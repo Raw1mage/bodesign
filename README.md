@@ -1,11 +1,12 @@
 # bodesign
 
-`bodesign` is a host-agnostic MCP server plus web server for AI-assisted PCB reference-board rebuilding.
+`bodesign` is a host-agnostic web service plus MCP server for AI-assisted PCB reference-board rebuilding. The web route lives under `/bodesign/`, and the same product exposes MCP tools so IDEs/agents can drive ingestion, knowledge normalization, reconstruction, generation, validation, export, and viewer opening.
 
 ## MVP Vision
 
 - Agents or IDEs provide files and design instructions through MCP.
 - The web viewer is mounted at `/bodesign/`.
+- The web product includes both browser-facing routes and MCP-facing agent tools; these are one bodesign capability surface, not separate products.
 - Rockbox is the first reconstruction target from Gerber, drill, IPC, and placement/BOM-like evidence.
 - OpenMV is the first document-driven design target from schematics, datasheets, and reference documents.
 - Datasheets and reference documents are absorbed into a reusable component knowledge base so future requests can reuse chip, package, pinout, and layout knowledge.
