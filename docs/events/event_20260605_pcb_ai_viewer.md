@@ -99,6 +99,7 @@
 - T10 checkpoint: exposed `DesignReport` through `POST /api/projects/{project_id}/reports/design`, MCP `produce_report`, and the MCP tool manifest; reports summarize reconstruction/export assumptions, artifact references, warnings, and send-to-fab caveats。
 - T11 checkpoint: added component-kb datasheet ingestion and reuse placeholders with reusable component keys, source evidence refs, explicit extraction knowledge gaps, `POST /api/projects/{project_id}/knowledge/datasheets`, MCP `reuse_knowledge`, and unit coverage for ingestion/reuse。
 - T12 checkpoint: completed targeted backend/MCP verification for artifact ingestion, component knowledge ingestion/reuse, Rockbox reconstruction placeholder, Gerber export placeholder, report generation, and `/bodesign/` viewer URL generation。
+- Route checkpoint: registered bodesign-facing web/API aliases under `/bodesign/`, `/bodesign/health`, and `/bodesign/api/*` while keeping legacy `/api/*` aliases for scaffold compatibility。
 
 ## Verification
 
@@ -116,6 +117,7 @@
 - T9/T10 validation: Python compile validation covers API, MCP handler module, and source-core report contracts; MCP smoke test covers `produce_report`, `export_gerber`, and `validate_design` placeholder outputs。
 - T11 validation: Python compile validation covers component-kb, API, MCP handlers, and component tests; `unittest` covers datasheet ingestion creating `component:mdbt53-p1m` and reusing `W25Q128JVSIQ` knowledge; MCP smoke test covers `ingest_knowledge` and `reuse_knowledge`。
 - T12 validation: `python3 -m compileall packages services tests`, `python3 -m unittest discover -s tests`, and MCP end-to-end smoke for ingest → knowledge → reconstruct → export → report → viewer all passed。
+- Route validation: `python3 -m compileall services/api/main.py tests packages services` and `python3 -m unittest discover -s tests` passed; route-table smoke uses a FastAPI stub to verify `/bodesign`, `/bodesign/`, `/bodesign/health`, and `/bodesign/api/*` aliases without requiring FastAPI to be installed locally。
 - Architecture Sync: Verified (No doc changes); `specs/architecture.md` already defines host-agnostic MCP/web boundary, component-kb Day 1 ingestion, `/bodesign/` viewer, report/validation surfaces, and placeholder-safe state separation。
 
 ## Remaining

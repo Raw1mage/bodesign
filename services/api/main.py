@@ -4,7 +4,7 @@ import sys
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOTS = [
@@ -49,8 +49,14 @@ JOBS: list[dict[str, Any]] = []
 
 
 @app.get("/health")
+@app.get("/bodesign/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "bodesign-api"}
+
+
+@app.get("/bodesign", include_in_schema=False)
+def bodesign_viewer_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/bodesign/")
 
 
 @app.get("/bodesign/", response_class=HTMLResponse)
@@ -118,11 +124,13 @@ def bodesign_viewer() -> str:
 
 
 @app.get("/api/projects")
+@app.get("/bodesign/api/projects")
 def list_projects() -> list[dict[str, str]]:
     return list(PROJECTS.values())
 
 
 @app.post("/api/projects")
+@app.post("/bodesign/api/projects")
 def create_project(payload: dict[str, str] | None = None) -> dict[str, object]:
     project_name = (payload or {}).get("name") or "Untitled bodesign project"
     project_id = _project_id(project_name)
@@ -141,6 +149,7 @@ def create_project(payload: dict[str, str] | None = None) -> dict[str, object]:
 
 
 @app.post("/api/artifacts/detect")
+@app.post("/bodesign/api/artifacts/detect")
 def detect_artifacts(payload: dict[str, list[str]]) -> list[dict[str, object]]:
     paths = payload.get("paths", [])
     if detect_input_artifact is None:
@@ -161,6 +170,7 @@ def detect_artifacts(payload: dict[str, list[str]]) -> list[dict[str, object]]:
 
 
 @app.get("/api/jobs")
+@app.get("/bodesign/api/jobs")
 def list_jobs() -> list[dict[str, object]]:
     if JOBS or JobSummary is None:
         return JOBS
@@ -168,6 +178,7 @@ def list_jobs() -> list[dict[str, object]]:
 
 
 @app.get("/api/schema-summary")
+@app.get("/bodesign/api/schema-summary")
 def schema_summary() -> dict[str, object]:
     return {
         "schemas": [
@@ -194,6 +205,7 @@ def schema_summary() -> dict[str, object]:
 
 
 @app.get("/api/projects/{project_id}/board-design")
+@app.get("/bodesign/api/projects/{project_id}/board-design")
 def get_board_design(project_id: str) -> dict[str, object]:
     if reconstruct_rockbox_placeholder is None:
         return {
@@ -213,6 +225,7 @@ def get_board_design(project_id: str) -> dict[str, object]:
 
 
 @app.post("/api/projects/{project_id}/rockbox/manifest")
+@app.post("/bodesign/api/projects/{project_id}/rockbox/manifest")
 def build_rockbox_manifest(project_id: str, payload: dict[str, list[str]]) -> dict[str, object]:
     artifact_paths = payload.get("artifact_paths", [])
     if build_rockbox_input_manifest is None:
@@ -230,6 +243,7 @@ def build_rockbox_manifest(project_id: str, payload: dict[str, list[str]]) -> di
 
 
 @app.post("/api/projects/{project_id}/rockbox/reconstruct")
+@app.post("/bodesign/api/projects/{project_id}/rockbox/reconstruct")
 def reconstruct_rockbox(project_id: str, payload: dict[str, list[str]]) -> dict[str, object]:
     artifact_paths = payload.get("artifact_paths", [])
     if reconstruct_rockbox_placeholder is None:
@@ -249,6 +263,7 @@ def reconstruct_rockbox(project_id: str, payload: dict[str, list[str]]) -> dict[
 
 
 @app.post("/api/projects/{project_id}/knowledge/datasheets")
+@app.post("/bodesign/api/projects/{project_id}/knowledge/datasheets")
 def ingest_datasheets(project_id: str, payload: dict[str, object]) -> dict[str, object]:
     part_number = str(payload.get("part_number") or "unknown-part")
     document_paths_value = payload.get("document_paths", [])
@@ -270,6 +285,7 @@ def ingest_datasheets(project_id: str, payload: dict[str, object]) -> dict[str, 
 
 
 @app.post("/api/projects/{project_id}/openmv/plan")
+@app.post("/bodesign/api/projects/{project_id}/openmv/plan")
 def plan_openmv(project_id: str, payload: dict[str, list[str]]) -> dict[str, object]:
     artifact_paths = payload.get("artifact_paths", [])
     if plan_openmv_document_ingestion is None:
@@ -288,6 +304,7 @@ def plan_openmv(project_id: str, payload: dict[str, list[str]]) -> dict[str, obj
 
 
 @app.post("/api/projects/{project_id}/export/gerber")
+@app.post("/bodesign/api/projects/{project_id}/export/gerber")
 def export_gerber(project_id: str, payload: dict[str, str] | None = None) -> dict[str, object]:
     board_design_id = (payload or {}).get("board_design_id") or f"{project_id}-board-design"
     if plan_gerber_export is None:
@@ -304,6 +321,7 @@ def export_gerber(project_id: str, payload: dict[str, str] | None = None) -> dic
 
 
 @app.post("/api/projects/{project_id}/export/gerber/validate")
+@app.post("/bodesign/api/projects/{project_id}/export/gerber/validate")
 def validate_gerber_export(project_id: str, payload: dict[str, list[str]]) -> dict[str, object]:
     output_paths = payload.get("output_paths", [])
     if validate_gerber_export_placeholder is None:
@@ -319,6 +337,7 @@ def validate_gerber_export(project_id: str, payload: dict[str, list[str]]) -> di
 
 
 @app.post("/api/projects/{project_id}/reports/design")
+@app.post("/bodesign/api/projects/{project_id}/reports/design")
 def produce_design_reconstruction_report(project_id: str, payload: dict[str, object] | None = None) -> dict[str, object]:
     request_payload = payload or {}
     board_design_id = str(request_payload.get("board_design_id") or f"{project_id}-board-design")
