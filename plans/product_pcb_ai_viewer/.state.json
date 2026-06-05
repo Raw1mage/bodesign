@@ -1,0 +1,10 @@
+{
+  "state": "planned",
+  "slug": "product_pcb_ai_viewer",
+  "title": "AI-assisted Gerber PCB layout web viewer",
+  "updatedAt": "2026-06-05",
+  "gates": {
+    "approvalRequiredBeforeImplementation": true,
+    "reason": "New full-stack product scaffold and AI-assisted design modification workflow"
+  }
+}

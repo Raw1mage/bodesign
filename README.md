@@ -1,0 +1,21 @@
+# bodesign
+
+`bodesign` is a host-agnostic MCP server plus web server for AI-assisted PCB reference-board rebuilding.
+
+## MVP Vision
+
+- Agents or IDEs provide files and design instructions through MCP.
+- The web viewer is mounted at `/bodesign/`.
+- Rockbox is the first reconstruction target from Gerber, drill, IPC, and placement/BOM-like evidence.
+- OpenMV is the first document-driven design target from schematics, datasheets, and reference documents.
+- Datasheets and reference documents are absorbed into a reusable component knowledge base so future requests can reuse chip, package, pinout, and layout knowledge.
+
+## Surfaces
+
+- `services/mcp`: planned MCP tools for ingestion, normalization, reconstruction, generation, validation, export, and viewer opening.
+- `services/api`: FastAPI/Python service for web APIs and EDA job orchestration.
+- `apps/web`: `/bodesign/` viewer surface for circuit/PCB views, Gerber previews, evidence, confidence, and reports.
+
+## Current State
+
+This is an initial scaffold only. It does not parse Gerber files, reconstruct Rockbox, or generate PCB layouts yet.

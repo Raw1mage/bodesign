@@ -1,0 +1,76 @@
+{
+  "server": "bodesign-mcp",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "ingest_sources",
+      "status": "placeholder-handler",
+      "purpose": "Register user-provided design and manufacturing artifacts for a project.",
+      "input_summary": "Project id plus paths to datasheets, schematics, BOM/placement files, Gerbers, drill files, IPC-356 netlists, routing reports, or reference documents; paths are deterministically classified before normalization.",
+      "output_summary": "InputArtifact records, deterministic artifact type detection results, and EvidenceSource records prepared for later normalization."
+    },
+    {
+      "name": "ingest_knowledge",
+      "status": "placeholder-handler",
+      "purpose": "Absorb datasheets, OpenMV reference documents, and component documents into the reusable component knowledge base.",
+      "input_summary": "Part numbers, OpenMV document paths, datasheet paths, URLs, and optional manufacturer/package hints.",
+      "output_summary": "ComponentKnowledge, reusable knowledge key, and DesignIntent placeholders with pinout, package, interface, layout-guideline, confidence, and knowledge-gap fields."
+    },
+    {
+      "name": "reuse_knowledge",
+      "status": "placeholder-handler",
+      "purpose": "Reuse a normalized component knowledge record for a later design or reconstruction request.",
+      "input_summary": "Project id, part number, and optional datasheet/reference document paths used to seed the reusable placeholder record.",
+      "output_summary": "DatasheetIngestionResult marked as reused, including reusable key, ComponentKnowledge placeholder, warnings, and pending trust/freshness checks."
+    },
+    {
+      "name": "normalize_sources",
+      "status": "placeholder-handler",
+      "purpose": "Convert raw project artifacts into normalized evidence records.",
+      "input_summary": "Project id and selected InputArtifact ids.",
+      "output_summary": "EvidenceRef records linked to component knowledge, design intent, and BoardDesign IR targets."
+    },
+    {
+      "name": "reconstruct_board",
+      "status": "placeholder-handler",
+      "purpose": "Reconstruct a BoardDesign IR from Rockbox-style Gerber, drill, IPC, routing, and placement evidence.",
+      "input_summary": "Project id plus Rockbox manifest inputs: component placement/BOM files, Gerber/artwork files, drill files, IPC-356 netlists, routing reports, and unknown files.",
+      "output_summary": "BoardDesign IR placeholder with artifact-count confidence summary until real component, Gerber, drill, and IPC parsing is implemented."
+    },
+    {
+      "name": "generate_board",
+      "status": "placeholder-handler",
+      "purpose": "Generate a BoardDesign IR candidate from requirements, OpenMV design intent, and datasheet-derived component knowledge.",
+      "input_summary": "Project id, target function, selected components, constraints, OpenMV DesignIntent id, and reusable ComponentKnowledge ids.",
+      "output_summary": "BoardDesign IR candidate plus assumptions, confidence, and knowledge gaps."
+    },
+    {
+      "name": "validate_design",
+      "status": "placeholder-handler",
+      "purpose": "Run deterministic checks before a design is considered usable or exportable, including placeholder Gerber export validation.",
+      "input_summary": "Project id, BoardDesign IR version, and optional generated Gerber output paths.",
+      "output_summary": "Validation findings, placeholder Gerber validation warnings, confidence impacts, and blocking warnings."
+    },
+    {
+      "name": "export_gerber",
+      "status": "placeholder-handler",
+      "purpose": "Plan export of approved BoardDesign IR into Gerber/manufacturing outputs.",
+      "input_summary": "Project id, approved BoardDesign IR version or board_design_id, export settings, and fab constraints.",
+      "output_summary": "Placeholder manufacturing package paths, export report path, and warnings until real Gerber generation is implemented."
+    },
+    {
+      "name": "produce_report",
+      "status": "placeholder-handler",
+      "purpose": "Produce a human-readable reconstruction, generation, and export report for current BoardDesign IR outputs.",
+      "input_summary": "Project id, optional board_design_id, and artifact references that should be cited in the report.",
+      "output_summary": "DesignReport placeholder with summary, assumptions, warnings, artifact references, and send-to-fab readiness caveats."
+    },
+    {
+      "name": "open_viewer",
+      "status": "placeholder-handler",
+      "purpose": "Return a /bodesign/ viewer URL for the current project or board design.",
+      "input_summary": "Project id and optional BoardDesign IR version or view state.",
+      "output_summary": "Viewer URL and suggested display context for the host IDE/agent."
+    }
+  ]
+}

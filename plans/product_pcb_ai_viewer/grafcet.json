@@ -1,0 +1,33 @@
+{
+  "machine": "Gerber review workflow",
+  "initialStep": "idle",
+  "steps": [
+    { "id": "idle", "description": "Waiting for user upload" },
+    { "id": "uploading", "description": "Receiving and storing design files" },
+    { "id": "parsing", "description": "Classifying layers and normalizing geometry" },
+    { "id": "viewing", "description": "User inspects rendered PCB layout" },
+    { "id": "checking", "description": "Deterministic rules generate findings" },
+    { "id": "proposing", "description": "AI generates typed patch proposals" },
+    { "id": "awaiting_approval", "description": "User reviews each proposed operation" },
+    { "id": "applying", "description": "Approved operations are validated and applied" },
+    { "id": "exporting", "description": "System creates modified package and report" },
+    { "id": "complete", "description": "Export is ready" },
+    { "id": "failed", "description": "Workflow stopped with explicit error" }
+  ],
+  "transitions": [
+    { "from": "idle", "to": "uploading", "condition": "files_selected" },
+    { "from": "uploading", "to": "parsing", "condition": "upload_valid" },
+    { "from": "uploading", "to": "failed", "condition": "upload_invalid" },
+    { "from": "parsing", "to": "viewing", "condition": "geometry_ready" },
+    { "from": "parsing", "to": "failed", "condition": "parse_error" },
+    { "from": "viewing", "to": "checking", "condition": "run_checks" },
+    { "from": "checking", "to": "proposing", "condition": "findings_available_or_user_prompted" },
+    { "from": "proposing", "to": "awaiting_approval", "condition": "typed_proposals_valid" },
+    { "from": "proposing", "to": "failed", "condition": "proposal_validation_failed" },
+    { "from": "awaiting_approval", "to": "applying", "condition": "user_approved_one_or_more_operations" },
+    { "from": "awaiting_approval", "to": "viewing", "condition": "user_rejected_all_operations" },
+    { "from": "applying", "to": "exporting", "condition": "patch_validation_passed" },
+    { "from": "applying", "to": "failed", "condition": "patch_validation_failed" },
+    { "from": "exporting", "to": "complete", "condition": "package_ready" }
+  ]
+}

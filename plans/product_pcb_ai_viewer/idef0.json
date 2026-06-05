@@ -1,0 +1,45 @@
+{
+  "model": "AI-assisted Gerber PCB layout service",
+  "nodes": [
+    {
+      "id": "A0",
+      "name": "Review and modify PCB fabrication design",
+      "inputs": ["Gerber files", "User design intent"],
+      "controls": ["Manufacturing rules", "AI safety contract", "User approvals"],
+      "outputs": ["Rendered PCB layout", "Findings", "Approved modifications", "Export package"],
+      "mechanisms": ["React viewer", "FastAPI backend", "Gerber parser", "Rule checker", "AI proposal service"]
+    },
+    {
+      "id": "A1",
+      "name": "Ingest design files",
+      "inputs": ["Gerber archive or files"],
+      "controls": ["File validation"],
+      "outputs": ["Project", "Classified layers"],
+      "mechanisms": ["Upload API", "Storage service"]
+    },
+    {
+      "id": "A2",
+      "name": "Normalize and render layout",
+      "inputs": ["Classified layers"],
+      "controls": ["Geometry schema"],
+      "outputs": ["Layer geometry", "Viewer scene"],
+      "mechanisms": ["Gerber parser", "React renderer"]
+    },
+    {
+      "id": "A3",
+      "name": "Analyze design risks",
+      "inputs": ["Layer geometry"],
+      "controls": ["Rule set"],
+      "outputs": ["Findings"],
+      "mechanisms": ["Rule-check pipeline"]
+    },
+    {
+      "id": "A4",
+      "name": "Propose and apply approved changes",
+      "inputs": ["Findings", "User prompt", "Layer geometry"],
+      "controls": ["Typed patch schema", "User approval"],
+      "outputs": ["Approved patch operations", "Modified design package"],
+      "mechanisms": ["AI proposal service", "Patch validator", "Export service"]
+    }
+  ]
+}
