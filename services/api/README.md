@@ -2,8 +2,21 @@
 
 FastAPI/Python service for bodesign web APIs, EDA jobs, MCP tool handlers, validation, and export orchestration.
 
+Run locally from the repository root:
+
+```bash
+python3 -m pip install -r services/api/requirements.txt
+python3 -m services.api
+```
+
+Then open `http://127.0.0.1:8765/bodesign/`.
+
 Initial endpoints:
 
 - `GET /health`
+- `GET /`
+- `GET /bodesign`
 - `GET /bodesign/`
+- `GET /bodesign/routes`
+- `GET /bodesign/api/routes`
 - `GET /api/projects`

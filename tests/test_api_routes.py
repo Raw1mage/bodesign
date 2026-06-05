@@ -12,13 +12,28 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         api_main = importlib.import_module("services.api.main")
         routes = {route.path for route in api_main.app.routes}
 
+        self.assertIn("/", routes)
         self.assertIn("/bodesign", routes)
         self.assertIn("/bodesign/", routes)
+        self.assertIn("/bodesign/routes", routes)
         self.assertIn("/bodesign/health", routes)
+        self.assertIn("/bodesign/api/routes", routes)
         self.assertIn("/bodesign/api/projects", routes)
         self.assertIn("/bodesign/api/artifacts/detect", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/knowledge/datasheets", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/reports/design", routes)
+
+    def test_bodesign_route_index_is_visible_without_fastapi_runtime(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        route_index = api_main.bodesign_route_index()
+        route_registry = api_main.bodesign_route_registry()
+
+        self.assertIn("bodesign visible routes", route_index)
+        self.assertIn("/bodesign/", route_index)
+        self.assertIn("/bodesign/api/routes", {route["path"] for route in route_registry["routes"]})
 
 
 def install_fastapi_stub() -> None:

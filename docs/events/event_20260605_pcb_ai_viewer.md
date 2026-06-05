@@ -102,6 +102,7 @@
 - Route checkpoint: registered bodesign-facing web/API aliases under `/bodesign/`, `/bodesign/health`, and `/bodesign/api/*` while keeping legacy `/api/*` aliases for scaffold compatibility。
 - Rockbox summary checkpoint: upgraded reverse-core from artifact-count placeholder to fixture-backed summary reconstruction. It parses Allegro `cds2f_ROCKBOX_V2.txt` into 327 component instances, IPC-D-356A into 208 named nets, 938 component pads, and 817 vias, and preserves six copper layer labels from the Gerber manifest。
 - Viewer checkpoint: `/bodesign/` now renders fixture-derived component/net/layer counts, selected placed components such as `U401 MDBT53-P1M`, and top IPC net summaries instead of only static mock data. Exact Gerber geometry remains pending。
+- Visible route checkpoint: added `/` redirect to `/bodesign/`, HTML route index at `/bodesign/routes`, JSON route registry at `/bodesign/api/routes`, and a `python3 -m services.api` uvicorn entrypoint so the web surface has an explicit launch path。
 
 ## Verification
 
@@ -123,6 +124,7 @@
 - Rockbox summary validation: `python3 -m compileall packages services tests`, `PYTHONPATH="packages/shared:packages/design-ir:packages/reverse-core:packages/component-kb:packages/doc-core:packages/source-core:packages/gerber-core" python3 -m unittest discover -s tests`, and MCP `reconstruct_board`/`open_viewer` smoke test passed. The new reverse-core fixture test fixes expected Rockbox counts at 327 components, 208 nets, 6 layers, 938 IPC pads, and 817 vias。
 - Viewer validation: FastAPI is not installed locally, so `/bodesign/` helper validation used the existing FastAPI stub approach and confirmed the HTML contains `MDBT53-P1M`, `Top Nets`, and `327` from fixture-derived data。
 - Architecture Sync: Updated `specs/architecture.md` to distinguish current placement/IPC summary reconstruction from pending Gerber/drill geometry extraction。
+- Visible route validation: `python3 -m compileall services/api/main.py services/api/__main__.py tests packages services` and `PYTHONPATH="packages/shared:packages/design-ir:packages/reverse-core:packages/component-kb:packages/doc-core:packages/source-core:packages/gerber-core" python3 -m unittest discover -s tests` passed; tests now assert `/`, `/bodesign/routes`, and `/bodesign/api/routes` registration and route-index content without requiring FastAPI to be installed locally。
 
 ## Remaining
 

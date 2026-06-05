@@ -49,15 +49,74 @@ PROJECTS: dict[str, dict[str, Any]] = {}
 JOBS: list[dict[str, Any]] = []
 
 
+BODESIGN_WEB_ROUTES = [
+    {"method": "GET", "path": "/", "purpose": "Redirect to the bodesign viewer."},
+    {"method": "GET", "path": "/bodesign", "purpose": "Redirect to the canonical bodesign viewer path."},
+    {"method": "GET", "path": "/bodesign/", "purpose": "Render the Rockbox BoardDesign IR summary viewer."},
+    {"method": "GET", "path": "/bodesign/routes", "purpose": "Show visible bodesign web/API routes."},
+    {"method": "GET", "path": "/bodesign/health", "purpose": "Health check for host/gateway routing."},
+    {"method": "GET", "path": "/bodesign/api/routes", "purpose": "Return visible bodesign web/API routes as JSON."},
+    {"method": "GET", "path": "/bodesign/api/projects", "purpose": "List bodesign projects."},
+    {"method": "POST", "path": "/bodesign/api/projects", "purpose": "Create a bodesign project."},
+    {"method": "POST", "path": "/bodesign/api/artifacts/detect", "purpose": "Detect artifact types before ingestion."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/board-design", "purpose": "Return a BoardDesign IR summary."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/rockbox/reconstruct", "purpose": "Reconstruct Rockbox into BoardDesign IR summary."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/knowledge/datasheets", "purpose": "Ingest datasheet knowledge."},
+]
+
+
 @app.get("/health")
 @app.get("/bodesign/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "bodesign-api"}
 
 
+@app.get("/", include_in_schema=False)
+def root_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/bodesign/")
+
+
 @app.get("/bodesign", include_in_schema=False)
 def bodesign_viewer_redirect() -> RedirectResponse:
     return RedirectResponse(url="/bodesign/")
+
+
+@app.get("/bodesign/routes", response_class=HTMLResponse)
+def bodesign_route_index() -> str:
+    route_rows = "".join(
+        f"<tr><td><code>{escape(route['method'])}</code></td><td><a href=\"{escape(route['path'])}\"><code>{escape(route['path'])}</code></a></td><td>{escape(route['purpose'])}</td></tr>"
+        for route in BODESIGN_WEB_ROUTES
+    )
+    return """
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>bodesign routes</title>
+        <style>
+          body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, sans-serif; background: #101418; color: #e8f0f2; }
+          a { color: #8ef6d2; }
+          table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+          th, td { border-bottom: 1px solid #26323a; padding: 10px 8px; text-align: left; vertical-align: top; }
+          code { color: #8ef6d2; }
+        </style>
+      </head>
+      <body>
+        <h1>bodesign visible routes</h1>
+        <p>The primary viewer is <a href="/bodesign/"><code>/bodesign/</code></a>.</p>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+          <tbody>""" + route_rows + """</tbody>
+        </table>
+      </body>
+    </html>
+    """
+
+
+@app.get("/bodesign/api/routes")
+def bodesign_route_registry() -> dict[str, object]:
+    return {"service": "bodesign-api", "routes": BODESIGN_WEB_ROUTES}
 
 
 @app.get("/bodesign/", response_class=HTMLResponse)
