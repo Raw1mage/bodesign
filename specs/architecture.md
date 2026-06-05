@@ -13,7 +13,7 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 - `packages/design-ir`: Product-owned PCB source of truth, evidence model, schema validation, and versioning.
 - `packages/component-kb`: Datasheet ingestion, part-number resolution, pinout/package normalization, interface grouping, and layout-rule knowledge.
 - `packages/doc-core`: OpenMV schematic/datasheet evidence extraction and design-intent normalization.
-- `packages/reverse-core`: Rockbox Gerber/drill/IPC evidence extraction, IR reconstruction, net inference, component clustering, and confidence scoring.
+- `packages/reverse-core`: Rockbox evidence extraction and IR reconstruction. Current implementation parses Allegro `cds2f` placement/BOM-like exports into component instances and IPC-D-356A records into net/pad/via summaries; Gerber/drill geometry extraction, net inference beyond IPC evidence, and component clustering remain next steps.
 - `packages/source-core`: `BoardDesign IR` patch validation and source export helpers.
 - `packages/gerber-core`: Python-first Gerber adapter around `pygerber`, geometry normalization, manufacturing checks, output comparison, and validation.
 - `packages/shared`: Shared schemas and API types.
@@ -26,8 +26,8 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 3. Source-ingestion pipeline classifies each input as component evidence, design-intent evidence, manufacturing evidence, or reference-board evidence.
 4. Component knowledge pipeline extracts part numbers, resolves/ingests datasheets, and normalizes pinout/package/power/interface/layout knowledge.
 5. Document and artifact pipelines extract evidence into a shared evidence model.
-6. OpenMV flow generates initial `BoardDesign IR`; Rockbox flow reconstructs `BoardDesign IR` from component, Gerber, drill, and IPC evidence.
-7. `/bodesign/` retrieves `BoardDesign IR`, original layers, confidence overlays, component knowledge, and generated output data for Canvas 2D rendering.
+6. OpenMV flow generates initial `BoardDesign IR`; Rockbox flow reconstructs `BoardDesign IR` from component placement, IPC net/pad/via summaries, Gerber/drill manifests, and confidence evidence.
+7. `/bodesign/` retrieves `BoardDesign IR`, layer summaries, parsed component positions, IPC net summaries, confidence overlays, component knowledge, and generated output data for Canvas 2D rendering.
 8. Validation checks verify IR schema, component knowledge coverage, connectivity evidence, DRC-like constraints, and generated Gerber outputs.
 9. AI invokes EDA MCP tools to ingest knowledge, propose layout plans, reconstruct Rockbox, generate datasheet-derived designs, or create IR operations; deterministic validators gate every operation.
 10. User reviews generated layout/Gerber candidates in `/bodesign/` or an IDE/host proposal UI and approves selected outputs.
@@ -60,7 +60,7 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 ## Verification Baseline
 
 - Component knowledge extraction, document extraction, artifact parsing, IR generation, and reconstruction behavior should be fixture-driven.
-- First reconstruction spike must verify Gerber/drill/IPC inputs can recover board outline, layers, pads, vias, tracks, zones, net assignments, and confidence evidence.
+- First reconstruction spike now verifies placement and IPC inputs can recover component instances, copper layer labels, named nets, pad counts, via counts, and confidence evidence. Next reconstruction spikes must add Gerber/drill geometry for board outline, tracks, zones, apertures, and drill-to-copper relationships.
 - Gerber validation spike must verify `pygerber` support for layer bounds, apertures, flashes, tracks, regions, SVG/image rendering, and output comparison.
 - API flows should verify upload, parse status, findings, proposal creation, approval, and export.
 - Frontend tests should cover viewer controls and approval UI state transitions.

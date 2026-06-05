@@ -100,6 +100,8 @@
 - T11 checkpoint: added component-kb datasheet ingestion and reuse placeholders with reusable component keys, source evidence refs, explicit extraction knowledge gaps, `POST /api/projects/{project_id}/knowledge/datasheets`, MCP `reuse_knowledge`, and unit coverage for ingestion/reuse。
 - T12 checkpoint: completed targeted backend/MCP verification for artifact ingestion, component knowledge ingestion/reuse, Rockbox reconstruction placeholder, Gerber export placeholder, report generation, and `/bodesign/` viewer URL generation。
 - Route checkpoint: registered bodesign-facing web/API aliases under `/bodesign/`, `/bodesign/health`, and `/bodesign/api/*` while keeping legacy `/api/*` aliases for scaffold compatibility。
+- Rockbox summary checkpoint: upgraded reverse-core from artifact-count placeholder to fixture-backed summary reconstruction. It parses Allegro `cds2f_ROCKBOX_V2.txt` into 327 component instances, IPC-D-356A into 208 named nets, 938 component pads, and 817 vias, and preserves six copper layer labels from the Gerber manifest。
+- Viewer checkpoint: `/bodesign/` now renders fixture-derived component/net/layer counts, selected placed components such as `U401 MDBT53-P1M`, and top IPC net summaries instead of only static mock data. Exact Gerber geometry remains pending。
 
 ## Verification
 
@@ -118,11 +120,14 @@
 - T11 validation: Python compile validation covers component-kb, API, MCP handlers, and component tests; `unittest` covers datasheet ingestion creating `component:mdbt53-p1m` and reusing `W25Q128JVSIQ` knowledge; MCP smoke test covers `ingest_knowledge` and `reuse_knowledge`。
 - T12 validation: `python3 -m compileall packages services tests`, `python3 -m unittest discover -s tests`, and MCP end-to-end smoke for ingest → knowledge → reconstruct → export → report → viewer all passed。
 - Route validation: `python3 -m compileall services/api/main.py tests packages services` and `python3 -m unittest discover -s tests` passed; route-table smoke uses a FastAPI stub to verify `/bodesign`, `/bodesign/`, `/bodesign/health`, and `/bodesign/api/*` aliases without requiring FastAPI to be installed locally。
-- Architecture Sync: Verified (No doc changes); `specs/architecture.md` already defines host-agnostic MCP/web boundary, component-kb Day 1 ingestion, `/bodesign/` viewer, report/validation surfaces, and placeholder-safe state separation。
+- Rockbox summary validation: `python3 -m compileall packages services tests`, `PYTHONPATH="packages/shared:packages/design-ir:packages/reverse-core:packages/component-kb:packages/doc-core:packages/source-core:packages/gerber-core" python3 -m unittest discover -s tests`, and MCP `reconstruct_board`/`open_viewer` smoke test passed. The new reverse-core fixture test fixes expected Rockbox counts at 327 components, 208 nets, 6 layers, 938 IPC pads, and 817 vias。
+- Viewer validation: FastAPI is not installed locally, so `/bodesign/` helper validation used the existing FastAPI stub approach and confirmed the HTML contains `MDBT53-P1M`, `Top Nets`, and `327` from fixture-derived data。
+- Architecture Sync: Updated `specs/architecture.md` to distinguish current placement/IPC summary reconstruction from pending Gerber/drill geometry extraction。
 
 ## Remaining
 
-- Extend MCP/server/web scaffold from placeholders into real source ingestion, knowledge normalization, Rockbox reconstruction, Gerber export, and `/bodesign/` rendering。
+- Extend Rockbox reconstruction from placement/IPC summaries into real Gerber/drill geometry: board outline, copper tracks, zones, apertures, drill hits, and drill-to-copper relationships。
+- Replace remaining MCP/server/web placeholders for source ingestion, knowledge normalization, Gerber export, and layout generation with persistent job-backed implementations。
 - Replace placeholder component knowledge ingestion with real PDF/text extraction, source trust checks, and persistent storage。
 - Decide GPL integration posture for KiCad/freerouting before embedding either directly。
 - Keep detailed Rockbox parsing and debug/test guidance for later phases。

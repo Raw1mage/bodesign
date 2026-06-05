@@ -19,4 +19,4 @@
 
 ## Current State
 
-This is an initial scaffold only. It does not parse Gerber files, reconstruct Rockbox, or generate PCB layouts yet.
+The current MVP parses Rockbox placement/BOM-like and IPC-356 fixture evidence into a `BoardDesign IR` summary, exposes it through MCP/API reconstruction handlers, and renders the summary at `/bodesign/`. Exact Gerber geometry rendering, full source reconstruction, and layout generation are still pending.

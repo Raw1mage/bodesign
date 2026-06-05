@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from html import escape
 from pathlib import Path
 import sys
 from typing import Any
@@ -63,6 +64,20 @@ def bodesign_viewer_redirect() -> RedirectResponse:
 def bodesign_viewer() -> str:
     board_design = _rockbox_demo_board_design()
     confidence = board_design["confidence_summary"]
+    components = board_design.get("components", [])
+    nets = board_design.get("nets", [])
+    layers = board_design.get("layers", [])
+    highlighted_components = _highlight_components(components)
+    component_markup = "".join(_component_markup(component) for component in highlighted_components)
+    layer_markup = "".join(f'<span class="pill">{escape(str(layer.get("name", "layer")))}</span>' for layer in layers)
+    if not layer_markup:
+        layer_markup = '<span class="pill">No copper layers parsed</span>'
+    net_markup = "".join(
+        f'<div class="metric"><span>{escape(str(net.get("name", "net")))}</span><code>{len(net.get("connected_pads", []))} pads</code></div>'
+        for net in nets[:10]
+    )
+    if not net_markup:
+        net_markup = '<p>No IPC nets parsed yet.</p>'
     return """
     <!doctype html>
     <html lang="en">
@@ -72,15 +87,16 @@ def bodesign_viewer() -> str:
         <title>bodesign Rockbox Viewer</title>
         <style>
           body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #101418; color: #e8f0f2; }
-          main { display: grid; grid-template-columns: 280px 1fr 320px; min-height: 100vh; }
+          main { display: grid; grid-template-columns: 300px 1fr 360px; min-height: 100vh; }
           aside, section { padding: 24px; border-right: 1px solid #26323a; }
           h1, h2 { margin-top: 0; }
           .canvas { display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, #20303a, #0b0f12 70%); }
           .board { width: min(68vw, 760px); aspect-ratio: 1.65; border: 2px solid #5de4c7; border-radius: 18px; position: relative; background: #16362e; box-shadow: 0 24px 80px #0008; }
-          .chip { position: absolute; border-radius: 10px; background: #d8e1e5; color: #111; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+          .chip { position: absolute; border-radius: 10px; background: #d8e1e5; color: #111; display: grid; place-items: center; font-size: 11px; font-weight: 700; padding: 4px; text-align: center; box-sizing: border-box; }
           .trace { position: absolute; height: 4px; background: #ffc857; border-radius: 999px; transform-origin: left center; }
           .pill { display: inline-block; margin: 4px 4px 4px 0; padding: 4px 8px; border: 1px solid #39515b; border-radius: 999px; color: #9bd8ff; }
           .metric { display: flex; justify-content: space-between; margin: 8px 0; color: #cbd6d9; }
+          .scroll { max-height: 230px; overflow: auto; padding-right: 8px; }
           code { color: #8ef6d2; }
         </style>
       </head>
@@ -88,18 +104,19 @@ def bodesign_viewer() -> str:
         <main>
           <aside>
             <h1>bodesign</h1>
-            <p>Rockbox reconstructed circuit/PCB viewer placeholder.</p>
-            <p><code>/bodesign/</code> is backed by MCP/API contracts and currently renders manifest-level placeholder data.</p>
+            <p>Rockbox reconstructed circuit/PCB summary from placement and IPC-356 evidence.</p>
+            <p><code>/bodesign/</code> is backed by MCP/API contracts and now renders fixture-derived component and net counts.</p>
             <h2>Layers</h2>
-            <span class="pill">L1 top</span><span class="pill">L2 GND</span><span class="pill">L3 IN1</span>
-            <span class="pill">L4 IN2</span><span class="pill">L5 IN3</span><span class="pill">L6 bot</span>
+            """ + layer_markup + """
+            <h2>Parsed Summary</h2>
+            <div class="metric"><span>components</span><code>""" + str(int(confidence.get("components", 0))) + """</code></div>
+            <div class="metric"><span>nets</span><code>""" + str(int(confidence.get("nets", 0))) + """</code></div>
+            <div class="metric"><span>IPC pads</span><code>""" + str(int(confidence.get("ipc_pads", 0))) + """</code></div>
+            <div class="metric"><span>IPC vias</span><code>""" + str(int(confidence.get("ipc_vias", 0))) + """</code></div>
           </aside>
           <section class="canvas">
-            <div class="board" aria-label="Rockbox PCB placeholder">
-              <div class="chip" style="left: 42%; top: 35%; width: 120px; height: 78px;">MDBT53-P1M</div>
-              <div class="chip" style="left: 18%; top: 22%; width: 86px; height: 52px;">FLASH</div>
-              <div class="chip" style="right: 16%; top: 20%; width: 90px; height: 56px;">CHARGER</div>
-              <div class="chip" style="right: 20%; bottom: 18%; width: 96px; height: 48px;">USB/CONN</div>
+            <div class="board" aria-label="Rockbox PCB summary">
+              """ + component_markup + """
               <div class="trace" style="left: 31%; top: 36%; width: 130px; transform: rotate(10deg);"></div>
               <div class="trace" style="left: 57%; top: 45%; width: 160px; transform: rotate(-12deg);"></div>
               <div class="trace" style="left: 52%; top: 60%; width: 180px; transform: rotate(18deg);"></div>
@@ -115,7 +132,9 @@ def bodesign_viewer() -> str:
             <div class="metric"><span>Drill files</span><code>""" + str(int(confidence["drill_files"])) + """</code></div>
             <div class="metric"><span>IPC-356</span><code>""" + str(int(confidence["ipc_files"])) + """</code></div>
             <div class="metric"><span>Placement/BOM</span><code>""" + str(int(confidence["component_files"])) + """</code></div>
-            <p>Geometry is mocked until real Gerber/drill/IPC parsing lands.</p>
+            <h2>Top Nets</h2>
+            <div class="scroll">""" + net_markup + """</div>
+            <p>Exact Gerber geometry rendering is still pending; this view uses real placement/net summaries.</p>
           </aside>
         </main>
       </body>
@@ -365,18 +384,7 @@ def _project_id(project_name: str) -> str:
 
 
 def _rockbox_demo_board_design() -> dict[str, object]:
-    artifact_paths = [
-        "L1_top.art",
-        "L2_GND.art",
-        "L3_IN1.art",
-        "L4_IN2.art",
-        "L5_IN3.art",
-        "L6_bot.art",
-        "ROCKBOX_V2-1-6.drl",
-        "ROCKBOX_V2.ipc",
-        "ROCKBOX_V2_1-6.rou",
-        "cds2f_ROCKBOX_V2.txt",
-    ]
+    artifact_paths = _rockbox_demo_artifact_paths()
     if reconstruct_rockbox_placeholder is None:
         return {
             "id": "rockbox-board-design",
@@ -390,3 +398,26 @@ def _rockbox_demo_board_design() -> dict[str, object]:
             },
         }
     return asdict(reconstruct_rockbox_placeholder("rockbox", artifact_paths))
+
+
+def _rockbox_demo_artifact_paths() -> list[str]:
+    fixture_dir = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber"
+    if not fixture_dir.exists():
+        return []
+    return [str(path) for path in fixture_dir.iterdir()]
+
+
+def _highlight_components(components: list[dict[str, object]]) -> list[dict[str, object]]:
+    priority_refdes = {"U401", "U402", "U301", "U801", "J301", "ANT501", "J302", "J402"}
+    highlighted = [component for component in components if str(component.get("refdes")) in priority_refdes]
+    return highlighted[:8] or components[:8]
+
+
+def _component_markup(component: dict[str, object]) -> str:
+    placement = component.get("placement") if isinstance(component.get("placement"), dict) else {}
+    x_mil = float(placement.get("x_mil", 0.0))
+    y_mil = float(placement.get("y_mil", 0.0))
+    left_percent = max(4.0, min(84.0, (x_mil / 2600.0) * 100.0))
+    top_percent = max(6.0, min(82.0, 92.0 - (y_mil / 2000.0) * 100.0))
+    label = escape(f"{component.get('refdes', '')} {component.get('part_number') or component.get('footprint') or ''}".strip())
+    return f'<div class="chip" style="left: {left_percent:.1f}%; top: {top_percent:.1f}%; width: 98px; height: 48px;">{label}</div>'
