@@ -149,6 +149,73 @@ tests/                    MCP, service, viewer, fixture, and integration tests
 7. Add Gerber export/validation pipeline from `BoardDesign IR`.
 8. Add AI planning interfaces for OpenMV generation and Rockbox reconstruction.
 
+## Gap-Driven Roadmap
+
+The current implementation has a working published web surface, Rockbox fixture project listing, source-file tabs, placement/IPC summaries, and MCP/API placeholders. It does **not** yet have the core visual/design capabilities needed for the final goal. The roadmap below turns the scaffold into the intended AI reference-board rebuilder.
+
+### Milestone A: Real Project Workspace
+
+- Replace in-memory projects with durable project records and raw artifact storage.
+- Add web import/open/browse flows for uploaded folders and fixture-backed projects.
+- Preserve raw artifacts, normalized evidence, `BoardDesign IR`, reports, and generated outputs as separate project assets.
+- Add per-project routes such as `/bodesign/projects/{project_id}` so Rockbox is not hard-coded into the global viewer.
+- Keep Rockbox as a built-in imported fixture and use it as the regression baseline.
+
+### Milestone B: File Viewers Before Board Claims
+
+- Render each source artifact in its own correct viewer instead of drawing fake circuit pictures.
+- PDF/reference docs: embedded document preview, text extraction status, evidence anchors.
+- BOM/placement: sortable component table, refdes search, side/rotation/XY inspection.
+- IPC-356: net browser, refdes/pin connections, via/pad statistics, net search.
+- Gerber/drill: layer list, metadata, bounds, aperture/tool summaries, parse errors.
+- Board View remains disabled until real geometry primitives exist.
+
+### Milestone C: Gerber/Drill Geometry Reconstruction
+
+- Integrate a Python Gerber parser/render path, starting with `pygerber` if it can expose enough geometry and SVG/image output.
+- Parse RS-274X apertures, flashes, draws, regions, polarity, layer bounds, units, and coordinate format.
+- Parse drill tools, drill hits, plated/non-plated hints, and board outline candidates.
+- Normalize geometry into `BoardDesign IR` primitives linked to original file evidence.
+- Render true layer canvases with pan/zoom/layer toggle; only then re-enable Board View as actual PCB layout rendering.
+
+### Milestone D: Connectivity and Component Reconstruction
+
+- Fuse IPC nets, placement/BOM, pads, vias, Gerber flashes, and drill hits into component-pad-net objects.
+- Infer footprints and package outlines where explicit package evidence is incomplete.
+- Score confidence per component, pad, net, layer, and geometry object.
+- Support cross-probing: click component → pins/nets/layers/evidence; click net → connected pads/vias; click artifact → derived IR objects.
+- Produce a reconstruction report that separates confirmed evidence from inferred design intent.
+
+### Milestone E: Component Knowledge Base
+
+- Extract part numbers from Rockbox placement and OpenMV references into a reusable component queue.
+- Add datasheet ingestion for user-provided PDFs first; external fetching remains gated by policy.
+- Normalize manufacturer, aliases, package, footprint hints, pinout, power pins, interface pins, absolute limits, decoupling guidance, layout guidelines, and reference-design notes.
+- Store explicit knowledge gaps when datasheets or pin definitions are missing.
+- Use component knowledge to enrich viewer panels and later guide circuit/layout generation.
+
+### Milestone F: EDA Source and KiCad Bridge
+
+- Keep `BoardDesign IR` as product source of truth.
+- Add a KiCad adapter behind `packages/source-core` / `packages/eda-bridge` once IR has enough component, footprint, net, board-outline, and layer-stack data.
+- First target is export/import compatibility and DRC invocation, not depending on KiCad UI.
+- Evaluate `freerouting` only after placement, net classes, keepouts, and constraints are emitted deterministically.
+- No generated Gerber is send-to-fab unless IR validation, EDA bridge export, Gerber re-import/compare, and user approval pass.
+
+### Milestone G: AI Reference Board Rebuilder
+
+- Agent input: chip model(s), target function, reference board docs, uploaded manufacturing outputs, and constraints.
+- Agent workflow: ingest sources → resolve component knowledge → reconstruct/reference-design IR → propose retained/removed subsystems → generate layout intent → deterministic validation → user approval.
+- AI never directly emits fabrication files; it proposes typed `BoardDesign IR` operations and evidence-linked assumptions.
+- The first useful end-to-end demo should be Rockbox reconstruction plus OpenMV component knowledge enrichment, not arbitrary from-scratch PCB generation.
+
+### Milestone H: Design Generation
+
+- Generate schematic/net intent from component knowledge and reference designs.
+- Generate placement plan, board outline proposal, layer stack, net classes, keepouts, and routing constraints.
+- Use KiCad/freerouting/other backend adapters only after deterministic IR operations exist.
+- Show generated candidates in the same project workspace with diff/evidence/approval UI.
+
 ## Open Decisions
 
 - Confirm whether Rockbox can be used as the first checked-in fixture, or whether fixture data must remain external/private.

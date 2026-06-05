@@ -15,10 +15,14 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/", routes)
         self.assertIn("/bodesign", routes)
         self.assertIn("/bodesign/", routes)
+        self.assertIn("/bodesign/projects/{project_id}", routes)
+        self.assertIn("/bodesign/projects/{project_id}/artifacts/{artifact_id}", routes)
         self.assertIn("/bodesign/routes", routes)
         self.assertIn("/bodesign/health", routes)
         self.assertIn("/bodesign/api/routes", routes)
         self.assertIn("/bodesign/api/projects", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/artifacts", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", routes)
         self.assertIn("/bodesign/api/artifacts/detect", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/knowledge/datasheets", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/reports/design", routes)
@@ -34,6 +38,55 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("bodesign visible routes", route_index)
         self.assertIn("/bodesign/", route_index)
         self.assertIn("/bodesign/api/routes", {route["path"] for route in route_registry["routes"]})
+
+    def test_bodesign_viewer_has_file_workspace_tabs(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        html = api_main.bodesign_viewer()
+
+        self.assertIn("Projects", html)
+        self.assertIn("Rockbox reference board", html)
+        self.assertIn("imported-fixture", html)
+        self.assertIn("/bodesign/projects/rockbox", html)
+        self.assertIn("Source Documents", api_main.bodesign_project_workspace("rockbox"))
+        self.assertIn("Source Documents", html)
+        self.assertIn("Gerber Layers", html)
+        self.assertIn("IPC-356 Nets", html)
+        self.assertIn("Components", html)
+        self.assertIn("BoardDesign IR", html)
+        self.assertIn("Reconstruction Report", html)
+        self.assertIn("PCB layout rendering is not available yet", html)
+        self.assertIn("decorative placement sketch", html)
+
+    def test_project_api_lists_imported_rockbox_project(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        projects = api_main.list_projects()
+
+        self.assertEqual("rockbox", projects[0]["id"])
+        self.assertEqual("imported-fixture", projects[0]["status"])
+        self.assertIn("viewer_url", projects[0])
+
+    def test_project_artifact_api_and_viewer_expose_rockbox_files(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        artifacts = api_main.list_project_artifacts("rockbox")
+        artifact = artifacts[0]
+        artifact_detail = api_main.get_project_artifact("rockbox", artifact["id"])
+        artifact_html = api_main.bodesign_artifact_viewer("rockbox", artifact["id"])
+
+        self.assertGreater(len(artifacts), 0)
+        self.assertEqual("rockbox", artifact["project_id"])
+        self.assertIn("viewer_url", artifact)
+        self.assertIn("preview", artifact_detail)
+        self.assertIn(str(artifact["filename"]), artifact_html)
+        self.assertIn("Preview", artifact_html)
 
 
 def install_fastapi_stub() -> None:

@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from html import escape
+import json
 from pathlib import Path
 import sys
 from typing import Any
@@ -52,17 +53,24 @@ JOBS: list[dict[str, Any]] = []
 BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/", "purpose": "Redirect to the bodesign viewer."},
     {"method": "GET", "path": "/bodesign", "purpose": "Redirect to the canonical bodesign viewer path."},
-    {"method": "GET", "path": "/bodesign/", "purpose": "Render the Rockbox BoardDesign IR summary viewer."},
+    {"method": "GET", "path": "/bodesign/", "purpose": "Render the bodesign project browser and default Rockbox workspace."},
+    {"method": "GET", "path": "/bodesign/projects/{project_id}", "purpose": "Open a specific bodesign project workspace."},
+    {"method": "GET", "path": "/bodesign/projects/{project_id}/artifacts/{artifact_id}", "purpose": "Browse a specific project artifact."},
     {"method": "GET", "path": "/bodesign/routes", "purpose": "Show visible bodesign web/API routes."},
     {"method": "GET", "path": "/bodesign/health", "purpose": "Health check for host/gateway routing."},
     {"method": "GET", "path": "/bodesign/api/routes", "purpose": "Return visible bodesign web/API routes as JSON."},
     {"method": "GET", "path": "/bodesign/api/projects", "purpose": "List bodesign projects."},
     {"method": "POST", "path": "/bodesign/api/projects", "purpose": "Create a bodesign project."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts", "purpose": "List project artifacts."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", "purpose": "Return artifact metadata and preview."},
     {"method": "POST", "path": "/bodesign/api/artifacts/detect", "purpose": "Detect artifact types before ingestion."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/board-design", "purpose": "Return a BoardDesign IR summary."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/rockbox/reconstruct", "purpose": "Reconstruct Rockbox into BoardDesign IR summary."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/knowledge/datasheets", "purpose": "Ingest datasheet knowledge."},
 ]
+
+BUILTIN_PROJECT_ID = "rockbox"
+
 
 
 @app.get("/health")
@@ -121,80 +129,189 @@ def bodesign_route_registry() -> dict[str, object]:
 
 @app.get("/bodesign/", response_class=HTMLResponse)
 def bodesign_viewer() -> str:
-    board_design = _rockbox_demo_board_design()
+    return _render_project_workspace(BUILTIN_PROJECT_ID)
+
+
+@app.get("/bodesign/projects/{project_id}", response_class=HTMLResponse)
+def bodesign_project_workspace(project_id: str) -> str:
+    return _render_project_workspace(project_id)
+
+
+@app.get("/bodesign/projects/{project_id}/artifacts/{artifact_id}", response_class=HTMLResponse)
+def bodesign_artifact_viewer(project_id: str, artifact_id: str) -> str:
+    artifact = _find_project_artifact(project_id, artifact_id)
+    if artifact is None:
+        return _render_not_found(f"Artifact not found: {project_id}/{artifact_id}")
+    return _render_artifact_viewer(project_id, artifact)
+
+
+def _render_project_workspace(project_id: str) -> str:
+    projects = _list_visible_projects()
+    project_markup = "".join(_project_card(project) for project in projects)
+    board_design = _project_board_design(project_id)
     confidence = board_design["confidence_summary"]
     components = board_design.get("components", [])
     nets = board_design.get("nets", [])
     layers = board_design.get("layers", [])
-    highlighted_components = _highlight_components(components)
-    component_markup = "".join(_component_markup(component) for component in highlighted_components)
-    layer_markup = "".join(f'<span class="pill">{escape(str(layer.get("name", "layer")))}</span>' for layer in layers)
-    if not layer_markup:
-        layer_markup = '<span class="pill">No copper layers parsed</span>'
+    artifact_paths = _project_artifact_paths(project_id)
+    artifact_groups = _group_artifacts(artifact_paths)
+    layer_markup = "".join(_layer_row(layer) for layer in layers) or '<p class="muted">No copper layers parsed.</p>'
+    document_markup = _artifact_group_markup(artifact_groups)
+    artifact_table = "".join(_artifact_row(project_id, artifact) for artifact in _project_artifact_records(project_id))
+    if not artifact_table:
+        artifact_table = '<tr><td colspan="5">No artifacts are attached to this project yet.</td></tr>'
+    component_table = "".join(_component_row(component) for component in components[:80])
+    if not component_table:
+        component_table = '<tr><td colspan="5">No placement/BOM components parsed.</td></tr>'
     net_markup = "".join(
-        f'<div class="metric"><span>{escape(str(net.get("name", "net")))}</span><code>{len(net.get("connected_pads", []))} pads</code></div>'
-        for net in nets[:10]
+        f'<tr><td><code>{escape(str(net.get("name", "net")))}</code></td><td>{len(net.get("connected_pads", []))}</td><td>{escape(", ".join(str(pad) for pad in net.get("connected_pads", [])[:8]))}</td></tr>'
+        for net in nets[:80]
     )
     if not net_markup:
-        net_markup = '<p>No IPC nets parsed yet.</p>'
+        net_markup = '<tr><td colspan="3">No IPC nets parsed yet.</td></tr>'
+    ir_json = escape(json.dumps(_compact_board_design(board_design), indent=2, ensure_ascii=False))
     return """
     <!doctype html>
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>bodesign Rockbox Viewer</title>
+        <title>bodesign Workspace</title>
         <style>
-          body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #101418; color: #e8f0f2; }
-          main { display: grid; grid-template-columns: 300px 1fr 360px; min-height: 100vh; }
-          aside, section { padding: 24px; border-right: 1px solid #26323a; }
-          h1, h2 { margin-top: 0; }
-          .canvas { display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, #20303a, #0b0f12 70%); }
-          .board { width: min(68vw, 760px); aspect-ratio: 1.65; border: 2px solid #5de4c7; border-radius: 18px; position: relative; background: #16362e; box-shadow: 0 24px 80px #0008; }
-          .chip { position: absolute; border-radius: 10px; background: #d8e1e5; color: #111; display: grid; place-items: center; font-size: 11px; font-weight: 700; padding: 4px; text-align: center; box-sizing: border-box; }
-          .trace { position: absolute; height: 4px; background: #ffc857; border-radius: 999px; transform-origin: left center; }
-          .pill { display: inline-block; margin: 4px 4px 4px 0; padding: 4px 8px; border: 1px solid #39515b; border-radius: 999px; color: #9bd8ff; }
-          .metric { display: flex; justify-content: space-between; margin: 8px 0; color: #cbd6d9; }
-          .scroll { max-height: 230px; overflow: auto; padding-right: 8px; }
+          :root { color-scheme: dark; --bg: #0b0f12; --panel: #111a20; --panel2: #162229; --line: #293943; --text: #e8f0f2; --muted: #9aacb4; --accent: #5de4c7; --accent2: #ffc857; }
+          * { box-sizing: border-box; }
+          body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); }
+          .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
+          .sidebar { padding: 24px; border-right: 1px solid var(--line); background: #0f171c; }
+          .workspace { padding: 22px; min-width: 0; }
+          h1, h2, h3 { margin-top: 0; }
+          h1 { font-size: 26px; letter-spacing: -0.03em; }
+          h2 { font-size: 18px; }
+          h3 { font-size: 15px; color: #d8e8ec; }
+          .muted { color: var(--muted); }
+          .metric { display: flex; justify-content: space-between; gap: 16px; margin: 8px 0; color: #cbd6d9; }
+          .button { display: inline-block; padding: 8px 11px; border-radius: 10px; background: var(--accent); color: #07100d; text-decoration: none; font-weight: 700; }
+          .button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+          .pill { display: inline-block; margin: 4px 4px 4px 0; padding: 5px 9px; border: 1px solid #39515b; border-radius: 999px; color: #9bd8ff; background: #0c151a; }
+          .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; position: sticky; top: 0; z-index: 1; padding: 8px 0 14px; background: linear-gradient(#0b0f12 76%, #0b0f1200); }
+          .tabs input { display: none; }
+          .tabs label { cursor: pointer; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--panel); }
+          #tab-projects:checked ~ label[for="tab-projects"], #tab-documents:checked ~ label[for="tab-documents"], #tab-board:checked ~ label[for="tab-board"], #tab-gerber:checked ~ label[for="tab-gerber"], #tab-ipc:checked ~ label[for="tab-ipc"], #tab-components:checked ~ label[for="tab-components"], #tab-ir:checked ~ label[for="tab-ir"], #tab-report:checked ~ label[for="tab-report"] { color: #07100d; background: var(--accent); border-color: var(--accent); }
+          .panel { display: none; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: 20px; min-height: calc(100vh - 96px); }
+          #tab-projects:checked ~ .panels #projects, #tab-documents:checked ~ .panels #documents, #tab-board:checked ~ .panels #board, #tab-gerber:checked ~ .panels #gerber, #tab-ipc:checked ~ .panels #ipc, #tab-components:checked ~ .panels #components, #tab-ir:checked ~ .panels #ir, #tab-report:checked ~ .panels #report { display: block; }
+          .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+          .card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--panel2); }
+          .project-card { border-color: #3e635b; }
+          .empty-viewer { min-height: 520px; display: grid; place-items: center; border: 1px dashed #3b5560; border-radius: 16px; background: linear-gradient(135deg, #101820, #081013); text-align: center; padding: 32px; }
+          .empty-viewer strong { display: block; font-size: 22px; margin-bottom: 10px; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border-bottom: 1px solid var(--line); padding: 9px 8px; text-align: left; vertical-align: top; }
+          th { color: #bcd0d7; font-weight: 650; }
+          .scroll { max-height: 540px; overflow: auto; }
+          pre { margin: 0; white-space: pre-wrap; color: #d6e3e7; }
           code { color: #8ef6d2; }
         </style>
       </head>
       <body>
-        <main>
-          <aside>
+        <main class="shell">
+          <aside class="sidebar">
             <h1>bodesign</h1>
-            <p>Rockbox reconstructed circuit/PCB summary from placement and IPC-356 evidence.</p>
-            <p><code>/bodesign/</code> is backed by MCP/API contracts and now renders fixture-derived component and net counts.</p>
-            <h2>Layers</h2>
-            """ + layer_markup + """
+            <p class="muted">Project workspace from uploaded or fixture-backed hardware evidence. This is a file-centric viewer, not a fake completed schematic.</p>
+            <h2>Project</h2>
+            <div class="metric"><span>project</span><code>""" + escape(project_id) + """</code></div>
+            <div class="metric"><span>IR</span><code>""" + escape(str(board_design["id"])) + """</code></div>
+            <div class="metric"><span>status</span><code>""" + escape(str(confidence["status"])) + """</code></div>
+            <div class="metric"><span>confidence</span><code>""" + escape(str(confidence["overall"])) + """</code></div>
+            <p><a class="button" href="#projects">Open projects</a></p>
             <h2>Parsed Summary</h2>
             <div class="metric"><span>components</span><code>""" + str(int(confidence.get("components", 0))) + """</code></div>
             <div class="metric"><span>nets</span><code>""" + str(int(confidence.get("nets", 0))) + """</code></div>
             <div class="metric"><span>IPC pads</span><code>""" + str(int(confidence.get("ipc_pads", 0))) + """</code></div>
             <div class="metric"><span>IPC vias</span><code>""" + str(int(confidence.get("ipc_vias", 0))) + """</code></div>
+            <h2>Source Groups</h2>
+            <div class="metric"><span>Gerber</span><code>""" + str(len(artifact_groups["gerber"])) + """</code></div>
+            <div class="metric"><span>Drill</span><code>""" + str(len(artifact_groups["drill"])) + """</code></div>
+            <div class="metric"><span>IPC</span><code>""" + str(len(artifact_groups["ipc356"])) + """</code></div>
+            <div class="metric"><span>BOM/placement</span><code>""" + str(len(artifact_groups["bom_placement"])) + """</code></div>
           </aside>
-          <section class="canvas">
-            <div class="board" aria-label="Rockbox PCB summary">
-              """ + component_markup + """
-              <div class="trace" style="left: 31%; top: 36%; width: 130px; transform: rotate(10deg);"></div>
-              <div class="trace" style="left: 57%; top: 45%; width: 160px; transform: rotate(-12deg);"></div>
-              <div class="trace" style="left: 52%; top: 60%; width: 180px; transform: rotate(18deg);"></div>
+          <section class="workspace">
+            <div class="tabs">
+              <input checked id="tab-projects" name="workspace-tab" type="radio" />
+              <input id="tab-documents" name="workspace-tab" type="radio" />
+              <input id="tab-board" name="workspace-tab" type="radio" />
+              <input id="tab-gerber" name="workspace-tab" type="radio" />
+              <input id="tab-ipc" name="workspace-tab" type="radio" />
+              <input id="tab-components" name="workspace-tab" type="radio" />
+              <input id="tab-ir" name="workspace-tab" type="radio" />
+              <input id="tab-report" name="workspace-tab" type="radio" />
+              <label for="tab-projects">Projects</label>
+              <label for="tab-documents">Documents</label>
+              <label for="tab-board">Board View</label>
+              <label for="tab-gerber">Gerber Layers</label>
+              <label for="tab-ipc">IPC / Nets</label>
+              <label for="tab-components">Components</label>
+              <label for="tab-ir">BoardDesign IR</label>
+              <label for="tab-report">Report</label>
+              <div class="panels">
+                <article class="panel" id="projects">
+                  <h2>Projects</h2>
+                  <p class="muted">Open or import board projects. Rockbox is preloaded from the private fixture as an already-uploaded project so it can be browsed immediately.</p>
+                  <div class="grid">""" + project_markup + """
+                    <div class="card">
+                      <h3>Import new project</h3>
+                      <p class="muted">Drop/upload is not wired yet. MCP/agent import should call <code>/bodesign/api/artifacts/detect</code> and then attach files to a project.</p>
+                      <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
+                    </div>
+                  </div>
+                </article>
+                <article class="panel" id="documents">
+                  <h2>Source Documents</h2>
+                  <p class="muted">This tab is the file-centric entry point. It separates Gerber, drill, IPC, BOM/placement, routing reports and unknown files before any circuit claim is made.</p>
+                  <div class="scroll"><table><thead><tr><th>File</th><th>Type</th><th>Format</th><th>Size</th><th>Open</th></tr></thead><tbody>""" + artifact_table + """</tbody></table></div>
+                  <h3>Grouped by type</h3>
+                  <div class="grid">""" + document_markup + """</div>
+                </article>
+                <article class="panel" id="board">
+                  <h2>Board View</h2>
+                  <div class="empty-viewer">
+                    <div>
+                      <strong>PCB layout rendering is not available yet.</strong>
+                      <p class="muted">The previous board drawing was removed because it was only a decorative placement sketch, not a valid circuit diagram, schematic, or Gerber render.</p>
+                      <p class="muted">Current verified data is available in <b>Gerber Layers</b>, <b>IPC / Nets</b>, and <b>Components</b>. A real board view requires Gerber aperture/geometry parsing plus drill/outline rendering.</p>
+                    </div>
+                  </div>
+                </article>
+                <article class="panel" id="gerber">
+                  <h2>Gerber Layers</h2>
+                  <p class="muted">Layer files are visible here first. Actual Gerber shape rendering is intentionally marked pending.</p>
+                  <table><thead><tr><th>Layer</th><th>Source file</th><th>Status</th></tr></thead><tbody>""" + layer_markup + """</tbody></table>
+                </article>
+                <article class="panel" id="ipc">
+                  <h2>IPC-356 Nets</h2>
+                  <p class="muted">Connectivity evidence parsed from IPC records. This is the closest current view to circuit topology.</p>
+                  <div class="scroll"><table><thead><tr><th>Net</th><th>Connected pads</th><th>Sample pads</th></tr></thead><tbody>""" + net_markup + """</tbody></table></div>
+                </article>
+                <article class="panel" id="components">
+                  <h2>Components</h2>
+                  <p class="muted">Placement/BOM-derived component table. Datasheet enrichment will attach pinout and design knowledge here.</p>
+                  <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Footprint</th><th>Side</th><th>XY mil</th></tr></thead><tbody>""" + component_table + """</tbody></table></div>
+                </article>
+                <article class="panel" id="ir">
+                  <h2>BoardDesign IR</h2>
+                  <p class="muted">Compact JSON preview of the normalized source-of-truth model.</p>
+                  <pre>""" + ir_json + """</pre>
+                </article>
+                <article class="panel" id="report">
+                  <h2>Reconstruction Report</h2>
+                  <div class="grid">
+                    <div class="card"><h3>Current capability</h3><p>Rockbox placement and IPC summaries are parsed into BoardDesign IR.</p></div>
+                    <div class="card"><h3>Not yet correct</h3><p>True schematic drawing, Gerber geometry rendering, routing topology and datasheet-derived semantics are still pending.</p></div>
+                    <div class="card"><h3>Next viewer layer</h3><p>Render each original file type visually: PDFs as documents, Gerber as layer canvas, IPC as net graph, BOM as component table.</p></div>
+                  </div>
+                </article>
+              </div>
             </div>
           </section>
-          <aside>
-            <h2>BoardDesign IR</h2>
-            <div class="metric"><span>id</span><code>""" + str(board_design["id"]) + """</code></div>
-            <div class="metric"><span>status</span><code>""" + str(confidence["status"]) + """</code></div>
-            <div class="metric"><span>overall confidence</span><code>""" + str(confidence["overall"]) + """</code></div>
-            <h2>Artifact Evidence</h2>
-            <div class="metric"><span>Gerber layers</span><code>""" + str(int(confidence["gerber_files"])) + """</code></div>
-            <div class="metric"><span>Drill files</span><code>""" + str(int(confidence["drill_files"])) + """</code></div>
-            <div class="metric"><span>IPC-356</span><code>""" + str(int(confidence["ipc_files"])) + """</code></div>
-            <div class="metric"><span>Placement/BOM</span><code>""" + str(int(confidence["component_files"])) + """</code></div>
-            <h2>Top Nets</h2>
-            <div class="scroll">""" + net_markup + """</div>
-            <p>Exact Gerber geometry rendering is still pending; this view uses real placement/net summaries.</p>
-          </aside>
         </main>
       </body>
     </html>
@@ -203,8 +320,23 @@ def bodesign_viewer() -> str:
 
 @app.get("/api/projects")
 @app.get("/bodesign/api/projects")
-def list_projects() -> list[dict[str, str]]:
-    return list(PROJECTS.values())
+def list_projects() -> list[dict[str, object]]:
+    return _list_visible_projects()
+
+
+@app.get("/api/projects/{project_id}/artifacts")
+@app.get("/bodesign/api/projects/{project_id}/artifacts")
+def list_project_artifacts(project_id: str) -> list[dict[str, object]]:
+    return _project_artifact_records(project_id)
+
+
+@app.get("/api/projects/{project_id}/artifacts/{artifact_id}")
+@app.get("/bodesign/api/projects/{project_id}/artifacts/{artifact_id}")
+def get_project_artifact(project_id: str, artifact_id: str) -> dict[str, object]:
+    artifact = _find_project_artifact(project_id, artifact_id)
+    if artifact is None:
+        return {"project_id": project_id, "artifact_id": artifact_id, "status": "not-found"}
+    return {**artifact, "preview": _artifact_preview(Path(str(artifact["path"])), str(artifact["artifact_type"]))}
 
 
 @app.post("/api/projects")
@@ -442,6 +574,176 @@ def _project_id(project_name: str) -> str:
     return safe_name or "project"
 
 
+def _list_visible_projects() -> list[dict[str, object]]:
+    projects = [_builtin_rockbox_project()]
+    projects.extend(project for project_id, project in PROJECTS.items() if project_id != BUILTIN_PROJECT_ID)
+    return projects
+
+
+def _builtin_rockbox_project() -> dict[str, object]:
+    artifact_paths = _rockbox_demo_artifact_paths()
+    board_design = _rockbox_demo_board_design()
+    confidence = board_design.get("confidence_summary", {})
+    return {
+        "id": BUILTIN_PROJECT_ID,
+        "name": "Rockbox reference board",
+        "status": "imported-fixture",
+        "source": "fixtures/private/rockbox/gerber",
+        "artifact_count": len(artifact_paths),
+        "board_design_id": board_design.get("id", "rockbox-board-design"),
+        "components": int(confidence.get("components", 0)),
+        "nets": int(confidence.get("nets", 0)),
+        "viewer_url": "/bodesign/projects/rockbox",
+    }
+
+
+def _project_board_design(project_id: str) -> dict[str, object]:
+    if project_id == BUILTIN_PROJECT_ID:
+        return _rockbox_demo_board_design()
+    return {
+        "id": f"{project_id}-board-design",
+        "components": [],
+        "nets": [],
+        "layers": [],
+        "board_objects": [],
+        "evidence_refs": [],
+        "confidence_summary": {"overall": 0.0, "status": "empty-project", "components": 0, "nets": 0, "ipc_pads": 0, "ipc_vias": 0},
+    }
+
+
+def _project_artifact_paths(project_id: str) -> list[str]:
+    if project_id == BUILTIN_PROJECT_ID:
+        return _rockbox_demo_artifact_paths()
+    return []
+
+
+def _project_artifact_records(project_id: str) -> list[dict[str, object]]:
+    records = []
+    for path_string in _project_artifact_paths(project_id):
+        path = Path(path_string)
+        detected = detect_input_artifact(str(path)) if detect_input_artifact is not None else None
+        artifact_type = detected.artifact_type if detected is not None else "unknown"
+        detected_format = detected.detected_format if detected is not None else path.suffix.lower().lstrip(".")
+        records.append(
+            {
+                "id": _artifact_id(path),
+                "project_id": project_id,
+                "filename": path.name,
+                "path": str(path),
+                "artifact_type": artifact_type,
+                "detected_format": detected_format,
+                "size_bytes": path.stat().st_size if path.exists() else 0,
+                "viewer_url": f"/bodesign/projects/{project_id}/artifacts/{_artifact_id(path)}",
+            }
+        )
+    return records
+
+
+def _artifact_id(path: Path) -> str:
+    safe_name = "".join(character.lower() if character.isalnum() else "-" for character in path.name).strip("-")
+    return safe_name or "artifact"
+
+
+def _find_project_artifact(project_id: str, artifact_id: str) -> dict[str, object] | None:
+    for artifact in _project_artifact_records(project_id):
+        if artifact["id"] == artifact_id:
+            return artifact
+    return None
+
+
+def _artifact_row(project_id: str, artifact: dict[str, object]) -> str:
+    return (
+        "<tr>"
+        f"<td><code>{escape(str(artifact['filename']))}</code></td>"
+        f"<td>{escape(str(artifact['artifact_type']))}</td>"
+        f"<td>{escape(str(artifact['detected_format']))}</td>"
+        f"<td>{escape(str(artifact['size_bytes']))}</td>"
+        f"<td><a class=\"button secondary\" href=\"/bodesign/projects/{escape(project_id)}/artifacts/{escape(str(artifact['id']))}\">Open</a></td>"
+        "</tr>"
+    )
+
+
+def _artifact_preview(path: Path, artifact_type: str) -> dict[str, object]:
+    if not path.exists():
+        return {"kind": "missing", "text": "Artifact file is missing."}
+    if artifact_type in {"bom_placement", "ipc356", "routing_report", "gerber", "drill", "unknown"}:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()[:80]
+        except OSError as error:
+            return {"kind": "error", "text": str(error)}
+        return {"kind": "text", "line_count_previewed": len(lines), "text": "\n".join(lines)}
+    if artifact_type in {"datasheet", "schematic", "reference_doc"}:
+        return {"kind": "document", "text": "Document preview is pending; file is registered for extraction."}
+    return {"kind": "metadata", "text": "No preview adapter is available for this artifact type yet."}
+
+
+def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str:
+    preview = _artifact_preview(Path(str(artifact["path"])), str(artifact["artifact_type"]))
+    preview_text = escape(str(preview.get("text", "")))
+    return """
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>bodesign artifact</title>
+        <style>
+          body { margin: 0; padding: 28px; font-family: ui-sans-serif, system-ui, sans-serif; background: #0b0f12; color: #e8f0f2; }
+          a { color: #5de4c7; } code { color: #8ef6d2; }
+          .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 18px 0; }
+          .card { border: 1px solid #293943; border-radius: 14px; padding: 14px; background: #111a20; }
+          pre { white-space: pre-wrap; border: 1px solid #293943; border-radius: 14px; padding: 16px; background: #111a20; overflow: auto; }
+        </style>
+      </head>
+      <body>
+        <p><a href="/bodesign/projects/""" + escape(project_id) + """">← Back to project</a></p>
+        <h1>""" + escape(str(artifact["filename"])) + """</h1>
+        <div class="meta">
+          <div class="card"><strong>type</strong><br><code>""" + escape(str(artifact["artifact_type"])) + """</code></div>
+          <div class="card"><strong>format</strong><br><code>""" + escape(str(artifact["detected_format"])) + """</code></div>
+          <div class="card"><strong>size</strong><br><code>""" + escape(str(artifact["size_bytes"])) + """ bytes</code></div>
+          <div class="card"><strong>preview</strong><br><code>""" + escape(str(preview.get("kind", "unknown"))) + """</code></div>
+        </div>
+        <h2>Preview</h2>
+        <pre>""" + preview_text + """</pre>
+      </body>
+    </html>
+    """
+
+
+def _render_not_found(message: str) -> str:
+    return f"""
+    <!doctype html>
+    <html lang="en"><head><meta charset="utf-8"><title>bodesign not found</title></head>
+    <body style="font-family: sans-serif; background: #0b0f12; color: #e8f0f2; padding: 32px;">
+      <p><a style="color: #5de4c7" href="/bodesign/">← Back to bodesign</a></p>
+      <h1>{escape(message)}</h1>
+    </body></html>
+    """
+
+
+def _project_card(project: dict[str, object]) -> str:
+    name = escape(str(project.get("name", "Untitled project")))
+    status = escape(str(project.get("status", "unknown")))
+    project_id = escape(str(project.get("id", "")))
+    artifact_count = escape(str(project.get("artifact_count", 0)))
+    components = escape(str(project.get("components", "—")))
+    nets = escape(str(project.get("nets", "—")))
+    source = escape(str(project.get("source", "manual project")))
+    viewer_url = escape(str(project.get("viewer_url", "/bodesign/")))
+    return f"""
+      <div class="card project-card">
+        <h3>{name} <span class="pill">{status}</span></h3>
+        <div class="metric"><span>project id</span><code>{project_id}</code></div>
+        <div class="metric"><span>artifacts</span><code>{artifact_count}</code></div>
+        <div class="metric"><span>components</span><code>{components}</code></div>
+        <div class="metric"><span>nets</span><code>{nets}</code></div>
+        <p class="muted">{source}</p>
+        <p><a class="button" href="{viewer_url}">Open / browse</a></p>
+      </div>
+    """
+
+
 def _rockbox_demo_board_design() -> dict[str, object]:
     artifact_paths = _rockbox_demo_artifact_paths()
     if reconstruct_rockbox_placeholder is None:
@@ -464,6 +766,80 @@ def _rockbox_demo_artifact_paths() -> list[str]:
     if not fixture_dir.exists():
         return []
     return [str(path) for path in fixture_dir.iterdir()]
+
+
+def _group_artifacts(artifact_paths: list[str]) -> dict[str, list[Path]]:
+    groups = {
+        "datasheet": [],
+        "schematic": [],
+        "bom_placement": [],
+        "gerber": [],
+        "drill": [],
+        "ipc356": [],
+        "routing_report": [],
+        "reference_doc": [],
+        "unknown": [],
+    }
+    for artifact_path in sorted(artifact_paths):
+        path = Path(artifact_path)
+        artifact_type = detect_input_artifact(str(path)).artifact_type if detect_input_artifact is not None else path.suffix.lower().lstrip(".")
+        if artifact_type not in groups:
+            artifact_type = "unknown"
+        groups[artifact_type].append(path)
+    return groups
+
+
+def _artifact_group_markup(artifact_groups: dict[str, list[Path]]) -> str:
+    labels = {
+        "datasheet": "Datasheets",
+        "schematic": "Schematics",
+        "bom_placement": "BOM / placement",
+        "gerber": "Gerber artwork",
+        "drill": "Drill files",
+        "ipc356": "IPC-356 nets",
+        "routing_report": "Routing reports",
+        "reference_doc": "Reference docs",
+        "unknown": "Unknown / pending",
+    }
+    cards = []
+    for artifact_type, label in labels.items():
+        files = artifact_groups.get(artifact_type, [])
+        file_items = "".join(f"<li><code>{escape(path.name)}</code></li>" for path in files[:18])
+        if len(files) > 18:
+            file_items += f"<li class=\"muted\">+ {len(files) - 18} more</li>"
+        if not file_items:
+            file_items = '<li class="muted">No files detected yet.</li>'
+        cards.append(f'<div class="card"><h3>{escape(label)} <span class="pill">{len(files)}</span></h3><ul>{file_items}</ul></div>')
+    return "".join(cards)
+
+
+def _layer_row(layer: dict[str, object]) -> str:
+    name = escape(str(layer.get("name", "layer")))
+    source_artifact_id = escape(str(layer.get("source_artifact_id", "unknown")))
+    return f"<tr><td><code>{name}</code></td><td>{source_artifact_id}</td><td><span class=\"pill\">listed, render pending</span></td></tr>"
+
+
+def _component_row(component: dict[str, object]) -> str:
+    placement = component.get("placement") if isinstance(component.get("placement"), dict) else {}
+    x_mil = placement.get("x_mil", "")
+    y_mil = placement.get("y_mil", "")
+    return (
+        "<tr>"
+        f"<td><code>{escape(str(component.get('refdes', '')))}</code></td>"
+        f"<td>{escape(str(component.get('part_number') or placement.get('value') or ''))}</td>"
+        f"<td>{escape(str(component.get('footprint') or ''))}</td>"
+        f"<td>{escape(str(placement.get('side', '')))}</td>"
+        f"<td>{escape(str(x_mil))}, {escape(str(y_mil))}</td>"
+        "</tr>"
+    )
+
+
+def _compact_board_design(board_design: dict[str, object]) -> dict[str, object]:
+    compact = dict(board_design)
+    compact["components"] = board_design.get("components", [])[:12]
+    compact["nets"] = board_design.get("nets", [])[:12]
+    compact["note"] = "Preview is truncated for the web workspace; use the API for the full IR."
+    return compact
 
 
 def _highlight_components(components: list[dict[str, object]]) -> list[dict[str, object]]:

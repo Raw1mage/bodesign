@@ -64,3 +64,14 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 - Gerber validation spike must verify `pygerber` support for layer bounds, apertures, flashes, tracks, regions, SVG/image rendering, and output comparison.
 - API flows should verify upload, parse status, findings, proposal creation, approval, and export.
 - Frontend tests should cover viewer controls and approval UI state transitions.
+
+## Immediate Capability Gaps
+
+- Project workspace: current web UI has a builtin Rockbox fixture project, but per-project routes, durable artifact storage, and real upload/open flows are still missing.
+- File visualization: source files must be rendered in type-specific viewers before the product claims a board/circuit view. PDFs, BOM/placement, IPC nets, Gerber metadata, drill files, and routing reports each need their own visual surface.
+- Board View: must stay unavailable until true Gerber/drill geometry exists. Decorative placement sketches are explicitly disallowed because they misrepresent evidence as a PCB layout or circuit diagram.
+- Geometry reconstruction: reverse-core must add RS-274X aperture/flash/draw/region/polarity parsing, drill tool/hit parsing, board outline detection, and normalized `GeometryPrimitive` output.
+- Connectivity reconstruction: IPC nets, placement data, Gerber pads/flashes, vias, and drill hits must be fused into component-pad-net objects with confidence and cross-probing.
+- Knowledge base: component-kb must move from placeholder records to user-provided datasheet extraction, part queueing, pinout/package/power/interface/layout guideline normalization, and explicit knowledge gaps.
+- EDA bridge: KiCad should be introduced only behind adapter boundaries after `BoardDesign IR` has enough component, footprint, net, board-outline, layer-stack, and constraint data.
+- AI design workflow: the agent path is ingest sources → resolve component knowledge → reconstruct/reference-board IR → propose subsystem/layout intent → deterministic validation → user approval; generated layouts remain non-final until export validation passes.

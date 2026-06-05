@@ -37,6 +37,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
 PY
 }
 
+port_pid() {
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -ti TCP:"$PORT" -sTCP:LISTEN | head -n 1
+  elif command -v fuser >/dev/null 2>&1; then
+    fuser -n tcp "$PORT" 2>/dev/null | tr ' ' '\n' | head -n 1
+  fi
+}
+
 start() {
   ensure_dirs
   if is_running; then
@@ -64,7 +72,14 @@ stop() {
   if ! is_running; then
     rm -f "$PID_FILE"
     if port_alive; then
-      echo "bodesign is reachable on $HOST:$PORT but has no pid file; leaving it running"
+      local existing_pid
+      existing_pid="$(port_pid || true)"
+      if [ -n "$existing_pid" ]; then
+        kill "$existing_pid"
+        echo "bodesign stopped on $HOST:$PORT pid=$existing_pid"
+        return 0
+      fi
+      echo "bodesign is reachable on $HOST:$PORT but no pid/port owner was found; leaving it running"
       return 0
     fi
     echo "bodesign is not running"
