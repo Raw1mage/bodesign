@@ -18,10 +18,10 @@
 - [~] T13 Replace hard-coded Rockbox demo with per-project workspace routes and durable project/artifact records — per-project routes and fixture artifact records are implemented; durable DB/file storage is still pending
 - [~] T14 Add real web import/open/browse flow for uploaded project folders and fixture-backed projects — fixture-backed browsing is implemented; upload/drop flow is still pending
 - [x] T15 Build source-file viewers for PDFs, BOM/placement, IPC nets, Gerber layer metadata, drill files, and routing reports
-- [ ] T16 Integrate Gerber parser/render spike for RS-274X metadata, apertures, bounds, flashes, draws, regions, polarity, and SVG/image output
-- [ ] T17 Integrate drill parser for tool tables, drill hits, plated/non-plated hints, and board-outline candidates
-- [ ] T18 Normalize Gerber/drill geometry into `BoardDesign IR` primitives with evidence refs and confidence
-- [ ] T19 Re-enable Board View only after true PCB layer geometry can be rendered with pan/zoom/layer toggles
+- [x] T16 Integrate Gerber parser/render spike for RS-274X metadata, apertures, bounds, flashes, draws, regions, polarity, and SVG/image output
+- [x] T17 Integrate drill parser for tool tables, drill hits, plated/non-plated hints, and board-outline candidates
+- [~] T18 Normalize Gerber/drill geometry into `BoardDesign IR` primitives with evidence refs and confidence — geometry summaries and SVG evidence are available; full `GeometryPrimitive` IR fusion is pending
+- [~] T19 Re-enable Board View only after true PCB layer geometry can be rendered with pan/zoom/layer toggles — Board View now renders evidence-based SVG from one Gerber layer plus drill hits; pan/zoom/layer toggles are pending
 - [ ] T20 Fuse IPC nets, placement, Gerber pads/flashes, vias, and drill hits into component-pad-net reconstruction
 - [ ] T21 Add cross-probing between components, nets, layers, artifacts, and derived IR objects
 - [ ] T22 Build reusable component knowledge queue from Rockbox parts and OpenMV references

@@ -69,8 +69,8 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 
 - Project workspace: current web UI has a builtin Rockbox fixture project, but per-project routes, durable artifact storage, and real upload/open flows are still missing.
 - File visualization: source files must be rendered in type-specific viewers before the product claims a board/circuit view. PDFs, BOM/placement, IPC nets, Gerber metadata, drill files, and routing reports each need their own visual surface.
-- Board View: must stay unavailable until true Gerber/drill geometry exists. Decorative placement sketches are explicitly disallowed because they misrepresent evidence as a PCB layout or circuit diagram.
-- Geometry reconstruction: reverse-core must add RS-274X aperture/flash/draw/region/polarity parsing, drill tool/hit parsing, board outline detection, and normalized `GeometryPrimitive` output.
+- Board View: now renders an evidence-based SVG geometry preview from parsed Gerber draw/flash operations and drill hits. Decorative placement sketches remain explicitly disallowed; pan/zoom/layer toggles and full board-outline-aware rendering are still pending.
+- Geometry reconstruction: gerber-core now parses RS-274X aperture/flash/draw/region/polarity summaries and drill tool/hit summaries for Rockbox fixture files. Full board outline detection, repeated drill command expansion, polarity-aware regions, and normalized `GeometryPrimitive` IR output remain pending.
 - Connectivity reconstruction: IPC nets, placement data, Gerber pads/flashes, vias, and drill hits must be fused into component-pad-net objects with confidence and cross-probing.
 - Knowledge base: component-kb must move from placeholder records to user-provided datasheet extraction, part queueing, pinout/package/power/interface/layout guideline normalization, and explicit knowledge gaps.
 - EDA bridge: KiCad should be introduced only behind adapter boundaries after `BoardDesign IR` has enough component, footprint, net, board-outline, layer-stack, and constraint data.

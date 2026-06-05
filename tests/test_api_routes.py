@@ -23,6 +23,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/artifacts", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/geometry", routes)
         self.assertIn("/bodesign/api/artifacts/detect", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/knowledge/datasheets", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/reports/design", routes)
@@ -57,8 +58,10 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("Components", html)
         self.assertIn("BoardDesign IR", html)
         self.assertIn("Reconstruction Report", html)
-        self.assertIn("PCB layout rendering is not available yet", html)
-        self.assertIn("decorative placement sketch", html)
+        self.assertIn("Evidence-based geometry preview", html)
+        self.assertIn("L1_top.art", html)
+        self.assertIn("ROCKBOX_V2-1-6.drl", html)
+        self.assertIn("<svg", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -87,6 +90,19 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("preview", artifact_detail)
         self.assertIn(str(artifact["filename"]), artifact_html)
         self.assertIn("Preview", artifact_html)
+
+    def test_project_geometry_api_exposes_gerber_and_drill_summary(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        geometry = api_main.get_project_geometry("rockbox")
+
+        self.assertEqual("geometry-preview", geometry["status"])
+        self.assertEqual("L1_top.art", geometry["gerber"]["filename"])
+        self.assertEqual("ROCKBOX_V2-1-6.drl", geometry["drill"]["filename"])
+        self.assertGreater(geometry["gerber"]["draw_count"], 1000)
+        self.assertEqual(789, geometry["drill"]["hit_count"])
 
 
 def install_fastapi_stub() -> None:

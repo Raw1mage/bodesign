@@ -27,7 +27,7 @@ for package_root in PACKAGE_ROOTS:
 try:
     from bodesign_component_kb import ingest_datasheet_knowledge, reuse_component_knowledge
     from bodesign_doc_core import plan_openmv_document_ingestion
-    from bodesign_gerber_core import validate_gerber_export_placeholder
+    from bodesign_gerber_core import parse_drill_file, parse_gerber_file, render_geometry_svg, validate_gerber_export_placeholder
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
@@ -35,6 +35,9 @@ except ImportError:
     ingest_datasheet_knowledge = None
     reuse_component_knowledge = None
     plan_openmv_document_ingestion = None
+    parse_drill_file = None
+    parse_gerber_file = None
+    render_geometry_svg = None
     validate_gerber_export_placeholder = None
     JobSummary = None
     ProjectSummary = None
@@ -63,6 +66,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "POST", "path": "/bodesign/api/projects", "purpose": "Create a bodesign project."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts", "purpose": "List project artifacts."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", "purpose": "Return artifact metadata and preview."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/geometry", "purpose": "Return parsed Gerber/drill geometry summary for the board view."},
     {"method": "POST", "path": "/bodesign/api/artifacts/detect", "purpose": "Detect artifact types before ingestion."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/board-design", "purpose": "Return a BoardDesign IR summary."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/rockbox/reconstruct", "purpose": "Reconstruct Rockbox into BoardDesign IR summary."},
@@ -155,6 +159,10 @@ def _render_project_workspace(project_id: str) -> str:
     layers = board_design.get("layers", [])
     artifact_paths = _project_artifact_paths(project_id)
     artifact_groups = _group_artifacts(artifact_paths)
+    geometry = _project_geometry(project_id)
+    board_svg = geometry.get("svg", "")
+    gerber_geometry = geometry.get("gerber") or {}
+    drill_geometry = geometry.get("drill") or {}
     layer_markup = "".join(_layer_row(layer) for layer in layers) or '<p class="muted">No copper layers parsed.</p>'
     document_markup = _artifact_group_markup(artifact_groups)
     artifact_table = "".join(_artifact_row(project_id, artifact) for artifact in _project_artifact_records(project_id))
@@ -202,8 +210,8 @@ def _render_project_workspace(project_id: str) -> str:
           .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
           .card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--panel2); }
           .project-card { border-color: #3e635b; }
-          .empty-viewer { min-height: 520px; display: grid; place-items: center; border: 1px dashed #3b5560; border-radius: 16px; background: linear-gradient(135deg, #101820, #081013); text-align: center; padding: 32px; }
-          .empty-viewer strong { display: block; font-size: 22px; margin-bottom: 10px; }
+          .geometry-viewer { min-height: 520px; border: 1px solid #3b5560; border-radius: 16px; background: #07100d; overflow: auto; padding: 12px; }
+          .geometry-viewer svg { width: 100%; min-width: 760px; height: auto; display: block; }
           table { border-collapse: collapse; width: 100%; }
           th, td { border-bottom: 1px solid var(--line); padding: 9px 8px; text-align: left; vertical-align: top; }
           th { color: #bcd0d7; font-weight: 650; }
@@ -271,19 +279,20 @@ def _render_project_workspace(project_id: str) -> str:
                   <h3>Grouped by type</h3>
                   <div class="grid">""" + document_markup + """</div>
                 </article>
-                <article class="panel" id="board">
+                 <article class="panel" id="board">
                   <h2>Board View</h2>
-                  <div class="empty-viewer">
-                    <div>
-                      <strong>PCB layout rendering is not available yet.</strong>
-                      <p class="muted">The previous board drawing was removed because it was only a decorative placement sketch, not a valid circuit diagram, schematic, or Gerber render.</p>
-                      <p class="muted">Current verified data is available in <b>Gerber Layers</b>, <b>IPC / Nets</b>, and <b>Components</b>. A real board view requires Gerber aperture/geometry parsing plus drill/outline rendering.</p>
-                    </div>
+                  <p class="muted">Evidence-based geometry preview from parsed RS-274X Gerber draw/flash operations and Excellon drill hits. This is still a parser spike, not a full EDA editor.</p>
+                  <div class="grid">
+                    <div class="card"><h3>Gerber source</h3><p><code>""" + escape(str(gerber_geometry.get("filename", "none"))) + """</code></p><p>draws: <b>""" + escape(str(gerber_geometry.get("draw_count", 0))) + """</b> · flashes: <b>""" + escape(str(gerber_geometry.get("flash_count", 0))) + """</b></p></div>
+                    <div class="card"><h3>Drill source</h3><p><code>""" + escape(str(drill_geometry.get("filename", "none"))) + """</code></p><p>hits: <b>""" + escape(str(drill_geometry.get("hit_count", 0))) + """</b> · tools: <b>""" + escape(str(drill_geometry.get("tool_count", 0))) + """</b></p></div>
+                  </div>
+                  <div class="geometry-viewer">
+                    """ + board_svg + """
                   </div>
                 </article>
                 <article class="panel" id="gerber">
                   <h2>Gerber Layers</h2>
-                  <p class="muted">Layer files are visible here first. Actual Gerber shape rendering is intentionally marked pending.</p>
+                  <p class="muted">Layer files are visible here first. The Board View currently renders a sample copper layer plus drill hits.</p>
                   <table><thead><tr><th>Layer</th><th>Source file</th><th>Status</th></tr></thead><tbody>""" + layer_markup + """</tbody></table>
                 </article>
                 <article class="panel" id="ipc">
@@ -337,6 +346,13 @@ def get_project_artifact(project_id: str, artifact_id: str) -> dict[str, object]
     if artifact is None:
         return {"project_id": project_id, "artifact_id": artifact_id, "status": "not-found"}
     return {**artifact, "preview": _artifact_preview(Path(str(artifact["path"])), str(artifact["artifact_type"]))}
+
+
+@app.get("/api/projects/{project_id}/geometry")
+@app.get("/bodesign/api/projects/{project_id}/geometry")
+def get_project_geometry(project_id: str) -> dict[str, object]:
+    geometry = _project_geometry(project_id)
+    return {key: value for key, value in geometry.items() if key != "svg"}
 
 
 @app.post("/api/projects")
@@ -639,6 +655,59 @@ def _project_artifact_records(project_id: str) -> list[dict[str, object]]:
     return records
 
 
+def _project_geometry(project_id: str) -> dict[str, object]:
+    if parse_gerber_file is None or parse_drill_file is None or render_geometry_svg is None:
+        return {"status": "gerber-core unavailable", "gerber": None, "drill": None, "svg": ""}
+    records = _project_artifact_records(project_id)
+    gerber_record = _preferred_artifact(records, "gerber", ["L1_top.art", "L1_TOP.art", "top.art"])
+    drill_record = _preferred_artifact(records, "drill", ["ROCKBOX_V2-1-6.drl"])
+    gerber_summary = parse_gerber_file(str(gerber_record["path"]), sample_limit=900) if gerber_record is not None else None
+    drill_summary = parse_drill_file(str(drill_record["path"]), sample_limit=700) if drill_record is not None else None
+    gerber_dict = _compact_gerber_geometry(gerber_record, asdict(gerber_summary)) if gerber_summary is not None and gerber_record is not None else None
+    drill_dict = _compact_drill_geometry(drill_record, asdict(drill_summary)) if drill_summary is not None and drill_record is not None else None
+    return {
+        "status": "geometry-preview" if gerber_summary is not None or drill_summary is not None else "no-geometry-artifacts",
+        "gerber": gerber_dict,
+        "drill": drill_dict,
+        "svg": render_geometry_svg(gerber_summary, drill_summary),
+    }
+
+
+def _preferred_artifact(records: list[dict[str, object]], artifact_type: str, preferred_names: list[str]) -> dict[str, object] | None:
+    candidates = [record for record in records if record.get("artifact_type") == artifact_type]
+    for preferred_name in preferred_names:
+        for candidate in candidates:
+            if str(candidate.get("filename")) == preferred_name:
+                return candidate
+    return candidates[0] if candidates else None
+
+
+def _compact_gerber_geometry(record: dict[str, object], geometry: dict[str, object]) -> dict[str, object]:
+    return {
+        "artifact_id": record["id"],
+        "filename": record["filename"],
+        "unit": geometry["unit"],
+        "bounds": geometry["bounds"],
+        "aperture_count": len(geometry["apertures"]),
+        "draw_count": geometry["draw_count"],
+        "flash_count": geometry["flash_count"],
+        "region_count": geometry["region_count"],
+        "polarity_changes": geometry["polarity_changes"],
+    }
+
+
+def _compact_drill_geometry(record: dict[str, object], geometry: dict[str, object]) -> dict[str, object]:
+    return {
+        "artifact_id": record["id"],
+        "filename": record["filename"],
+        "unit": geometry["unit"],
+        "bounds": geometry["bounds"],
+        "tool_count": len(geometry["tools"]),
+        "hit_count": geometry["hit_count"],
+        "tools": geometry["tools"],
+    }
+
+
 def _artifact_id(path: Path) -> str:
     safe_name = "".join(character.lower() if character.isalnum() else "-" for character in path.name).strip("-")
     return safe_name or "artifact"
@@ -663,9 +732,58 @@ def _artifact_row(project_id: str, artifact: dict[str, object]) -> str:
     )
 
 
+def _gerber_summary_text(path: Path, geometry: dict[str, object]) -> str:
+    bounds = geometry.get("bounds", {}) if isinstance(geometry.get("bounds"), dict) else {}
+    return "\n".join(
+        [
+            f"Gerber geometry summary: {path.name}",
+            f"unit: {geometry.get('unit')}",
+            f"apertures: {len(geometry.get('apertures', []))}",
+            f"draw segments: {geometry.get('draw_count')}",
+            f"flashes: {geometry.get('flash_count')}",
+            f"regions: {geometry.get('region_count')}",
+            f"polarity changes: {geometry.get('polarity_changes')}",
+            f"bounds: ({bounds.get('min_x')}, {bounds.get('min_y')}) → ({bounds.get('max_x')}, {bounds.get('max_y')})",
+        ]
+    )
+
+
+def _drill_summary_text(path: Path, geometry: dict[str, object]) -> str:
+    bounds = geometry.get("bounds", {}) if isinstance(geometry.get("bounds"), dict) else {}
+    tools = geometry.get("tools", [])
+    tool_lines = [f"T{tool.get('index')}: {tool.get('size_mil')} mil {tool.get('plating')} hits={tool.get('hit_count')} qty_hint={tool.get('quantity_hint')}" for tool in tools]
+    return "\n".join(
+        [
+            f"Drill geometry summary: {path.name}",
+            f"unit: {geometry.get('unit')}",
+            f"hits: {geometry.get('hit_count')}",
+            f"tools: {len(tools)}",
+            f"bounds: ({bounds.get('min_x')}, {bounds.get('min_y')}) → ({bounds.get('max_x')}, {bounds.get('max_y')})",
+            "",
+            *tool_lines,
+        ]
+    )
+
+
 def _artifact_preview(path: Path, artifact_type: str) -> dict[str, object]:
     if not path.exists():
         return {"kind": "missing", "text": "Artifact file is missing."}
+    if artifact_type == "gerber" and parse_gerber_file is not None:
+        geometry = parse_gerber_file(path, sample_limit=120)
+        return {
+            "kind": "gerber-geometry",
+            "text": _gerber_summary_text(path, asdict(geometry)),
+            "geometry": asdict(geometry),
+            "svg": render_geometry_svg(geometry, None) if render_geometry_svg is not None else "",
+        }
+    if artifact_type == "drill" and parse_drill_file is not None:
+        geometry = parse_drill_file(path, sample_limit=180)
+        return {
+            "kind": "drill-geometry",
+            "text": _drill_summary_text(path, asdict(geometry)),
+            "geometry": asdict(geometry),
+            "svg": render_geometry_svg(None, geometry) if render_geometry_svg is not None else "",
+        }
     if artifact_type in {"bom_placement", "ipc356", "routing_report", "gerber", "drill", "unknown"}:
         try:
             lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()[:80]
@@ -680,6 +798,7 @@ def _artifact_preview(path: Path, artifact_type: str) -> dict[str, object]:
 def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str:
     preview = _artifact_preview(Path(str(artifact["path"])), str(artifact["artifact_type"]))
     preview_text = escape(str(preview.get("text", "")))
+    preview_svg = str(preview.get("svg", ""))
     return """
     <!doctype html>
     <html lang="en">
@@ -692,6 +811,8 @@ def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str
           a { color: #5de4c7; } code { color: #8ef6d2; }
           .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 18px 0; }
           .card { border: 1px solid #293943; border-radius: 14px; padding: 14px; background: #111a20; }
+          .geometry { border: 1px solid #293943; border-radius: 14px; padding: 12px; background: #07100d; overflow: auto; }
+          .geometry svg { width: 100%; min-width: 720px; height: auto; display: block; }
           pre { white-space: pre-wrap; border: 1px solid #293943; border-radius: 14px; padding: 16px; background: #111a20; overflow: auto; }
         </style>
       </head>
@@ -704,6 +825,7 @@ def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str
           <div class="card"><strong>size</strong><br><code>""" + escape(str(artifact["size_bytes"])) + """ bytes</code></div>
           <div class="card"><strong>preview</strong><br><code>""" + escape(str(preview.get("kind", "unknown"))) + """</code></div>
         </div>
+        <div class="geometry">""" + preview_svg + """</div>
         <h2>Preview</h2>
         <pre>""" + preview_text + """</pre>
       </body>
@@ -816,7 +938,7 @@ def _artifact_group_markup(artifact_groups: dict[str, list[Path]]) -> str:
 def _layer_row(layer: dict[str, object]) -> str:
     name = escape(str(layer.get("name", "layer")))
     source_artifact_id = escape(str(layer.get("source_artifact_id", "unknown")))
-    return f"<tr><td><code>{name}</code></td><td>{source_artifact_id}</td><td><span class=\"pill\">listed, render pending</span></td></tr>"
+    return f"<tr><td><code>{name}</code></td><td>{source_artifact_id}</td><td><span class=\"pill\">geometry parser available</span></td></tr>"
 
 
 def _component_row(component: dict[str, object]) -> str:
