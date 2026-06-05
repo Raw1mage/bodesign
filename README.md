@@ -20,8 +20,9 @@
 ## Run the Web Surface
 
 ```bash
-python3 -m pip install -r services/api/requirements.txt
-python3 -m services.api
+python3 -m venv .venv
+.venv/bin/python -m pip install -r services/api/requirements.txt
+./webctl.sh start
 ```
 
 Then open:
@@ -29,6 +30,13 @@ Then open:
 - `http://127.0.0.1:8765/bodesign/` for the Rockbox viewer.
 - `http://127.0.0.1:8765/bodesign/routes` for the visible route index.
 - `http://127.0.0.1:8765/bodesign/api/routes` for the JSON route registry.
+
+## opencms Published Web
+
+Published Web visibility requires both layers:
+
+- User registry entry in `~/.config/web_registry.json` with `entryName: "bodesign"`, `publicBasePath: "/bodesign"`, `primaryPort: 8765`, and `webctlPath: "/home/pkcs12/projects/bodesign/webctl.sh"`.
+- Gateway route published as `/bodesign -> 127.0.0.1:8765` through opencode `webctl.sh publish-route` or the web-route API.
 
 ## Current State
 
