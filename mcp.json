@@ -1,0 +1,11 @@
+{
+  "id": "bodesign",
+  "name": "bodesign",
+  "description": "AI PCB design copilot — ingest a KiCad/EDA project folder, plan requirements, source reference evidence, generate KiCad symbols/schematics, lay out + export fab files, and track readiness, validated against KiCad and a known-good reference (control group). Runs as a Docker container; MCP Streamable HTTP over a Unix socket with a token file API.",
+  "version": "0.1.0",
+  "transport": "streamable-http",
+  "url": "unix:///home/pkcs12/projects/bodesign/.run/bodesign.sock:/mcp/",
+  "auth": { "type": "none" },
+  "source": { "type": "local" },
+  "instructions": "bodesign exposes AI PCB-design tools (prefix `bodesign_`): ingest_project, plan_design_intent, evidence_manifest, emit_symbol, compose_schematic, pin_allocation, emit_layout, emit_fab, render_companion, emit_doc, package_readiness, reference_crosscheck.\n\nTools operate on host paths (the local files-land-in-the-client-folder model). Produced files are also fetchable over the socket:\n  curl --unix-socket /home/pkcs12/projects/bodesign/.run/bodesign.sock http://bodesign.local/files/{token}/blob/{rel}\nUpload host files via POST /files (set x-filename) -> returns {token}.\n\nNo send-to-fab output without deterministic validation + explicit user approval. Reliability is shown by cross-check vs a known-good reference (control group), not asserted."
+}

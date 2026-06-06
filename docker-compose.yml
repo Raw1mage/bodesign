@@ -1,0 +1,34 @@
+# bodesign MCP server — per-user container (G10d). Mirrors docxmcp.
+#
+#   mcpctl.sh start        # docker compose -p bodesign-${USER} up -d --build
+#
+# Transport: MCP Streamable HTTP over a Unix domain socket. uvicorn binds the
+# socket inside the container at /run/bodesign/bodesign.sock; the host reaches
+# it via the ./.run bind mount (the IPC rendezvous). External HTTP, if wanted,
+# is exposed by a gateway in front of this socket (not a published port here).
+services:
+  bodesign:
+    image: bodesign:latest
+    build:
+      context: .
+    command: ["--transport", "http", "--uds", "/run/bodesign/bodesign.sock"]
+    volumes:
+      # IPC rendezvous: the UDS lives here, host-visible.
+      - "./.run:/run/bodesign"
+      # Token file store + analysis cache (host-invisible named volume).
+      - "bodesign-sessions:/var/cache/bodesign/sessions"
+    environment:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+      BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/bodesign/bodesign.sock"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  bodesign-sessions:
+    driver: local

@@ -56,10 +56,10 @@ Status · dependency · acceptance.
 
 ### Deployment gap (G10) — package as an MCP server (mirrors docxmcp; see design.md §Deployment, DD-9..DD-13)
 - [x] **G10a MCP server** — `mcp.server.Server` + starlette/uvicorn; transports `stdio` / `http` (TCP) / **`http`-over-UDS**; tool registry exposing the bodesign capabilities (ingest, requirement-plan, evidence-sourcing, symbol, compose, schematic+validate, pin-allocation, layout, fab, companion-render, doc-emit, readiness, reference-crosscheck, gap-report) + token-based file upload/download. *Needs `pip install mcp`.*
-- [ ] **G10b `mcpctl.sh`** — start / stop / reload / status / log (docker-compose-backed).
-- [ ] **G10c Dockerfile** — python + KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + `mcp`.
-- [ ] **G10d docker-compose.yml** — per-user container, `./.run/<sock>` UDS bind + named volumes (cache/sessions) + socket healthcheck.
-- [ ] **G10e `mcp.json`** — registration manifest (transport `streamable-http`, `unix://…/bodesign.sock:/mcp/`).
+- [x] **G10b `mcpctl.sh`** — start / stop / reload / status / log (docker-compose-backed).
+- [x] **G10c Dockerfile** — python + KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + `mcp`.
+- [x] **G10d docker-compose.yml** — per-user container, `./.run/<sock>` UDS bind + named volumes (cache/sessions) + socket healthcheck.
+- [x] **G10e `mcp.json`** — registration manifest (transport `streamable-http`, `unix://…/bodesign.sock:/mcp/`).
 - **Acceptance:** `mcpctl.sh start` brings the container up; an MCP client lists + calls a bodesign tool over the UDS; a tool producing a file (e.g. a rendered schematic PDF) is downloadable by token over the UDS.
 
 The other remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, scored vs the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
