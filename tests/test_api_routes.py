@@ -1,4 +1,5 @@
 import importlib
+import os
 import sys
 import types
 import unittest
@@ -724,6 +725,35 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         html = api_main.bodesign_design_intake()
         self.assertIn("Requirement intake", html)
         self.assertIn("Clarifying questions", html)
+        self.assertIn("Evidence sourcing", html)
+
+    def test_design_evidence_manifest_local_first_and_policy_gated(self):
+        import tempfile
+        from pathlib import Path as _Path
+
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+        api_main = importlib.import_module("services.api.main")
+
+        base = _Path(os.environ.get("XDG_RUNTIME_DIR") or (_Path.home() / ".cache")) / "claude-work"
+        base.mkdir(parents=True, exist_ok=True)
+        corpus = _Path(tempfile.mkdtemp(prefix="bodesign-corpus-", dir=base))
+        try:
+            (corpus / "STM32N657_datasheet.pdf").write_text("x", encoding="utf-8")
+            manifest = api_main.post_design_evidence({"spec": "STM32N657 with nRF9151", "corpus_dir": str(corpus)})
+
+            parts = {p["part"].lower(): p for p in manifest["parts"]}
+            stm = parts["stm32n657"]
+            self.assertTrue(stm["local_found"])
+            self.assertEqual("A", stm["trust_grade"])
+            self.assertTrue(any(d["role"] == "datasheet" for d in stm["documents"]))
+            nrf = parts["nrf9151"]
+            self.assertFalse(nrf["local_found"])
+            self.assertEqual("needs-sourcing", nrf["fetch_status"])
+            self.assertTrue(nrf["source_pointers"])  # distributor pointers, policy-gated
+        finally:
+            import shutil
+            shutil.rmtree(corpus, ignore_errors=True)
 
 
 def install_fastapi_stub() -> None:

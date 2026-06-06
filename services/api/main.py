@@ -37,7 +37,7 @@ try:
     from bodesign_reverse_core import build_rockbox_input_manifest, fuse_drill_and_ipc, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
     from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_evidence_manifest, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
-    from bodesign_workflow_core import build_generated_design_candidate_workspace, collect_source_gap_report, plan_design_intent, plan_reference_board_workflow, render_gap_report_markdown
+    from bodesign_workflow_core import build_design_evidence_manifest, build_generated_design_candidate_workspace, collect_source_gap_report, extract_part_candidates, plan_design_intent, plan_reference_board_workflow, render_gap_report_markdown
 except ImportError:
     ingest_datasheet_knowledge = None
     build_component_knowledge_queue = None
@@ -79,6 +79,8 @@ except ImportError:
     collect_source_gap_report = None
     render_gap_report_markdown = None
     plan_design_intent = None
+    build_design_evidence_manifest = None
+    extract_part_candidates = None
 
 app = FastAPI(title="bodesign API", version="0.1.0")
 
@@ -129,6 +131,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/openmv/schematic.svg", "purpose": "Render the generated OpenMV N6 schematic to SVG via kicad-cli (the real KiCad rendering)."},
     {"method": "GET", "path": "/bodesign/design", "purpose": "Interactive requirement intake: state a board in natural language, get clarifying questions + an architecture plan."},
     {"method": "POST", "path": "/bodesign/api/design-intent/plan", "purpose": "Plan a DesignIntent from a natural-language spec (+ answers): extract requirements, ask clarifying questions, decompose subsystems."},
+    {"method": "POST", "path": "/bodesign/api/design-intent/evidence", "purpose": "Resolve a sourcing/evidence manifest for the spec's parts (local-corpus-first; web fetch policy-gated)."},
 ]
 
 DESIGN_INTENT_EXAMPLE = (
@@ -310,6 +313,19 @@ def post_design_intent_plan(payload: dict | None = None) -> dict[str, object]:
     return plan_design_intent(spec, answers).to_dict()
 
 
+@app.post("/api/design-intent/evidence")
+@app.post("/bodesign/api/design-intent/evidence")
+def post_design_evidence(payload: dict | None = None) -> dict[str, object]:
+    if build_design_evidence_manifest is None or extract_part_candidates is None:
+        return {"status": "unavailable", "reason": "workflow-core is not available."}
+    payload = payload or {}
+    parts = payload.get("parts")
+    if not isinstance(parts, list) or not parts:
+        parts = extract_part_candidates(str(payload.get("spec", "")))
+    corpus_dir = payload.get("corpus_dir") or None
+    return build_design_evidence_manifest(parts, corpus_dir)
+
+
 @app.get("/bodesign/design", response_class=HTMLResponse)
 def bodesign_design_intake() -> str:
     example = plan_design_intent(DESIGN_INTENT_EXAMPLE).to_dict() if plan_design_intent is not None else {"status": "unavailable"}
@@ -359,6 +375,11 @@ def _render_design_intake(plan: dict[str, object]) -> str:
     <h2>Proposed subsystems</h2>
     <table><thead><tr><th>Subsystem</th><th>Role</th><th>Evidence needed</th></tr></thead><tbody>""" + subsystem_rows + """</tbody></table>
   </div>
+  <h2>Evidence sourcing (R6)</h2>
+  <p class="muted">Resolve datasheets / reference designs for the spec's parts. Local-first: point at a client-owned corpus folder; parts with no local match get distributor pointers (web fetch is policy-gated and run by the agent via skills).</p>
+  <input id="corpus" style="width:100%;background:#0d171d;color:#e8f0f2;border:1px solid #2b3a44;border-radius:8px;padding:8px;font:inherit" placeholder="optional local corpus dir, e.g. /home/.../03.研發資料/01.ROCKBOX" />
+  <div><button onclick="findEvidence()">Find evidence</button></div>
+  <div id="evidence"></div>
   <script>
     async function planSpec() {
       const spec = document.getElementById('spec').value;
@@ -373,6 +394,20 @@ def _render_design_intake(plan: dict[str, object]) -> str:
         `<h2>Extracted requirements</h2><table><thead><tr><th>Requirement</th><th>State</th><th>Evidence</th></tr></thead><tbody>${reqs}</tbody></table>`+
         `<h2>Clarifying questions (AI asks back)</h2><ul>${qs}</ul>`+
         `<h2>Proposed subsystems</h2><table><thead><tr><th>Subsystem</th><th>Role</th><th>Evidence needed</th></tr></thead><tbody>${subs}</tbody></table>`;
+    }
+    async function findEvidence() {
+      const spec = document.getElementById('spec').value;
+      const corpus_dir = document.getElementById('corpus').value.trim();
+      const res = await fetch('/bodesign/api/design-intent/evidence', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({spec, corpus_dir})});
+      const m = await res.json();
+      const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const rows = (m.parts||[]).map(p => {
+        const docs = (p.documents||[]).map(d => `${esc(d.role)}: ${esc(d.path)}`).join('<br>') || '—';
+        return `<tr><td><code>${esc(p.part)}</code></td><td>${esc(p.fetch_status)}</td><td>${esc(p.trust_grade)}</td><td>${docs}</td></tr>`;
+      }).join('');
+      document.getElementById('evidence').innerHTML =
+        `<p class="muted">${esc((m.counts||{}).local_evidence||0)} with local evidence, ${esc((m.counts||{}).needs_sourcing||0)} need sourcing.</p>`+
+        `<table><thead><tr><th>Part</th><th>Status</th><th>Trust</th><th>Documents</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
   </script>
 </body></html>"""

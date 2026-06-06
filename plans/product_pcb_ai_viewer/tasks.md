@@ -21,7 +21,7 @@
 
 ### P1 — The "vibe" front-end (the missing heart of the vision)
 - [x] **R5** Interactive requirement→planning loop (= T30): `workflow-core.requirement_planning.plan_design_intent` deterministically extracts requirements from a natural-language spec (bilingual EN + zh keywords), asks back clarifying questions for missing fields, and decomposes the request into reference-design-grounded subsystems. `POST /bodesign/api/design-intent/plan` + an interactive `/bodesign/design` page (type a spec → questions + subsystem plan). On the running example (STM32N6 + nRF9151 + 8GB flash + USB-C charging + 18650) it detects 6 functional areas, asks about dimensions/certification/volume, and proposes compute/comms/memory/power-input/battery subsystems. Rule-based skeleton; an LLM can enrich extraction/questions later without changing the contract.
-- [ ] **R6** Reference-design discovery via skills: given target chips, use `datasheets`/`digikey` skills to locate dev-board datasheets/reference designs as starting evidence (generalizes OpenMV O0–O1).
+- [x] **R6** Reference-design / evidence discovery: `workflow-core.evidence_sourcing` extracts part candidates from a spec (`extract_part_candidates`) and builds a design-evidence manifest (`build_design_evidence_manifest`) — local-corpus-first scan for matching datasheets/schematics/BOM/pinout/PRD with role + trust grading, distributor pointers (digikey/lcsc, policy-gated) for parts with no local match. `POST /bodesign/api/design-intent/evidence` + an "Evidence sourcing" section on `/bodesign/design`. Verified live on the real ROCKBOX corpus: nRF9151 + MDBT53-P1M → grade-A local evidence (found the GPIO pinout table), 18650 → needs-sourcing. Generalizes OpenMV O0–O1 to any spec; actual web fetch/skill execution stays agent-side (host-agnostic).
 
 ### P2 — Generalize beyond OpenMV to an arbitrary spec
 - [ ] **R7** Multi-chip subsystem composition: planned subsystems + selected parts → composed IR → emit; prove on the running example (STM32N6 + nRF9151 + 8GB flash + USB-C PD/charging + 18650 battery/control).
@@ -33,7 +33,7 @@
 
 ### ⏸ Parked (revisit only when triggered)
 - **A2 represented contracts** (storage-share / project-tree / folder-open / save-back / cache-conflict / analysis status / evidence manifest / plugin handshake, T14a–T14o): keep as deterministic contracts; make real only when a real client folder handle or in-KiCad plugin exists.
-- **Reverse-path geometry (B)**: Gerber pad/flash spatial fusion + placement↔IPC origin co-registration. Secondary to forward-design now; remains an optional reverse-engineering capability.
+- **Reverse-path geometry (B)**: Gerber pad/flash spatial fusion + placement↔IPC origin co-registration. Secondary, now effectively retired — as of 2026-06-06 the client ROCKBOX corpus (`03.研發資料/01.ROCKBOX`) gained a full product document set (C01–C07: ID/ME/**C03 circuit design incl. OrCAD `.DSN` schematic + BOM + MDBT53-P1M/nRF9151 GPIO table**/Layout/FW/驗證/PRD), so Rockbox can use the same forward/document path as OpenMV instead of Gerber reverse-engineering. Rockbox is now a candidate second forward-design exemplar (and notably shares nRF9151 with the running example spec).
 - **Persistence (Postgres), multi-user/billing**: out of near-term scope.
 - **Full auto place-and-route to a finished layout**: not a near-term target (industry-unsolved); human + freerouting finish.
 
