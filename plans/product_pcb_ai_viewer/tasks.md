@@ -30,7 +30,7 @@
 | N9 | Footprint mapping/generation | `build_footprint_map` | bodesign | ✅ R3 (gen: G6) |
 | N10 | Subsystem composition (ref → IR) | `composer.compose_schematic` | bodesign | ✅ **G3** (full V1 needs G6) |
 | N11 | Schematic emit + ERC | `emit_kicad_schematic` + `kicad-cli erc` | bodesign | ✅ |
-| N12 | Netlist + BOM | `kicad` + `kicad-cli export` | orchestrate | partial |
+| N12 | Netlist + BOM | `bom_export` (kicad-cli sch export bom/netlist) | bodesign | ✅ **G12** |
 | N13 | Pin/GPIO allocation (→FW) | `pin_allocation` | bodesign | ✅ **G5** |
 | N14 | Layout (place + DRC) | `layout.emit_layout` (pcbnew + kicad-cli drc) | bodesign | ✅ **G8** |
 | N15 | Fab outputs + companions | `fab.emit_fab_outputs` (kicad-cli export) | bodesign | ✅ **G9** |
@@ -67,6 +67,9 @@ G10a's `/files` is minimal (single-file upload + token download); tools take hos
 - [x] **G11a Token store + directory ingest** — a dir-based token store (`services/mcp/token_store.py`): `POST /files` accepts `application/x-tar`/`gzip` (unpack into a fresh token `doc_dir`), multipart, and raw (x-filename); returns `{token, doc_dir, files}`. Plus a **`bodesign_stage_dir`** tool (inline `{relpath:{content,encoding}}` map → token). Traversal-defended.
 - [x] **G11b Token-aware tool dispatch + produced-file surfacing** — when a tool call includes `token`, resolve its path args (folder/out_dir/path/md_path/board_path) relative to the token `doc_dir`; snapshot-diff the token dir after the call and append produced files as `{rel, url:/files/{token}/blob/{rel}}` to the result. Host-path mode unchanged when no token.
 - **Acceptance:** upload a directory tarball over the UDS → `{token}`; call `bodesign_package_readiness` (or `ingest`) with that token (operates inside the token tree); a produced companion is downloadable via `GET /files/{token}/blob/{rel}`. End-to-end docxmcp-style round trip.
+
+### BOM / netlist export gap (G12) — N12
+- [x] **G12 BOM + netlist export** — `eda-bridge.bom_export`: wrap `kicad-cli sch export bom` (grouped-by-value, qty, MPN field, exclude-DNP) → BOM CSV (+ optional xlsx companion via LibreOffice) and `kicad-cli sch export netlist` → netlist. Makes N12 a first-class bodesign tool (was orchestrate/partial); also exposed as MCP tools. **Acceptance:** export from a composed schematic → grouped BOM CSV with correct qty + a netlist file.
 
 The other remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, scored vs the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
 

@@ -10,6 +10,7 @@ from .kicad_emit import (
 )
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .openmv_subsystem import OpenMVSubsystemEmitResult, emit_openmv_n6_subsystem_schematic
+from .bom_export import BomResult, export_bom, export_netlist
 from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
 from .layout import LayoutResult, PCBNEW_AVAILABLE, emit_layout
@@ -17,6 +18,7 @@ from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocatio
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints, openmv_package_queries
 
 __all__ = [
+    "BomResult",
     "ComposeResult",
     "EmitComponent",
     "EmitNet",
@@ -42,6 +44,8 @@ __all__ = [
     "build_kicad_native_extension_contract",
     "compose_schematic",
     "emit_fab_outputs",
+    "export_bom",
+    "export_netlist",
     "emit_kicad_symbol",
     "emit_layout",
     "emit_openmv_n6_subsystem_schematic",

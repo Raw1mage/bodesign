@@ -128,6 +128,16 @@ def _h_crosscheck(a: dict) -> Any:
                            a.get("label", "interface"), a.get("provenance")).to_dict()
 
 
+def _h_export_bom(a: dict) -> Any:
+    from bodesign_eda_bridge import export_bom
+    return asdict(export_bom(a["schematic_path"], a["out_dir"], group_by=a.get("group_by", "Value"), xlsx=a.get("xlsx", False)))
+
+
+def _h_export_netlist(a: dict) -> Any:
+    from bodesign_eda_bridge import export_netlist
+    return asdict(export_netlist(a["schematic_path"], a["out_dir"], fmt=a.get("format", "kicadsexpr")))
+
+
 def _h_stage_dir(a: dict) -> Any:
     from token_store import default_store
     return default_store().stage_files(a["files"])
@@ -165,6 +175,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_emit_fab", "handler": _h_fab,
      "description": "Export fab outputs (gerbers/drill/pos/step/pdf) from a .kicad_pcb via kicad-cli.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_dir": _STR, "formats": {"type": "array", "items": _STR}}, "required": ["board_path", "out_dir"]}},
+    {"name": "bodesign_export_bom", "handler": _h_export_bom,
+     "description": "Export a grouped Bill of Materials (CSV, qty + MPN, DNP excluded) from a schematic; optional xlsx companion.",
+     "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "group_by": _STR, "xlsx": {"type": "boolean"}}, "required": ["schematic_path", "out_dir"]}},
+    {"name": "bodesign_export_netlist", "handler": _h_export_netlist,
+     "description": "Export a netlist from a schematic via kicad-cli.",
+     "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "format": _STR}, "required": ["schematic_path", "out_dir"]}},
     {"name": "bodesign_render_companion", "handler": _h_companion,
      "description": "Render a readable companion (pdf/png) for a non-readable engineering file (.kicad_sch/.kicad_pcb/gerber).",
      "schema": {"type": "object", "properties": {"path": _STR, "out_dir": _STR}, "required": ["path", "out_dir"]}},
@@ -186,7 +202,7 @@ TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
 # local same-host UDS mode).
-PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "output_path", "corpus_dir")
+PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "output_path", "corpus_dir", "schematic_path")
 
 
 def _snapshot(doc_dir: Path) -> dict:
