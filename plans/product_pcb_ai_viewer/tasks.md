@@ -33,7 +33,7 @@
 | N12 | Netlist + BOM | `kicad` + `kicad-cli export` | orchestrate | partial |
 | N13 | Pin/GPIO allocation (→FW) | `pin_allocation` | bodesign | ✅ **G5** |
 | N14 | Layout (place + DRC) | `layout.emit_layout` (pcbnew + kicad-cli drc) | bodesign | ✅ **G8** |
-| N15 | Fab outputs + companions | `kicad-cli pcb export` | bodesign+orch | ⬜ **G9** |
+| N15 | Fab outputs + companions | `fab.emit_fab_outputs` (kicad-cli export) | bodesign | ✅ **G9** |
 | N16 | Simulation / EMC / thermal | `spice` / `emc` skills | orchestrate | ⬜ (wire) |
 | N17 | Doc packages (HDD/MTP/Design-Review) | `kidoc` | orchestrate | ✅ verified (needs PCB) |
 | N18 | Gap / readiness | `collect_source_gap_report` + `package_readiness` | bodesign | ✅ R1/**G2** |
@@ -50,7 +50,9 @@ Status · dependency · acceptance.
 - [x] **G5 Pin/GPIO allocation table** (N13) — done. `eda-bridge.pin_allocation` (`build_pin_allocation` + csv/md renderers): net list → per-pin allocation table (RefDes/Pin/Net), MCU pins flagged as the GPIO/FW interface view, natural pin sort. Source-agnostic (composer spec nets / parsed netlist).
 - [x] **G6 Per-part symbol harvest** (N7/N8) — tool done. `eda-bridge.emit_kicad_symbol`: any pin list `{number,name,type}` → valid `.kicad_sym` (power/NC inferred, rectangular symbol). Verified: a generated charger symbol passes `kicad-cli sym export svg` and composes into a `kicad-cli`-validated schematic (full pins→symbol→schematic chain). The datasheet→pinout harvest itself is orchestrated agent-side via the `datasheets` skill; running on the actual V1 parts is execution (not tool-building).
 - [x] **G8 Layout** (N14) — tool done. `eda-bridge.layout.emit_layout`: load footprints from the KiCad libs via `pcbnew`, auto-place on a grid inside an Edge.Cuts outline, save `.kicad_pcb`, run `kicad-cli pcb drc`, render an SVG companion. Verified: 4 footprints (incl. USB-C receptacle) placed, board saved, DRC 0 violations, SVG rendered; unresolved footprints flagged. Starting layout for the engineer to route (auto-routing = freerouting/manual, bounded).
-- [ ] **G9 Fab outputs** (N15) — *dep: G8.* `kicad-cli pcb export` gerber/drill/pos/step/ipc2581 + companions; assemble the fab/assembly handoff package. **Acceptance:** outputs validate via `kicad` gerber analyzer; unlocks full `kidoc` Manufacturing-Transfer package.
+- [x] **G9 Fab outputs** (N15) — tool done. `eda-bridge.fab.emit_fab_outputs`: `kicad-cli pcb export` gerbers/drill/pos/step/ipc2581 + a PDF companion from a `.kicad_pcb`. Verified on a generated board → gerbers (25 files), drill, pos CSV, STEP, PDF — status `ok`. Unlocks the full `kidoc` Manufacturing-Transfer package.
+
+**Build queue complete (G1–G9).** All bodesign-unique workflow tools are built + tested; the forward pipeline (ingest → plan → source → symbol → compose → schematic → pin-table → layout → fab) plus surface/state/trust/doc layers are in place. Remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, step-by-step, scored against the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
 
 Orchestration wiring (not bodesign gaps, but workflow steps): **N16** install+wire `spice`/`emc`; **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.
 
