@@ -37,7 +37,7 @@ try:
     from bodesign_reverse_core import build_rockbox_input_manifest, fuse_drill_and_ipc, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
     from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_evidence_manifest, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
-    from bodesign_workflow_core import build_generated_design_candidate_workspace, collect_source_gap_report, plan_reference_board_workflow, render_gap_report_markdown
+    from bodesign_workflow_core import build_generated_design_candidate_workspace, collect_source_gap_report, plan_design_intent, plan_reference_board_workflow, render_gap_report_markdown
 except ImportError:
     ingest_datasheet_knowledge = None
     build_component_knowledge_queue = None
@@ -78,6 +78,7 @@ except ImportError:
     plan_reference_board_workflow = None
     collect_source_gap_report = None
     render_gap_report_markdown = None
+    plan_design_intent = None
 
 app = FastAPI(title="bodesign API", version="0.1.0")
 
@@ -126,7 +127,14 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/openmv", "purpose": "Render the OpenMV N6 forward-design KiCad source evidence dashboard."},
     {"method": "GET", "path": "/bodesign/api/openmv/evidence", "purpose": "Return the OpenMV N6 KiCad source gap/evidence dashboard data (computed live from package artifacts)."},
     {"method": "GET", "path": "/bodesign/api/openmv/schematic.svg", "purpose": "Render the generated OpenMV N6 schematic to SVG via kicad-cli (the real KiCad rendering)."},
+    {"method": "GET", "path": "/bodesign/design", "purpose": "Interactive requirement intake: state a board in natural language, get clarifying questions + an architecture plan."},
+    {"method": "POST", "path": "/bodesign/api/design-intent/plan", "purpose": "Plan a DesignIntent from a natural-language spec (+ answers): extract requirements, ask clarifying questions, decompose subsystems."},
 ]
+
+DESIGN_INTENT_EXAMPLE = (
+    "用 STM32N6 晶片搭配 Nordic 9151 晶片設計一個具有通訊功能的 NPU 運算界面，"
+    "要有 8GB Flash，要有 USB Type-C 供電/充電，內建 18650 電池含控制板。"
+)
 
 BUILTIN_PROJECT_ID = "rockbox"
 
@@ -289,6 +297,85 @@ def get_openmv_schematic_svg() -> Response:
 @app.get("/bodesign/openmv", response_class=HTMLResponse)
 def bodesign_openmv_evidence() -> str:
     return _render_openmv_evidence(_openmv_evidence())
+
+
+@app.post("/api/design-intent/plan")
+@app.post("/bodesign/api/design-intent/plan")
+def post_design_intent_plan(payload: dict | None = None) -> dict[str, object]:
+    if plan_design_intent is None:
+        return {"status": "unavailable", "reason": "workflow-core is not available."}
+    payload = payload or {}
+    spec = str(payload.get("spec", ""))
+    answers = payload.get("answers") if isinstance(payload.get("answers"), dict) else {}
+    return plan_design_intent(spec, answers).to_dict()
+
+
+@app.get("/bodesign/design", response_class=HTMLResponse)
+def bodesign_design_intake() -> str:
+    example = plan_design_intent(DESIGN_INTENT_EXAMPLE).to_dict() if plan_design_intent is not None else {"status": "unavailable"}
+    return _render_design_intake(example)
+
+
+def _render_design_intake(plan: dict[str, object]) -> str:
+    req_rows = "".join(
+        f'<tr><td>{escape(str(r.get("label","")))}</td>'
+        f'<td><span class="state state-{escape(str(r.get("state","")))}">{escape(str(r.get("state","")))}</span></td>'
+        f'<td><code>{escape(str(r.get("evidence") or "—"))}</code></td></tr>'
+        for r in (plan.get("requirements") or [])
+    )
+    question_items = "".join(f"<li>{escape(str(q.get('question','')))}</li>" for q in (plan.get("open_questions") or [])) or "<li>none</li>"
+    subsystem_rows = "".join(
+        f'<tr><td><code>{escape(str(s.get("id","")))}</code></td><td>{escape(str(s.get("role","")))}</td>'
+        f'<td class="muted">{escape(str(s.get("needs_evidence","")))}</td></tr>'
+        for s in (plan.get("subsystems") or [])
+    )
+    return """<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>bodesign — requirement intake</title>
+<style>
+  body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, sans-serif; background: #101418; color: #e8f0f2; line-height: 1.5; }
+  a { color: #8ef6d2; } code { color: #8ef6d2; } h1 { margin-bottom: 4px; }
+  textarea { width: 100%; min-height: 96px; background: #0d171d; color: #e8f0f2; border: 1px solid #2b3a44; border-radius: 10px; padding: 10px; font: inherit; }
+  button { background: #8ef6d2; color: #07100d; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 24px; }
+  th, td { border-bottom: 1px solid #26323a; padding: 8px; text-align: left; vertical-align: top; }
+  .muted { color: #9aacb4; } ul { padding-left: 18px; }
+  .state { font-size: 0.74em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; }
+  .state-stated, .state-answered { background: #14342a; color: #8ef6d2; } .state-missing { background: #3a2a14; color: #ffc857; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-weight:700; color:#07100d; background:#ffc857; }
+</style></head>
+<body>
+  <p class="muted"><a href="/bodesign/">← companion dashboard</a></p>
+  <h1>Requirement intake → clarifying questions → plan</h1>
+  <p class="muted">State the board in natural language (English or Chinese). The planner extracts what it can, asks back for what's missing, and decomposes subsystems grounded in reference designs. No layout/fabrication output is produced here.</p>
+  <textarea id="spec">""" + escape(DESIGN_INTENT_EXAMPLE) + """</textarea>
+  <div><button onclick="planSpec()">Plan</button> <span class="muted">(example below is rendered server-side)</span></div>
+  <div id="result">
+    <h2>Status: <span class="badge">""" + escape(str(plan.get("status", "?"))) + """</span></h2>
+    <h2>Extracted requirements</h2>
+    <table><thead><tr><th>Requirement</th><th>State</th><th>Evidence</th></tr></thead><tbody>""" + req_rows + """</tbody></table>
+    <h2>Clarifying questions (AI asks back)</h2>
+    <ul>""" + question_items + """</ul>
+    <h2>Proposed subsystems</h2>
+    <table><thead><tr><th>Subsystem</th><th>Role</th><th>Evidence needed</th></tr></thead><tbody>""" + subsystem_rows + """</tbody></table>
+  </div>
+  <script>
+    async function planSpec() {
+      const spec = document.getElementById('spec').value;
+      const res = await fetch('/bodesign/api/design-intent/plan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({spec})});
+      const p = await res.json();
+      const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const reqs = (p.requirements||[]).map(r => `<tr><td>${esc(r.label)}</td><td><span class="state state-${esc(r.state)}">${esc(r.state)}</span></td><td><code>${esc(r.evidence||'—')}</code></td></tr>`).join('');
+      const qs = (p.open_questions||[]).map(q => `<li>${esc(q.question)}</li>`).join('') || '<li>none</li>';
+      const subs = (p.subsystems||[]).map(s => `<tr><td><code>${esc(s.id)}</code></td><td>${esc(s.role)}</td><td class="muted">${esc(s.needs_evidence)}</td></tr>`).join('');
+      document.getElementById('result').innerHTML =
+        `<h2>Status: <span class="badge">${esc(p.status)}</span></h2>`+
+        `<h2>Extracted requirements</h2><table><thead><tr><th>Requirement</th><th>State</th><th>Evidence</th></tr></thead><tbody>${reqs}</tbody></table>`+
+        `<h2>Clarifying questions (AI asks back)</h2><ul>${qs}</ul>`+
+        `<h2>Proposed subsystems</h2><table><thead><tr><th>Subsystem</th><th>Role</th><th>Evidence needed</th></tr></thead><tbody>${subs}</tbody></table>`;
+    }
+  </script>
+</body></html>"""
 
 
 def _render_openmv_evidence(data: dict[str, object]) -> str:
@@ -583,6 +670,7 @@ def _render_project_workspace(project_id: str) -> str:
                   <h2>Project Overview</h2>
                   <div class="hero">
                     <strong>✅ Real generated output:</strong> the OpenMV N6 forward-design package emits a KiCad schematic rendered by <code>kicad-cli</code> + a gap/evidence dashboard. <a href="/bodesign/openmv">Open OpenMV KiCad source evidence →</a>
+                    <br><strong>🧭 Start a new design:</strong> <a href="/bodesign/design">describe a board in natural language →</a> (intake → clarifying questions → subsystem plan)
                     <br><span class="muted">Below: this Rockbox project is reverse-engineering evidence; storage/analysis contracts marked "parked" are represented placeholders, not wired to your files yet.</span>
                   </div>
                    <p class="muted">Open or import client-owned KiCad projects. bodesign is a companion dashboard; native KiCad owns editing, canvas, libraries, DRC, and ERC. Project registry records are fixture-backed metadata, not server-owned durable file storage.</p>

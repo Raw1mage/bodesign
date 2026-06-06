@@ -683,6 +683,48 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn('href="/bodesign/openmv"', html)
         self.assertIn('details class="parked"', html)
 
+    def test_design_intent_plan_api_extracts_and_asks_questions(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        spec = ("用STM32N6晶片搭配Nordic 9151晶片設計一個具有通訊功能的NPU運算界面，"
+                "要有8GB Flash，要有usb typeC供電/充電。內建18650電池含控制板。")
+        plan = api_main.post_design_intent_plan({"spec": spec})
+
+        self.assertEqual("needs-clarification", plan["status"])
+        stated = {r["key"] for r in plan["requirements"] if r["state"] == "stated"}
+        self.assertTrue({"compute", "comms", "memory", "power_input", "charging", "battery"} <= stated)
+        missing = {r["key"] for r in plan["requirements"] if r["state"] == "missing"}
+        self.assertIn("dimensions", missing)
+        self.assertTrue(plan["open_questions"])
+        subsystem_ids = {s["id"] for s in plan["subsystems"]}
+        self.assertTrue({"compute", "comms", "memory", "power-input", "battery"} <= subsystem_ids)
+
+    def test_design_intent_answers_close_clarifying_questions(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        spec = "STM32N6 NPU board, nRF9151 cellular, 8GB flash, USB-C charging, 18650 battery"
+        answers = {"dimensions": "50x70mm", "certification": "CE+FCC", "volume": "prototype x5"}
+        plan = api_main.post_design_intent_plan({"spec": spec, "answers": answers})
+
+        self.assertEqual("planned", plan["status"])
+        self.assertEqual([], plan["open_questions"])
+
+    def test_design_intake_page_and_route_registered(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        routes = {route.path for route in api_main.app.routes}
+        self.assertIn("/bodesign/design", routes)
+        self.assertIn("/bodesign/api/design-intent/plan", routes)
+        html = api_main.bodesign_design_intake()
+        self.assertIn("Requirement intake", html)
+        self.assertIn("Clarifying questions", html)
+
 
 def install_fastapi_stub() -> None:
     fastapi_module = types.ModuleType("fastapi")
