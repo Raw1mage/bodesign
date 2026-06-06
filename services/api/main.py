@@ -7,7 +7,7 @@ import sys
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOTS = [
@@ -125,6 +125,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/candidates/generated-design", "purpose": "Show generated design candidate diff/evidence/approval workspace."},
     {"method": "GET", "path": "/bodesign/openmv", "purpose": "Render the OpenMV N6 forward-design KiCad source evidence dashboard."},
     {"method": "GET", "path": "/bodesign/api/openmv/evidence", "purpose": "Return the OpenMV N6 KiCad source gap/evidence dashboard data (computed live from package artifacts)."},
+    {"method": "GET", "path": "/bodesign/api/openmv/schematic.svg", "purpose": "Render the generated OpenMV N6 schematic to SVG via kicad-cli (the real KiCad rendering)."},
 ]
 
 BUILTIN_PROJECT_ID = "rockbox"
@@ -251,6 +252,40 @@ def get_openmv_evidence() -> dict[str, object]:
     return _openmv_evidence()
 
 
+OPENMV_SCHEMATIC = OPENMV_PLAN_DIR / "generated" / "openmv_n6_subsystem" / "openmv_n6_subsystem.kicad_sch"
+
+
+def _openmv_schematic_svg_path() -> Path | None:
+    """Render the generated OpenMV schematic to SVG with kicad-cli (cached)."""
+    import shutil
+    import subprocess
+
+    if not OPENMV_SCHEMATIC.exists():
+        return None
+    cli = shutil.which("kicad-cli")
+    if cli is None:
+        return None
+    out_dir = REPO_ROOT / ".artifacts" / "openmv-schematic"
+    svg = out_dir / "openmv_n6_subsystem.svg"
+    if svg.exists() and svg.stat().st_mtime >= OPENMV_SCHEMATIC.stat().st_mtime:
+        return svg
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run([cli, "sch", "export", "svg", str(OPENMV_SCHEMATIC), "-o", str(out_dir)], check=True, capture_output=True, text=True)
+    except Exception:  # pragma: no cover - kicad-cli/version variance
+        return None
+    return svg if svg.exists() else None
+
+
+@app.get("/bodesign/api/openmv/schematic.svg")
+def get_openmv_schematic_svg() -> Response:
+    svg = _openmv_schematic_svg_path()
+    if svg is None:
+        placeholder = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120"><text x="20" y="60" fill="#9aacb4">Schematic render unavailable (kicad-cli not found).</text></svg>'
+        return Response(content=placeholder, media_type="image/svg+xml")
+    return Response(content=svg.read_text(encoding="utf-8"), media_type="image/svg+xml")
+
+
 @app.get("/bodesign/openmv", response_class=HTMLResponse)
 def bodesign_openmv_evidence() -> str:
     return _render_openmv_evidence(_openmv_evidence())
@@ -322,6 +357,8 @@ def _render_openmv_evidence(data: dict[str, object]) -> str:
   .sev-open { background: #3a3320; color: #ffc857; } .sev-blocking { background: #3a2020; color: #ff7a7a; }
   .cards { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
   .card { background: #161d23; border: 1px solid #26323a; border-radius: 12px; padding: 14px 18px; }
+  .schematic { background: #fff; border: 1px solid #26323a; border-radius: 12px; padding: 8px; margin: 12px 0 28px; }
+  .schematic object { width: 100%; height: 70vh; display: block; }
 </style></head>
 <body>
   <p class="muted"><a href="/bodesign/">← bodesign companion dashboard</a></p>
@@ -329,6 +366,9 @@ def _render_openmv_evidence(data: dict[str, object]) -> str:
   <p class="muted">Forward-design package: datasheets → verified pinout → generated KiCad symbol → subsystem schematic. Reusable source evidence, not a finished or send-to-fab design.</p>
   <p>Readiness: <span class="badge">""" + escape(state) + """</span></p>
   <p>""" + escape(str(readiness.get("summary", ""))) + """</p>
+  <h2>Generated schematic (rendered by KiCad)</h2>
+  <p class="muted">This is the actual generated <code>.kicad_sch</code> rendered by <code>kicad-cli</code> — the real KiCad engine, not a mock. Open it in KiCad to edit.</p>
+  <div class="schematic"><object data="/bodesign/api/openmv/schematic.svg" type="image/svg+xml" aria-label="Generated OpenMV N6 schematic"></object></div>
   <div class="cards">
     <div class="card"><h3>Artifacts</h3><p>""" + escape(str(counts.get("artifacts", 0))) + """</p></div>
     <div class="card"><h3>Blocking</h3><p>""" + escape(str(counts.get("blocking", 0))) + """</p></div>
@@ -458,6 +498,11 @@ def _render_project_workspace(project_id: str) -> str:
           #tab-overview:checked ~ label[for="tab-overview"], #tab-schematic:checked ~ label[for="tab-schematic"], #tab-pcb:checked ~ label[for="tab-pcb"], #tab-libraries:checked ~ label[for="tab-libraries"], #tab-datasheets:checked ~ label[for="tab-datasheets"], #tab-analysis:checked ~ label[for="tab-analysis"], #tab-manufacturing:checked ~ label[for="tab-manufacturing"], #tab-reports:checked ~ label[for="tab-reports"], #tab-candidates:checked ~ label[for="tab-candidates"] { color: #07100d; background: var(--accent); border-color: var(--accent); }
           .panels { flex: 0 0 100%; width: 100%; min-width: 0; }
           .panel { display: none; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: 20px; min-height: calc(100vh - 96px); max-width: 100%; overflow: hidden; }
+          .hero { border: 1px solid var(--accent); border-radius: 14px; background: #0f1a16; padding: 14px 18px; margin-bottom: 16px; }
+          .hero a { color: var(--accent); font-weight: 700; }
+          details.parked { grid-column: 1 / -1; border: 1px dashed #3b4a54; border-radius: 12px; padding: 8px 12px; background: #11171c; }
+          details.parked > summary { cursor: pointer; color: #7e93a0; font-size: 0.9em; }
+          details.parked[open] { padding-bottom: 14px; }
           #tab-overview:checked ~ .panels #overview, #tab-schematic:checked ~ .panels #schematic, #tab-pcb:checked ~ .panels #pcb, #tab-libraries:checked ~ .panels #libraries, #tab-datasheets:checked ~ .panels #datasheets, #tab-analysis:checked ~ .panels #analysis, #tab-manufacturing:checked ~ .panels #manufacturing, #tab-reports:checked ~ .panels #reports, #tab-candidates:checked ~ .panels #candidates { display: block; }
           .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; min-width: 0; }
           .card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--panel2); min-width: 0; overflow-wrap: anywhere; }
@@ -536,6 +581,10 @@ def _render_project_workspace(project_id: str) -> str:
               <div class="panels">
                 <article class="panel" id="overview">
                   <h2>Project Overview</h2>
+                  <div class="hero">
+                    <strong>✅ Real generated output:</strong> the OpenMV N6 forward-design package emits a KiCad schematic rendered by <code>kicad-cli</code> + a gap/evidence dashboard. <a href="/bodesign/openmv">Open OpenMV KiCad source evidence →</a>
+                    <br><span class="muted">Below: this Rockbox project is reverse-engineering evidence; storage/analysis contracts marked "parked" are represented placeholders, not wired to your files yet.</span>
+                  </div>
                    <p class="muted">Open or import client-owned KiCad projects. bodesign is a companion dashboard; native KiCad owns editing, canvas, libraries, DRC, and ERC. Project registry records are fixture-backed metadata, not server-owned durable file storage.</p>
                     <div class="grid"><div class="card"><h3>Client-owned project registry</h3><p><code>""" + escape(str(registry.get("status", "unknown"))) + """</code></p><p>access: <code>""" + escape(str(registry.get("access_mode", "unknown"))) + """</code></p><p>durable owner: <code>""" + escape(str(registry.get("durable_owner", "client"))) + """</code></p></div></div>
                    <div class="grid">""" + project_markup + """
@@ -544,12 +593,14 @@ def _render_project_workspace(project_id: str) -> str:
                          <p class="muted">Folder sharing is not wired yet. The target flow indexes KiCad files from a client-owned folder and hands edit/canvas actions to a KiCad Action Plugin or sidecar.</p>
                         <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
                        </div>
+                        <details class="parked"><summary>Parked storage/analysis contracts (represented, not wired yet) — expand</summary><div class="grid">
                         """ + _folder_open_request_markup(folder_open_request) + """
                          """ + _save_back_proposals_markup(save_back_proposals) + """
                           """ + _cache_conflict_status_markup(cache_conflict_status) + """
                            """ + _source_chunk_materialization_markup(source_chunk_materialization) + """
                            """ + kicad_analysis_status_markup + """
                            """ + kicad_analysis_evidence_markup + """
+                        </div></details>
                            <div class="card">
                         <h3>KiCad native foundation status</h3>
                        <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>

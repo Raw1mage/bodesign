@@ -658,6 +658,30 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("openmv_generated.kicad_sym", html)
         self.assertIn("Package → footprint map", html)
         self.assertIn("Per-artifact summary", html)
+        # the real generated schematic is embedded (rendered by kicad-cli), not a mock
+        self.assertIn("Generated schematic (rendered by KiCad)", html)
+        self.assertIn("/bodesign/api/openmv/schematic.svg", html)
+
+    def test_openmv_schematic_svg_route_returns_svg(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        self.assertIn("/bodesign/api/openmv/schematic.svg", {route.path for route in api_main.app.routes})
+        response = api_main.get_openmv_schematic_svg()
+        self.assertEqual("image/svg+xml", response.media_type)
+        self.assertIn("<svg", response.content)
+
+    def test_workspace_declutters_with_hero_and_parked_section(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        html = api_main.bodesign_viewer()
+
+        self.assertIn("Real generated output", html)
+        self.assertIn('href="/bodesign/openmv"', html)
+        self.assertIn('details class="parked"', html)
 
 
 def install_fastapi_stub() -> None:
@@ -693,9 +717,15 @@ def install_fastapi_stub() -> None:
         def __init__(self, url: str) -> None:
             self.url = url
 
+    class Response:
+        def __init__(self, content=None, media_type=None, **kwargs) -> None:
+            self.content = content
+            self.media_type = media_type
+
     fastapi_module.FastAPI = FastAPI
     responses_module.HTMLResponse = HTMLResponse
     responses_module.RedirectResponse = RedirectResponse
+    responses_module.Response = Response
     sys.modules["fastapi"] = fastapi_module
     sys.modules["fastapi.responses"] = responses_module
 
