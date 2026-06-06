@@ -49,7 +49,7 @@ The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` 
 
 bodesign is delivered as an **MCP server**, packaged like `docxmcp`:
 - **DD-9** Primary delivery = an MCP server exposing the bodesign tools; the FastAPI web app (`services/api`) is legacy/optional (the surface is MCP + files, not a UI). Built on the `mcp` Python SDK (`mcp.server.Server`) + starlette/uvicorn — the docxmcp stack.
-- **DD-10** Transport = MCP Streamable HTTP. **Local: UDS** (`uvicorn --uds <sock>`, the docxmcp default); **external: TCP** `--host/--port`. Also `stdio` for direct IDE/agent use.
+- **DD-10** Transport = MCP Streamable HTTP, served **concurrently over UDS (local) and TCP (external) from one process** (shared session manager + app, two uvicorn binds); pass `--uds` and/or `--port` (default TCP 8077 if neither). Also `stdio` for direct IDE/agent use. The container publishes both: UDS at `./.run/bodesign.sock` + TCP `:8077`.
 - **DD-11** File transfer = token-based upload/download over the same endpoint (clients submit whole project folders / datasheets; tool results reference produced files by token), mirroring docxmcp's `/files` + `stage_dir`.
 - **DD-12** Packaged as a **per-user Docker container** (`Dockerfile` + `docker-compose.yml`): image bundles KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + the `mcp` SDK; `./.run/<sock>` bind for the UDS rendezvous + named volumes for cache/sessions; socket healthcheck. Image is heavy (~GB) because KiCad/LibreOffice are required by the tools — accepted for portability.
 - **DD-13** Operated by **`mcpctl.sh`** (start / stop / reload / status / log), docker-compose-backed (the FastAPI `webctl.sh` is superseded).

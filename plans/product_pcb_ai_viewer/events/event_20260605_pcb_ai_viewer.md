@@ -265,6 +265,8 @@
 
 - G10 container acceptance MET (2026-06-07): the earlier 'wedged docker daemon' was a misdiagnosis — the session Bash sandbox was blocking /var/run/docker.sock (docker worked fine from other sessions). Bypassing the sandbox, `mcpctl.sh start` built the KiCad 9 + LibreOffice + pygerber + mcp image and brought up the container healthy. Verified over the container UDS: /healthz=200 (18 tools); MCP initialize→session, tools/list=18, tools/call bodesign_plan_design_intent → ok (5 subsystems) ran inside the container; tarball upload→token→blob download round-tripped. Note: MCP endpoint is /mcp/ (trailing slash; Mount 307-redirects /mcp→/mcp/); mcp.json already uses the trailing slash. The full bodesign MCP server (G10/G11) is now verified containerized end-to-end.
 
+- Dual transport (2026-06-07): made the MCP server serve UDS (local) + TCP (external) **simultaneously** from one process — `run_http` now builds one app + session manager and runs two uvicorn binds under a single `session_manager.run()` (`--uds` and/or `--port`; default TCP 8077). docker-compose updated to `--uds … --host 0.0.0.0 --port 8077` + `ports: 8077:8077`. Rebuilt/recreated the container and verified BOTH on the same container: UDS /healthz=200, TCP :8077 /healthz=200, and a TCP MCP tools/call (package_readiness) ok. Suite 125 pass. mcp.json notes the TCP endpoint; DD-10 updated.
+
 ## Remaining
 
 - Extend Rockbox reconstruction from first-pass placement/IPC component-net summaries into spatial Gerber/drill fusion: board outline, copper tracks, zones, apertures, drill hits, pad/via matching, and drill-to-copper relationships。

@@ -11,7 +11,10 @@ services:
     image: bodesign:latest
     build:
       context: .
-    command: ["--transport", "http", "--uds", "/run/bodesign/bodesign.sock"]
+    # Serve both: UDS (local IPC) + TCP HTTP (external) from one process.
+    command: ["--transport", "http", "--uds", "/run/bodesign/bodesign.sock", "--host", "0.0.0.0", "--port", "8077"]
+    ports:
+      - "8077:8077"
     volumes:
       # IPC rendezvous: the UDS lives here, host-visible.
       - "./.run:/run/bodesign"

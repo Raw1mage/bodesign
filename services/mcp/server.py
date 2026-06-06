@@ -371,34 +371,43 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
             return JSONResponse({"error": "not_found"}, status_code=404)
         return FileResponse(str(target))
 
-    @contextlib.asynccontextmanager
-    async def lifespan(app):
-        async with session_manager.run():
-            yield
-
     app = Starlette(routes=[
         Route("/", landing),
         Route("/healthz", healthz),
         Route("/files", upload_file, methods=["POST"]),
         Route("/files/{token}/blob/{rel:path}", get_blob),
         Mount("/mcp", app=handle_mcp),
-    ], lifespan=lifespan)
+    ])
 
-    config = uvicorn.Config(app, uds=uds) if uds else uvicorn.Config(app, host=host, port=port)
-    await uvicorn.Server(config).serve()
+    # Serve UDS (local) and/or TCP (external) concurrently from one process,
+    # sharing a single session manager + app. session_manager.run() is entered
+    # once and held open while both uvicorn binds serve.
+    binds = []
+    if uds:
+        binds.append(uvicorn.Server(uvicorn.Config(app, uds=uds)).serve())
+    if port is not None:
+        binds.append(uvicorn.Server(uvicorn.Config(app, host=host, port=port)).serve())
+    if not binds:
+        raise ValueError("run_http needs at least one of --uds / --port")
+    async with session_manager.run():
+        await asyncio.gather(*binds)
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="bodesign MCP server")
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8077)
-    parser.add_argument("--uds", default=None, help="bind HTTP transport to this unix socket")
+    parser.add_argument("--port", type=int, default=None, help="serve HTTP on this TCP port (external)")
+    parser.add_argument("--uds", default=None, help="serve HTTP on this unix socket (local)")
     args = parser.parse_args(argv)
     if args.transport == "stdio":
         asyncio.run(run_stdio())
     else:
-        asyncio.run(run_http(args.host, args.port, args.uds))
+        # UDS and TCP can run together; default to TCP 8077 if neither is given.
+        port = args.port
+        if not args.uds and port is None:
+            port = 8077
+        asyncio.run(run_http(args.host, port, args.uds))
 
 
 if __name__ == "__main__":
