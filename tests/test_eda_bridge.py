@@ -2,11 +2,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from bodesign_eda_bridge import build_kicad_native_extension_contract, emit_kicad_symbol_library_from_pin_table, plan_kicad_bridge
+from bodesign_eda_bridge import build_kicad_native_extension_contract, emit_kicad_symbol_library_from_pin_table, emit_openmv_n6_subsystem_schematic, plan_kicad_bridge
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PIN_TABLE = REPO_ROOT / "plans/product_openmv_datasheet_kicad_source/stm32n657-vfbga223-pin-table.json"
+OPENMV_PLAN = REPO_ROOT / "plans/product_openmv_datasheet_kicad_source"
 
 
 class EdaBridgeTests(unittest.TestCase):
@@ -49,6 +50,39 @@ class EdaBridgeTests(unittest.TestCase):
                 self.assertIn(f'(name "{pin_name}"', symbol)
             self.assertIn('(property "BodesignEvidence"', symbol)
             self.assertIn('raw_pdf_text_committed=false', symbol)
+
+    def test_emit_project_local_openmv_subsystem_schematic(self):
+        with TemporaryDirectory() as work:
+            result = emit_openmv_n6_subsystem_schematic(OPENMV_PLAN, Path(work) / "generated/openmv_n6_subsystem")
+
+            schematic_path = Path(result.schematic_path)
+            project_path = Path(result.project_path)
+            self.assertTrue(schematic_path.exists())
+            self.assertTrue(project_path.exists())
+            self.assertEqual(2, result.component_count)
+            self.assertGreaterEqual(result.net_count, 12)
+            self.assertFalse(Path(work, "sym-lib-table").exists())
+            self.assertFalse(Path(work, "fp-lib-table").exists())
+
+            first = schematic_path.read_text(encoding="utf-8")
+            second_result = emit_openmv_n6_subsystem_schematic(OPENMV_PLAN, Path(work) / "generated/openmv_n6_subsystem_2")
+            second = Path(second_result.schematic_path).read_text(encoding="utf-8")
+            self.assertEqual(first, second)
+            for text in (
+                'openmv_generated:STM32N657L0_VFBGA223',
+                'openmv_generated:MX25UM25645GXDI00_24BGA',
+                'STM32N657L0_VFBGA223',
+                'MX25UM25645GXDI00',
+                'XSPIM_P2_IO0',
+                'XSPIM_P2_IO7',
+                'XSPIM_P2_DQS0',
+                'XSPIM_P2_NCS1',
+                'XSPIM_P2_CLK_P',
+                'XSPIM_P2_RST#',
+                'VCC_1.8V_GATED',
+                'raw_pdf_text_committed=false',
+            ):
+                self.assertIn(text, first)
 
 
 if __name__ == "__main__":

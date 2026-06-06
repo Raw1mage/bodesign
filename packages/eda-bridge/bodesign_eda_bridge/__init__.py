@@ -9,6 +9,7 @@ from .kicad_emit import (
     validate_kicad_schematic,
 )
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol_library_from_pin_table
+from .openmv_subsystem import OpenMVSubsystemEmitResult, emit_openmv_n6_subsystem_schematic
 
 __all__ = [
     "EmitComponent",
@@ -19,8 +20,10 @@ __all__ = [
     "KiCadSymbolEmitResult",
     "KiCadSymbolPin",
     "KiCadValidationResult",
+    "OpenMVSubsystemEmitResult",
     "SchematicEmitResult",
     "build_kicad_native_extension_contract",
+    "emit_openmv_n6_subsystem_schematic",
     "emit_kicad_schematic",
     "emit_kicad_symbol_library_from_pin_table",
     "load_symbol",
