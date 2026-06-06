@@ -15,9 +15,12 @@ PACKAGE_ROOTS = [
     REPO_ROOT / "packages" / "component-kb",
     REPO_ROOT / "packages" / "design-ir",
     REPO_ROOT / "packages" / "doc-core",
+    REPO_ROOT / "packages" / "eda-bridge",
     REPO_ROOT / "packages" / "reverse-core",
     REPO_ROOT / "packages" / "source-core",
     REPO_ROOT / "packages" / "gerber-core",
+    REPO_ROOT / "packages" / "storage-core",
+    REPO_ROOT / "packages" / "workflow-core",
 ]
 
 for package_root in PACKAGE_ROOTS:
@@ -26,16 +29,22 @@ for package_root in PACKAGE_ROOTS:
         sys.path.append(package_path)
 
 try:
-    from bodesign_component_kb import ingest_datasheet_knowledge, reuse_component_knowledge
+    from bodesign_component_kb import build_component_knowledge_queue, ingest_datasheet_knowledge, reuse_component_knowledge
     from bodesign_doc_core import plan_openmv_document_ingestion
+    from bodesign_eda_bridge import build_kicad_native_extension_contract, plan_kicad_bridge
     from bodesign_gerber_core import focus_svg_viewbox, parse_drill_file, parse_gerber_file, render_gerber_raster_with_pygerber, render_gerber_with_pygerber, render_geometry_svg, validate_gerber_export_placeholder
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
+    from bodesign_storage_core import build_default_storage_share_manifest, build_kicad_happy_cache_mapping, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
+    build_component_knowledge_queue = None
     reuse_component_knowledge = None
     plan_openmv_document_ingestion = None
+    build_kicad_native_extension_contract = None
+    plan_kicad_bridge = None
     parse_drill_file = None
     parse_gerber_file = None
     focus_svg_viewbox = None
@@ -50,6 +59,12 @@ except ImportError:
     reconstruct_rockbox_placeholder = None
     plan_gerber_export = None
     produce_design_report = None
+    build_default_storage_share_manifest = None
+    build_kicad_happy_cache_mapping = None
+    classify_project_folder_taxonomy = None
+    validate_storage_share_manifest = None
+    build_generated_design_candidate_workspace = None
+    plan_reference_board_workflow = None
 
 app = FastAPI(title="bodesign API", version="0.1.0")
 
@@ -71,10 +86,18 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts", "purpose": "List project artifacts."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", "purpose": "Return artifact metadata and preview."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/geometry", "purpose": "Return parsed Gerber/drill geometry summary for the board view."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/storage-share", "purpose": "Return client-owned project folder storage-share manifest."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
     {"method": "POST", "path": "/bodesign/api/artifacts/detect", "purpose": "Detect artifact types before ingestion."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/board-design", "purpose": "Return a BoardDesign IR summary."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/rockbox/reconstruct", "purpose": "Reconstruct Rockbox into BoardDesign IR summary."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/knowledge/datasheets", "purpose": "Ingest datasheet knowledge."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/knowledge/queue", "purpose": "List reusable component knowledge candidates."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/knowledge/external-fetch", "purpose": "Policy gate for external datasheet fetching."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/eda/kicad/bridge-plan", "purpose": "Plan KiCad adapter/plugin bridge outputs."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/workflow/reference-board", "purpose": "Plan the AI reference-board reconstruction workflow."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/candidates/generated-design", "purpose": "Show generated design candidate diff/evidence/approval workspace."},
 ]
 
 BUILTIN_PROJECT_ID = "rockbox"
@@ -178,11 +201,11 @@ def _render_project_workspace(project_id: str) -> str:
     artifact_table = "".join(_artifact_row(project_id, artifact) for artifact in _project_artifact_records(project_id))
     if not artifact_table:
         artifact_table = '<tr><td colspan="5">No artifacts are attached to this project yet.</td></tr>'
-    component_table = "".join(_component_row(component) for component in components[:80])
+    component_table = "".join(_component_row(project_id, component) for component in components[:80])
     if not component_table:
         component_table = '<tr><td colspan="5">No placement/BOM components parsed.</td></tr>'
     net_markup = "".join(
-        f'<tr><td><code>{escape(str(net.get("name", "net")))}</code></td><td>{len(net.get("connected_pads", []))}</td><td>{escape(", ".join(str(pad) for pad in net.get("connected_pads", [])[:8]))}</td></tr>'
+        f'<tr><td><a href="/bodesign/api/projects/{escape(project_id)}/cross-probe/{escape_url(str(net.get("name", "net")))}"><code>{escape(str(net.get("name", "net")))}</code></a></td><td>{len(net.get("connected_pads", []))}</td><td>{escape(", ".join(str(pad) for pad in net.get("connected_pads", [])[:8]))}</td></tr>'
         for net in nets[:80]
     )
     if not net_markup:
@@ -191,6 +214,15 @@ def _render_project_workspace(project_id: str) -> str:
     fusion_markup = "".join(_component_fusion_row(component) for component in fusion_components[:80])
     if not fusion_markup:
         fusion_markup = '<tr><td colspan="5">No component↔net fusion evidence yet.</td></tr>'
+    kicad_foundation = get_project_kicad_foundation(project_id)
+    kicad_native_extension = get_project_kicad_native_extension(project_id)
+    kicad_source_markup = _kicad_source_markup(kicad_foundation)
+    kicad_taxonomy_markup = _kicad_taxonomy_markup(kicad_foundation)
+    kicad_analysis_markup = _kicad_analysis_markup(kicad_foundation)
+    kicad_blocker_markup = _kicad_blocker_markup(kicad_foundation)
+    kicad_native_markup = _kicad_native_extension_markup(kicad_native_extension)
+    candidate_workspace = get_generated_design_candidate_workspace(project_id)
+    candidate_markup = _candidate_workspace_markup(candidate_workspace)
     ir_json = escape(json.dumps(_compact_board_design(board_design), indent=2, ensure_ascii=False))
     return """
     <!doctype html>
@@ -218,10 +250,10 @@ def _render_project_workspace(project_id: str) -> str:
           .tabs { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-bottom: 16px; position: sticky; top: 0; z-index: 1; padding: 8px 0 14px; background: linear-gradient(#0b0f12 76%, #0b0f1200); min-width: 0; }
           .tabs input { display: none; }
           .tabs label { cursor: pointer; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--panel); }
-          #tab-projects:checked ~ label[for="tab-projects"], #tab-documents:checked ~ label[for="tab-documents"], #tab-board:checked ~ label[for="tab-board"], #tab-gerber:checked ~ label[for="tab-gerber"], #tab-ipc:checked ~ label[for="tab-ipc"], #tab-components:checked ~ label[for="tab-components"], #tab-ir:checked ~ label[for="tab-ir"], #tab-report:checked ~ label[for="tab-report"] { color: #07100d; background: var(--accent); border-color: var(--accent); }
+          #tab-overview:checked ~ label[for="tab-overview"], #tab-schematic:checked ~ label[for="tab-schematic"], #tab-pcb:checked ~ label[for="tab-pcb"], #tab-libraries:checked ~ label[for="tab-libraries"], #tab-datasheets:checked ~ label[for="tab-datasheets"], #tab-analysis:checked ~ label[for="tab-analysis"], #tab-manufacturing:checked ~ label[for="tab-manufacturing"], #tab-reports:checked ~ label[for="tab-reports"], #tab-candidates:checked ~ label[for="tab-candidates"] { color: #07100d; background: var(--accent); border-color: var(--accent); }
           .panels { flex: 0 0 100%; width: 100%; min-width: 0; }
           .panel { display: none; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: 20px; min-height: calc(100vh - 96px); max-width: 100%; overflow: hidden; }
-          #tab-projects:checked ~ .panels #projects, #tab-documents:checked ~ .panels #documents, #tab-board:checked ~ .panels #board, #tab-gerber:checked ~ .panels #gerber, #tab-ipc:checked ~ .panels #ipc, #tab-components:checked ~ .panels #components, #tab-ir:checked ~ .panels #ir, #tab-report:checked ~ .panels #report { display: block; }
+          #tab-overview:checked ~ .panels #overview, #tab-schematic:checked ~ .panels #schematic, #tab-pcb:checked ~ .panels #pcb, #tab-libraries:checked ~ .panels #libraries, #tab-datasheets:checked ~ .panels #datasheets, #tab-analysis:checked ~ .panels #analysis, #tab-manufacturing:checked ~ .panels #manufacturing, #tab-reports:checked ~ .panels #reports, #tab-candidates:checked ~ .panels #candidates { display: block; }
           .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; min-width: 0; }
           .card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--panel2); min-width: 0; overflow-wrap: anywhere; }
           .project-card { border-color: #3e635b; }
@@ -257,13 +289,13 @@ def _render_project_workspace(project_id: str) -> str:
         <main class="shell">
           <aside class="sidebar">
             <h1>bodesign</h1>
-            <p class="muted">Project workspace from uploaded or fixture-backed hardware evidence. This is a file-centric viewer, not a fake completed schematic.</p>
+             <p class="muted">KiCad companion dashboard for client-owned folders and fixture-backed hardware evidence. Native KiCad remains the schematic/PCB editor.</p>
             <h2>Project</h2>
             <div class="metric"><span>project</span><code>""" + escape(project_id) + """</code></div>
             <div class="metric"><span>IR</span><code>""" + escape(str(board_design["id"])) + """</code></div>
             <div class="metric"><span>status</span><code>""" + escape(str(confidence["status"])) + """</code></div>
             <div class="metric"><span>confidence</span><code>""" + escape(str(confidence["overall"])) + """</code></div>
-            <p><a class="button" href="#projects">Open projects</a></p>
+             <p><a class="button" href="#overview">Open companion dashboard</a></p>
             <h2>Parsed Summary</h2>
             <div class="metric"><span>components</span><code>""" + str(int(confidence.get("components", 0))) + """</code></div>
             <div class="metric"><span>nets</span><code>""" + str(int(confidence.get("nets", 0))) + """</code></div>
@@ -277,43 +309,59 @@ def _render_project_workspace(project_id: str) -> str:
           </aside>
           <section class="workspace">
             <div class="tabs">
-              <input checked id="tab-projects" name="workspace-tab" type="radio" />
-              <input id="tab-documents" name="workspace-tab" type="radio" />
-              <input id="tab-board" name="workspace-tab" type="radio" />
-              <input id="tab-gerber" name="workspace-tab" type="radio" />
-              <input id="tab-ipc" name="workspace-tab" type="radio" />
-              <input id="tab-components" name="workspace-tab" type="radio" />
-              <input id="tab-ir" name="workspace-tab" type="radio" />
-              <input id="tab-report" name="workspace-tab" type="radio" />
-              <label for="tab-projects">Projects</label>
-              <label for="tab-documents">Documents</label>
-              <label for="tab-board">Board View</label>
-              <label for="tab-gerber">Gerber Layers</label>
-              <label for="tab-ipc">IPC / Nets</label>
-              <label for="tab-components">Components</label>
-              <label for="tab-ir">BoardDesign IR</label>
-              <label for="tab-report">Report</label>
+              <input checked id="tab-overview" name="workspace-tab" type="radio" />
+              <input id="tab-schematic" name="workspace-tab" type="radio" />
+              <input id="tab-pcb" name="workspace-tab" type="radio" />
+              <input id="tab-libraries" name="workspace-tab" type="radio" />
+              <input id="tab-datasheets" name="workspace-tab" type="radio" />
+              <input id="tab-analysis" name="workspace-tab" type="radio" />
+              <input id="tab-manufacturing" name="workspace-tab" type="radio" />
+              <input id="tab-reports" name="workspace-tab" type="radio" />
+              <input id="tab-candidates" name="workspace-tab" type="radio" />
+              <label for="tab-overview">Project Overview</label>
+              <label for="tab-schematic">Schematic Status</label>
+              <label for="tab-pcb">PCB Layout Status</label>
+              <label for="tab-libraries">Libraries</label>
+              <label for="tab-datasheets">Datasheets/Docs</label>
+              <label for="tab-analysis">Analysis</label>
+              <label for="tab-manufacturing">Manufacturing Outputs</label>
+              <label for="tab-reports">Reports</label>
+              <label for="tab-candidates">Candidate Review</label>
               <div class="panels">
-                <article class="panel" id="projects">
-                  <h2>Projects</h2>
-                  <p class="muted">Open or import board projects. Rockbox is preloaded from the private fixture as an already-uploaded project so it can be browsed immediately.</p>
-                  <div class="grid">""" + project_markup + """
-                    <div class="card">
-                      <h3>Import new project</h3>
-                      <p class="muted">Drop/upload is not wired yet. MCP/agent import should call <code>/bodesign/api/artifacts/detect</code> and then attach files to a project.</p>
-                      <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
-                    </div>
-                  </div>
+                <article class="panel" id="overview">
+                  <h2>Project Overview</h2>
+                  <p class="muted">Open or import client-owned KiCad projects. bodesign is a companion dashboard; native KiCad owns editing, canvas, libraries, DRC, and ERC.</p>
+                   <div class="grid">""" + project_markup + """
+                     <div class="card">
+                        <h3>Connect native KiCad project</h3>
+                        <p class="muted">Folder sharing is not wired yet. The target flow indexes KiCad files from a client-owned folder and hands edit/canvas actions to a KiCad Action Plugin or sidecar.</p>
+                       <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
+                     </div>
+                     <div class="card">
+                        <h3>KiCad native foundation status</h3>
+                       <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>
+                       <p>storage owner: <code>""" + escape(str(kicad_foundation.get("storage_owner", "unknown"))) + """</code></p>
+                       <p>save-back: <code>""" + escape(str(kicad_foundation.get("safe_save_back", {}).get("mode", "unknown"))) + """</code></p>
+                     </div>
+                   </div>
+                    <h3>KiCad source detection</h3>
+                    <div class="grid">""" + kicad_source_markup + """</div>
+                    <h3>Native KiCad extension boundary</h3>
+                    """ + kicad_native_markup + """
+                    <h3>Foundation blockers</h3>
+                    <ul>""" + kicad_blocker_markup + """</ul>
+                  </article>
+                 <article class="panel" id="schematic">
+                  <h2>Schematic Status</h2>
+                  <p class="muted">Native KiCad schematic editor is the primary circuit design surface. This panel shows evidence/status only; it is not a browser schematic editor.</p>
+                  <div class="card"><h3>Schematic evidence status</h3><p>No <code>.kicad_sch</code> is attached yet. IPC nets and placement tables below are evidence inputs, not a schematic source.</p></div>
+                  <h3>IPC / Nets evidence</h3>
+                  <div class="scroll"><table><thead><tr><th>Net</th><th>Connected pads</th><th>Sample pads</th></tr></thead><tbody>""" + net_markup + """</tbody></table></div>
                 </article>
-                <article class="panel" id="documents">
-                  <h2>Source Documents</h2>
-                  <p class="muted">This tab is the file-centric entry point. It separates Gerber, drill, IPC, BOM/placement, routing reports and unknown files before any circuit claim is made.</p>
-                  <div class="scroll"><table><thead><tr><th>File</th><th>Type</th><th>Format</th><th>Size</th><th>Open</th></tr></thead><tbody>""" + artifact_table + """</tbody></table></div>
-                  <h3>Grouped by type</h3>
-                  <div class="grid">""" + document_markup + """</div>
-                </article>
-                 <article class="panel" id="board">
-                  <h2>Board View</h2>
+                <article class="panel" id="pcb">
+                  <h2>PCB Layout Status</h2>
+                  <p class="muted">Native KiCad PCB editor owns board layout, canvas interaction, DRC, and ERC. This fixture shows third-party raster Gerber evidence until a <code>.kicad_pcb</code> source is attached.</p>
+                  <h3>Board View evidence</h3>
                   <p class="muted">Third-party raster Gerber render. This view uses pygerber's raster backend instead of hand-written SVG geometry; net-aware coloring and multi-layer compositing are still pending.</p>
                   <div class="grid">
                     <div class="card"><h3>Default view</h3><p><code>pygerber-raster</code></p><p>status: <b>""" + escape(str((geometry.get("raster_renderer") or {}).get("status", "not-run"))) + """</b></p></div>
@@ -334,31 +382,49 @@ def _render_project_workspace(project_id: str) -> str:
                     <h3>Component / pinout inspector</h3>
                     <p class="muted">Click a component marker to see placement, package, and IPC-derived pin/net evidence. Exact footprint pin geometry is pending datasheet/footprint normalization.</p>
                   </div>
-                  <h3>Component-Net fusion evidence</h3>
+                </article>
+                 <article class="panel" id="libraries">
+                   <h2>Libraries</h2>
+                   <p class="muted">Project-local symbols, footprints, 3D models, and vendor libraries will be indexed here when a KiCad folder is shared.</p>
+                   <h3>Human-facing folder taxonomy</h3>
+                   <div class="grid">""" + kicad_taxonomy_markup + """</div>
+                   <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Footprint</th><th>Side</th><th>XY mil</th></tr></thead><tbody>""" + component_table + """</tbody></table></div>
+                 </article>
+                <article class="panel" id="datasheets">
+                  <h2>Datasheets/Docs</h2>
+                  <p class="muted">Human-facing docs and datasheets stay in client-owned folders. Manufacturing artifacts remain evidence inputs below until native KiCad sources are attached.</p>
+                  <div class="scroll"><table><thead><tr><th>File</th><th>Type</th><th>Format</th><th>Size</th><th>Open</th></tr></thead><tbody>""" + artifact_table + """</tbody></table></div>
+                  <h3>Grouped by type</h3>
+                  <div class="grid">""" + document_markup + """</div>
+                </article>
+                <article class="panel" id="analysis">
+                  <h2>Analysis</h2>
+                   <p class="muted">KiCad Happy analyzer output, trust summaries, DRC/ERC/DFM evidence, and reconstruction previews appear here as evidence/cache views.</p>
+                   <h3>KiCad Happy hidden analysis cache</h3>
+                   """ + kicad_analysis_markup + """
+                   <h3>Component-Net fusion evidence</h3>
                   <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Pins</th><th>Nets</th><th>Sample nets</th></tr></thead><tbody>""" + fusion_markup + """</tbody></table></div>
+                  <h3>BoardDesign IR</h3>
+                  <pre>""" + ir_json + """</pre>
                 </article>
-                <article class="panel" id="gerber">
-                  <h2>Gerber Layers</h2>
-                  <p class="muted">Layer files are visible here first. The Board View currently renders one selected copper layer through pygerber when available; layer toggles and compositing are still pending.</p>
+                <article class="panel" id="manufacturing">
+                  <h2>Manufacturing Outputs</h2>
+                   <p class="muted">Gerber, drill, IPC, BOM, placement, and routing reports are manufacturing evidence panels for the KiCad companion dashboard.</p>
+                   <h3>Detected manufacturing outputs</h3>
+                   """ + _kicad_output_markup(kicad_foundation) + """
+                   <h3>Gerber Layers</h3>
                   <table><thead><tr><th>Layer</th><th>Source file</th><th>Status</th></tr></thead><tbody>""" + layer_markup + """</tbody></table>
-                </article>
-                <article class="panel" id="ipc">
                   <h2>IPC-356 Nets</h2>
                   <p class="muted">Connectivity evidence parsed from IPC records. This is the closest current view to circuit topology.</p>
                   <div class="scroll"><table><thead><tr><th>Net</th><th>Connected pads</th><th>Sample pads</th></tr></thead><tbody>""" + net_markup + """</tbody></table></div>
                 </article>
-                <article class="panel" id="components">
-                  <h2>Components</h2>
-                  <p class="muted">Placement/BOM-derived component table. Datasheet enrichment will attach pinout and design knowledge here.</p>
-                  <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Footprint</th><th>Side</th><th>XY mil</th></tr></thead><tbody>""" + component_table + """</tbody></table></div>
+                <article class="panel" id="candidates">
+                  <h2>Candidate Review</h2>
+                  <p class="muted">Candidate workspace for diff, evidence and approval review. This does not create send-to-fab output.</p>
+                  """ + candidate_markup + """
                 </article>
-                <article class="panel" id="ir">
-                  <h2>BoardDesign IR</h2>
-                  <p class="muted">Compact JSON preview of the normalized source-of-truth model.</p>
-                  <pre>""" + ir_json + """</pre>
-                </article>
-                <article class="panel" id="report">
-                  <h2>Reconstruction Report</h2>
+                <article class="panel" id="reports">
+                  <h2>Reports</h2>
                   <div class="grid">
                     <div class="card"><h3>Current capability</h3><p>Rockbox placement and IPC summaries are parsed into BoardDesign IR.</p></div>
                     <div class="card"><h3>Not yet correct</h3><p>True schematic drawing, Gerber geometry rendering, routing topology and datasheet-derived semantics are still pending.</p></div>
@@ -428,6 +494,96 @@ def get_project_artifact(project_id: str, artifact_id: str) -> dict[str, object]
 def get_project_geometry(project_id: str) -> dict[str, object]:
     geometry = _project_geometry(project_id)
     return {key: value for key, value in geometry.items() if key != "svg"}
+
+
+@app.get("/api/projects/{project_id}/storage-share")
+@app.get("/bodesign/api/projects/{project_id}/storage-share")
+def get_project_storage_share(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or validate_storage_share_manifest is None:
+        return {
+            "project_id": project_id,
+            "status": "storage-core package import failed",
+            "durable_owner": "client",
+            "storage_model": "client-owned-local-folder",
+            "hidden_workspace": ".bodesign",
+            "warnings": ["Storage-share manifest contract could not be built."],
+        }
+    manifest = build_default_storage_share_manifest(project_id)
+    taxonomy = classify_project_folder_taxonomy(_project_taxonomy_paths(project_id), manifest.hidden_workspace) if classify_project_folder_taxonomy is not None else None
+    kicad_happy_cache = build_kicad_happy_cache_mapping(manifest.hidden_workspace) if build_kicad_happy_cache_mapping is not None else None
+    return {
+        **asdict(manifest),
+        "status": "ready",
+        "validation_errors": validate_storage_share_manifest(manifest),
+        "folder_taxonomy": asdict(taxonomy) if taxonomy is not None else {"warnings": ["Storage folder taxonomy classifier is unavailable."]},
+        "kicad_happy_cache": asdict(kicad_happy_cache) if kicad_happy_cache is not None else {"warnings": ["KiCad Happy cache mapping is unavailable."]},
+    }
+
+
+@app.get("/api/projects/{project_id}/kicad-foundation")
+@app.get("/bodesign/api/projects/{project_id}/kicad-foundation")
+def get_project_kicad_foundation(project_id: str) -> dict[str, object]:
+    storage_share = get_project_storage_share(project_id)
+    taxonomy = storage_share.get("folder_taxonomy") if isinstance(storage_share.get("folder_taxonomy"), dict) else {}
+    kicad_sources = taxonomy.get("kicad_sources") if isinstance(taxonomy.get("kicad_sources"), dict) else {}
+    roles = taxonomy.get("roles") if isinstance(taxonomy.get("roles"), dict) else {}
+    output_artifacts = taxonomy.get("output_artifacts") if isinstance(taxonomy.get("output_artifacts"), list) else []
+    kicad_happy_cache = storage_share.get("kicad_happy_cache") if isinstance(storage_share.get("kicad_happy_cache"), dict) else {}
+    blockers = [
+        "Real client folder browsing is not wired yet; this fixture uses deterministic manifest paths.",
+        "Safe save-back is limited to scoped client-approved writes or client-applied patches.",
+        "Gerber→design-source and datasheet/reference→design-source remain blocked until native KiCad plugin/sidecar round-trip is reliable.",
+        "Browser-native schematic/PCB editing is intentionally blocked; native KiCad owns editor, canvas, DRC, and ERC.",
+    ]
+    if not kicad_sources.get("project"):
+        blockers.append("No .kicad_pro source is detected in the shared client folder.")
+    if not kicad_sources.get("schematic"):
+        blockers.append("No .kicad_sch source is detected in the shared client folder.")
+    if not kicad_sources.get("pcb"):
+        blockers.append("No .kicad_pcb source is detected in the shared client folder.")
+    return {
+        "project_id": project_id,
+        "status": "foundation-fixture-ready",
+        "storage_share_status": storage_share.get("status", "unknown"),
+        "storage_owner": storage_share.get("durable_owner", "client"),
+        "storage_model": storage_share.get("storage_model", "client-owned-local-folder"),
+        "project_root": storage_share.get("project_root", f"client://projects/{project_id}"),
+        "hidden_workspace": storage_share.get("hidden_workspace", ".bodesign"),
+        "safe_save_back": {
+            "mode": storage_share.get("save_back_mode", "scoped-client-storage-share"),
+            "conflict_policy": storage_share.get("conflict_policy", "client-detects-conflicts-before-accepting-mcp-writes"),
+            "write_scopes": storage_share.get("write_scopes", []),
+            "requires_client_approval": True,
+        },
+        "kicad_sources": kicad_sources,
+        "taxonomy_roles": roles,
+        "output_artifacts": output_artifacts,
+        "kicad_happy_cache": kicad_happy_cache,
+        "native_extension": get_project_kicad_native_extension(project_id),
+        "blocked_pipelines": ["gerber-to-design-source", "datasheet-reference-to-design-source"],
+        "blockers": blockers,
+        "warnings": list(storage_share.get("warnings", [])) if isinstance(storage_share.get("warnings"), list) else [],
+    }
+
+
+@app.get("/api/projects/{project_id}/kicad-native-extension")
+@app.get("/bodesign/api/projects/{project_id}/kicad-native-extension")
+def get_project_kicad_native_extension(project_id: str) -> dict[str, object]:
+    if build_kicad_native_extension_contract is None:
+        return {
+            "project_id": project_id,
+            "status": "eda-bridge package import failed",
+            "integration_model": "kicad-action-plugin-plus-bodesign-mcp-sidecar",
+            "native_editor_owner": "KiCad native application owns schematic editor, PCB editor, canvas, libraries, DRC, and ERC.",
+            "warnings": ["KiCad native extension contract could not be built."],
+        }
+    return {**asdict(build_kicad_native_extension_contract(project_id)), "status": "contract-ready"}
+
+
+@app.get("/api/projects/{project_id}/cross-probe/{probe_id}")
+@app.get("/bodesign/api/projects/{project_id}/cross-probe/{probe_id}")
+def get_project_cross_probe(project_id: str, probe_id: str) -> dict[str, object]:
+    return _project_cross_probe(project_id, probe_id)
 
 
 @app.post("/api/projects")
@@ -585,6 +741,32 @@ def ingest_datasheets(project_id: str, payload: dict[str, object]) -> dict[str, 
     return asdict(ingest_datasheet_knowledge(project_id, part_number, document_paths, package_hint))
 
 
+@app.get("/api/projects/{project_id}/knowledge/queue")
+@app.get("/bodesign/api/projects/{project_id}/knowledge/queue")
+def get_component_knowledge_queue(project_id: str) -> dict[str, object]:
+    board_design = _project_board_design(project_id)
+    components = board_design.get("components", []) if isinstance(board_design.get("components"), list) else []
+    if build_component_knowledge_queue is None:
+        return {"project_id": project_id, "status": "component-kb package import failed", "items": []}
+    items = [asdict(item) for item in build_component_knowledge_queue(components)]
+    return {"project_id": project_id, "status": "queued", "total_items": len(items), "items": items}
+
+
+@app.post("/api/projects/{project_id}/knowledge/external-fetch")
+@app.post("/bodesign/api/projects/{project_id}/knowledge/external-fetch")
+def request_external_datasheet_fetch(project_id: str, payload: dict[str, object] | None = None) -> dict[str, object]:
+    request_payload = payload or {}
+    return {
+        "project_id": project_id,
+        "part_number": str(request_payload.get("part_number") or "unknown-part"),
+        "status": "blocked-policy-gate",
+        "external_fetch_enabled": False,
+        "requires_user_approval": True,
+        "allowed_inputs": ["user-provided PDF", "user-provided text", "docxmcp-derived source chunks"],
+        "reason": "Automatic public web datasheet downloads are disabled until the user approves an explicit fetching policy.",
+    }
+
+
 @app.post("/api/projects/{project_id}/openmv/plan")
 @app.post("/bodesign/api/projects/{project_id}/openmv/plan")
 def plan_openmv(project_id: str, payload: dict[str, list[str]]) -> dict[str, object]:
@@ -635,6 +817,89 @@ def validate_gerber_export(project_id: str, payload: dict[str, list[str]]) -> di
         }
 
     return asdict(validate_gerber_export_placeholder(project_id, output_paths))
+
+
+@app.post("/api/projects/{project_id}/eda/kicad/bridge-plan")
+@app.post("/bodesign/api/projects/{project_id}/eda/kicad/bridge-plan")
+def plan_project_kicad_bridge(project_id: str, payload: dict[str, str] | None = None) -> dict[str, object]:
+    request_payload = payload or {}
+    board_design_id = request_payload.get("board_design_id") or f"{project_id}-board-design"
+    integration_posture = request_payload.get("integration_posture") or "plugin-submodule-auto-workflow"
+    if plan_kicad_bridge is None:
+        return {
+            "project_id": project_id,
+            "board_design_id": board_design_id,
+            "integration_posture": integration_posture,
+            "execution_status": "eda-bridge package import failed",
+            "planned_outputs": [],
+            "warnings": ["KiCad bridge adapter could not be planned."],
+        }
+    return asdict(plan_kicad_bridge(project_id, board_design_id, integration_posture))
+
+
+@app.post("/api/projects/{project_id}/workflow/reference-board")
+@app.post("/bodesign/api/projects/{project_id}/workflow/reference-board")
+def plan_project_reference_board_workflow(project_id: str, payload: dict[str, str] | None = None) -> dict[str, object]:
+    request_payload = payload or {}
+    board_design = _project_board_design(project_id)
+    board_design_id = request_payload.get("board_design_id") or str(board_design.get("id") or f"{project_id}-board-design")
+    components = board_design.get("components", []) if isinstance(board_design.get("components"), list) else []
+    nets = board_design.get("nets", []) if isinstance(board_design.get("nets"), list) else []
+    artifacts = _project_artifact_records(project_id)
+    queue = get_component_knowledge_queue(project_id)
+    queue_count = int(queue.get("total_items", 0)) if isinstance(queue.get("total_items"), int) else 0
+    if plan_reference_board_workflow is None:
+        return {
+            "project_id": project_id,
+            "board_design_id": board_design_id,
+            "status": "workflow-core package import failed",
+            "orchestration_model": "client-orchestrated-mcp-workflow",
+            "stages": [],
+            "approval_gates": [],
+            "warnings": ["Reference-board workflow planner could not run."],
+        }
+    return asdict(
+        plan_reference_board_workflow(
+            project_id=project_id,
+            board_design_id=board_design_id,
+            artifact_count=len(artifacts),
+            component_count=len(components),
+            net_count=len(nets),
+            knowledge_queue_count=queue_count,
+            orchestration_model=str(request_payload.get("orchestration_model") or "client-orchestrated-mcp-workflow"),
+        )
+    )
+
+
+@app.get("/api/projects/{project_id}/candidates/generated-design")
+@app.get("/bodesign/api/projects/{project_id}/candidates/generated-design")
+def get_generated_design_candidate_workspace(project_id: str) -> dict[str, object]:
+    board_design = _project_board_design(project_id)
+    board_design_id = str(board_design.get("id") or f"{project_id}-board-design")
+    components = board_design.get("components", []) if isinstance(board_design.get("components"), list) else []
+    nets = board_design.get("nets", []) if isinstance(board_design.get("nets"), list) else []
+    artifacts = _project_artifact_records(project_id)
+    if build_generated_design_candidate_workspace is None:
+        return {
+            "project_id": project_id,
+            "candidate_id": f"{project_id}-candidate-001",
+            "source_board_design_id": board_design_id,
+            "status": "workflow-core package import failed",
+            "approval_state": "not-approved",
+            "diff_summary": [],
+            "evidence_refs": [],
+            "validation_gates": ["Candidate is not send-to-fab without explicit user approval."],
+            "warnings": ["Generated design candidate workspace could not run."],
+        }
+    return asdict(
+        build_generated_design_candidate_workspace(
+            project_id=project_id,
+            source_board_design_id=board_design_id,
+            component_count=len(components),
+            net_count=len(nets),
+            artifact_count=len(artifacts),
+        )
+    )
 
 
 @app.post("/api/projects/{project_id}/reports/design")
@@ -728,6 +993,31 @@ def _project_artifact_records(project_id: str) -> list[dict[str, object]]:
             }
         )
     return records
+
+
+def _project_taxonomy_paths(project_id: str) -> list[str]:
+    paths = [
+        f"eda/{project_id}/{project_id}.kicad_pro",
+        f"eda/{project_id}/{project_id}.kicad_sch",
+        f"eda/{project_id}/{project_id}.kicad_pcb",
+        "docs/datasheets/reference.pdf",
+        "libraries/symbols/project.kicad_sym",
+        "libraries/footprints/project.pretty/README.md",
+        "reports/design-review.md",
+        ".bodesign/analysis/kicad-happy/manifest.json",
+    ]
+    for record in _project_artifact_records(project_id):
+        artifact_type = str(record.get("artifact_type") or "unknown")
+        filename = str(record.get("filename") or "artifact")
+        if artifact_type in {"gerber", "drill", "bom_placement", "ipc356", "routing_report"}:
+            paths.append(f"outputs/manufacturing/{filename}")
+        elif artifact_type in {"datasheet", "reference_doc"}:
+            paths.append(f"docs/{filename}")
+        elif artifact_type == "schematic":
+            paths.append(f"eda/imported/{filename}")
+        else:
+            paths.append(f"inputs/{filename}")
+    return paths
 
 
 def _project_geometry(project_id: str) -> dict[str, object]:
@@ -902,6 +1192,199 @@ def _component_net_fusion_summary(components: list[dict[str, object]], nets: lis
     }
 
 
+def _project_cross_probe(project_id: str, probe_id: str) -> dict[str, object]:
+    normalized_probe = probe_id.strip()
+    board_design = _project_board_design(project_id)
+    components = board_design.get("components", []) if isinstance(board_design.get("components"), list) else []
+    nets = board_design.get("nets", []) if isinstance(board_design.get("nets"), list) else []
+    records = _project_artifact_records(project_id)
+    component = _find_component(components, normalized_probe)
+    if component is not None:
+        return _component_cross_probe(project_id, component, nets, records)
+    net = _find_net(nets, normalized_probe)
+    if net is not None:
+        return _net_cross_probe(project_id, net, components, records)
+    artifact = _find_project_artifact(project_id, normalized_probe)
+    if artifact is not None:
+        return _artifact_cross_probe(project_id, artifact, records)
+    return {"project_id": project_id, "probe_id": probe_id, "status": "not-found", "kind": "unknown", "links": []}
+
+
+def _find_component(components: list[dict[str, object]], refdes: str) -> dict[str, object] | None:
+    refdes_upper = refdes.upper()
+    for component in components:
+        if str(component.get("refdes", "")).upper() == refdes_upper:
+            return component
+    return None
+
+
+def _find_net(nets: list[dict[str, object]], net_name: str) -> dict[str, object] | None:
+    net_upper = net_name.upper()
+    for net in nets:
+        if str(net.get("name", "")).upper() == net_upper:
+            return net
+    return None
+
+
+def _component_cross_probe(project_id: str, component: dict[str, object], nets: list[dict[str, object]], records: list[dict[str, object]]) -> dict[str, object]:
+    refdes = str(component.get("refdes", ""))
+    connected = []
+    for net in nets:
+        pads = [str(pad) for pad in net.get("connected_pads", []) if str(pad).upper().startswith(f"{refdes.upper()}.")]
+        if pads:
+            connected.append({"net": str(net.get("name", "")), "pads": pads[:24], "pad_count": len(pads)})
+    placement = component.get("placement") if isinstance(component.get("placement"), dict) else {}
+    return {
+        "project_id": project_id,
+        "probe_id": refdes,
+        "kind": "component",
+        "status": "linked",
+        "component": {
+            "refdes": refdes,
+            "part_number": str(component.get("part_number") or placement.get("value") or ""),
+            "footprint": str(component.get("footprint") or ""),
+            "placement": placement,
+        },
+        "nets": connected[:40],
+        "artifacts": _cross_probe_artifact_links(records),
+        "links": [f"/bodesign/api/projects/{project_id}/cross-probe/{escape_url(str(item['net']))}" for item in connected[:24]],
+    }
+
+
+def _net_cross_probe(project_id: str, net: dict[str, object], components: list[dict[str, object]], records: list[dict[str, object]]) -> dict[str, object]:
+    component_index = {str(component.get("refdes", "")).upper(): component for component in components}
+    connected_components = []
+    connected_vias = []
+    for pad in net.get("connected_pads", []):
+        pad_text = str(pad)
+        if pad_text.startswith("VIA."):
+            connected_vias.append(pad_text)
+            continue
+        if "." not in pad_text:
+            continue
+        refdes, pin = pad_text.split(".", 1)
+        component = component_index.get(refdes.upper(), {})
+        connected_components.append({"refdes": refdes, "pin": pin, "part_number": str(component.get("part_number", ""))})
+    net_name = str(net.get("name", ""))
+    return {
+        "project_id": project_id,
+        "probe_id": net_name,
+        "kind": "net",
+        "status": "linked",
+        "net": {"name": net_name, "pad_count": len(net.get("connected_pads", [])), "via_count": len(connected_vias)},
+        "components": connected_components[:80],
+        "vias": connected_vias[:80],
+        "artifacts": _cross_probe_artifact_links(records),
+        "links": [f"/bodesign/api/projects/{project_id}/cross-probe/{escape_url(item['refdes'])}" for item in connected_components[:40]],
+    }
+
+
+def _artifact_cross_probe(project_id: str, artifact: dict[str, object], records: list[dict[str, object]]) -> dict[str, object]:
+    related_types = {
+        "gerber": ["drill", "ipc356", "bom_placement"],
+        "drill": ["gerber", "ipc356"],
+        "ipc356": ["bom_placement", "gerber", "drill"],
+        "bom_placement": ["ipc356", "gerber"],
+    }.get(str(artifact.get("artifact_type")), [])
+    related = [record for record in records if record.get("artifact_type") in related_types]
+    return {
+        "project_id": project_id,
+        "probe_id": str(artifact.get("id", "")),
+        "kind": "artifact",
+        "status": "linked",
+        "artifact": artifact,
+        "related_artifacts": related[:40],
+        "links": [str(record.get("viewer_url", "")) for record in related[:40]],
+    }
+
+
+def _cross_probe_artifact_links(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    evidence_types = {"bom_placement", "ipc356", "gerber", "drill"}
+    return [
+        {"id": str(record.get("id", "")), "filename": str(record.get("filename", "")), "type": str(record.get("artifact_type", "")), "viewer_url": str(record.get("viewer_url", ""))}
+        for record in records
+        if record.get("artifact_type") in evidence_types
+    ][:80]
+
+
+def escape_url(value: str) -> str:
+    return value.replace("/", "%2F").replace("#", "%23").replace(" ", "%20")
+
+
+def _kicad_source_markup(foundation: dict[str, object]) -> str:
+    sources = foundation.get("kicad_sources") if isinstance(foundation.get("kicad_sources"), dict) else {}
+    cards = []
+    for source_type, label in [("project", ".kicad_pro"), ("schematic", ".kicad_sch"), ("pcb", ".kicad_pcb")]:
+        paths = sources.get(source_type) if isinstance(sources.get(source_type), list) else []
+        items = "".join(f"<li><code>{escape(str(path))}</code></li>" for path in paths[:8]) or '<li class="muted">Not detected yet.</li>'
+        cards.append(f'<div class="card"><h3>{escape(label)}</h3><ul>{items}</ul></div>')
+    return "".join(cards)
+
+
+def _kicad_taxonomy_markup(foundation: dict[str, object]) -> str:
+    roles = foundation.get("taxonomy_roles") if isinstance(foundation.get("taxonomy_roles"), dict) else {}
+    cards = []
+    for role in ["docs", "inputs", "eda", "libraries", "outputs", "reports"]:
+        paths = roles.get(role) if isinstance(roles.get(role), list) else []
+        items = "".join(f"<li><code>{escape(str(path))}</code></li>" for path in paths[:8]) or '<li class="muted">No paths classified yet.</li>'
+        cards.append(f'<div class="card"><h3>{escape(role)}</h3><ul>{items}</ul></div>')
+    return "".join(cards)
+
+
+def _kicad_analysis_markup(foundation: dict[str, object]) -> str:
+    cache = foundation.get("kicad_happy_cache") if isinstance(foundation.get("kicad_happy_cache"), dict) else {}
+    artifacts = cache.get("artifact_paths") if isinstance(cache.get("artifact_paths"), list) else []
+    rows = "".join(
+        f"<tr><td>{escape(str(artifact.get('category', '')))}</td><td><code>{escape(str(artifact.get('path', '')))}</code></td><td>{escape(str(artifact.get('visibility', '')))}</td></tr>"
+        for artifact in artifacts[:24]
+        if isinstance(artifact, dict)
+    )
+    if not rows:
+        rows = '<tr><td colspan="3">No KiCad Happy cache mapping is available.</td></tr>'
+    return (
+        '<div class="grid">'
+        f'<div class="card"><h3>Cache mode</h3><p><code>{escape(str(cache.get("mode", "unknown")))}</code></p><p>root: <code>{escape(str(cache.get("analysis_root", "unknown")))}</code></p><p>track_in_git: <code>{escape(str(cache.get("track_in_git", "unknown")))}</code></p></div>'
+        f'<div class="card"><h3>Compatibility config</h3><p><code>{escape(str(cache.get("config_path", ".kicad-happy.json")))}</code></p><p class="muted">Compatibility config is recognized but MCP analyzer output stays hidden by default.</p></div>'
+        '</div>'
+        f'<div class="scroll"><table><thead><tr><th>Category</th><th>Path</th><th>Visibility</th></tr></thead><tbody>{rows}</tbody></table></div>'
+    )
+
+
+def _kicad_output_markup(foundation: dict[str, object]) -> str:
+    artifacts = foundation.get("output_artifacts") if isinstance(foundation.get("output_artifacts"), list) else []
+    rows = "".join(
+        f"<tr><td>{escape(str(artifact.get('artifact_type', '')))}</td><td><code>{escape(str(artifact.get('path', '')))}</code></td><td>{escape(str(artifact.get('visibility', '')))}</td></tr>"
+        for artifact in artifacts[:40]
+        if isinstance(artifact, dict)
+    )
+    if not rows:
+        rows = '<tr><td colspan="3">No manufacturing outputs detected in the human-facing outputs folder.</td></tr>'
+    return f'<div class="scroll"><table><thead><tr><th>Type</th><th>Path</th><th>Visibility</th></tr></thead><tbody>{rows}</tbody></table></div>'
+
+
+def _kicad_blocker_markup(foundation: dict[str, object]) -> str:
+    blockers = foundation.get("blockers") if isinstance(foundation.get("blockers"), list) else []
+    return "".join(f"<li>{escape(str(blocker))}</li>" for blocker in blockers) or '<li class="muted">No foundation blockers recorded.</li>'
+
+
+def _kicad_native_extension_markup(extension: dict[str, object]) -> str:
+    capabilities = extension.get("capabilities") if isinstance(extension.get("capabilities"), list) else []
+    blocked = extension.get("blocked_browser_features") if isinstance(extension.get("blocked_browser_features"), list) else []
+    capability_items = "".join(
+        f"<li><strong>{escape(str(item.get('capability_id', 'capability')))}</strong> — {escape(str(item.get('owner', 'unknown')))} via {escape(str(item.get('trigger_surface', 'unknown')))}</li>"
+        for item in capabilities[:8]
+        if isinstance(item, dict)
+    ) or '<li class="muted">No native extension capabilities defined yet.</li>'
+    blocked_items = "".join(f"<li>{escape(str(item))}</li>" for item in blocked[:8]) or '<li class="muted">No browser feature blockers defined.</li>'
+    return (
+        '<div class="grid">'
+        f'<div class="card"><h3>Integration model</h3><p><code>{escape(str(extension.get("integration_model", "unknown")))}</code></p><p>{escape(str(extension.get("native_editor_owner", "Native KiCad owns editing.")))}</p></div>'
+        f'<div class="card"><h3>bodesign role</h3><p>{escape(str(extension.get("bodesign_role", "Companion dashboard.")))}</p><p><code>{escape(str(extension.get("sidecar_boundary", "unknown")))}</code></p></div>'
+        '</div>'
+        f'<div class="grid"><div class="card"><h3>Native extension capabilities</h3><ul>{capability_items}</ul></div><div class="card"><h3>Blocked browser features</h3><ul>{blocked_items}</ul></div></div>'
+    )
+
+
 def _component_fusion_row(component: dict[str, object]) -> str:
     sample_nets = component.get("sample_nets") if isinstance(component.get("sample_nets"), list) else []
     sample = ", ".join(str(net) for net in sample_nets[:6])
@@ -962,13 +1445,14 @@ def _find_project_artifact(project_id: str, artifact_id: str) -> dict[str, objec
 
 
 def _artifact_row(project_id: str, artifact: dict[str, object]) -> str:
+    probe_url = f"/bodesign/api/projects/{escape(project_id)}/cross-probe/{escape_url(str(artifact['id']))}"
     return (
         "<tr>"
         f"<td><code>{escape(str(artifact['filename']))}</code></td>"
         f"<td>{escape(str(artifact['artifact_type']))}</td>"
         f"<td>{escape(str(artifact['detected_format']))}</td>"
         f"<td>{escape(str(artifact['size_bytes']))}</td>"
-        f"<td><a class=\"button secondary\" href=\"/bodesign/projects/{escape(project_id)}/artifacts/{escape(str(artifact['id']))}\">Open</a></td>"
+        f"<td><a class=\"button secondary\" href=\"/bodesign/projects/{escape(project_id)}/artifacts/{escape(str(artifact['id']))}\">Open</a> <a class=\"button secondary\" href=\"{probe_url}\">Probe</a></td>"
         "</tr>"
     )
 
@@ -1185,19 +1669,54 @@ def _layer_row(layer: dict[str, object]) -> str:
     return f"<tr><td><code>{name}</code></td><td>{source_artifact_id}</td><td><span class=\"pill\">geometry parser available</span></td></tr>"
 
 
-def _component_row(component: dict[str, object]) -> str:
+def _component_row(project_id: str, component: dict[str, object]) -> str:
     placement = component.get("placement") if isinstance(component.get("placement"), dict) else {}
     x_mil = placement.get("x_mil", "")
     y_mil = placement.get("y_mil", "")
+    refdes = str(component.get("refdes", ""))
+    probe_url = f"/bodesign/api/projects/{escape(project_id)}/cross-probe/{escape_url(refdes)}"
     return (
         "<tr>"
-        f"<td><code>{escape(str(component.get('refdes', '')))}</code></td>"
+        f"<td><a href=\"{probe_url}\"><code>{escape(refdes)}</code></a></td>"
         f"<td>{escape(str(component.get('part_number') or placement.get('value') or ''))}</td>"
         f"<td>{escape(str(component.get('footprint') or ''))}</td>"
         f"<td>{escape(str(placement.get('side', '')))}</td>"
         f"<td>{escape(str(x_mil))}, {escape(str(y_mil))}</td>"
         "</tr>"
     )
+
+
+def _candidate_workspace_markup(candidate_workspace: dict[str, object]) -> str:
+    diff_items = candidate_workspace.get("diff_summary") if isinstance(candidate_workspace.get("diff_summary"), list) else []
+    diff_rows = "".join(
+        "<tr>"
+        f"<td>{escape(str(item.get('area', 'unknown')))}</td>"
+        f"<td><span class=\"pill\">{escape(str(item.get('status', 'unknown')))}</span></td>"
+        f"<td>{escape(str(item.get('summary', '')))}</td>"
+        f"<td>{escape(', '.join(str(ref) for ref in item.get('evidence_refs', [])))}</td>"
+        "</tr>"
+        for item in diff_items
+        if isinstance(item, dict)
+    )
+    if not diff_rows:
+        diff_rows = '<tr><td colspan="4">No candidate diff rows are available yet.</td></tr>'
+    gates = candidate_workspace.get("validation_gates") if isinstance(candidate_workspace.get("validation_gates"), list) else []
+    gate_items = "".join(f"<li>{escape(str(gate))}</li>" for gate in gates)
+    warnings = candidate_workspace.get("warnings") if isinstance(candidate_workspace.get("warnings"), list) else []
+    warning_items = "".join(f"<li>{escape(str(warning))}</li>" for warning in warnings)
+    return f"""
+      <div class="grid">
+        <div class="card"><h3>Candidate</h3><p><code>{escape(str(candidate_workspace.get('candidate_id', 'unknown-candidate')))}</code></p><p>status: <b>{escape(str(candidate_workspace.get('status', 'unknown')))}</b></p></div>
+        <div class="card"><h3>Source IR</h3><p><code>{escape(str(candidate_workspace.get('source_board_design_id', 'unknown-ir')))}</code></p></div>
+        <div class="card"><h3>Approval</h3><p><code>{escape(str(candidate_workspace.get('approval_state', 'not-approved')))}</code></p><p class="muted">No generated layout is usable until this changes through an explicit approval workflow.</p></div>
+      </div>
+      <h3>Diff / evidence summary</h3>
+      <div class="scroll"><table><thead><tr><th>Area</th><th>Status</th><th>Summary</th><th>Evidence</th></tr></thead><tbody>{diff_rows}</tbody></table></div>
+      <div class="grid">
+        <div class="card"><h3>Validation gates</h3><ul>{gate_items}</ul></div>
+        <div class="card"><h3>Warnings</h3><ul>{warning_items}</ul></div>
+      </div>
+    """
 
 
 def _compact_board_design(board_design: dict[str, object]) -> dict[str, object]:

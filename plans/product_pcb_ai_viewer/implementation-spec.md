@@ -155,11 +155,28 @@ The current implementation has a working published web surface, Rockbox fixture 
 
 ### Milestone A: Real Project Workspace
 
-- Replace in-memory projects with durable project records and raw artifact storage.
-- Add web import/open/browse flows for uploaded folders and fixture-backed projects.
-- Preserve raw artifacts, normalized evidence, `BoardDesign IR`, reports, and generated outputs as separate project assets.
+- Replace in-memory projects with lightweight project records that point at client-owned local project folders; the client remains the durable content owner.
+- Add web import/open/browse flows for uploaded, fixture-backed, or client-shared project folders.
+- Preserve raw artifacts, normalized evidence, `BoardDesign IR`, reports, generated outputs, and user edits as project assets in the client-managed folder structure.
+- Treat the MCP server as an analyzer/indexer/web surface: it may keep cache, thumbnails, parse indexes, and render artifacts, but those caches are disposable and must not become the authoritative source of user documents.
+- Define the client↔MCP storage-share protocol for browsing folders, requesting file reads, writing edits, materializing docxmcp-style source chunks, invalidating cache, and surfacing sync conflicts.
+- Keep the user-visible folder taxonomy small and industry-aligned. Prefer a KiCad/EDA-shaped root such as `docs/` or `inputs/` for datasheets, application notes, reference designs, and manufacturing packages; `eda/` for KiCad-native project files such as `.kicad_pro`, `.kicad_sch`, `.kicad_pcb`, and project settings; `libraries/` for project-local symbols, footprints, 3D models, and vendor libraries; `outputs/` for reviewed PDFs, Gerbers, drill files, BOM, pick-and-place/position files, STEP/3D exports, and release packages; `reports/` for human-readable reconstruction/validation notes.
+- Keep generated or imported KiCad projects recognizable to EDA users: do not flatten `.kicad_sch`, `.kicad_pcb`, project libraries, fabrication outputs, and assembly outputs into an MCP-specific hierarchy. The MCP manifest should map these standard locations to semantic roles rather than renaming them into internal concepts.
+- Put machine-only intermediates under a hidden/system workspace such as `.bodesign/`: source chunks, OCR/table extraction, parse indexes, embeddings, normalized IR snapshots, render caches, temporary EDA bridge outputs, workflow state, and provenance maps. The web UI can surface these as evidence/views without forcing users to navigate exploded internal folders.
+- Integrate KiCad Happy conventions without exposing its machine cache as the primary UX. Keep `.kicad-happy.json` as an optional project/user configuration source, but for MCP-initiated analysis set `analysis.output_dir` to a hidden path such as `.bodesign/analysis/kicad-happy/`, keep `track_in_git=false` by default, and surface analyzer JSON, `manifest.json`, prior-run diffs, schematic/PCB renders, EMC/thermal/gerber findings, and trust summaries through the web evidence UI.
+- Allow a user preference to use visible `analysis/` and `reports/figures/` folders when working directly in the KiCad Happy/kidoc ecosystem, but do not require that layout for ordinary bodesign document browsing.
 - Add per-project routes such as `/bodesign/projects/{project_id}` so Rockbox is not hard-coded into the global viewer.
 - Keep Rockbox as a built-in imported fixture and use it as the regression baseline.
+
+### Milestone A2: KiCad-Native Foundation
+
+- Prioritize making ordinary KiCad project usage smooth before attempting high-risk reconstruction, but do **not** reimplement KiCad's schematic editor, PCB editor, canvas, DRC/ERC, or library editors in the browser. Native KiCad remains the primary editing surface.
+- Treat `eda/` + `libraries/` + `outputs/` + `.bodesign/analysis/kicad-happy/` as the immediate integration target. bodesign should recognize these assets, index evidence, and coordinate analysis/cache, while KiCad-native plugins or sidecars perform editor-adjacent actions.
+- Reframe the Web frontend as a KiCad companion dashboard. Primary panels should be Project Overview, Schematic Status, PCB Layout Status, Libraries, Datasheets/Docs, Analysis, Manufacturing Outputs, Reports, and Candidate Review. These panels show evidence, findings, documents, generated candidates, and approval state; they must not imply browser-native schematic/PCB editing.
+- Add a KiCad native plugin/sidecar contract. The preferred MVP integration is a KiCad Action Plugin or companion process that calls bodesign MCP/API, opens the active project context, requests analysis, receives evidence/candidate patches, and applies user-approved changes through KiCad-native APIs.
+- The first useful UI should answer: what KiCad project is open, what source files exist, what analysis has run, what findings/trust levels exist, what manufacturing outputs are available, what documents/datasheets support the design, what native KiCad action/plugin can be invoked, and whether any edit/export/candidate is approved.
+- Implement this foundation as the gate before resuming the two speculative conversion paths: Gerber/manufacturing evidence → circuit design source, and OpenMV datasheet/reference evidence → circuit design source.
+- Use the existing KiCad/KiCad Happy/kidoc/JLCPCB conventions as first-class mappings. bodesign adds storage-share, manifest, evidence indexing, and Web presentation; it should not replace the KiCad project model.
 
 ### Milestone B: File Viewers Before Board Claims
 
@@ -169,6 +186,8 @@ The current implementation has a working published web surface, Rockbox fixture 
 - IPC-356: net browser, refdes/pin connections, via/pad statistics, net search.
 - Gerber/drill: layer list, metadata, bounds, aperture/tool summaries, parse errors.
 - Board View remains disabled until real geometry primitives exist.
+
+Foundation gate: Milestones C–E may continue as research spikes, but product implementation should not prioritize Gerber→source or datasheet→source automation until Milestone A2 proves normal KiCad project browsing, analysis-cache handling, evidence viewing, and storage round-trip.
 
 ### Milestone C: Gerber/Drill Geometry Reconstruction
 
@@ -190,7 +209,7 @@ The current implementation has a working published web surface, Rockbox fixture 
 ### Milestone E: Component Knowledge Base
 
 - Extract part numbers from Rockbox placement and OpenMV references into a reusable component queue.
-- Add datasheet ingestion for user-provided PDFs first; external fetching remains gated by policy.
+- Add datasheet ingestion for user-provided PDFs first; prefer a docxmcp-style PDF-to-src workflow that turns pages/tables/text into chunked provenance-preserving source assets before component extraction. External fetching remains gated by policy.
 - Normalize manufacturer, aliases, package, footprint hints, pinout, power pins, interface pins, absolute limits, decoupling guidance, layout guidelines, and reference-design notes.
 - Store explicit knowledge gaps when datasheets or pin definitions are missing.
 - Use component knowledge to enrich viewer panels and later guide circuit/layout generation.
@@ -222,6 +241,7 @@ The current implementation has a working published web surface, Rockbox fixture 
 - Confirm whether Rockbox can be used as the first checked-in fixture, or whether fixture data must remain external/private.
 - Decide initial `BoardDesign IR` persistence format and schema versioning policy.
 - Decide initial `ComponentKnowledge` persistence format and datasheet cache policy.
+- Decide client↔MCP storage-share contract: folder manifest shape, read/write capability scope, cache invalidation, conflict handling, whether edits are applied by MCP directly or returned as client-side patch operations, the hidden/system workspace convention for machine-only intermediates, and how `.kicad-happy.json` analyzer output settings map into `.bodesign/analysis/`.
 - Decide first EDA bridge target: product JSON only, KiCad `.kicad_pcb`, or product JSON plus KiCad adapter.
 - Decide KiCad/freerouting GPL integration posture before embedding either tool directly.
 - Define minimum layout operation set needed for AI to generate OpenMV layout candidates.
