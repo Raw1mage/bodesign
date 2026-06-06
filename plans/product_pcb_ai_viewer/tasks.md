@@ -14,7 +14,7 @@
 - [x] **R1** OpenMV gap/evidence report (= O8): deterministic `workflow-core.gap_report` consolidates the package's recorded gaps/blockers/validation facts into `reports/openmv_n6_source_gaps.md` + `openmv-n6-evidence-dashboard.json`; reconciles the stale STM32 seed blocker as superseded. Readiness `reusable-as-source-evidence-with-gaps` (0 blocking, 16 open). The `dashboard_data` feeds R4.
 - [ ] **R2** Expand OpenMV subsystem emit beyond MCU+flash: add power rails (1.8/3.3/VDDA), USB-C/USB-HS, and at least one peripheral subsystem into the generated schematic from the O6 constraints.
 - [ ] **R3** Package→footprint mapping for generated symbols (confidence + gaps), emitted as project-local metadata.
-- [ ] **R4** Web/API evidence dashboard for the OpenMV KiCad source package: surface pin tables, generated symbols, subsystem constraints, gaps, and `kicad-cli` validation in the companion dashboard. (= T29f)
+- [x] **R4** Web/API evidence dashboard for the OpenMV KiCad source package (= T29f): `GET /bodesign/api/openmv/evidence` computes the gap/evidence dashboard live from the package's evidence artifacts (excluding the plan-control `.state.json` and its own generated output so it never re-ingests itself), and `GET /bodesign/openmv` renders readiness, resolved facts, open gaps by area, generated KiCad source files, and a per-artifact summary; linked from the companion dashboard sidebar. Live-verified (8 artifacts, 16 open, 0 blocking) + gateway 200.
 
 ### P1 — The "vibe" front-end (the missing heart of the vision)
 - [ ] **R5** Interactive requirement→planning loop (= T30): MCP tool that intakes an NL spec, asks back for missing specs/dimensions/interfaces, and produces a structured `DesignIntent` + architecture/subsystem plan before any emission.

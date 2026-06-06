@@ -612,6 +612,48 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertTrue(any(item["area"] == "layout output" for item in response["diff_summary"]))
         self.assertTrue(any("send-to-fab" in gate for gate in response["validation_gates"]))
 
+    def test_openmv_evidence_routes_are_registered(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        routes = {route.path for route in api_main.app.routes}
+
+        self.assertIn("/bodesign/openmv", routes)
+        self.assertIn("/bodesign/api/openmv/evidence", routes)
+
+    def test_openmv_evidence_api_reports_reusable_with_gaps(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        data = api_main.get_openmv_evidence()
+
+        self.assertEqual("available", data["status"])
+        self.assertEqual("reusable-as-source-evidence-with-gaps", data["readiness"]["state"])
+        self.assertEqual(0, data["counts"]["blocking"])
+        self.assertGreater(data["counts"]["open"], 0)
+        # Evidence inputs only: the plan-control (.state.json) and the generated dashboard
+        # output must be excluded, so the report never re-ingests itself.
+        self.assertEqual(8, data["counts"]["artifacts"])
+        # the generated KiCad source files are referenced and present
+        files = {f["path"]: f for f in data["kicad_source_files"]}
+        self.assertTrue(files["libraries/symbols/openmv_generated.kicad_sym"]["exists"])
+        self.assertTrue(files["generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"]["exists"])
+
+    def test_openmv_evidence_page_renders_key_sections(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        html = api_main.bodesign_openmv_evidence()
+
+        self.assertIn("OpenMV N6 — KiCad source evidence", html)
+        self.assertIn("reusable-as-source-evidence-with-gaps", html)
+        self.assertIn("Generated KiCad source files", html)
+        self.assertIn("openmv_generated.kicad_sym", html)
+        self.assertIn("Per-artifact summary", html)
+
 
 def install_fastapi_stub() -> None:
     fastapi_module = types.ModuleType("fastapi")

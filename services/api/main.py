@@ -37,7 +37,7 @@ try:
     from bodesign_reverse_core import build_rockbox_input_manifest, fuse_drill_and_ipc, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
     from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_evidence_manifest, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
-    from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
+    from bodesign_workflow_core import build_generated_design_candidate_workspace, collect_source_gap_report, plan_reference_board_workflow, render_gap_report_markdown
 except ImportError:
     ingest_datasheet_knowledge = None
     build_component_knowledge_queue = None
@@ -74,6 +74,8 @@ except ImportError:
     validate_storage_share_manifest = None
     build_generated_design_candidate_workspace = None
     plan_reference_board_workflow = None
+    collect_source_gap_report = None
+    render_gap_report_markdown = None
 
 app = FastAPI(title="bodesign API", version="0.1.0")
 
@@ -119,6 +121,8 @@ BODESIGN_WEB_ROUTES = [
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/eda/kicad/bridge-plan", "purpose": "Plan KiCad adapter/plugin bridge outputs."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/workflow/reference-board", "purpose": "Plan the AI reference-board reconstruction workflow."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/candidates/generated-design", "purpose": "Show generated design candidate diff/evidence/approval workspace."},
+    {"method": "GET", "path": "/bodesign/openmv", "purpose": "Render the OpenMV N6 forward-design KiCad source evidence dashboard."},
+    {"method": "GET", "path": "/bodesign/api/openmv/evidence", "purpose": "Return the OpenMV N6 KiCad source gap/evidence dashboard data (computed live from package artifacts)."},
 ]
 
 BUILTIN_PROJECT_ID = "rockbox"
@@ -177,6 +181,136 @@ def bodesign_route_index() -> str:
 @app.get("/bodesign/api/routes")
 def bodesign_route_registry() -> dict[str, object]:
     return {"service": "bodesign-api", "routes": BODESIGN_WEB_ROUTES}
+
+
+OPENMV_PLAN_DIR = REPO_ROOT / "plans" / "product_openmv_datasheet_kicad_source"
+OPENMV_KICAD_SOURCE_FILES = [
+    ("Generated STM32N657 symbol library", "libraries/symbols/openmv_generated.kicad_sym"),
+    ("Generated subsystem schematic", "generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"),
+    ("Generated subsystem project", "generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_pro"),
+    ("Gap & evidence report", "reports/openmv_n6_source_gaps.md"),
+]
+
+
+OPENMV_NON_EVIDENCE_JSON = {".state.json", "openmv-n6-evidence-dashboard.json"}
+
+
+def _openmv_evidence() -> dict[str, object]:
+    if collect_source_gap_report is None or not OPENMV_PLAN_DIR.exists():
+        return {"status": "unavailable", "reason": "OpenMV forward-design package or workflow-core is not available."}
+    # Evidence inputs only: exclude the plan-control file and this endpoint's own generated output
+    # so the report never re-ingests itself.
+    artifact_paths = sorted(
+        str(path) for path in OPENMV_PLAN_DIR.glob("*.json") if path.name not in OPENMV_NON_EVIDENCE_JSON
+    )
+    report = collect_source_gap_report(
+        "openmv_n6_kicad_source",
+        "OpenMV N6 datasheets → KiCad-reusable sources",
+        artifact_paths,
+    )
+    data = report.dashboard_data
+    data["status"] = "available"
+    data["kicad_source_files"] = [
+        {
+            "label": label,
+            "path": rel,
+            "exists": (OPENMV_PLAN_DIR / rel).exists(),
+            "bytes": (OPENMV_PLAN_DIR / rel).stat().st_size if (OPENMV_PLAN_DIR / rel).exists() else 0,
+        }
+        for label, rel in OPENMV_KICAD_SOURCE_FILES
+    ]
+    return data
+
+
+@app.get("/api/openmv/evidence")
+@app.get("/bodesign/api/openmv/evidence")
+def get_openmv_evidence() -> dict[str, object]:
+    return _openmv_evidence()
+
+
+@app.get("/bodesign/openmv", response_class=HTMLResponse)
+def bodesign_openmv_evidence() -> str:
+    return _render_openmv_evidence(_openmv_evidence())
+
+
+def _render_openmv_evidence(data: dict[str, object]) -> str:
+    if data.get("status") != "available":
+        return _render_not_found("OpenMV forward-design evidence package is not available.")
+    readiness = data.get("readiness") if isinstance(data.get("readiness"), dict) else {}
+    counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
+    state = str(readiness.get("state", "unknown"))
+    badge_color = {"reusable": "#8ef6d2", "reusable-as-source-evidence-with-gaps": "#ffc857", "blocked": "#ff7a7a"}.get(state, "#9aacb4")
+
+    resolved = "".join(
+        f'<li>{escape(str(fact.get("text", "")))} <span class="src">{escape(str(fact.get("source_artifact", "")))}</span></li>'
+        for fact in (data.get("resolved_facts") or [])
+    ) or "<li>none</li>"
+
+    gaps_by_area: dict[str, list[dict]] = {}
+    for gap in (data.get("gaps") or []):
+        if gap.get("severity") == "resolved-superseded":
+            continue
+        gaps_by_area.setdefault(str(gap.get("area", "other")), []).append(gap)
+    gap_sections = ""
+    for area in sorted(gaps_by_area):
+        rows = "".join(
+            f'<li><span class="sev sev-{escape(str(gap.get("severity","open")))}">{escape(str(gap.get("severity","open")))}</span> '
+            f'{escape(str(gap.get("text","")))} <span class="src">{escape(str(gap.get("source_artifact","")))}</span></li>'
+            for gap in gaps_by_area[area]
+        )
+        gap_sections += f"<h3>{escape(area)}</h3><ul class=\"gaps\">{rows}</ul>"
+
+    artifact_rows = "".join(
+        f'<tr><td><code>{escape(str(a.get("name","")))}</code></td><td>{escape(str(a.get("role","")))}</td>'
+        f'<td>{"" if a.get("confidence") is None else escape(str(a.get("confidence")))}</td>'
+        f'<td>{escape(str(a.get("open_gaps",0)))}</td><td>{escape(str(a.get("blockers",0)))}</td></tr>'
+        for a in (data.get("artifacts") or [])
+    )
+
+    file_rows = "".join(
+        f'<tr><td>{escape(str(f.get("label","")))}</td><td><code>{escape(str(f.get("path","")))}</code></td>'
+        f'<td>{"✓" if f.get("exists") else "—"}</td><td>{escape(str(f.get("bytes",0)))}</td></tr>'
+        for f in (data.get("kicad_source_files") or [])
+    )
+
+    return """<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenMV N6 KiCad source evidence</title>
+<style>
+  body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, sans-serif; background: #101418; color: #e8f0f2; line-height: 1.5; }
+  a { color: #8ef6d2; } code { color: #8ef6d2; } h1 { margin-bottom: 4px; }
+  .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; color: #101418; background: """ + badge_color + """; }
+  .muted { color: #9aacb4; } .src { color: #6f8290; font-size: 0.82em; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 28px; }
+  th, td { border-bottom: 1px solid #26323a; padding: 8px; text-align: left; vertical-align: top; }
+  ul.gaps { padding-left: 18px; } ul.gaps li { margin-bottom: 6px; }
+  .sev { font-size: 0.72em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+  .sev-open { background: #3a3320; color: #ffc857; } .sev-blocking { background: #3a2020; color: #ff7a7a; }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+  .card { background: #161d23; border: 1px solid #26323a; border-radius: 12px; padding: 14px 18px; }
+</style></head>
+<body>
+  <p class="muted"><a href="/bodesign/">← bodesign companion dashboard</a></p>
+  <h1>OpenMV N6 — KiCad source evidence</h1>
+  <p class="muted">Forward-design package: datasheets → verified pinout → generated KiCad symbol → subsystem schematic. Reusable source evidence, not a finished or send-to-fab design.</p>
+  <p>Readiness: <span class="badge">""" + escape(state) + """</span></p>
+  <p>""" + escape(str(readiness.get("summary", ""))) + """</p>
+  <div class="cards">
+    <div class="card"><h3>Artifacts</h3><p>""" + escape(str(counts.get("artifacts", 0))) + """</p></div>
+    <div class="card"><h3>Blocking</h3><p>""" + escape(str(counts.get("blocking", 0))) + """</p></div>
+    <div class="card"><h3>Open gaps</h3><p>""" + escape(str(counts.get("open", 0))) + """</p></div>
+    <div class="card"><h3>Resolved facts</h3><p>""" + escape(str(counts.get("resolved_facts", 0))) + """</p></div>
+  </div>
+  <h2>Resolved / validated</h2>
+  <ul>""" + resolved + """</ul>
+  <h2>Open gaps by area</h2>
+  """ + (gap_sections or "<p class=\"muted\">none</p>") + """
+  <h2>Generated KiCad source files</h2>
+  <table><thead><tr><th>File</th><th>Path</th><th>Present</th><th>Bytes</th></tr></thead><tbody>""" + file_rows + """</tbody></table>
+  <h2>Per-artifact summary</h2>
+  <table><thead><tr><th>Artifact</th><th>Role</th><th>Confidence</th><th>Open</th><th>Blocking</th></tr></thead><tbody>""" + artifact_rows + """</tbody></table>
+  <p class="muted">Data computed live from package evidence artifacts via <code>/bodesign/api/openmv/evidence</code>.</p>
+</body></html>"""
 
 
 @app.get("/bodesign/", response_class=HTMLResponse)
@@ -332,6 +466,7 @@ def _render_project_workspace(project_id: str) -> str:
             <div class="metric"><span>status</span><code>""" + escape(str(confidence["status"])) + """</code></div>
             <div class="metric"><span>confidence</span><code>""" + escape(str(confidence["overall"])) + """</code></div>
              <p><a class="button" href="#overview">Open companion dashboard</a></p>
+             <p><a href="/bodesign/openmv">Forward-design: OpenMV N6 KiCad source evidence →</a></p>
             <h2>Parsed Summary</h2>
             <div class="metric"><span>components</span><code>""" + str(int(confidence.get("components", 0))) + """</code></div>
             <div class="metric"><span>nets</span><code>""" + str(int(confidence.get("nets", 0))) + """</code></div>
