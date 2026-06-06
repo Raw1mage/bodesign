@@ -3,13 +3,32 @@ import json
 from pathlib import Path
 import uuid
 
-from .kicad_emit import _extract_symbol_block, _pin_endpoints, _project_document
+from .kicad_emit import DEFAULT_SYMBOL_DIR, _extract_symbol_block, _pin_endpoints, _project_document, load_symbol
 
 
 SCHEMATIC_VERSION = "20250114"
 PROJECT_NAME = "openmv_n6_subsystem"
 MCU_LIB_ID = "openmv_generated:STM32N657L0_VFBGA223"
 FLASH_LIB_ID = "openmv_generated:MX25UM25645GXDI00_24BGA"
+CAP_LIB_ID = "Device:C"
+
+# Voltage-unambiguous power-rail mapping: only connect MCU power balls whose
+# voltage is encoded in the pin name, so no rail assignment is guessed. The
+# evidence rail names come from openmv-n6-subsystem-constraints.json (power).
+DECOUPLED_RAILS = ("VCC_1.8V", "VCC_3.3V")
+
+
+def _rail_for_power_pin(pin_name: str) -> str | None:
+    upper = pin_name.upper()
+    if upper.startswith("VSS") or upper == "VREF-":
+        return "GND"
+    if upper == "VBAT":
+        return "V_BATT"
+    if upper.startswith("VDDA") and "18" in upper:
+        return "VCC_1.8V"
+    if upper.startswith("VDD") and "33" in upper:
+        return "VCC_3.3V"
+    return None  # ambiguous IO/core rail (VDD, VDDIO*, VDDCORE, VDDSMPS, VREF+, ...) -> deferred
 
 
 @dataclass(slots=True)
@@ -49,6 +68,8 @@ def emit_openmv_n6_subsystem_schematic(
     constraints = json.loads(constraints_path.read_text(encoding="utf-8"))
     flash_symbol, flash_pins = _flash_symbol(flash)
 
+    cap_symbol, cap_pins = load_symbol(CAP_LIB_ID, DEFAULT_SYMBOL_DIR)
+
     components = [
         _component_block("U5", MCU_LIB_ID, "STM32N657L0_VFBGA223", 75.0, 120.0, sorted(mcu_pins), PROJECT_NAME),
         _component_block("U7", FLASH_LIB_ID, flash["resolved_part"]["mpn"], 195.0, 120.0, sorted(flash_pins), PROJECT_NAME),
@@ -60,20 +81,50 @@ def emit_openmv_n6_subsystem_schematic(
     for net_name, flash_pin in [("VCC_1.8V_GATED", "B4"), ("VCC_1.8V_GATED", "D1"), ("GND", "B3"), ("GND", "C1"), ("GND", "E5")]:
         labels.append(_label_at(net_name, "U7", 195.0, 120.0, flash_pins[flash_pin]))
 
-    schematic = _schematic_document([mcu_symbol, flash_symbol], components, labels)
+    # Power backbone: connect voltage-unambiguous MCU power balls to named rails.
+    power_connections, deferred_power_pins = _power_connections(pin_table)
+    for rail, ball in power_connections:
+        labels.append(_label_at(rail, "U5", 75.0, 120.0, mcu_pins[ball]))
+
+    # Decoupling capacitors on each main rail to GND (standard practice).
+    cap_index = 0
+    for rail in DECOUPLED_RAILS:
+        if not any(connected_rail == rail for connected_rail, _ball in power_connections):
+            continue
+        for _ in range(2):
+            cap_index += 1
+            ref = f"C{cap_index}"
+            cx, cy = 40.0 + cap_index * 14.0, 170.0
+            components.append(_component_block(ref, CAP_LIB_ID, "100nF", cx, cy, ["1", "2"], PROJECT_NAME))
+            labels.append(_label_at(rail, ref, cx, cy, cap_pins["1"]))
+            labels.append(_label_at("GND", ref, cx, cy, cap_pins["2"]))
+
+    schematic = _schematic_document([mcu_symbol, flash_symbol, cap_symbol], components, labels)
     schematic_path = generated_root / f"{PROJECT_NAME}.kicad_sch"
     project_path = generated_root / f"{PROJECT_NAME}.kicad_pro"
     schematic_path.write_text(schematic, encoding="utf-8")
     project_path.write_text(_project_document(), encoding="utf-8")
+    warnings = list(constraints.get("global_gaps", []))
+    if deferred_power_pins:
+        warnings.append(
+            "Power pins with ambiguous (non-name-encoded) rail voltage were left unconnected pending "
+            "datasheet rail confirmation: " + ", ".join(deferred_power_pins)
+        )
+    warnings.append(
+        "USB-C/USB-HS and peripheral subsystems (charger, regulators, PHYs, connectors) are not emitted yet: "
+        "their symbols are not in the project library and the MCU USB data balls are not verified — deferred to "
+        "symbol generation + pin verification (no guessed parts/pins per stop gate)."
+    )
+
     return OpenMVSubsystemEmitResult(
         project_dir=str(generated_root),
         schematic_path=str(schematic_path),
         project_path=str(project_path),
-        component_count=2,
+        component_count=len(components),
         net_count=len({label[0] for label in labels}),
         label_count=len(labels),
         evidence_artifacts=[str(pin_table_path), str(flash_path), str(constraints_path)],
-        warnings=list(constraints.get("global_gaps", [])),
+        warnings=warnings,
     )
 
 
@@ -161,7 +212,29 @@ def _component_block(ref: str, lib_id: str, value: str, x: float, y: float, pins
 def _label_at(name: str, ref: str, sx: float, sy: float, endpoint: tuple[float, float]) -> tuple[str, str]:
     x = round(sx + endpoint[0], 4)
     y = round(sy - endpoint[1], 4)
-    return name, f'  (global_label "{_escape(name)}" (shape bidirectional) (at {x} {y} 0)\n    (effects (font (size 1.27 1.27)) (justify left)) (uuid "{_stable_uuid(ref, name)}"))'
+    # Include the placement so multiple same-net labels on one part (e.g. the 18 ground
+    # balls -> GND) get distinct UUIDs rather than colliding.
+    label_uuid = _stable_uuid(ref, name, f"{x}", f"{y}")
+    return name, f'  (global_label "{_escape(name)}" (shape bidirectional) (at {x} {y} 0)\n    (effects (font (size 1.27 1.27)) (justify left)) (uuid "{label_uuid}"))'
+
+
+def _power_connections(pin_table: dict[str, object]) -> tuple[list[tuple[str, str]], list[str]]:
+    """Map each MCU power ball to a rail when its voltage is name-encoded.
+
+    Returns (connections, deferred) where connections is [(rail, ball)] and
+    deferred lists ambiguous power pin names that were intentionally not wired.
+    """
+    connections: list[tuple[str, str]] = []
+    deferred: set[str] = set()
+    for row in pin_table["rows"]:
+        name = str(row["pin_name"])
+        upper = name.upper()
+        rail = _rail_for_power_pin(name)
+        if rail is not None:
+            connections.append((rail, str(row["ball"])))
+        elif upper.startswith("VDD") or upper.startswith("VREF"):
+            deferred.add(name)
+    return connections, sorted(deferred)
 
 
 def _schematic_document(symbol_defs: list[str], component_blocks: list[str], labels: list[tuple[str, str]]) -> str:

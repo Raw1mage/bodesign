@@ -59,10 +59,14 @@ class EdaBridgeTests(unittest.TestCase):
             project_path = Path(result.project_path)
             self.assertTrue(schematic_path.exists())
             self.assertTrue(project_path.exists())
-            self.assertEqual(2, result.component_count)
+            # MCU + flash + 4 decoupling caps (power backbone, R2).
+            self.assertEqual(6, result.component_count)
             self.assertGreaterEqual(result.net_count, 12)
             self.assertFalse(Path(work, "sym-lib-table").exists())
             self.assertFalse(Path(work, "fp-lib-table").exists())
+            # Ambiguous power pins and USB/peripheral subsystems are deferred, not guessed.
+            self.assertTrue(any("ambiguous" in warning for warning in result.warnings))
+            self.assertTrue(any("USB-C/USB-HS" in warning for warning in result.warnings))
 
             first = schematic_path.read_text(encoding="utf-8")
             second_result = emit_openmv_n6_subsystem_schematic(OPENMV_PLAN, Path(work) / "generated/openmv_n6_subsystem_2")
@@ -80,6 +84,10 @@ class EdaBridgeTests(unittest.TestCase):
                 'XSPIM_P2_CLK_P',
                 'XSPIM_P2_RST#',
                 'VCC_1.8V_GATED',
+                '(global_label "VCC_1.8V"',
+                '(global_label "VCC_3.3V"',
+                '(global_label "V_BATT"',
+                '(lib_id "Device:C")',
                 'raw_pdf_text_committed=false',
             ):
                 self.assertIn(text, first)
