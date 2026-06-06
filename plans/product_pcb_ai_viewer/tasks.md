@@ -11,7 +11,7 @@
 - **Datasheet → KiCad source (OpenMV exemplar)**: PDF pin-table extraction → 223-pin STM32N657 symbol → minimal subsystem schematic, `kicad-cli`-validated. (OpenMV O0–O7, in `product_openmv_datasheet_kicad_source`)
 
 ### P0 — Close & harden the forward-design slice (OpenMV as the exemplar)
-- [ ] **R1** OpenMV gap/evidence report (= O8): consolidate unresolved datasheet/package/footprint/schematic assumptions + per-artifact validation status into a reviewable report.
+- [x] **R1** OpenMV gap/evidence report (= O8): deterministic `workflow-core.gap_report` consolidates the package's recorded gaps/blockers/validation facts into `reports/openmv_n6_source_gaps.md` + `openmv-n6-evidence-dashboard.json`; reconciles the stale STM32 seed blocker as superseded. Readiness `reusable-as-source-evidence-with-gaps` (0 blocking, 16 open). The `dashboard_data` feeds R4.
 - [ ] **R2** Expand OpenMV subsystem emit beyond MCU+flash: add power rails (1.8/3.3/VDDA), USB-C/USB-HS, and at least one peripheral subsystem into the generated schematic from the O6 constraints.
 - [ ] **R3** Package→footprint mapping for generated symbols (confidence + gaps), emitted as project-local metadata.
 - [ ] **R4** Web/API evidence dashboard for the OpenMV KiCad source package: surface pin tables, generated symbols, subsystem constraints, gaps, and `kicad-cli` validation in the companion dashboard. (= T29f)
