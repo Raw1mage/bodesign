@@ -148,52 +148,12 @@ def build_footprint_map(queries: list[PackageQuery], footprint_dir: str | Path =
             }
         )
     return {
-        "artifact_id": "openmv-n6-footprint-map",
+        "artifact_id": "footprint-map",
         "footprint_library": BGA_LIB,
         "library_scope": "project-local-only",
         "global_kicad_library_mutation": "forbidden",
         "entries": entries,
     }
-
-
-def openmv_package_queries(plan_dir: str | Path) -> list[PackageQuery]:
-    """Extract package queries from the OpenMV component-knowledge artifacts."""
-    import json
-
-    plan = Path(plan_dir)
-    queries: list[PackageQuery] = []
-
-    mcu_path = plan / "stm32n657-component-knowledge.json"
-    if mcu_path.exists():
-        mcu = json.loads(mcu_path.read_text(encoding="utf-8"))
-        evidence = mcu.get("package_evidence", {})
-        queries.append(
-            PackageQuery(
-                component_ref="U5",
-                mpn="STM32N657L0",
-                package=str(evidence.get("selected_package", "VFBGA223")),
-                ball_count=_as_int(evidence.get("pin_or_ball_count")),
-                array=None,
-                body_mm=_parse_body(evidence.get("body_size_mm")),
-                pitch_mm=_as_float(evidence.get("pitch_mm")),
-            )
-        )
-
-    flash_path = plan / "mx25um25645g-component-knowledge.json"
-    if flash_path.exists():
-        flash = json.loads(flash_path.read_text(encoding="utf-8"))
-        evidence = flash.get("package_evidence", {})
-        array_match = re.search(r"(\d+x\d+)", str(evidence.get("ball_array", "")))
-        queries.append(
-            PackageQuery(
-                component_ref="U7",
-                mpn=str(flash.get("resolved_part", {}).get("mpn", "MX25UM25645G")),
-                package=str(evidence.get("selected_package", "24-Ball BGA")),
-                ball_count=24,
-                array=array_match.group(1) if array_match else None,
-            )
-        )
-    return queries
 
 
 def _as_int(value) -> int | None:

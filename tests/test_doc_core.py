@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from bodesign_doc_core import NormalizedPinRow, build_pin_table_gap_report, document_to_source_chunks, normalize_stm32_pin_table_text, validate_vfbga223_pin_table
+from bodesign_doc_core import NormalizedPinRow, build_pin_table_gap_report, document_to_source_chunks, normalize_pin_table_text, validate_pin_table
 
 
 class DocCoreTests(unittest.TestCase):
@@ -30,7 +30,7 @@ class DocCoreTests(unittest.TestCase):
                    -          -           -          -          -       C10               PC0           I/O
         """
 
-        rows = normalize_stm32_pin_table_text(text)
+        rows = normalize_pin_table_text(text)
 
         self.assertEqual(["F4", "W7", "B1", "E1", "W15"], [row.ball for row in rows])
         self.assertEqual("PA13 (JTMS/SWDIO)", rows[1].pin_name)
@@ -50,7 +50,7 @@ class DocCoreTests(unittest.TestCase):
             NormalizedPinRow(ball="F4", pin_name="BOOT0", pin_type="I"),
         ]
 
-        validation = validate_vfbga223_pin_table(rows, expected_balls={"A1", "F2", "F4", "W19"})
+        validation = validate_pin_table(rows, expected_balls={"A1", "F2", "F4", "W19"})
         report = build_pin_table_gap_report(rows, validation)
 
         self.assertFalse(validation.passed)

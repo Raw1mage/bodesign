@@ -42,7 +42,7 @@ class GeometryPrimitive:
     """A spatially-located board feature fused from manufacturing evidence.
 
     Coordinates are kept in the source evidence frame (IPC/drill mil-scale for
-    Rockbox) rather than re-projected, so downstream consumers can decide on a
+    a reference board) rather than re-projected, so downstream consumers can decide on a
     canonical unit once a board-origin transform is resolved.
     """
 

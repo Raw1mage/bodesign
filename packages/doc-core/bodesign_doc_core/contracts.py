@@ -63,10 +63,10 @@ def document_to_source_chunks(project_id: str, document_path: str, chunk_chars: 
     return chunks
 
 
-def plan_openmv_document_ingestion(project_id: str, artifact_paths: list[str]) -> DesignIntent:
+def plan_document_ingestion(project_id: str, artifact_paths: list[str]) -> DesignIntent:
     evidence_refs = [
         EvidenceRef(
-            source_id=f"{project_id}-openmv-doc-{index}",
+            source_id=f"{project_id}-doc-{index}",
             target_path=path,
             confidence=0.1,
             note="Placeholder evidence reference; real PDF extraction is not implemented yet.",
@@ -77,13 +77,13 @@ def plan_openmv_document_ingestion(project_id: str, artifact_paths: list[str]) -
     components = sorted({hint for hint in component_hints if hint})
 
     return DesignIntent(
-        id=f"{project_id}-openmv-design-intent",
-        title="OpenMV document-driven design intent placeholder",
+        id=f"{project_id}-design-intent",
+        title="Document-driven design intent placeholder",
         target_functions=["camera", "microphone", "flash", "psram", "usb", "power"],
         source_evidence=evidence_refs,
         components=components,
         constraints=[
-            "Extract schematic nets from OpenMV schematic PDF.",
+            "Extract schematic nets from the schematic PDF.",
             "Normalize datasheet pinouts before layout generation.",
             "Identify package and footprint evidence for each selected component.",
         ],
@@ -100,7 +100,7 @@ def plan_openmv_document_ingestion(project_id: str, artifact_paths: list[str]) -
 def _component_hint(path: str) -> str | None:
     name = Path(path).name.lower()
     hints = {
-        "stm32": "STM32N657 processor",
+        "stm32": "STM32 MCU",
         "flash": "flash memory",
         "psram": "PSRAM",
         "camera": "camera interface",

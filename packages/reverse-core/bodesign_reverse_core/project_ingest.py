@@ -100,7 +100,7 @@ def ingest_project_folder(root: str | Path, max_files: int = 20000) -> ProjectFo
         index.warnings.append(f"Folder not found: {base}")
         return index
 
-    # Top-level C0* style sections (Rockbox/TheSmartAI document architecture).
+    # Top-level C0* style sections (reference/product document architecture).
     index.sections = sorted(
         p.name for p in base.iterdir() if p.is_dir() and p.name[:1] == "C" and p.name[1:3].isdigit()
     )

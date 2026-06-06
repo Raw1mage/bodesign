@@ -5,8 +5,8 @@ import re
 
 
 SYMBOL_LIB_VERSION = "20241209"
-DEFAULT_SYMBOL_NAME = "STM32N657L0_VFBGA223"
-DEFAULT_FOOTPRINT_FILTER = "*VFBGA*223*"
+DEFAULT_SYMBOL_NAME = "GENERIC_IC"
+DEFAULT_FOOTPRINT_FILTER = "*"
 
 
 @dataclass(slots=True)
@@ -39,8 +39,8 @@ def emit_kicad_symbol_library_from_pin_table(
     if not pin_table.get("validation", {}).get("passed"):
         raise ValueError("pin table validation did not pass")
     rows = pin_table.get("rows", [])
-    if pin_table.get("row_count") != 223 or len(rows) != 223:
-        raise ValueError("expected a complete 223-row VFBGA223 pin table")
+    if not rows:
+        raise ValueError("pin table has no rows")
 
     pins = [_pin_from_row(row) for row in rows]
     library = _symbol_library(symbol_name, pins, pin_table)
@@ -180,7 +180,7 @@ def _symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], pin_table: dic
         pin_blocks.append(_pin_block(pin, x, y, rotation))
 
     evidence = _evidence_property(pin_table)
-    description = "OpenMV N6 derived STM32N657L0 VFBGA223 project-local symbol; evidence-backed generated library."
+    description = "Project-local symbol generated from a verified pin table."
     return (
         "(kicad_symbol_lib\n"
         f"\t(version {SYMBOL_LIB_VERSION})\n"
@@ -193,10 +193,10 @@ def _symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], pin_table: dic
         f"{_property('Reference', 'U', -30.48, top + 3.81, visible=True)}\n"
         f"{_property('Value', symbol_name, 7.62, top + 3.81, visible=True)}\n"
         f"{_property('Footprint', '', -30.48, bottom - 3.81, visible=False)}\n"
-        f"{_property('Datasheet', 'stm32n657l0_datasheet#Table 18 pages 89-130', 0, 0, visible=False)}\n"
+        f"{_property('Datasheet', '', 0, 0, visible=False)}\n"
         f"{_property('Description', description, 0, 0, visible=False)}\n"
         f"{_property('BodesignEvidence', evidence, 0, 0, visible=False)}\n"
-        f"{_property('ki_keywords', 'OpenMV STM32N657 STM32N6 VFBGA223 B0GK', 0, 0, visible=False)}\n"
+        f"{_property('ki_keywords', '', 0, 0, visible=False)}\n"
         f"{_property('ki_fp_filters', DEFAULT_FOOTPRINT_FILTER, 0, 0, visible=False)}\n"
         f"\t\t(symbol \"{_escape(symbol_name)}_0_1\"\n"
         "\t\t\t(rectangle\n"

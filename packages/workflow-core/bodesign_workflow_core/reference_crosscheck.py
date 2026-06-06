@@ -2,7 +2,7 @@
 
 The circuit design is a black box to a non-EE owner, so reliability must be
 *demonstrated*, not asserted. The strongest available anchor is a known-good
-dev-board product (OpenMV / Rockbox): treat it as a **control group** and
+dev-board product (a known-good reference board): treat it as a **control group** and
 compare bodesign's generated artifacts against it.
 
 This compares net sets (and carries the reference's provenance), reporting:

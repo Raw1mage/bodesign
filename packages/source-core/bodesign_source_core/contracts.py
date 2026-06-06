@@ -62,7 +62,7 @@ def produce_design_report(project_id: str, board_design_id: str, artifact_refs: 
         title="bodesign reconstruction/export report placeholder",
         summary=[
             "BoardDesign IR has placeholder reconstruction/export evidence only.",
-            "Rockbox artifact classification and manifest counts are available.",
+            "Board artifact classification and manifest counts are available.",
             "Gerber generation and validation are planned but not implemented.",
         ],
         assumptions=[

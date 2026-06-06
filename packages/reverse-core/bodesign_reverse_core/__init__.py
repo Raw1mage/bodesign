@@ -9,7 +9,7 @@ from .fusion import (
 from .companion_render import CompanionResult, render_all_companions, render_companion
 from .doc_emit import DocEmitResult, emit_document, markdown_to_html
 from .project_ingest import IngestedFile, ProjectFolderIndex, ingest_project_folder, render_index_markdown
-from .rockbox import RockboxInputManifest, build_rockbox_input_manifest, reconstruct_rockbox_placeholder
+from .board_reconstruct import BoardInputManifest, build_board_input_manifest, reconstruct_board_placeholder
 
 __all__ = [
     "CompanionResult",
@@ -18,9 +18,9 @@ __all__ = [
     "IngestedFile",
     "IpcFeature",
     "ProjectFolderIndex",
-    "RockboxInputManifest",
+    "BoardInputManifest",
     "SpatialFusionSummary",
-    "build_rockbox_input_manifest",
+    "build_board_input_manifest",
     "emit_document",
     "fuse_drill_and_ipc",
     "ingest_project_folder",
@@ -29,6 +29,6 @@ __all__ = [
     "render_companion",
     "parse_drill_hits",
     "parse_ipc_features",
-    "reconstruct_rockbox_placeholder",
+    "reconstruct_board_placeholder",
     "render_index_markdown",
 ]

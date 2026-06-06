@@ -25,7 +25,7 @@ class NormalizedPinRow:
     pin_name: str
     pin_type: str
     functions: list[str] = field(default_factory=list)
-    package: str = "VFBGA223"
+    package: str = ""
     evidence: PinEvidenceRef | None = None
 
 
@@ -42,13 +42,13 @@ class PinTableValidation:
     blockers: list[str] = field(default_factory=list)
 
 
-def normalize_stm32_pin_table_text(
+def normalize_pin_table_text(
     text: str,
     *,
-    source_id: str = "stm32n657l0_datasheet",
+    source_id: str = "",
     page_start: int = 89,
     page_end: int = 130,
-    package: str = "VFBGA223",
+    package: str = "",
 ) -> list[NormalizedPinRow]:
     rows: list[NormalizedPinRow] = []
     pending_pin_name = ""
@@ -69,16 +69,16 @@ def normalize_stm32_pin_table_text(
     return rows
 
 
-def extract_stm32_pin_table_from_pdf(
+def extract_pin_table_from_pdf(
     pdf_path: str,
     *,
-    source_id: str = "stm32n657l0_datasheet",
+    source_id: str = "",
     page_start: int = 89,
     page_end: int = 130,
-    package: str = "VFBGA223",
+    package: str = "",
 ) -> list[NormalizedPinRow]:
     text = _pdftotext_page_span(Path(pdf_path), page_start, page_end)
-    return normalize_stm32_pin_table_text(
+    return normalize_pin_table_text(
         text,
         source_id=source_id,
         page_start=page_start,
@@ -87,13 +87,13 @@ def extract_stm32_pin_table_from_pdf(
     )
 
 
-def validate_vfbga223_pin_table(
+def validate_pin_table(
     rows: list[NormalizedPinRow],
     *,
     expected_balls: set[str] | None = None,
     required_pins: set[str] | None = None,
 ) -> PinTableValidation:
-    expected = expected_balls or vfbga223_expected_balls()
+    expected = expected_balls or expected_bga_balls()
     required = required_pins or {"NRST", "BOOT0", "PDR_ON", "VDD", "VSS", "VDDCORE"}
     balls = [row.ball for row in rows]
     unique_balls = set(balls)
@@ -104,7 +104,7 @@ def validate_vfbga223_pin_table(
     rows_without_evidence = sorted(row.ball for row in rows if row.evidence is None or not row.evidence.source_id)
     blockers: list[str] = []
     if len(rows) != len(expected):
-        blockers.append(f"Expected {len(expected)} {rows[0].package if rows else 'VFBGA223'} rows, found {len(rows)}.")
+        blockers.append(f"Expected {len(expected)} {rows[0].package if rows else 'BGA'} rows, found {len(rows)}.")
     if duplicate_balls:
         blockers.append("Duplicate ball coordinates are present.")
     if missing_balls:
@@ -128,11 +128,11 @@ def validate_vfbga223_pin_table(
 
 def build_pin_table_gap_report(rows: list[NormalizedPinRow], validation: PinTableValidation) -> dict:
     return {
-        "artifact_id": "stm32n657-vfbga223-pin-table-validation-v1",
+        "artifact_id": "pin-table-validation-v1",
         "status": "blocked" if not validation.passed else "validated",
-        "pin_table_output": None if not validation.passed else "stm32n657-vfbga223-pin-table.json",
+        "pin_table_output": None if not validation.passed else "pin-table.json",
         "raw_pdf_text_committed": False,
-        "package": "VFBGA223",
+        "package": "",
         "expected_count": validation.expected_count,
         "actual_count": validation.actual_count,
         "unique_ball_count": validation.unique_ball_count,
@@ -150,7 +150,7 @@ def build_pin_table_gap_report(rows: list[NormalizedPinRow], validation: PinTabl
     }
 
 
-def vfbga223_expected_balls() -> set[str]:
+def expected_bga_balls() -> set[str]:
     rows = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "R", "T", "U", "V", "W"]
     excluded = {
         "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16",

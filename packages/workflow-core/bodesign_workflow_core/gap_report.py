@@ -170,7 +170,7 @@ def collect_source_gap_report(package_id: str, title: str, artifact_paths: list[
             reason = str(pin_status.get("reason") or "symbol generation blocked pending pin-table materialization")
             if "symbol-generation-unblocked" in signals:
                 report.resolved_facts.append(
-                    ResolvedFact(f"Superseded: {reason} — resolved by validated VFBGA223 pin table (O3a/O3b/O4).", name)
+                    ResolvedFact(f"Superseded: {reason} — resolved by a validated pin table.", name)
                 )
                 report.gap_items.append(
                     GapItem("symbol/pin", "resolved-superseded", reason, name, note="superseded by validated pin table")

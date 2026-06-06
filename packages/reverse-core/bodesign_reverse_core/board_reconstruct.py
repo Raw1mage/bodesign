@@ -7,7 +7,7 @@ from bodesign_shared.detection import detect_artifact_type
 
 
 @dataclass(slots=True)
-class RockboxInputManifest:
+class BoardInputManifest:
     project_id: str
     component_files: list[str] = field(default_factory=list)
     gerber_files: list[str] = field(default_factory=list)
@@ -24,8 +24,8 @@ class IpcSummary:
     pad_count: int = 0
 
 
-def build_rockbox_input_manifest(project_id: str, artifact_paths: list[str]) -> RockboxInputManifest:
-    manifest = RockboxInputManifest(project_id=project_id)
+def build_board_input_manifest(project_id: str, artifact_paths: list[str]) -> BoardInputManifest:
+    manifest = BoardInputManifest(project_id=project_id)
     for artifact_path in artifact_paths:
         artifact_type = detect_artifact_type(artifact_path)
         if artifact_type == "bom_placement":
@@ -43,8 +43,8 @@ def build_rockbox_input_manifest(project_id: str, artifact_paths: list[str]) -> 
     return manifest
 
 
-def reconstruct_rockbox_placeholder(project_id: str = "rockbox", artifact_paths: list[str] | None = None) -> BoardDesign:
-    manifest = build_rockbox_input_manifest(project_id, artifact_paths or [])
+def reconstruct_board_placeholder(project_id: str = "board", artifact_paths: list[str] | None = None) -> BoardDesign:
+    manifest = build_board_input_manifest(project_id, artifact_paths or [])
     components = _parse_component_files(project_id, manifest.component_files)
     ipc_summary = _parse_ipc_files(manifest.ipc_files)
     layers = _layers_from_manifest(manifest)
@@ -52,16 +52,16 @@ def reconstruct_rockbox_placeholder(project_id: str = "rockbox", artifact_paths:
         Net(
             name=net_name,
             connected_pads=sorted(connected_pads),
-            evidence_refs=[EvidenceRef(source_id="rockbox-ipc", target_path=f"net/{net_name}", confidence=0.55)],
+            evidence_refs=[EvidenceRef(source_id="board-ipc", target_path=f"net/{net_name}", confidence=0.55)],
         )
         for net_name, connected_pads in sorted(ipc_summary.nets.items())
     ]
     board_objects = [
         BoardObject(
-            id="rockbox-ipc-vias",
+            id="board-ipc-vias",
             object_type="via-summary",
             geometry={"count": ipc_summary.via_count},
-            evidence_refs=[EvidenceRef(source_id="rockbox-ipc", target_path="vias", confidence=0.45)],
+            evidence_refs=[EvidenceRef(source_id="board-ipc", target_path="vias", confidence=0.45)],
         )
     ]
     artifact_counts = {
@@ -79,15 +79,15 @@ def reconstruct_rockbox_placeholder(project_id: str = "rockbox", artifact_paths:
     has_real_evidence = bool(components or nets or layers)
     return BoardDesign(
         id=f"{project_id}-board-design",
-        version="0.2.0-rockbox-summary",
-        title="Rockbox reconstructed board summary",
+        version="0.2.0-board-summary",
+        title="Reconstructed board summary",
         components=components,
         nets=nets,
         layers=layers,
         board_objects=board_objects,
         evidence_refs=[
             EvidenceRef(
-                source_id="rockbox-fixture",
+                source_id="board-fixture",
                 target_path="BoardDesign",
                 confidence=0.45 if has_real_evidence else 0.1 if artifact_paths else 0.0,
                 note="Summary reconstruction from placement and IPC evidence; Gerber geometry parsing is still pending.",
@@ -171,7 +171,7 @@ def _parse_ipc_files(ipc_files: list[str]) -> IpcSummary:
     return summary
 
 
-def _layers_from_manifest(manifest: RockboxInputManifest) -> list[BoardLayer]:
+def _layers_from_manifest(manifest: BoardInputManifest) -> list[BoardLayer]:
     layer_names = []
     for gerber_file in manifest.gerber_files:
         filename = Path(gerber_file).name

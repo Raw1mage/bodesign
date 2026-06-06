@@ -12,13 +12,13 @@ class KiCadPluginTests(unittest.TestCase):
         self.assertIn("without replacing KiCad editors", BODESIGN_PLUGIN_METADATA["description"])
 
     def test_default_sidecar_urls(self):
-        config = SidecarConfig("rockbox")
+        config = SidecarConfig("board")
 
-        self.assertEqual("http://127.0.0.1:8765/bodesign/projects/rockbox", config.dashboard_url)
-        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-foundation", config.foundation_api_url)
-        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-native-extension", config.native_extension_api_url)
-        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-plugin-handshake", config.handshake_api_url)
-        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-analysis-status", config.request_analysis_api_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/projects/board", config.dashboard_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/board/kicad-foundation", config.foundation_api_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/board/kicad-native-extension", config.native_extension_api_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/board/kicad-plugin-handshake", config.handshake_api_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/board/kicad-analysis-status", config.request_analysis_api_url)
 
     def test_discovers_project_context_from_kicad_paths(self):
         project_context = discover_project_context("/work/demo/eda/demo.kicad_pro")

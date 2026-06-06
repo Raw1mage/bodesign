@@ -1,7 +1,7 @@
 from pathlib import Path
 import unittest
 
-from bodesign_reverse_core import fuse_drill_and_ipc, reconstruct_rockbox_placeholder
+from bodesign_reverse_core import fuse_drill_and_ipc, reconstruct_board_placeholder
 from bodesign_shared import data_root
 
 FIXTURE_DIR = data_root() / "fixtures" / "rockbox" / "gerber"
@@ -15,9 +15,9 @@ class RockboxReconstructionTests(unittest.TestCase):
         fixture_dir = data_root() / "fixtures" / "rockbox" / "gerber"
         artifact_paths = [str(path) for path in fixture_dir.iterdir()]
 
-        board_design = reconstruct_rockbox_placeholder("rockbox", artifact_paths)
+        board_design = reconstruct_board_placeholder("rockbox", artifact_paths)
 
-        self.assertEqual(board_design.version, "0.2.0-rockbox-summary")
+        self.assertEqual(board_design.version, "0.2.0-board-summary")
         self.assertEqual(len(board_design.components), 327)
         self.assertEqual(len(board_design.nets), 208)
         self.assertEqual(len(board_design.layers), 6)

@@ -1,11 +1,11 @@
 """Spatial fusion of drill hits and IPC-D-356A copper features.
 
-This module advances Rockbox reconstruction from the non-spatial component/net
+This module advances board reconstruction from the non-spatial component/net
 summary into a *spatially-verified* fusion: every plated drill hit is matched to
 an IPC via record by nearest-neighbour in a shared coordinate frame, so drill
 holes gain net identity and unmatched holes are classified as tooling/mounting.
 
-Coordinate frames (empirically validated on the Rockbox fixture):
+Coordinate frames (empirically validated on the reference board fixture):
   - IPC-D-356A 317/327 records: raw integer / 100  -> fusion units
   - Excellon drill X/Y:         raw integer / 1000 -> fusion units
 Both resolve to the same physical point (e.g. drill X0000178400 == IPC via
