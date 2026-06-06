@@ -11,6 +11,7 @@ from .kicad_emit import (
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol_library_from_pin_table
 from .openmv_subsystem import OpenMVSubsystemEmitResult, emit_openmv_n6_subsystem_schematic
 from .composer import ComposeResult, compose_schematic
+from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocation, render_pin_allocation_csv, render_pin_allocation_md
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints, openmv_package_queries
 
 __all__ = [
@@ -26,6 +27,11 @@ __all__ = [
     "KiCadValidationResult",
     "OpenMVSubsystemEmitResult",
     "PackageQuery",
+    "PinAllocation",
+    "PinAllocationRow",
+    "build_pin_allocation",
+    "render_pin_allocation_csv",
+    "render_pin_allocation_md",
     "SchematicEmitResult",
     "build_footprint_map",
     "build_kicad_native_extension_contract",
