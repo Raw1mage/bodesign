@@ -77,18 +77,23 @@ def _uid() -> str:
     return str(_uuid.uuid4())
 
 
-def load_symbol(lib_id: str, symbol_dir: str | Path = DEFAULT_SYMBOL_DIR) -> tuple[str, dict[str, tuple[float, float]]]:
+def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR) -> tuple[str, dict[str, tuple[float, float]]]:
     """Return (embedded symbol definition text, {pin_number: (x, y)}).
 
-    Raises FileNotFoundError if the library is missing and KeyError if the
-    symbol is not present in that library.
+    `symbol_dir` may be a single directory or a list of directories (tried in
+    order) — so stdlib symbols and project-local generated libraries
+    (e.g. `openmv_generated.kicad_sym`) can be resolved together.
+
+    Raises FileNotFoundError if the library is found in none of the dirs, and
+    KeyError if the symbol is not present in the located library.
     """
     library, _, name = lib_id.partition(":")
     if not name:
         raise KeyError(f"lib_id must be 'Library:Symbol', got {lib_id!r}")
-    lib_path = Path(symbol_dir) / f"{library}.kicad_sym"
-    if not lib_path.exists():
-        raise FileNotFoundError(f"KiCad symbol library not found: {lib_path}")
+    dirs = [symbol_dir] if isinstance(symbol_dir, (str, Path)) else list(symbol_dir)
+    lib_path = next((Path(d) / f"{library}.kicad_sym" for d in dirs if (Path(d) / f"{library}.kicad_sym").exists()), None)
+    if lib_path is None:
+        raise FileNotFoundError(f"KiCad symbol library '{library}.kicad_sym' not found in: {[str(d) for d in dirs]}")
     source = lib_path.read_text(encoding="utf-8", errors="ignore")
     block = _extract_symbol_block(source, name)
     if block is None:

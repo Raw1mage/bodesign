@@ -10,9 +10,11 @@ from .kicad_emit import (
 )
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol_library_from_pin_table
 from .openmv_subsystem import OpenMVSubsystemEmitResult, emit_openmv_n6_subsystem_schematic
+from .composer import ComposeResult, compose_schematic
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints, openmv_package_queries
 
 __all__ = [
+    "ComposeResult",
     "EmitComponent",
     "EmitNet",
     "FootprintCandidate",
@@ -27,6 +29,7 @@ __all__ = [
     "SchematicEmitResult",
     "build_footprint_map",
     "build_kicad_native_extension_contract",
+    "compose_schematic",
     "emit_openmv_n6_subsystem_schematic",
     "emit_kicad_schematic",
     "emit_kicad_symbol_library_from_pin_table",

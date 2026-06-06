@@ -29,7 +29,8 @@ The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` 
 - `packages/reverse-core/bodesign_reverse_core/project_ingest.py` — N1 folder ingest.
 - `packages/reverse-core/bodesign_reverse_core/companion_render.py` — N3 companion rendering (G1).
 - `packages/reverse-core/bodesign_reverse_core/doc_emit.py` — N5 md → docx/pdf doc emitter (G4).
-- `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py` — N11 schematic emit + `kicad-cli` validation.
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py` — N11 schematic emit + `kicad-cli` validation (multi-source `load_symbol`).
+- `packages/eda-bridge/bodesign_eda_bridge/composer.py` — N10 generalized subsystem composer (G3).
 - `packages/eda-bridge/bodesign_eda_bridge/kicad_symbol.py` — N8 symbol generation.
 - `packages/eda-bridge/bodesign_eda_bridge/footprint_map.py` — N9 footprint mapping (R3).
 - `packages/workflow-core/bodesign_workflow_core/requirement_planning.py` — N4 requirements→plan (R5).

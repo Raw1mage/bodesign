@@ -28,7 +28,7 @@
 | N7 | Datasheet → ComponentKnowledge (pinout) | `datasheets` skill + pin_tables | orchestrate | ✅(ST) ⬜ **G6** |
 | N8 | Symbol generation | `emit_kicad_symbol_library_from_pin_table` | bodesign | ✅ |
 | N9 | Footprint mapping/generation | `build_footprint_map` | bodesign | ✅ R3 (gen: G6) |
-| N10 | Subsystem composition (ref → IR) | composer | bodesign | ⬜ **G3** |
+| N10 | Subsystem composition (ref → IR) | `composer.compose_schematic` | bodesign | ✅ **G3** (full V1 needs G6) |
 | N11 | Schematic emit + ERC | `emit_kicad_schematic` + `kicad-cli erc` | bodesign | ✅ |
 | N12 | Netlist + BOM | `kicad` + `kicad-cli export` | orchestrate | partial |
 | N13 | Pin/GPIO allocation (→FW) | emitter | bodesign | ⬜ **G5** |
@@ -45,7 +45,7 @@ Status · dependency · acceptance.
 - [x] **G1 Companion rendering** (N3) — done. `reverse-core.companion_render`; verified sch→PDF, gerber→PNG, .DSN→unsupported.
 - [x] **G2 Package readiness compass** (N18) — done. `workflow-core.package_readiness`; TheSmartAI 67%.
 - [x] **G7 Reference cross-check / trust** (N19) — done. `workflow-core.reference_crosscheck`; flash 75% vs OpenMV.
-- [ ] **G3 Generalized subsystem composer** (N10) — *dep: G6.* spec + harvested evidence → IR → schematic. **Acceptance:** kicad-cli ERC clean + cross-check coverage vs control group ≥ target (e.g. flash 75%→100%).
+- [x] **G3 Generalized subsystem composer** (N10) — tool done. `eda-bridge.composer.compose_schematic`: declarative design spec (components + `"REF.PIN"` named-net interconnect) → auto-placed IR → `emit_kicad_schematic` → optional `kicad-cli` validation; `load_symbol` now resolves across multiple sources (stdlib + project-local generated libs). Verified: a 4-component spec (incl. a connector) → 0 ERC errors, exact net connectivity. *Running it on the full V1 device still needs per-part symbols (G6); the tool itself is generic + done.*
 - [x] **G4 PRD/doc emitter** (N5) — done. `reverse-core.doc_emit` (`markdown_to_html` + `emit_document`): any markdown deliverable → docx + pdf via LibreOffice (per-format profile to avoid the LO lock; explicit `docx:MS Word 2007 XML` filter so html→docx doesn't drop silently). Verified on the real PRD → docx (10 KB) + pdf (106 KB), status `ok`. Markdown stays the editable source; docx/pdf are shareable companions.
 - [ ] **G5 Pin/GPIO allocation table** (N13) — *unblocked.* net/pin evidence → C03↔FW interface table (xlsx/csv). **Acceptance:** table matches the schematic nets.
 - [ ] **G6 Per-part symbol harvest** (N7/N8) — *unblocked.* orchestrate `datasheets` → pinout → symbol for V1 parts beyond STM32N657/MX25 (WiFi `LBEE5KL1YN`, charger `BQ24075`, mic, camera connector). Feeds G3. **Acceptance:** each symbol parses + kicad-cli accepts.
