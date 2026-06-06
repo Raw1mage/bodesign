@@ -1,45 +1,28 @@
 {
-  "model": "AI-assisted Gerber PCB layout service",
-  "nodes": [
-    {
-      "id": "A0",
-      "name": "Review and modify PCB fabrication design",
-      "inputs": ["Gerber files", "User design intent"],
-      "controls": ["Manufacturing rules", "AI safety contract", "User approvals"],
-      "outputs": ["Rendered PCB layout", "Findings", "Approved modifications", "Export package"],
-      "mechanisms": ["React viewer", "FastAPI backend", "Gerber parser", "Rule checker", "AI proposal service"]
-    },
-    {
-      "id": "A1",
-      "name": "Ingest design files",
-      "inputs": ["Gerber archive or files"],
-      "controls": ["File validation"],
-      "outputs": ["Project", "Classified layers"],
-      "mechanisms": ["Upload API", "Storage service"]
-    },
-    {
-      "id": "A2",
-      "name": "Normalize and render layout",
-      "inputs": ["Classified layers"],
-      "controls": ["Geometry schema"],
-      "outputs": ["Layer geometry", "Viewer scene"],
-      "mechanisms": ["Gerber parser", "React renderer"]
-    },
-    {
-      "id": "A3",
-      "name": "Analyze design risks",
-      "inputs": ["Layer geometry"],
-      "controls": ["Rule set"],
-      "outputs": ["Findings"],
-      "mechanisms": ["Rule-check pipeline"]
-    },
-    {
-      "id": "A4",
-      "name": "Propose and apply approved changes",
-      "inputs": ["Findings", "User prompt", "Layer geometry"],
-      "controls": ["Typed patch schema", "User approval"],
-      "outputs": ["Approved patch operations", "Modified design package"],
-      "mechanisms": ["AI proposal service", "Patch validator", "Export service"]
-    }
+  "diagram_title": "bodesign：AI 電路設計 MCP 功能分解（IDEF0）",
+  "node_reference": "A0",
+  "activities": [
+    {"id": "A1", "title": "匯入專案與需求規劃"},
+    {"id": "A2", "title": "蒐集參考設計證據"},
+    {"id": "A3", "title": "產生符號與原理圖"},
+    {"id": "A4", "title": "佈局與製造輸出"},
+    {"id": "A5", "title": "驗證（ERC/DRC・對照組・SPICE・EMC）"},
+    {"id": "A6", "title": "文件產出與就緒度追蹤"}
+  ],
+  "arrows": [
+    {"id": "i1", "type": "input", "source": "EXTERNAL", "target": "A1:input", "label": "自然語言規格＋專案資料夾"},
+    {"id": "i2", "type": "input", "source": "EXTERNAL", "target": "A2:input", "label": "參考開發板語料（控制組）"},
+    {"id": "f1", "type": "input", "source": "A1:output", "target": "A2:input", "label": "子系統與零件清單"},
+    {"id": "f2", "type": "input", "source": "A2:output", "target": "A3:input", "label": "參考證據＋零件知識"},
+    {"id": "f3", "type": "input", "source": "A3:output", "target": "A4:input", "label": "原理圖＋網表"},
+    {"id": "f4", "type": "input", "source": "A3:output", "target": "A5:input", "label": "原理圖"},
+    {"id": "f5", "type": "input", "source": "A4:output", "target": "A5:input", "label": "PCB 佈局"},
+    {"id": "f6", "type": "input", "source": "A5:output", "target": "A6:input", "label": "驗證結果"},
+    {"id": "o1", "type": "output", "source": "A4:output", "target": "EXTERNAL", "label": "製造輸出（Gerber/鑽孔/STEP）"},
+    {"id": "o2", "type": "output", "source": "A6:output", "target": "EXTERNAL", "label": "就緒度＋文件包"},
+    {"id": "c1", "type": "control", "source": "EXTERNAL", "target": "A3:control", "label": "KiCad 設計規則"},
+    {"id": "c2", "type": "control", "source": "EXTERNAL", "target": "A4:control", "label": "送廠批准閘門"},
+    {"id": "m1", "type": "mechanism", "source": "EXTERNAL", "target": "A3:mechanism", "label": "KiCad9／pcbnew"},
+    {"id": "m2", "type": "mechanism", "source": "EXTERNAL", "target": "A5:mechanism", "label": "ngspice／emc／kicad skills"}
   ]
 }

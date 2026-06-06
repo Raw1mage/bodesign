@@ -1,33 +1,10 @@
-{
-  "machine": "Gerber review workflow",
-  "initialStep": "idle",
-  "steps": [
-    { "id": "idle", "description": "Waiting for user upload" },
-    { "id": "uploading", "description": "Receiving and storing design files" },
-    { "id": "parsing", "description": "Classifying layers and normalizing geometry" },
-    { "id": "viewing", "description": "User inspects rendered PCB layout" },
-    { "id": "checking", "description": "Deterministic rules generate findings" },
-    { "id": "proposing", "description": "AI generates typed patch proposals" },
-    { "id": "awaiting_approval", "description": "User reviews each proposed operation" },
-    { "id": "applying", "description": "Approved operations are validated and applied" },
-    { "id": "exporting", "description": "System creates modified package and report" },
-    { "id": "complete", "description": "Export is ready" },
-    { "id": "failed", "description": "Workflow stopped with explicit error" }
-  ],
-  "transitions": [
-    { "from": "idle", "to": "uploading", "condition": "files_selected" },
-    { "from": "uploading", "to": "parsing", "condition": "upload_valid" },
-    { "from": "uploading", "to": "failed", "condition": "upload_invalid" },
-    { "from": "parsing", "to": "viewing", "condition": "geometry_ready" },
-    { "from": "parsing", "to": "failed", "condition": "parse_error" },
-    { "from": "viewing", "to": "checking", "condition": "run_checks" },
-    { "from": "checking", "to": "proposing", "condition": "findings_available_or_user_prompted" },
-    { "from": "proposing", "to": "awaiting_approval", "condition": "typed_proposals_valid" },
-    { "from": "proposing", "to": "failed", "condition": "proposal_validation_failed" },
-    { "from": "awaiting_approval", "to": "applying", "condition": "user_approved_one_or_more_operations" },
-    { "from": "awaiting_approval", "to": "viewing", "condition": "user_rejected_all_operations" },
-    { "from": "applying", "to": "exporting", "condition": "patch_validation_passed" },
-    { "from": "applying", "to": "failed", "condition": "patch_validation_failed" },
-    { "from": "exporting", "to": "complete", "condition": "package_ready" }
-  ]
-}
+[
+  {"StepNumber": 1, "ModuleRef": "A0", "StepType": "initial", "StepAction": "讀就緒度羅盤，選定下一交付物", "LinkOutputType": "track", "LinkInputNumber": [8], "LinkOutputNumber": [2], "Condition": ["已選定下一交付物"], "SubGrafcet": []},
+  {"StepNumber": 2, "ModuleRef": "A1", "StepType": "normal", "StepAction": "需求釐清（向使用者反問規格/決策）", "LinkOutputType": "track", "LinkInputNumber": [1], "LinkOutputNumber": [3], "Condition": ["規格與決策齊備"], "SubGrafcet": []},
+  {"StepNumber": 3, "ModuleRef": "A2", "StepType": "normal", "StepAction": "蒐集參考設計證據（本地語料優先）", "LinkOutputType": "track", "LinkInputNumber": [2], "LinkOutputNumber": [4], "Condition": ["零件已對應到參考設計"], "SubGrafcet": []},
+  {"StepNumber": 4, "ModuleRef": "A3", "StepType": "normal", "StepAction": "由 datasheet 採集零件符號", "LinkOutputType": "track", "LinkInputNumber": [3], "LinkOutputNumber": [5], "Condition": ["所需符號齊備"], "SubGrafcet": []},
+  {"StepNumber": 5, "ModuleRef": "A3", "StepType": "normal", "StepAction": "組成原理圖並執行 kicad-cli ERC", "LinkOutputType": "track", "LinkInputNumber": [4], "LinkOutputNumber": [6], "Condition": ["ERC 乾淨"], "SubGrafcet": []},
+  {"StepNumber": 6, "ModuleRef": "A5", "StepType": "normal", "StepAction": "驗證：對照組交叉檢核＋SPICE＋EMC", "LinkOutputType": "track", "LinkInputNumber": [5], "LinkOutputNumber": [7], "Condition": ["覆蓋率達標且分析通過"], "SubGrafcet": []},
+  {"StepNumber": 7, "ModuleRef": "A4", "StepType": "normal", "StepAction": "佈局（pcbnew+DRC）並匯出製造檔", "LinkOutputType": "track", "LinkInputNumber": [6], "LinkOutputNumber": [8], "Condition": ["DRC 乾淨且 fab 已匯出"], "SubGrafcet": []},
+  {"StepNumber": 8, "ModuleRef": "A6", "StepType": "normal", "StepAction": "產出文件＋更新就緒度羅盤", "LinkOutputType": "track", "LinkInputNumber": [7], "LinkOutputNumber": [1], "Condition": ["未可送廠 → 進入下一輪"], "SubGrafcet": []}
+]

@@ -1,14 +1,17 @@
 {
   "state": "implementing",
-  "slug": "product_pcb_ai_viewer",
-  "title": "AI-assisted PCB design copilot (reverse reconstruction + forward KiCad generation)",
-  "updatedAt": "2026-06-06T2",
+  "slug": "product/pcb_ai_viewer",
+  "title": "bodesign — AI PCB design copilot (MCP)",
+  "updatedAt": "2026-06-07",
   "gates": {
     "approvalRequiredBeforeImplementation": true,
     "approvalGranted": true,
-    "reason": "Scaffold and AI-assisted design workflow approved; now in active implementation. North star pivoted to forward vibe-design into KiCad, grounded in reference designs."
+    "reason": "Scaffold and AI-assisted design workflow approved; forward vibe-design into KiCad, grounded in reference designs, delivered as an MCP server."
   },
-  "relatedPlans": [
-    "product_openmv_datasheet_kicad_source"
+  "history": [
+    {"state": "proposed", "at": "2026-06-05", "mode": "new", "reason": "initial scaffold + scope"},
+    {"state": "designed", "at": "2026-06-05", "mode": "promote", "reason": "architecture + IDEF0/GRAFCET + decisions"},
+    {"state": "planned", "at": "2026-06-06", "mode": "promote", "reason": "build queue G1-G12 + lifecycle node table"},
+    {"state": "implementing", "at": "2026-06-06", "mode": "promote", "reason": "tools + MCP server + skills pack built; 131 tests"}
   ]
 }
