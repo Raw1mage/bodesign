@@ -1,0 +1,42 @@
+# Design: bodesign — AI PCB Design Copilot (MCP)
+
+> The build queue, full-lifecycle node table, and per-gap status live in `tasks.md` §1–7 (authoritative). This file holds the architecture and the decision record.
+
+## Architecture
+
+- **Core engine = KiCad's circuit-design capability** across the full lifecycle (schematic → layout → simulation/verification). Principle: *whatever KiCad can do, wrap it in.*
+- **Surface = docxmcp-style file/folder processor.** Ingest a whole client folder, operate via MCP tools, emit files back. No web UI (retired).
+- **State = the folder itself.** No separate state file to drift; `package_readiness` computes the compass on demand from folder contents.
+- **Interaction = prompt-driven, agent-as-wizard.** Loop: read compass → one next step → ask for raw data/decision → harvest/compose → emit + readable companion → validate (`kicad-cli` + reference cross-check) → recompute compass.
+- **Division of labour:** bodesign builds the forward-generation/surface/state/trust layer; orchestrates mature skills (`kicad`/`kidoc`/`emc`/`spice`/`datasheets`/`bom`/distributors/fab) for analysis/docs/sim/sourcing/fab.
+- **Verification & trust (for a non-EE owner):** (1) deterministic `kicad-cli` ERC/DRC + netlist; (2) reference cross-check vs a known-good shipped product (control group) with provenance; (3) analysis skills + EE/user approval for novel parts. "Submittable" = readiness% + cross-check coverage + skill checks + approval.
+
+The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` §3.
+
+## Decisions
+
+- **DD-1** No web UI; docxmcp-style file/folder surface, prompt-driven. The earlier FastAPI web dashboard is retired/legacy. *Rationale: the owner produces documents via conversation + raw data, not a GUI; the web layer was mostly placeholder.*
+- **DD-2** bodesign builds only the forward-generation gap; everything else orchestrates existing skills. *Rationale: `kicad`/`kidoc`/`emc`/`spice`/`datasheets`/`bom` already cover analysis/docs/sim/sourcing/fab; no analysis tool does spec→schematic generation.*
+- **DD-3** Reliability is demonstrated by reference cross-check against a known-good shipped product (control group), not asserted. *Rationale: a non-EE owner cannot judge EE correctness; agreement with a shipping board is evidence they can act on; divergences are surfaced with provenance.*
+- **DD-4** AI does not synthesize pin-level netlists from scratch; it starts from dev-board datasheets/reference designs and composes subsystems. *Rationale: from-scratch netlist synthesis is unsolved and unverifiable; reference-grounded reuse is high-confidence.*
+- **DD-5** The package folder is the state (no separate `.state.json` for deliverable status). *Rationale: one source of truth, no drift; the readiness compass is computed.*
+- **DD-6** Format policy: any non-readable engineering file ships with a readable companion (pdf/png/svg/xlsx); md/csv/html/docx/pdf/xlsx/png/pptx acceptable. *Rationale: the owner must be able to view every artifact in native apps; professional vendor files (.kicad_sch/Gerber) still generated but paired with a viewable version.*
+- **DD-7** V1 of the driving product is OpenMV-derived (single corpus, WiFi/BLE); cellular (Nordic nRF9151) deferred to V2. *Rationale: OpenMV already provides complete WiFi/BLE + NPU + camera + mic + power; single-reference V1 is the strongest candidate for a complete, verifiable design.*
+- **DD-8** No send-to-fab output without deterministic validation + explicit approval. *Safety invariant.*
+
+## Code anchors
+
+- `packages/reverse-core/bodesign_reverse_core/project_ingest.py` — N1 folder ingest.
+- `packages/reverse-core/bodesign_reverse_core/companion_render.py` — N3 companion rendering (G1).
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py` — N11 schematic emit + `kicad-cli` validation.
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_symbol.py` — N8 symbol generation.
+- `packages/eda-bridge/bodesign_eda_bridge/footprint_map.py` — N9 footprint mapping (R3).
+- `packages/workflow-core/bodesign_workflow_core/requirement_planning.py` — N4 requirements→plan (R5).
+- `packages/workflow-core/bodesign_workflow_core/evidence_sourcing.py` — N6 evidence sourcing (R6).
+- `packages/workflow-core/bodesign_workflow_core/package_readiness.py` — N18 readiness compass (G2).
+- `packages/workflow-core/bodesign_workflow_core/reference_crosscheck.py` — N19 reference cross-check / trust (G7).
+- `packages/workflow-core/bodesign_workflow_core/gap_report.py` — N18 gap report (R1).
+
+## Pending design (build queue, see tasks.md §4)
+
+G3 subsystem composer (dep G6 per-part symbol harvest), G4 PRD/doc emitter, G5 pin/GPIO allocation, G8 layout (`pcbnew` + DRC), G9 fab outputs (`kicad-cli pcb export`). Orchestration wiring: `spice`/`emc`, `kidoc` doc packages (unlocked by G8), `datasheets` extraction.
