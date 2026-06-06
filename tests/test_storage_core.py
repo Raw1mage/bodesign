@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy
+from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -158,6 +158,24 @@ class StorageCoreTests(unittest.TestCase):
         self.assertIn("analysis", status.cache_entries[0].categories)
         self.assertIn("render", status.cache_entries[0].categories)
         self.assertTrue(any("silent resolution is blocked" in blocker for blocker in status.blockers))
+
+    def test_builds_source_chunk_materialization_without_copying_files(self):
+        materialization = build_source_chunk_materialization("openmv")
+        first_chunk = materialization.chunk_items[0]
+
+        self.assertEqual("openmv", materialization.project_id)
+        self.assertEqual("client-owned-folder", materialization.source_authority)
+        self.assertEqual(".bodesign/sources", materialization.target_workspace)
+        self.assertEqual("client-applied/docxmcp-orchestration", materialization.materialization_mode)
+        self.assertEqual("not-approved/needs-client-grant", materialization.approval_state)
+        self.assertTrue(materialization.direct_server_copy_blocked)
+        self.assertEqual("docs/reference-datasheet.pdf", first_chunk.source_path)
+        self.assertEqual(".bodesign/sources/docs/reference-datasheet/chunks.jsonl", first_chunk.target_path)
+        self.assertEqual("pdf-source-chunks", first_chunk.content_kind)
+        self.assertEqual("represented-not-materialized", first_chunk.cache_state)
+        self.assertIn("/bodesign/api/projects/openmv/project-tree", first_chunk.evidence_refs)
+        self.assertIn("run-docxmcp-client-side-decomposition", materialization.next_actions)
+        self.assertTrue(any("does not read or copy files" in warning for warning in materialization.warnings))
 
 
 if __name__ == "__main__":

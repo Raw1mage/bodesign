@@ -28,6 +28,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/folder-open-request", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/save-back-proposals", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/cache-conflict-status", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/source-chunks/materialization", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
@@ -166,6 +167,11 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("disposable-mcp-cache", html)
         self.assertIn("explicit-user-resolution", html)
         self.assertIn("Silent conflict resolution is blocked", html)
+        self.assertIn("Source chunk materialization", html)
+        self.assertIn("source-chunk-materialization-represented", html)
+        self.assertIn("client-applied/docxmcp-orchestration", html)
+        self.assertIn(".bodesign/sources", html)
+        self.assertIn("Direct server copy is blocked", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -359,6 +365,29 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("review-save-back-proposals", status["required_actions"])
         self.assertTrue(any(anchor.startswith("client-folder-handle:rockbox") for anchor in status["source_revision_anchors"]))
         self.assertTrue(any("silent resolution is blocked" in blocker for blocker in status["blockers"]))
+
+    def test_source_chunk_materialization_is_represented_without_server_copy(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        materialization = api_main.get_project_source_chunk_materialization("rockbox")
+        first_chunk = materialization["chunk_items"][0]
+
+        self.assertEqual("source-chunk-materialization-represented", materialization["status"])
+        self.assertEqual("client-owned-folder", materialization["source_authority"])
+        self.assertEqual(".bodesign/sources", materialization["target_workspace"])
+        self.assertEqual("client-applied/docxmcp-orchestration", materialization["materialization_mode"])
+        self.assertEqual("not-approved/needs-client-grant", materialization["approval_state"])
+        self.assertTrue(materialization["direct_server_copy_blocked"])
+        self.assertEqual("not-attempted", materialization["filesystem_access"])
+        self.assertEqual("blocked", materialization["server_copy"])
+        self.assertEqual([], materialization["mutation_capabilities"])
+        self.assertEqual("docs/reference-datasheet.pdf", first_chunk["source_path"])
+        self.assertEqual(".bodesign/sources/docs/reference-datasheet/chunks.jsonl", first_chunk["target_path"])
+        self.assertEqual("represented-not-materialized", first_chunk["cache_state"])
+        self.assertIn("run-docxmcp-client-side-decomposition", materialization["next_actions"])
+        self.assertTrue(any("Direct server-side copy" in blocker for blocker in materialization["blockers"]))
 
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()

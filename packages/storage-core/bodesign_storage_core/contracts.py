@@ -185,6 +185,30 @@ class CacheConflictStatus:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class SourceChunkItem:
+    source_path: str
+    target_path: str
+    provenance_anchor: str
+    content_kind: str
+    cache_state: str
+    evidence_refs: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class SourceChunkMaterialization:
+    project_id: str
+    source_authority: str
+    target_workspace: str
+    materialization_mode: str
+    approval_state: str
+    direct_server_copy_blocked: bool
+    chunk_items: list[SourceChunkItem] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -505,6 +529,59 @@ def build_cache_conflict_status(project_id: str, paths: list[str] | None = None,
         warnings=[
             "No filesystem scan, cache deletion, or conflict resolution is performed by this status contract.",
             "Refresh actions must be driven by client-owned source anchors.",
+        ],
+    )
+
+
+def build_source_chunk_materialization(project_id: str, manifest: StorageShareManifest | None = None) -> SourceChunkMaterialization:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    target_workspace = f"{storage_manifest.hidden_workspace}/sources"
+    return SourceChunkMaterialization(
+        project_id=project_id,
+        source_authority="client-owned-folder",
+        target_workspace=target_workspace,
+        materialization_mode="client-applied/docxmcp-orchestration",
+        approval_state="not-approved/needs-client-grant",
+        direct_server_copy_blocked=True,
+        chunk_items=[
+            SourceChunkItem(
+                source_path="docs/reference-datasheet.pdf",
+                target_path=f"{target_workspace}/docs/reference-datasheet/chunks.jsonl",
+                provenance_anchor="doc://docs/reference-datasheet.pdf#page=1..n",
+                content_kind="pdf-source-chunks",
+                cache_state="represented-not-materialized",
+                evidence_refs=[
+                    f"/bodesign/api/projects/{project_id}/project-tree",
+                    f"/bodesign/api/projects/{project_id}/cache-conflict-status",
+                ],
+            ),
+            SourceChunkItem(
+                source_path="inputs/reference-notes.txt",
+                target_path=f"{target_workspace}/inputs/reference-notes/chunks.jsonl",
+                provenance_anchor="doc://inputs/reference-notes.txt#line=1..n",
+                content_kind="text-source-chunks",
+                cache_state="represented-not-materialized",
+                evidence_refs=[
+                    f"/bodesign/api/projects/{project_id}/storage-share",
+                    f"/bodesign/api/projects/{project_id}/folder-open-request",
+                ],
+            ),
+        ],
+        blockers=[
+            "Client folder handle is not granted; source chunks cannot be materialized durably.",
+            "docxmcp/client orchestration must provide provenance-preserving chunks before storage.",
+            "Direct server-side copy of client documents into MCP-owned storage is blocked.",
+        ],
+        next_actions=[
+            "grant-client-folder-handle",
+            "run-docxmcp-client-side-decomposition",
+            "review-source-chunk-provenance",
+            "client-materializes-hidden-source-chunks",
+            "refresh-cache-conflict-status",
+        ],
+        warnings=[
+            "This contract represents source chunk materialization only; it does not read or copy files.",
+            "Durable source chunks remain under client-owned hidden .bodesign/sources/ storage.",
         ],
     )
 
