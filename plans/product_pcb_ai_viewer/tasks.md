@@ -60,7 +60,7 @@ Status · dependency · acceptance.
 - [x] **G10c Dockerfile** — python + KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + `mcp`.
 - [x] **G10d docker-compose.yml** — per-user container, `./.run/<sock>` UDS bind + named volumes (cache/sessions) + socket healthcheck.
 - [x] **G10e `mcp.json`** — registration manifest (transport `streamable-http`, `unix://…/bodesign.sock:/mcp/`).
-- **Acceptance:** `mcpctl.sh start` brings the container up; an MCP client lists + calls a bodesign tool over the UDS; a tool producing a file (e.g. a rendered schematic PDF) is downloadable by token over the UDS.
+- **Acceptance:** ✅ **MET (2026-06-07)** — `mcpctl.sh start` built the KiCad+LibreOffice image and brought the container up healthy; over the container UDS, MCP `initialize`+`tools/list` advertised 18 tools and `tools/call bodesign_plan_design_intent` ran inside the container (5 subsystems); a tarball upload→token→`/files/{token}/blob/{rel}` download round-tripped. (Root cause of the earlier 'wedge': the session Bash sandbox blocked /var/run/docker.sock, not the daemon.)
 
 ### File-model parity gap (G11) — full docxmcp-style client-tree + upload/download (see design.md DD-14)
 G10a's `/files` is minimal (single-file upload + token download); tools take host paths. G11 brings full docxmcp parity so the portable/container model works (upload your whole project tree → token → tools run inside it → download results).
