@@ -172,11 +172,12 @@ The current implementation has a working published web surface, Rockbox fixture 
 
 ### Milestone C: Gerber/Drill Geometry Reconstruction
 
-- Integrate a Python Gerber parser/render path, starting with `pygerber` if it can expose enough geometry and SVG/image output.
+- Integrate a Python Gerber parser/render path, starting with `pygerber` if it can expose enough geometry and raster/image output.
+- Stabilize Board View on third-party raster rendering before adding more reconstruction logic: no hand-written SVG fallback is allowed as the default PCB view, and render failure must be explicit and test-covered.
 - Parse RS-274X apertures, flashes, draws, regions, polarity, layer bounds, units, and coordinate format.
 - Parse drill tools, drill hits, plated/non-plated hints, and board outline candidates.
 - Normalize geometry into `BoardDesign IR` primitives linked to original file evidence.
-- Render true layer canvases with pan/zoom/layer toggle; only then re-enable Board View as actual PCB layout rendering.
+- Render true layer canvases or third-party raster/CAD-style images with pan/zoom/layer toggle; only then re-enable Board View as actual PCB layout rendering.
 
 ### Milestone D: Connectivity and Component Reconstruction
 

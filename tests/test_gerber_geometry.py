@@ -6,7 +6,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "packages" / "gerber-core"))
 
-from bodesign_gerber_core import parse_drill_file, parse_gerber_file, render_geometry_svg
+from bodesign_gerber_core import focus_svg_viewbox, normalize_allegro_gerber_source, parse_drill_file, parse_gerber_file, render_gerber_with_pygerber, render_geometry_svg
 
 
 class GerberGeometryTests(unittest.TestCase):
@@ -44,6 +44,37 @@ class GerberGeometryTests(unittest.TestCase):
         self.assertIn("<svg", svg)
         self.assertIn("<line", svg)
         self.assertIn("<circle", svg)
+
+    def test_allegro_header_normalization_removes_pygerber_incompatible_codes(self):
+        source = "%FSLAX25Y25*MOIN*%\n%IR0*IPPOS*OFA0B0*MIAV0*SF1.0B1.0*%\nM02*\n"
+
+        normalized, removed_codes = normalize_allegro_gerber_source(source)
+
+        self.assertIn("%FSLAX25Y25*%", normalized)
+        self.assertNotIn("IR0", normalized)
+        self.assertEqual(["IP", "IR", "MI", "OFA", "SF"], removed_codes)
+
+    def test_pygerber_adapter_renders_normalized_rockbox_layer_when_available(self):
+        gerber_path = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber" / "L1_top.art"
+        output_dir = REPO_ROOT / ".artifacts" / "tests" / "pygerber"
+
+        result = render_gerber_with_pygerber(gerber_path, output_dir)
+
+        if result.status != "rendered":
+            self.skipTest(f"pygerber renderer unavailable: {result.warnings}")
+        self.assertTrue(result.normalized)
+        self.assertIn("IR", result.removed_extended_codes)
+        self.assertIsNotNone(result.output_path)
+        self.assertIn("<svg", Path(str(result.output_path)).read_text(encoding="utf-8", errors="ignore"))
+
+    def test_focus_svg_viewbox_crops_empty_pygerber_extent(self):
+        svg = '<svg width="158.0" height="199.0" viewBox="0 0 158 199"><defs></defs><use xlink:href="#d1" x="14" y="111" /><use xlink:href="#d1" x="72" y="160" /><path d="M25,120 L70,150 Z" /></svg>'
+
+        focused = focus_svg_viewbox(svg)
+
+        self.assertIn("viewBox=\"", focused)
+        self.assertNotIn('viewBox="0 0 158 199"', focused)
+        self.assertNotIn('width="158.0" height="199.0"', focused)
 
 
 if __name__ == "__main__":

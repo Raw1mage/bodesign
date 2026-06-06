@@ -18,11 +18,12 @@
 - [~] T13 Replace hard-coded Rockbox demo with per-project workspace routes and durable project/artifact records — per-project routes and fixture artifact records are implemented; durable DB/file storage is still pending
 - [~] T14 Add real web import/open/browse flow for uploaded project folders and fixture-backed projects — fixture-backed browsing is implemented; upload/drop flow is still pending
 - [x] T15 Build source-file viewers for PDFs, BOM/placement, IPC nets, Gerber layer metadata, drill files, and routing reports
-- [x] T16 Integrate Gerber parser/render spike for RS-274X metadata, apertures, bounds, flashes, draws, regions, polarity, and SVG/image output
+- [x] T16 Integrate Gerber parser/render spike for RS-274X metadata, apertures, bounds, flashes, draws, regions, polarity, and pygerber-backed SVG output
 - [x] T17 Integrate drill parser for tool tables, drill hits, plated/non-plated hints, and board-outline candidates
-- [~] T18 Normalize Gerber/drill geometry into `BoardDesign IR` primitives with evidence refs and confidence — geometry summaries and SVG evidence are available; full `GeometryPrimitive` IR fusion is pending
-- [~] T19 Re-enable Board View only after true PCB layer geometry can be rendered with pan/zoom/layer toggles — Board View now renders evidence-based SVG from one Gerber layer plus drill hits; pan/zoom/layer toggles are pending
-- [ ] T20 Fuse IPC nets, placement, Gerber pads/flashes, vias, and drill hits into component-pad-net reconstruction
+- [~] T18 Normalize Gerber/drill geometry into `BoardDesign IR` primitives with evidence refs and confidence — geometry summaries and third-party render artifacts are available; full `GeometryPrimitive` IR fusion is pending
+- [x] T19 Stabilize Board View on a third-party raster renderer before advancing reconstruction — Board View now uses pygerber raster-only rendering with explicit fail-fast error state (no hand-written SVG fallback), and tests/docs are synchronized on the raster contract
+- [ ] T19a Commit the raster-only Board View stabilization slice after `compileall` and unittest pass
+- [~] T20 Fuse IPC nets, placement, Gerber pads/flashes, vias, and drill hits into component-pad-net reconstruction — first-pass component/net fusion summary is exposed in geometry API and Board View from placement + IPC evidence; Gerber pad/flash/via/drill spatial fusion remains pending
 - [ ] T21 Add cross-probing between components, nets, layers, artifacts, and derived IR objects
 - [ ] T22 Build reusable component knowledge queue from Rockbox parts and OpenMV references
 - [ ] T23 Implement user-provided datasheet PDF/text extraction into `ComponentKnowledge` records
@@ -38,4 +39,4 @@
 - [?] KiCad/freerouting integration posture must be approved before embedding GPL/native tools directly.
 - [!] Debug/test guidance is deferred and must not shape the MVP schema unless needed by layout generation.
 - [!] No generated layout or Gerber is considered send-to-fab without deterministic validation and explicit user approval.
-- [!] Board View must not display decorative/fake circuit drawings; it can only render true source/geometry evidence or an explicit unavailable state.
+- [!] Board View must not display decorative/fake circuit drawings or hand-written SVG approximations as the default PCB view; it must use a third-party Gerber/CAD renderer, verified evidence views, or an explicit unavailable/error state.

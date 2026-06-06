@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import re
+import subprocess
+import sys
 
 
 COORDINATE_RE = re.compile(r"X(?P<x>-?\d+)?Y(?P<y>-?\d+)?(?:D(?P<op>0[123]))?\*")
@@ -8,6 +10,11 @@ APERTURE_RE = re.compile(r"%ADD(?P<code>\d+)(?P<shape>[A-Z][A-Z0-9]*),?(?P<param
 FORMAT_RE = re.compile(r"%FSLAX(?P<xi>\d)(?P<xd>\d)Y(?P<yi>\d)(?P<yd>\d)\*M(?P<unit>OIN|MOMM)\*%")
 DRILL_RE = re.compile(r"X(?P<x>-?\d+)Y(?P<y>-?\d+)")
 HOLE_SIZE_RE = re.compile(r"Holesize\s+(?P<index>\d+)\.\s+=\s+(?P<size>[0-9.]+).*?(?P<plating>NON_PLATED|PLATED)", re.IGNORECASE)
+ALLEGRO_COMPATIBLE_EXTENDED_CODES = {"IR", "IP", "OFA", "MI", "SF"}
+SVG_VIEWBOX_RE = re.compile(r'viewBox="(?P<x>-?[0-9.]+) (?P<y>-?[0-9.]+) (?P<w>[0-9.]+) (?P<h>[0-9.]+)"')
+SVG_USE_RE = re.compile(r'<use\b[^>]*\sx="(?P<x>-?[0-9.]+)"[^>]*\sy="(?P<y>-?[0-9.]+)"')
+SVG_PATH_RE = re.compile(r'<path\b[^>]*\sd="(?P<d>[^"]+)"')
+SVG_COMMAND_COORD_RE = re.compile(r'[ML]\s*(?P<x>-?[0-9.]+),(?P<y>-?[0-9.]+)')
 
 
 @dataclass(slots=True)
@@ -104,12 +111,148 @@ class DrillGeometrySummary:
 
 
 @dataclass(slots=True)
+class GerberRenderResult:
+    source_path: str
+    output_path: str | None = None
+    renderer: str = "pygerber"
+    status: str = "pending"
+    normalized: bool = False
+    removed_extended_codes: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class GerberValidationResult:
     project_id: str
     output_paths: list[str] = field(default_factory=list)
     status: str = "pending"
     warnings: list[str] = field(default_factory=list)
     blocking_errors: list[str] = field(default_factory=list)
+
+
+def normalize_allegro_gerber_source(source_code: str) -> tuple[str, list[str]]:
+    removed_codes: list[str] = []
+    normalized_lines: list[str] = []
+
+    for line in source_code.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("%") and stripped.endswith("%"):
+            body = stripped[1:-1]
+            blocks = [block for block in body.split("*") if block]
+            unsupported_blocks = [block for block in blocks if block[:3] in ALLEGRO_COMPATIBLE_EXTENDED_CODES or block[:2] in ALLEGRO_COMPATIBLE_EXTENDED_CODES]
+            if unsupported_blocks:
+                removed_codes.extend(_extended_code_name(block) for block in unsupported_blocks)
+                kept_blocks = [block for block in blocks if block not in unsupported_blocks]
+                normalized_lines.extend(_extended_blocks(kept_blocks))
+                continue
+            if len(blocks) > 1:
+                normalized_lines.extend(_extended_blocks(blocks))
+                continue
+        normalized_lines.append(line)
+
+    return "\n".join(normalized_lines) + "\n", sorted(set(removed_codes))
+
+
+def render_gerber_with_pygerber(path: str | Path, output_dir: str | Path, file_type: str = "COPPER", scale: float = 1.0) -> GerberRenderResult:
+    source = Path(path)
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    normalized_source, removed_codes = normalize_allegro_gerber_source(source.read_text(encoding="utf-8", errors="ignore"))
+    normalized_path = output_root / f"{source.stem}.normalized.gbr"
+    output_path = output_root / f"{source.stem}.pygerber.svg"
+    normalized_path.write_text(normalized_source, encoding="utf-8")
+
+    try:
+        from pygerber.gerberx3.api.v2 import DEFAULT_COLOR_MAP, FileTypeEnum, GerberFile
+
+        parsed_file = GerberFile.from_str(normalized_source, file_type=FileTypeEnum(file_type)).parse()
+        color_scheme = DEFAULT_COLOR_MAP[parsed_file.get_file_type()]
+        parsed_file.render_svg(output_path, color_scheme=color_scheme, scale=scale)
+    except Exception as error:  # pragma: no cover - exact upstream errors vary by pygerber version.
+        return GerberRenderResult(
+            source_path=str(source),
+            output_path=None,
+            status="render-failed",
+            normalized=bool(removed_codes),
+            removed_extended_codes=removed_codes,
+            warnings=[str(error)],
+        )
+
+    return GerberRenderResult(
+        source_path=str(source),
+        output_path=str(output_path),
+        status="rendered",
+        normalized=bool(removed_codes),
+        removed_extended_codes=removed_codes,
+        warnings=[],
+    )
+
+
+def render_gerber_raster_with_pygerber(path: str | Path, output_dir: str | Path, dpi: int = 700, style: str = "copper") -> GerberRenderResult:
+    source = Path(path)
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    normalized_source, removed_codes = normalize_allegro_gerber_source(source.read_text(encoding="utf-8", errors="ignore"))
+    normalized_path = output_root / f"{source.stem}.normalized.gbr"
+    output_path = output_root / f"{source.stem}.pygerber.png"
+    normalized_path.write_text(normalized_source, encoding="utf-8")
+
+    command = [
+        sys.executable,
+        "-m",
+        "pygerber",
+        "raster-2d",
+        str(normalized_path),
+        "--output",
+        str(output_path),
+        "--style",
+        style,
+        "--dpi",
+        str(dpi),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except Exception as error:  # pragma: no cover - upstream/CLI availability varies by environment.
+        return GerberRenderResult(
+            source_path=str(source),
+            output_path=None,
+            renderer="pygerber-raster",
+            status="render-failed",
+            normalized=bool(removed_codes),
+            removed_extended_codes=removed_codes,
+            warnings=[str(error)],
+        )
+
+    return GerberRenderResult(
+        source_path=str(source),
+        output_path=str(output_path),
+        renderer="pygerber-raster",
+        status="rendered",
+        normalized=bool(removed_codes),
+        removed_extended_codes=removed_codes,
+        warnings=[],
+    )
+
+
+def focus_svg_viewbox(svg_source: str, padding_ratio: float = 0.08) -> str:
+    current_viewbox = SVG_VIEWBOX_RE.search(svg_source)
+    bounds = _svg_visible_bounds(svg_source)
+    if current_viewbox is None or bounds.min_x is None or bounds.min_y is None or bounds.max_x is None or bounds.max_y is None:
+        return svg_source
+
+    width = bounds.width()
+    height = bounds.height()
+    if width <= 0 or height <= 0:
+        return svg_source
+    padding = max(width, height) * padding_ratio
+    focused_x = bounds.min_x - padding
+    focused_y = bounds.min_y - padding
+    focused_width = width + padding * 2
+    focused_height = height + padding * 2
+    replacement = f'viewBox="{focused_x:.6f} {focused_y:.6f} {focused_width:.6f} {focused_height:.6f}"'
+    focused = SVG_VIEWBOX_RE.sub(replacement, svg_source, count=1)
+    focused = re.sub(r'\swidth="[0-9.]+"\sheight="[0-9.]+"', '', focused, count=1)
+    return focused
 
 
 def parse_gerber_file(path: str | Path, sample_limit: int = 500) -> GerberGeometrySummary:
@@ -214,7 +357,14 @@ def parse_drill_file(path: str | Path, sample_limit: int = 500) -> DrillGeometry
     return summary
 
 
-def render_geometry_svg(gerber: GerberGeometrySummary | None = None, drill: DrillGeometrySummary | None = None, width: int = 980, height: int = 620) -> str:
+def render_geometry_svg(
+    gerber: GerberGeometrySummary | None = None,
+    drill: DrillGeometrySummary | None = None,
+    width: int = 980,
+    height: int = 620,
+    include_flashes: bool = True,
+    include_drills: bool = True,
+) -> str:
     bounds = GeometryBounds()
     for source_bounds in [gerber.bounds if gerber else None, drill.bounds if drill else None]:
         if source_bounds is None or source_bounds.min_x is None or source_bounds.min_y is None or source_bounds.max_x is None or source_bounds.max_y is None:
@@ -236,10 +386,11 @@ def render_geometry_svg(gerber: GerberGeometrySummary | None = None, drill: Dril
             x1, y1 = project(segment.x1, segment.y1)
             x2, y2 = project(segment.x2, segment.y2)
             parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="#5de4c7" stroke-width="1.25" stroke-linecap="round" opacity="0.78"/>')
-        for flash in gerber.sample_flashes[:500]:
-            x, y = project(flash.x, flash.y)
-            parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="2.4" fill="#ffc857" opacity="0.8"/>')
-    if drill is not None:
+        if include_flashes:
+            for flash in gerber.sample_flashes[:500]:
+                x, y = project(flash.x, flash.y)
+                parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="2.4" fill="#ffc857" opacity="0.8"/>')
+    if drill is not None and include_drills:
         for hit in drill.sample_hits[:700]:
             x, y = project(hit.x, hit.y)
             parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="1.6" fill="none" stroke="#9bd8ff" stroke-width="1" opacity="0.8"/>')
@@ -256,6 +407,47 @@ def _decode_coordinate(value: str | None, previous: float | None, coordinate_sca
 def _count_aperture_use(apertures: dict[str, GerberAperture], selected_aperture: str | None) -> None:
     if selected_aperture is not None and selected_aperture in apertures:
         apertures[selected_aperture].use_count += 1
+
+
+def _extended_code_name(block: str) -> str:
+    for code in sorted(ALLEGRO_COMPATIBLE_EXTENDED_CODES, key=len, reverse=True):
+        if block.startswith(code):
+            return code
+    return block[:3]
+
+
+def _extended_blocks(blocks: list[str]) -> list[str]:
+    return [f"%{block}*%" for block in blocks]
+
+
+def _svg_visible_bounds(svg_source: str) -> GeometryBounds:
+    use_points: list[tuple[float, float]] = []
+    for use_match in SVG_USE_RE.finditer(svg_source):
+        use_points.append((float(use_match.group("x")), float(use_match.group("y"))))
+    if len(use_points) >= 20:
+        return _percentile_bounds(use_points, lower=0.05, upper=0.95)
+    if use_points:
+        bounds = GeometryBounds()
+        for x, y in use_points:
+            bounds.include(x, y)
+        return bounds
+
+    bounds = GeometryBounds()
+    for path_match in SVG_PATH_RE.finditer(svg_source):
+        for coord_match in SVG_COMMAND_COORD_RE.finditer(path_match.group("d")):
+            bounds.include(float(coord_match.group("x")), float(coord_match.group("y")))
+    return bounds
+
+
+def _percentile_bounds(points: list[tuple[float, float]], lower: float, upper: float) -> GeometryBounds:
+    xs = sorted(point[0] for point in points)
+    ys = sorted(point[1] for point in points)
+    lower_index = max(0, min(len(points) - 1, int(len(points) * lower)))
+    upper_index = max(0, min(len(points) - 1, int(len(points) * upper)))
+    bounds = GeometryBounds()
+    bounds.include(xs[lower_index], ys[lower_index])
+    bounds.include(xs[upper_index], ys[upper_index])
+    return bounds
 
 
 def validate_gerber_export_placeholder(project_id: str, output_paths: list[str]) -> GerberValidationResult:

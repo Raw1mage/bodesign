@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from html import escape
+import base64
 import json
 from pathlib import Path
 import sys
@@ -27,7 +28,7 @@ for package_root in PACKAGE_ROOTS:
 try:
     from bodesign_component_kb import ingest_datasheet_knowledge, reuse_component_knowledge
     from bodesign_doc_core import plan_openmv_document_ingestion
-    from bodesign_gerber_core import parse_drill_file, parse_gerber_file, render_geometry_svg, validate_gerber_export_placeholder
+    from bodesign_gerber_core import focus_svg_viewbox, parse_drill_file, parse_gerber_file, render_gerber_raster_with_pygerber, render_gerber_with_pygerber, render_geometry_svg, validate_gerber_export_placeholder
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
@@ -37,6 +38,9 @@ except ImportError:
     plan_openmv_document_ingestion = None
     parse_drill_file = None
     parse_gerber_file = None
+    focus_svg_viewbox = None
+    render_gerber_raster_with_pygerber = None
+    render_gerber_with_pygerber = None
     render_geometry_svg = None
     validate_gerber_export_placeholder = None
     JobSummary = None
@@ -160,9 +164,15 @@ def _render_project_workspace(project_id: str) -> str:
     artifact_paths = _project_artifact_paths(project_id)
     artifact_groups = _group_artifacts(artifact_paths)
     geometry = _project_geometry(project_id)
-    board_svg = geometry.get("svg", "")
+    fusion_summary = geometry.get("fusion_summary") if isinstance(geometry.get("fusion_summary"), dict) else {}
+    board_image = geometry.get("image_data_uri", "")
+    raster_renderer = geometry.get("raster_renderer") if isinstance(geometry.get("raster_renderer"), dict) else {}
+    board_visual = _board_raster_visual(board_image, raster_renderer)
     gerber_geometry = geometry.get("gerber") or {}
     drill_geometry = geometry.get("drill") or {}
+    overlay_components = _board_overlay_components(components, nets)
+    overlay_markup = "".join(_component_overlay_marker(component) for component in overlay_components)
+    overlay_data = _js_string_literal(json.dumps({component["refdes"]: component for component in overlay_components}, ensure_ascii=False))
     layer_markup = "".join(_layer_row(layer) for layer in layers) or '<p class="muted">No copper layers parsed.</p>'
     document_markup = _artifact_group_markup(artifact_groups)
     artifact_table = "".join(_artifact_row(project_id, artifact) for artifact in _project_artifact_records(project_id))
@@ -177,6 +187,10 @@ def _render_project_workspace(project_id: str) -> str:
     )
     if not net_markup:
         net_markup = '<tr><td colspan="3">No IPC nets parsed yet.</td></tr>'
+    fusion_components = fusion_summary.get("components") if isinstance(fusion_summary.get("components"), list) else []
+    fusion_markup = "".join(_component_fusion_row(component) for component in fusion_components[:80])
+    if not fusion_markup:
+        fusion_markup = '<tr><td colspan="5">No component↔net fusion evidence yet.</td></tr>'
     ir_json = escape(json.dumps(_compact_board_design(board_design), indent=2, ensure_ascii=False))
     return """
     <!doctype html>
@@ -189,8 +203,8 @@ def _render_project_workspace(project_id: str) -> str:
           :root { color-scheme: dark; --bg: #0b0f12; --panel: #111a20; --panel2: #162229; --line: #293943; --text: #e8f0f2; --muted: #9aacb4; --accent: #5de4c7; --accent2: #ffc857; }
           * { box-sizing: border-box; }
           body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); }
-          .shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
-          .sidebar { padding: 24px; border-right: 1px solid var(--line); background: #0f171c; }
+          .shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 100vh; max-width: 100vw; overflow-x: hidden; }
+          .sidebar { padding: 24px; border-right: 1px solid var(--line); background: #0f171c; min-width: 0; }
           .workspace { padding: 22px; min-width: 0; }
           h1, h2, h3 { margin-top: 0; }
           h1 { font-size: 26px; letter-spacing: -0.03em; }
@@ -201,23 +215,42 @@ def _render_project_workspace(project_id: str) -> str:
           .button { display: inline-block; padding: 8px 11px; border-radius: 10px; background: var(--accent); color: #07100d; text-decoration: none; font-weight: 700; }
           .button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); }
           .pill { display: inline-block; margin: 4px 4px 4px 0; padding: 5px 9px; border: 1px solid #39515b; border-radius: 999px; color: #9bd8ff; background: #0c151a; }
-          .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; position: sticky; top: 0; z-index: 1; padding: 8px 0 14px; background: linear-gradient(#0b0f12 76%, #0b0f1200); }
+          .tabs { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-bottom: 16px; position: sticky; top: 0; z-index: 1; padding: 8px 0 14px; background: linear-gradient(#0b0f12 76%, #0b0f1200); min-width: 0; }
           .tabs input { display: none; }
           .tabs label { cursor: pointer; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--panel); }
           #tab-projects:checked ~ label[for="tab-projects"], #tab-documents:checked ~ label[for="tab-documents"], #tab-board:checked ~ label[for="tab-board"], #tab-gerber:checked ~ label[for="tab-gerber"], #tab-ipc:checked ~ label[for="tab-ipc"], #tab-components:checked ~ label[for="tab-components"], #tab-ir:checked ~ label[for="tab-ir"], #tab-report:checked ~ label[for="tab-report"] { color: #07100d; background: var(--accent); border-color: var(--accent); }
-          .panel { display: none; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: 20px; min-height: calc(100vh - 96px); }
+          .panels { flex: 0 0 100%; width: 100%; min-width: 0; }
+          .panel { display: none; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: 20px; min-height: calc(100vh - 96px); max-width: 100%; overflow: hidden; }
           #tab-projects:checked ~ .panels #projects, #tab-documents:checked ~ .panels #documents, #tab-board:checked ~ .panels #board, #tab-gerber:checked ~ .panels #gerber, #tab-ipc:checked ~ .panels #ipc, #tab-components:checked ~ .panels #components, #tab-ir:checked ~ .panels #ir, #tab-report:checked ~ .panels #report { display: block; }
-          .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-          .card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--panel2); }
+          .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; min-width: 0; }
+          .card { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--panel2); min-width: 0; overflow-wrap: anywhere; }
           .project-card { border-color: #3e635b; }
-          .geometry-viewer { min-height: 520px; border: 1px solid #3b5560; border-radius: 16px; background: #07100d; overflow: auto; padding: 12px; }
-          .geometry-viewer svg { width: 100%; min-width: 760px; height: auto; display: block; }
-          table { border-collapse: collapse; width: 100%; }
+          .viewer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 10px; }
+          .control-button { cursor: pointer; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: #0f171c; color: var(--text); font-weight: 650; }
+          .control-button:hover { border-color: var(--accent); color: var(--accent); }
+          .geometry-viewer { height: min(68vh, 760px); border: 1px solid #3b5560; border-radius: 16px; background: #07100d; overflow: hidden; padding: 12px; user-select: none; touch-action: none; }
+          .geometry-canvas { width: 100%; height: 100%; position: relative; }
+          .raster-view { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: auto; }
+          .render-error { height: 100%; display: grid; place-content: center; text-align: center; color: #ffb4a8; border: 1px dashed #74443e; border-radius: 12px; padding: 20px; }
+          .component-overlay { position: absolute; inset: 0; pointer-events: none; }
+          .component-marker { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer; border: 1px solid #ffed9a; border-radius: 8px; background: #ffc857d9; color: #12170f; font-size: 11px; font-weight: 800; padding: 3px 5px; box-shadow: 0 0 0 2px #0008; white-space: nowrap; }
+          .component-marker[data-side="bottom"] { background: #9bd8ffd9; border-color: #cfefff; }
+          .geometry-canvas:not(.show-components) .component-marker { display: none; }
+          .component-marker[data-category="passive"], .component-marker[data-category="testpoint"] { display: none; }
+          .geometry-canvas.show-components.show-passives .component-marker[data-category="passive"], .geometry-canvas.show-components.show-testpoints .component-marker[data-category="testpoint"] { display: block; }
+          .geometry-canvas.show-components .component-marker[data-category="major"], .geometry-canvas.show-components .component-marker[data-category="active"], .geometry-canvas.show-components .component-marker[data-category="other"] { display: block; }
+          .component-marker[data-category="testpoint"] { font-size: 9px; padding: 2px 4px; opacity: 0.72; }
+          .component-marker.is-selected { background: #ff6b6b; border-color: #ffd0d0; color: white; }
+          .inspector { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; background: #0f171c; padding: 14px; }
+          .pin-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+          table { border-collapse: collapse; width: 100%; table-layout: fixed; }
           th, td { border-bottom: 1px solid var(--line); padding: 9px 8px; text-align: left; vertical-align: top; }
           th { color: #bcd0d7; font-weight: 650; }
-          .scroll { max-height: 540px; overflow: auto; }
-          pre { margin: 0; white-space: pre-wrap; color: #d6e3e7; }
+          td, th, code { overflow-wrap: anywhere; }
+          .scroll { max-height: 540px; overflow: auto; max-width: 100%; }
+          pre { margin: 0; white-space: pre-wrap; color: #d6e3e7; max-width: 100%; overflow: auto; }
           code { color: #8ef6d2; }
+          @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } }
         </style>
       </head>
       <body>
@@ -281,18 +314,32 @@ def _render_project_workspace(project_id: str) -> str:
                 </article>
                  <article class="panel" id="board">
                   <h2>Board View</h2>
-                  <p class="muted">Evidence-based geometry preview from parsed RS-274X Gerber draw/flash operations and Excellon drill hits. This is still a parser spike, not a full EDA editor.</p>
+                  <p class="muted">Third-party raster Gerber render. This view uses pygerber's raster backend instead of hand-written SVG geometry; net-aware coloring and multi-layer compositing are still pending.</p>
                   <div class="grid">
+                    <div class="card"><h3>Default view</h3><p><code>pygerber-raster</code></p><p>status: <b>""" + escape(str((geometry.get("raster_renderer") or {}).get("status", "not-run"))) + """</b></p></div>
                     <div class="card"><h3>Gerber source</h3><p><code>""" + escape(str(gerber_geometry.get("filename", "none"))) + """</code></p><p>draws: <b>""" + escape(str(gerber_geometry.get("draw_count", 0))) + """</b> · flashes: <b>""" + escape(str(gerber_geometry.get("flash_count", 0))) + """</b></p></div>
                     <div class="card"><h3>Drill source</h3><p><code>""" + escape(str(drill_geometry.get("filename", "none"))) + """</code></p><p>hits: <b>""" + escape(str(drill_geometry.get("hit_count", 0))) + """</b> · tools: <b>""" + escape(str(drill_geometry.get("tool_count", 0))) + """</b></p></div>
+                    <div class="card"><h3>Component-Net fusion preview</h3><p>coverage: <b>""" + escape(str(fusion_summary.get("coverage_ratio", 0.0))) + """</b></p><p>mapped components: <b>""" + escape(str(fusion_summary.get("mapped_components", 0))) + """</b> / """ + escape(str(fusion_summary.get("total_components", 0))) + """</p></div>
+                  </div>
+                  <div class="viewer-toolbar" aria-label="Board view controls">
+                      <button class="control-button" type="button" data-overlay-toggle="components">Toggle placement overlay</button>
+                      <button class="control-button" type="button" data-overlay-toggle="passives">Toggle passives</button>
+                      <button class="control-button" type="button" data-overlay-toggle="testpoints">Toggle test points</button>
+                      <span class="muted">Raster view is the default. It is generated by pygerber; Browser-level zoom is intentionally left to the image viewer for now, and hand-written SVG pan/zoom fallback has been removed.</span>
                   </div>
                   <div class="geometry-viewer">
-                    """ + board_svg + """
+                    <div class="geometry-canvas" id="geometry-canvas">""" + board_visual + """<div class="component-overlay" id="component-overlay">""" + overlay_markup + """</div></div>
                   </div>
+                  <div class="inspector" id="component-inspector">
+                    <h3>Component / pinout inspector</h3>
+                    <p class="muted">Click a component marker to see placement, package, and IPC-derived pin/net evidence. Exact footprint pin geometry is pending datasheet/footprint normalization.</p>
+                  </div>
+                  <h3>Component-Net fusion evidence</h3>
+                  <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Pins</th><th>Nets</th><th>Sample nets</th></tr></thead><tbody>""" + fusion_markup + """</tbody></table></div>
                 </article>
                 <article class="panel" id="gerber">
                   <h2>Gerber Layers</h2>
-                  <p class="muted">Layer files are visible here first. The Board View currently renders a sample copper layer plus drill hits.</p>
+                  <p class="muted">Layer files are visible here first. The Board View currently renders one selected copper layer through pygerber when available; layer toggles and compositing are still pending.</p>
                   <table><thead><tr><th>Layer</th><th>Source file</th><th>Status</th></tr></thead><tbody>""" + layer_markup + """</tbody></table>
                 </article>
                 <article class="panel" id="ipc">
@@ -322,6 +369,34 @@ def _render_project_workspace(project_id: str) -> str:
             </div>
           </section>
         </main>
+        <script>
+          (() => {
+            const canvas = document.getElementById('geometry-canvas');
+            const viewer = canvas ? canvas.closest('.geometry-viewer') : null;
+            if (!canvas || !viewer) return;
+            const inspector = document.getElementById('component-inspector');
+            const components = JSON.parse('""" + overlay_data + """');
+            document.querySelectorAll('[data-overlay-toggle]').forEach((button) => {
+              button.addEventListener('click', () => {
+                const category = button.getAttribute('data-overlay-toggle');
+                if (category === 'components') canvas.classList.toggle('show-components');
+                if (category === 'passives') canvas.classList.toggle('show-passives');
+                if (category === 'testpoints') canvas.classList.toggle('show-testpoints');
+              });
+            });
+            document.querySelectorAll('.component-marker').forEach((marker) => {
+              marker.addEventListener('click', (event) => {
+                event.stopPropagation();
+                document.querySelectorAll('.component-marker').forEach((item) => item.classList.remove('is-selected'));
+                marker.classList.add('is-selected');
+                const component = components[marker.dataset.refdes];
+                if (!component || !inspector) return;
+                const pins = component.pins.length ? component.pins.map((pin) => `<span class="pill">${pin}</span>`).join('') : '<span class="muted">No IPC pin/net evidence linked yet.</span>';
+                inspector.innerHTML = `<h3>${component.refdes} ${component.part_number || ''}</h3><div class="grid"><div class="card"><strong>footprint</strong><br><code>${component.footprint || 'unknown'}</code></div><div class="card"><strong>side</strong><br><code>${component.side}</code></div><div class="card"><strong>XY mil</strong><br><code>${component.x_mil}, ${component.y_mil}</code></div></div><h3>IPC pin/net evidence</h3><div class="pin-list">${pins}</div>`;
+              });
+            });
+          })();
+        </script>
       </body>
     </html>
     """
@@ -656,8 +731,8 @@ def _project_artifact_records(project_id: str) -> list[dict[str, object]]:
 
 
 def _project_geometry(project_id: str) -> dict[str, object]:
-    if parse_gerber_file is None or parse_drill_file is None or render_geometry_svg is None:
-        return {"status": "gerber-core unavailable", "gerber": None, "drill": None, "svg": ""}
+    if parse_gerber_file is None or parse_drill_file is None:
+        return {"status": "gerber-core unavailable", "gerber": None, "drill": None, "raster_renderer": None, "image_data_uri": ""}
     records = _project_artifact_records(project_id)
     gerber_record = _preferred_artifact(records, "gerber", ["L1_top.art", "L1_TOP.art", "top.art"])
     drill_record = _preferred_artifact(records, "drill", ["ROCKBOX_V2-1-6.drl"])
@@ -665,12 +740,50 @@ def _project_geometry(project_id: str) -> dict[str, object]:
     drill_summary = parse_drill_file(str(drill_record["path"]), sample_limit=700) if drill_record is not None else None
     gerber_dict = _compact_gerber_geometry(gerber_record, asdict(gerber_summary)) if gerber_summary is not None and gerber_record is not None else None
     drill_dict = _compact_drill_geometry(drill_record, asdict(drill_summary)) if drill_summary is not None and drill_record is not None else None
+    board_design = _project_board_design(project_id)
+    fusion_summary = _component_net_fusion_summary(
+        board_design.get("components", []) if isinstance(board_design.get("components"), list) else [],
+        board_design.get("nets", []) if isinstance(board_design.get("nets"), list) else [],
+    )
+    raster_renderer = _render_gerber_raster_artifact(project_id, gerber_record) if gerber_record is not None else None
+    image_data_uri = _read_rendered_png_data_uri(raster_renderer)
     return {
-        "status": "geometry-preview" if gerber_summary is not None or drill_summary is not None else "no-geometry-artifacts",
+        "status": "pygerber-raster-preview" if image_data_uri else "raster-render-unavailable" if gerber_record is not None else "no-geometry-artifacts",
         "gerber": gerber_dict,
         "drill": drill_dict,
-        "svg": render_geometry_svg(gerber_summary, drill_summary),
+        "fusion_summary": fusion_summary,
+        "raster_renderer": raster_renderer,
+        "image_data_uri": image_data_uri,
     }
+
+
+def _render_gerber_raster_artifact(project_id: str, artifact: dict[str, object] | None) -> dict[str, object] | None:
+    if artifact is None or render_gerber_raster_with_pygerber is None:
+        return None
+    artifact_path = Path(str(artifact["path"]))
+    output_dir = REPO_ROOT / ".artifacts" / "viewer" / project_id / str(artifact["id"])
+    return asdict(render_gerber_raster_with_pygerber(artifact_path, output_dir))
+
+
+def _read_rendered_png_data_uri(renderer: dict[str, object] | None) -> str:
+    if not renderer or renderer.get("status") != "rendered":
+        return ""
+    output_path = renderer.get("output_path")
+    if not output_path:
+        return ""
+    path = Path(str(output_path))
+    if not path.exists():
+        return ""
+    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def _board_raster_visual(image_data_uri: object, renderer: dict[str, object]) -> str:
+    if image_data_uri:
+        return f'<img class="raster-view" alt="Rendered Gerber layer" src="{escape(str(image_data_uri))}" />'
+    status = escape(str(renderer.get("status") or "not-run"))
+    warnings = renderer.get("warnings") if isinstance(renderer.get("warnings"), list) else []
+    warning_text = escape("; ".join(str(warning) for warning in warnings[:2]) or "pygerber raster output is required for Board View.")
+    return f'<div class="render-error"><div><h3>Raster render unavailable</h3><p><code>{status}</code></p><p>{warning_text}</p></div></div>'
 
 
 def _preferred_artifact(records: list[dict[str, object]], artifact_type: str, preferred_names: list[str]) -> dict[str, object] | None:
@@ -706,6 +819,134 @@ def _compact_drill_geometry(record: dict[str, object], geometry: dict[str, objec
         "hit_count": geometry["hit_count"],
         "tools": geometry["tools"],
     }
+
+
+def _board_overlay_components(components: list[dict[str, object]], nets: list[dict[str, object]], limit: int = 90) -> list[dict[str, object]]:
+    placed_components = [component for component in components if isinstance(component.get("placement"), dict)]
+    if not placed_components:
+        return []
+    xs = [float(component["placement"].get("x_mil", 0.0)) for component in placed_components]
+    ys = [float(component["placement"].get("y_mil", 0.0)) for component in placed_components]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    width = max(max_x - min_x, 1.0)
+    height = max(max_y - min_y, 1.0)
+    pins_by_refdes = _pins_by_refdes(nets)
+    key_components = sorted(placed_components, key=_component_overlay_priority)
+    overlay = []
+    for component in key_components[:limit]:
+        placement = component.get("placement") if isinstance(component.get("placement"), dict) else {}
+        x_mil = float(placement.get("x_mil", 0.0))
+        y_mil = float(placement.get("y_mil", 0.0))
+        refdes = str(component.get("refdes", ""))
+        overlay.append(
+            {
+                "refdes": refdes,
+                "part_number": str(component.get("part_number") or placement.get("value") or ""),
+                "footprint": str(component.get("footprint") or ""),
+                "side": str(placement.get("side") or "unknown"),
+                "category": _component_overlay_category(refdes),
+                "x_mil": round(x_mil, 3),
+                "y_mil": round(y_mil, 3),
+                "left_percent": round(((x_mil - min_x) / width) * 100.0, 3),
+                "top_percent": round(100.0 - ((y_mil - min_y) / height) * 100.0, 3),
+                "pins": pins_by_refdes.get(refdes, [])[:24],
+            }
+        )
+    return overlay
+
+
+def _pins_by_refdes(nets: list[dict[str, object]]) -> dict[str, list[str]]:
+    pins: dict[str, list[str]] = {}
+    for net in nets:
+        net_name = str(net.get("name", "net"))
+        for pad in net.get("connected_pads", []):
+            pad_text = str(pad)
+            if "." not in pad_text or pad_text.startswith("VIA."):
+                continue
+            refdes, pin = pad_text.split(".", 1)
+            pins.setdefault(refdes, []).append(f"{pin} → {net_name}")
+    return {refdes: sorted(values) for refdes, values in pins.items()}
+
+
+def _component_net_fusion_summary(components: list[dict[str, object]], nets: list[dict[str, object]], sample_limit: int = 80) -> dict[str, object]:
+    pins_by_refdes = _pins_by_refdes(nets)
+    rows: list[dict[str, object]] = []
+    mapped_components = 0
+    for component in components:
+        refdes = str(component.get("refdes", "")).strip()
+        if not refdes:
+            continue
+        pin_net_entries = pins_by_refdes.get(refdes, [])
+        net_names = sorted({entry.split("→", 1)[1].strip() for entry in pin_net_entries if "→" in entry})
+        if pin_net_entries:
+            mapped_components += 1
+        placement = component.get("placement") if isinstance(component.get("placement"), dict) else {}
+        rows.append(
+            {
+                "refdes": refdes,
+                "part_number": str(component.get("part_number") or placement.get("value") or ""),
+                "pins": len(pin_net_entries),
+                "nets": len(net_names),
+                "sample_nets": net_names[:6],
+            }
+        )
+    rows.sort(key=lambda item: (-int(item.get("nets", 0)), -int(item.get("pins", 0)), str(item.get("refdes", ""))))
+    total_components = len(rows)
+    coverage_ratio = round((mapped_components / total_components), 3) if total_components else 0.0
+    return {
+        "total_components": total_components,
+        "mapped_components": mapped_components,
+        "coverage_ratio": coverage_ratio,
+        "components": rows[:sample_limit],
+    }
+
+
+def _component_fusion_row(component: dict[str, object]) -> str:
+    sample_nets = component.get("sample_nets") if isinstance(component.get("sample_nets"), list) else []
+    sample = ", ".join(str(net) for net in sample_nets[:6])
+    return (
+        "<tr>"
+        f"<td><code>{escape(str(component.get('refdes', '')))}</code></td>"
+        f"<td>{escape(str(component.get('part_number', '')))}</td>"
+        f"<td>{escape(str(component.get('pins', 0)))}</td>"
+        f"<td>{escape(str(component.get('nets', 0)))}</td>"
+        f"<td>{escape(sample)}</td>"
+        "</tr>"
+    )
+
+
+def _component_overlay_marker(component: dict[str, object]) -> str:
+    refdes = escape(str(component.get("refdes", "")))
+    side = escape(str(component.get("side", "unknown")))
+    category = escape(str(component.get("category", "other")))
+    left = float(component.get("left_percent", 0.0))
+    top = float(component.get("top_percent", 0.0))
+    title = escape(f"{component.get('refdes', '')} {component.get('part_number', '')}".strip())
+    return f'<button class="component-marker" type="button" data-refdes="{refdes}" data-side="{side}" data-category="{category}" title="{title}" style="left:{left:.3f}%;top:{top:.3f}%">{refdes}</button>'
+
+
+def _component_overlay_category(refdes: str) -> str:
+    upper = refdes.upper()
+    if upper.startswith(("U", "J", "ANT", "Y", "SW", "BT")):
+        return "major"
+    if upper.startswith(("D", "Q")):
+        return "active"
+    if upper.startswith("TP"):
+        return "testpoint"
+    if upper.startswith(("R", "C", "L", "FB")):
+        return "passive"
+    return "other"
+
+
+def _component_overlay_priority(component: dict[str, object]) -> tuple[int, str]:
+    refdes = str(component.get("refdes", ""))
+    category_order = {"major": 0, "active": 1, "other": 2, "passive": 3, "testpoint": 4}
+    return (category_order.get(_component_overlay_category(refdes), 9), refdes)
+
+
+def _js_string_literal(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'").replace("</", "<\\/")
 
 
 def _artifact_id(path: Path) -> str:
@@ -770,11 +1011,14 @@ def _artifact_preview(path: Path, artifact_type: str) -> dict[str, object]:
         return {"kind": "missing", "text": "Artifact file is missing."}
     if artifact_type == "gerber" and parse_gerber_file is not None:
         geometry = parse_gerber_file(path, sample_limit=120)
+        renderer = asdict(render_gerber_raster_with_pygerber(path, REPO_ROOT / ".artifacts" / "viewer" / "artifacts" / _artifact_id(path))) if render_gerber_raster_with_pygerber is not None else None
+        image_data_uri = _read_rendered_png_data_uri(renderer)
         return {
-            "kind": "gerber-geometry",
+            "kind": "gerber-raster" if image_data_uri else "gerber-geometry",
             "text": _gerber_summary_text(path, asdict(geometry)),
             "geometry": asdict(geometry),
-            "svg": render_geometry_svg(geometry, None) if render_geometry_svg is not None else "",
+            "renderer": renderer,
+            "image_data_uri": image_data_uri,
         }
     if artifact_type == "drill" and parse_drill_file is not None:
         geometry = parse_drill_file(path, sample_limit=180)
@@ -782,7 +1026,6 @@ def _artifact_preview(path: Path, artifact_type: str) -> dict[str, object]:
             "kind": "drill-geometry",
             "text": _drill_summary_text(path, asdict(geometry)),
             "geometry": asdict(geometry),
-            "svg": render_geometry_svg(None, geometry) if render_geometry_svg is not None else "",
         }
     if artifact_type in {"bom_placement", "ipc356", "routing_report", "gerber", "drill", "unknown"}:
         try:
@@ -798,7 +1041,8 @@ def _artifact_preview(path: Path, artifact_type: str) -> dict[str, object]:
 def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str:
     preview = _artifact_preview(Path(str(artifact["path"])), str(artifact["artifact_type"]))
     preview_text = escape(str(preview.get("text", "")))
-    preview_svg = str(preview.get("svg", ""))
+    preview_image = preview.get("image_data_uri", "")
+    visual_preview = f'<img class="raster-view" alt="Rendered Gerber artifact" src="{escape(str(preview_image))}" />' if preview_image else ""
     return """
     <!doctype html>
     <html lang="en">
@@ -811,8 +1055,8 @@ def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str
           a { color: #5de4c7; } code { color: #8ef6d2; }
           .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 18px 0; }
           .card { border: 1px solid #293943; border-radius: 14px; padding: 14px; background: #111a20; }
-          .geometry { border: 1px solid #293943; border-radius: 14px; padding: 12px; background: #07100d; overflow: auto; }
-          .geometry svg { width: 100%; min-width: 720px; height: auto; display: block; }
+          .geometry { border: 1px solid #293943; border-radius: 14px; padding: 12px; background: #07100d; overflow: auto; min-height: 120px; }
+          .raster-view { max-width: 100%; max-height: 70vh; object-fit: contain; display: block; margin: 0 auto; }
           pre { white-space: pre-wrap; border: 1px solid #293943; border-radius: 14px; padding: 16px; background: #111a20; overflow: auto; }
         </style>
       </head>
@@ -825,7 +1069,7 @@ def _render_artifact_viewer(project_id: str, artifact: dict[str, object]) -> str
           <div class="card"><strong>size</strong><br><code>""" + escape(str(artifact["size_bytes"])) + """ bytes</code></div>
           <div class="card"><strong>preview</strong><br><code>""" + escape(str(preview.get("kind", "unknown"))) + """</code></div>
         </div>
-        <div class="geometry">""" + preview_svg + """</div>
+        <div class="geometry">""" + visual_preview + """</div>
         <h2>Preview</h2>
         <pre>""" + preview_text + """</pre>
       </body>

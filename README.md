@@ -40,4 +40,4 @@ Published Web visibility requires both layers:
 
 ## Current State
 
-The current MVP parses Rockbox placement/BOM-like and IPC-356 fixture evidence into a `BoardDesign IR` summary, exposes it through MCP/API reconstruction handlers, and renders the summary at `/bodesign/`. Exact Gerber geometry rendering, full source reconstruction, and layout generation are still pending.
+The current MVP parses Rockbox placement/BOM-like and IPC-356 fixture evidence into a `BoardDesign IR` summary, exposes it through MCP/API reconstruction handlers, and renders the summary at `/bodesign/`. Board View can render a selected Rockbox Gerber layer through `pygerber` after Allegro header normalization, with the internal geometry SVG kept as a fallback. Multi-layer PCB viewing, full source reconstruction, and layout generation are still pending.
