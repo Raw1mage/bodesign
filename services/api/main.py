@@ -31,7 +31,7 @@ for package_root in PACKAGE_ROOTS:
 try:
     from bodesign_component_kb import build_component_knowledge_queue, ingest_datasheet_knowledge, reuse_component_knowledge
     from bodesign_doc_core import plan_openmv_document_ingestion
-    from bodesign_eda_bridge import build_kicad_native_extension_contract, plan_kicad_bridge
+    from bodesign_eda_bridge import build_footprint_map, build_kicad_native_extension_contract, openmv_package_queries, plan_kicad_bridge
     from bodesign_gerber_core import focus_svg_viewbox, parse_drill_file, parse_gerber_file, render_gerber_raster_with_pygerber, render_gerber_with_pygerber, render_geometry_svg, validate_gerber_export_placeholder
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, fuse_drill_and_ipc, reconstruct_rockbox_placeholder
@@ -45,6 +45,8 @@ except ImportError:
     plan_openmv_document_ingestion = None
     build_kicad_native_extension_contract = None
     plan_kicad_bridge = None
+    build_footprint_map = None
+    openmv_package_queries = None
     parse_drill_file = None
     parse_gerber_file = None
     focus_svg_viewbox = None
@@ -188,8 +190,28 @@ OPENMV_KICAD_SOURCE_FILES = [
     ("Generated STM32N657 symbol library", "libraries/symbols/openmv_generated.kicad_sym"),
     ("Generated subsystem schematic", "generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"),
     ("Generated subsystem project", "generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_pro"),
+    ("Package→footprint map", "libraries/footprint-map.json"),
     ("Gap & evidence report", "reports/openmv_n6_source_gaps.md"),
 ]
+
+
+def _openmv_footprint_map() -> list[dict[str, object]]:
+    if build_footprint_map is None or openmv_package_queries is None or not OPENMV_PLAN_DIR.exists():
+        return []
+    try:
+        result = build_footprint_map(openmv_package_queries(OPENMV_PLAN_DIR))
+    except Exception:  # pragma: no cover - footprint libs may be absent in stripped environments
+        return []
+    return [
+        {
+            "component_ref": entry.get("component_ref"),
+            "mpn": entry.get("mpn"),
+            "package": entry.get("package"),
+            "status": entry.get("status"),
+            "best_match": entry.get("best_match"),
+        }
+        for entry in result.get("entries", [])
+    ]
 
 
 OPENMV_NON_EVIDENCE_JSON = {".state.json", "openmv-n6-evidence-dashboard.json"}
@@ -210,6 +232,7 @@ def _openmv_evidence() -> dict[str, object]:
     )
     data = report.dashboard_data
     data["status"] = "available"
+    data["footprint_map"] = _openmv_footprint_map()
     data["kicad_source_files"] = [
         {
             "label": label,
@@ -267,6 +290,17 @@ def _render_openmv_evidence(data: dict[str, object]) -> str:
         for a in (data.get("artifacts") or [])
     )
 
+    footprint_rows = "".join(
+        f'<tr><td>{escape(str(f.get("component_ref","")))}</td><td><code>{escape(str(f.get("mpn","")))}</code></td>'
+        f'<td>{escape(str(f.get("package","")))}</td><td>{escape(str(f.get("status","")))}</td>'
+        f'<td><code>{escape(str(f.get("best_match") or "—"))}</code></td></tr>'
+        for f in (data.get("footprint_map") or [])
+    )
+    footprint_section = (
+        '<h2>Package → footprint map</h2><table><thead><tr><th>Ref</th><th>MPN</th><th>Package</th>'
+        '<th>Status</th><th>Best candidate</th></tr></thead><tbody>' + footprint_rows + '</tbody></table>'
+    ) if footprint_rows else ""
+
     file_rows = "".join(
         f'<tr><td>{escape(str(f.get("label","")))}</td><td><code>{escape(str(f.get("path","")))}</code></td>'
         f'<td>{"✓" if f.get("exists") else "—"}</td><td>{escape(str(f.get("bytes",0)))}</td></tr>'
@@ -307,6 +341,7 @@ def _render_openmv_evidence(data: dict[str, object]) -> str:
   """ + (gap_sections or "<p class=\"muted\">none</p>") + """
   <h2>Generated KiCad source files</h2>
   <table><thead><tr><th>File</th><th>Path</th><th>Present</th><th>Bytes</th></tr></thead><tbody>""" + file_rows + """</tbody></table>
+  """ + footprint_section + """
   <h2>Per-artifact summary</h2>
   <table><thead><tr><th>Artifact</th><th>Role</th><th>Confidence</th><th>Open</th><th>Blocking</th></tr></thead><tbody>""" + artifact_rows + """</tbody></table>
   <p class="muted">Data computed live from package evidence artifacts via <code>/bodesign/api/openmv/evidence</code>.</p>

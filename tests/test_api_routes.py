@@ -640,6 +640,10 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         files = {f["path"]: f for f in data["kicad_source_files"]}
         self.assertTrue(files["libraries/symbols/openmv_generated.kicad_sym"]["exists"])
         self.assertTrue(files["generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"]["exists"])
+        # package -> footprint map (R3): honest match for the flash, gap for the 223-ball MCU
+        fp = {entry["component_ref"]: entry for entry in data["footprint_map"]}
+        self.assertEqual("no-stdlib-footprint-gap", fp["U5"]["status"])
+        self.assertEqual("candidate-match-needs-verification", fp["U7"]["status"])
 
     def test_openmv_evidence_page_renders_key_sections(self):
         install_fastapi_stub()
@@ -652,6 +656,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("reusable-as-source-evidence-with-gaps", html)
         self.assertIn("Generated KiCad source files", html)
         self.assertIn("openmv_generated.kicad_sym", html)
+        self.assertIn("Package → footprint map", html)
         self.assertIn("Per-artifact summary", html)
 
 
