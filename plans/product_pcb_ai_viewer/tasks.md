@@ -47,6 +47,7 @@ Everything else is **orchestrated** via skills (`kicad`/`kidoc`/`emc`/`spice`/`d
 - [ ] **G4 PRD/doc emitter (N5)** — structured PRD/report → docx/pdf companion (orchestrate libreoffice). *Unblocked.*
 - [ ] **G5 Pin/GPIO allocation table (N14)** — the C03↔C05 (FW) interface doc, from net/pin evidence. *Unblocked.*
 - [ ] **G6 Per-part symbol harvest (N7/N8 generalize)** — datasheet pinout → symbol for V1 parts beyond STM32N657/MX25 (orchestrate `datasheets`). Feeds G3. *Unblocked.*
+- [x] **G7 Reference cross-check — the trust layer** (user insight): the circuit design is a black box to a non-EE owner, so reliability is *demonstrated* by comparing bodesign's output against a known-good shipped product (OpenMV/Rockbox) as a **control group**. `workflow-core.reference_crosscheck` compares net sets → matched (confidence) / missing (reliability gap) / extra (novel, verify) + coverage % + provenance to the reference schematic. Verified: generated flash XSPI vs OpenMV = **75% (12/16), missing CLK_N/WP#/INT#/RSTO#**, traceable to `OpenMV-N6-Schematic-Rev4.pdf p.7`. Agreement = faithful reuse (high confidence for V1=OpenMV); deviations still need the analysis skills/EE. Pairs with G2 readiness as the "is it reliable + complete?" answer.
 
 The R1–R10 roadmap below is largely absorbed into this gap queue + the orchestrated skills; kept for history.
 

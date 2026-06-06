@@ -27,6 +27,13 @@ from .package_readiness import (
     assess_package_readiness,
     render_readiness_markdown,
 )
+from .reference_crosscheck import (
+    ReferenceCheck,
+    crosscheck_nets,
+    extract_schematic_net_labels,
+    reference_nets_from_component_knowledge,
+    render_crosscheck_markdown,
+)
 
 __all__ = [
     "CandidateDiffItem",
@@ -34,7 +41,12 @@ __all__ = [
     "DeliverableStatus",
     "DesignIntentPlan",
     "PackageReadiness",
+    "ReferenceCheck",
     "assess_package_readiness",
+    "crosscheck_nets",
+    "extract_schematic_net_labels",
+    "reference_nets_from_component_knowledge",
+    "render_crosscheck_markdown",
     "render_readiness_markdown",
     "EvidenceArtifactSummary",
     "ExtractedRequirement",
