@@ -280,28 +280,96 @@ def run_tool(name: str, arguments: dict) -> dict:
 # ── Self-documenting landing page ──────────────────────────────────────
 # Orchestrated skills (run agent-side / on the server host; not bundled in the
 # container image) that bodesign drives for analysis / docs / sim / sourcing / fab.
+# (name, en, zh-Hant)
 ORCHESTRATED_SKILLS = [
-    ("kicad", "Schematic/PCB/Gerber analysis — ERC/DRC, netlist, power tree, subcircuit detection. Consumed by simulate/EMC."),
-    ("kidoc", "Engineering doc packages — HDD, CE technical file, ICD, design-review, manufacturing-transfer; renders + diagrams."),
-    ("spice", "ngspice simulation of detected subcircuits (filters, dividers, opamp, crystal). Driven by bodesign_simulate."),
-    ("emc", "EMC pre-compliance risk analysis (FCC/CISPR). Driven by bodesign_analyze_emc."),
-    ("datasheets", "Extract pinouts/specs from datasheet PDFs → feeds symbol generation (N7)."),
-    ("bom / digikey / lcsc / element14 / mouser", "Part sourcing, pricing, stock, datasheet download."),
-    ("jlcpcb / pcbway", "Fabrication + assembly ordering, DFM rules."),
+    ("kicad", "Schematic/PCB/Gerber analysis — ERC/DRC, netlist, power tree, subcircuit detection. Consumed by simulate/EMC.", "原理圖／PCB／Gerber 分析 — ERC/DRC、網表、電源樹、子電路偵測。供 simulate/EMC 使用。"),
+    ("kidoc", "Engineering doc packages — HDD, CE technical file, ICD, design-review, manufacturing-transfer; renders + diagrams.", "工程文件包 — HDD、CE 技術文件、ICD、設計審查、製造移轉；含渲染與框圖。"),
+    ("spice", "ngspice simulation of detected subcircuits (filters, dividers, opamp, crystal). Driven by bodesign_simulate.", "以 ngspice 模擬偵測到的子電路（濾波、分壓、運放、晶振）。由 bodesign_simulate 驅動。"),
+    ("emc", "EMC pre-compliance risk analysis (FCC/CISPR). Driven by bodesign_analyze_emc.", "EMC 預兼容風險分析（FCC/CISPR）。由 bodesign_analyze_emc 驅動。"),
+    ("datasheets", "Extract pinouts/specs from datasheet PDFs → feeds symbol generation (N7).", "從 datasheet PDF 抽取腳位／規格 → 供符號生成（N7）。"),
+    ("bom / digikey / lcsc / element14 / mouser", "Part sourcing, pricing, stock, datasheet download.", "零件採購、報價、庫存、datasheet 下載。"),
+    ("jlcpcb / pcbway", "Fabrication + assembly ordering, DFM rules.", "製造＋組裝下單、DFM 規則。"),
 ]
 
+# (en_head, en_body, zh_head, zh_body)
 WORKFLOW_STEPS = [
-    ("1. Ingest", "Upload your project tree (tarball→token) or point at a folder; <code>bodesign_ingest_project</code> classifies files + flags non-readable ones."),
-    ("2. Plan", "<code>bodesign_plan_design_intent</code> turns a natural-language spec into requirements, clarifying questions, and subsystems."),
-    ("3. Source evidence", "<code>bodesign_evidence_manifest</code> grounds each part in a reference (local corpus first), so design = faithful reuse of known-good boards."),
-    ("4. Symbols", "<code>bodesign_emit_symbol</code> turns a datasheet pinout into a KiCad symbol (harvest via the datasheets skill)."),
-    ("5. Compose + ERC", "<code>bodesign_compose_schematic</code> auto-places components + nets → a kicad-cli-validated schematic (0 ERC)."),
-    ("6. BOM + pins", "<code>bodesign_export_bom</code> (grouped, MPN) + <code>bodesign_pin_allocation</code> (the C03↔firmware interface)."),
-    ("7. Layout", "<code>bodesign_emit_layout</code> places footprints via pcbnew + DRC + an SVG companion (a starting board to route)."),
-    ("8. Fab", "<code>bodesign_emit_fab</code> exports gerbers/drill/pos/STEP/PDF for the factory."),
-    ("9. Verify", "Four layers: ERC/DRC · <code>reference_crosscheck</code> vs a control group · <code>simulate</code> (SPICE) · <code>analyze_emc</code>/<code>analyze_thermal</code>."),
-    ("10. Track", "<code>bodesign_package_readiness</code> recomputes the compass + next step until the package is factory-submittable."),
+    ("1. Ingest", "Upload your project tree (tarball→token) or point at a folder; <code>bodesign_ingest_project</code> classifies files + flags non-readable ones.",
+     "1. 匯入", "上傳專案樹（tarball→token）或指定資料夾；<code>bodesign_ingest_project</code> 分類檔案並標記不可讀者。"),
+    ("2. Plan", "<code>bodesign_plan_design_intent</code> turns a natural-language spec into requirements, clarifying questions, and subsystems.",
+     "2. 規劃", "<code>bodesign_plan_design_intent</code> 把自然語言規格轉成需求、釐清問題與子系統。"),
+    ("3. Source evidence", "<code>bodesign_evidence_manifest</code> grounds each part in a reference (local corpus first), so design = faithful reuse of known-good boards.",
+     "3. 蒐集證據", "<code>bodesign_evidence_manifest</code> 將每個零件對應到參考設計（本地語料優先），使設計＝忠實重用良品。"),
+    ("4. Symbols", "<code>bodesign_emit_symbol</code> turns a datasheet pinout into a KiCad symbol (harvest via the datasheets skill).",
+     "4. 符號", "<code>bodesign_emit_symbol</code> 把 datasheet 腳位轉成 KiCad 符號（透過 datasheets skill 採集）。"),
+    ("5. Compose + ERC", "<code>bodesign_compose_schematic</code> auto-places components + nets → a kicad-cli-validated schematic (0 ERC).",
+     "5. 組成＋ERC", "<code>bodesign_compose_schematic</code> 自動佈點＋接線 → 經 kicad-cli 驗證的原理圖（0 ERC）。"),
+    ("6. BOM + pins", "<code>bodesign_export_bom</code> (grouped, MPN) + <code>bodesign_pin_allocation</code> (the C03↔firmware interface).",
+     "6. BOM＋腳位", "<code>bodesign_export_bom</code>（分組、MPN）＋ <code>bodesign_pin_allocation</code>（C03↔韌體介面）。"),
+    ("7. Layout", "<code>bodesign_emit_layout</code> places footprints via pcbnew + DRC + an SVG companion (a starting board to route).",
+     "7. 佈局", "<code>bodesign_emit_layout</code> 以 pcbnew 擺放 footprint＋DRC＋SVG 伴隨檔（待繞線的起手板）。"),
+    ("8. Fab", "<code>bodesign_emit_fab</code> exports gerbers/drill/pos/STEP/PDF for the factory.",
+     "8. 製造", "<code>bodesign_emit_fab</code> 匯出 gerber／鑽孔／pos／STEP／PDF 給工廠。"),
+    ("9. Verify", "Four layers: ERC/DRC · <code>reference_crosscheck</code> vs a control group · <code>simulate</code> (SPICE) · <code>analyze_emc</code>/<code>analyze_thermal</code>.",
+     "9. 驗證", "四層：ERC/DRC・對照組 <code>reference_crosscheck</code>・SPICE <code>simulate</code>・<code>analyze_emc</code>／<code>analyze_thermal</code>。"),
+    ("10. Track", "<code>bodesign_package_readiness</code> recomputes the compass + next step until the package is factory-submittable.",
+     "10. 追蹤", "<code>bodesign_package_readiness</code> 重算羅盤與下一步，直到文件包可送廠。"),
 ]
+
+# UI string table (en / zh-Hant). i18n: lang from ?lang= or Accept-Language.
+I18N = {
+    "lead": ("An AI PCB-design copilot, delivered as an MCP server (docxmcp-style). Drive the full KiCad lifecycle — schematic → layout → fab — by conversation + raw data: ingest a project tree, plan, generate symbols/schematics, lay out, export fab files, and verify, all validated against KiCad and a known-good reference.",
+             "AI 電路設計副駕，以 MCP server 形式交付（比照 docxmcp）。透過對談與提交原始資料，驅動完整 KiCad 生命週期 — 原理圖 → 佈局 → 製造：匯入專案樹、規劃、生成符號／原理圖、佈局、匯出製造檔、驗證，全程以 KiCad 與已知良品對照驗證。"),
+    "pill_tools": ("tools", "工具"),
+    "sec_arch": ("Architecture — IDEF0 functional decomposition", "架構總覽 — IDEF0 功能分解"),
+    "sec_endpoints": ("Endpoints", "連線端點"),
+    "sec_install": ("Install &amp; run", "安裝與啟動"),
+    "sec_filemodel": ("File model (docxmcp-style)", "檔案模型（docxmcp 風格）"),
+    "sec_workflow": ("Circuit-design workflow", "電路設計工作流"),
+    "sec_skills": ("Skill packages it orchestrates", "編排的 skill 套件"),
+    "sec_tools": ("Tools", "工具"),
+    "install_docker": ("<b>Docker (portable, recommended)</b> — bundles KiCad 9 + LibreOffice + pygerber + the mcp SDK:",
+                       "<b>Docker（可攜，建議）</b> — 內建 KiCad 9 + LibreOffice + pygerber + mcp SDK："),
+    "install_host": ("<b>Host (no Docker)</b> — needs kicad-cli + pcbnew + soffice + ngspice on PATH:",
+                     "<b>本機（免 Docker）</b> — 需 PATH 上有 kicad-cli + pcbnew + soffice + ngspice："),
+    "install_register": ("<b>Register in an MCP client</b> (see <code>mcp.json</code>): transport <code>streamable-http</code>, url <code>unix://…/bodesign.sock:/mcp/</code> (local) or <code>http://&lt;host&gt;:{port}/mcp/</code> (TCP).",
+                         "<b>在 MCP client 註冊</b>（見 <code>mcp.json</code>）：transport <code>streamable-http</code>，url <code>unix://…/bodesign.sock:/mcp/</code>（本機）或 <code>http://&lt;host&gt;:{port}/mcp/</code>（TCP）。"),
+    "file_body": ("Upload your whole project tree as a tarball → a <b>token</b> whose <code>doc_dir</code> is your tree; pass <code>token</code> to any tool (its path args resolve inside it) and download produced files by token. No host bind mount needed.",
+                  "把整個專案樹以 tarball 上傳 → 取得 <b>token</b>（其 <code>doc_dir</code> 即你的樹）；將 <code>token</code> 傳給任何工具（路徑參數在樹內解析），再依 token 下載產物。免主機 bind mount。"),
+    "file_stage": ("Or stage inline with the <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.",
+                   "或用 <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> 工具以 inline 方式上傳。工具也接受本機路徑（同機 UDS）。"),
+    "caveat": ("Reliability is <b>shown, not asserted</b>: bodesign cross-checks against a known-good shipped board (control group) and runs SPICE/EMC. These are pre-silicon risk layers — they do not replace accredited EMC / EVT / DVT at the lab/factory, and no send-to-fab output is emitted without validation + explicit approval.",
+               "可靠度是「<b>展示，而非宣稱</b>」：bodesign 以已量產良品（對照組）交叉檢核並執行 SPICE/EMC。這些是矽前風險層，無法取代實驗室／工廠的 EMC／EVT／DVT 認證；未經驗證與明確批准不會輸出送廠檔案。"),
+    "skills_intro": ("bodesign generates; mature skills verify/source/document. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>); install the ones you need:",
+                     "bodesign 負責生成；成熟 skills 負責驗證／採購／文件。它們在 agent 端執行（或在 server 主機，透過 <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>）；按需安裝："),
+    "tools_full": ("full call schemas →", "完整呼叫 schema →"),
+    "idx_crumb": ("tools", "工具"),
+    "idx_title": ("Tool catalog", "工具目錄"),
+    "idx_lead": ("Click a tool for its full MCP <code>inputSchema</code> and a ready-to-send <code>tools/call</code> payload.",
+                 "點擊工具以檢視完整 MCP <code>inputSchema</code> 與可直接送出的 <code>tools/call</code> 範例。"),
+    "th_tool": ("Tool", "工具"), "th_desc": ("Description", "說明"), "th_required": ("Required", "必填"),
+    "th_name": ("Name", "名稱"), "th_type": ("Type", "型別"),
+    "det_params": ("Parameters", "參數"),
+    "det_schema": ("inputSchema (JSON Schema)", "inputSchema（JSON Schema）"),
+    "det_payload": ("tools/call payload", "tools/call 範例"),
+    "det_back": ("← back to catalog", "← 返回目錄"),
+    "req": ("required", "必填"), "opt": ("optional", "選填"),
+    "unknown": ("Unknown tool", "未知工具"),
+    "unknown_body": ("is not registered.", "未註冊。"),
+}
+
+
+def _t(key: str, lang: str) -> str:
+    pair = I18N[key]
+    return pair[1] if lang == "zh" else pair[0]
+
+
+def _lang_of(request) -> str:
+    q = (request.query_params.get("lang") or "").lower()
+    if q.startswith("zh"):
+        return "zh"
+    if q == "en":
+        return "en"
+    return "zh" if "zh" in request.headers.get("accept-language", "").lower() else "en"
 
 
 _CSS = """
@@ -336,21 +404,30 @@ def _base() -> str:
     return os.environ.get("BODESIGN_HTTP_BASE", "").rstrip("/")
 
 
-def _page(title: str, inner: str) -> str:
-    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
+def _page(title: str, inner: str, lang: str = "en") -> str:
+    htmllang = "zh-Hant" if lang == "zh" else "en"
+    on = ' style="color:var(--accent);font-weight:700"'
+    toggle = ('<div style="text-align:right;font-size:.85rem;margin-bottom:6px">'
+              f'<a href="?lang=en"{on if lang != "zh" else ""}>EN</a> · '
+              f'<a href="?lang=zh"{on if lang == "zh" else ""}>繁中</a></div>')
+    return (f'<!doctype html><html lang="{htmllang}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>'
-            f'<style>{_CSS}</style></head><body><main>{inner}</main></body></html>')
+            f'<style>{_CSS}</style></head><body><main>{toggle}{inner}</main></body></html>')
 
 
-def _landing_html(uds_path: str | None = None, tcp_port: int | None = None) -> str:
+def _landing_html(uds_path: str | None = None, tcp_port: int | None = None, lang: str = "en") -> str:
     import html
 
     def esc(x):
         return html.escape(str(x))
 
+    def L(k):
+        return _t(k, lang)
+
     uds = uds_path or "<server>.run/bodesign.sock"
     port = tcp_port or 8077
     b = _base()
+    req_label = L("th_required")
 
     tool_cards = []
     for t in TOOLS:
@@ -358,64 +435,73 @@ def _landing_html(uds_path: str | None = None, tcp_port: int | None = None) -> s
         tool_cards.append(
             f'<div class="tool"><div class="tname"><a href="{b}/tools/{esc(t["name"])}">{esc(t["name"])}</a></div>'
             f'<div class="tdesc">{esc(t["description"])}</div>'
-            f'<div class="treq">required: {req}</div></div>'
+            f'<div class="treq">{req_label}: {req}</div></div>'
         )
-    skills = "".join(f"<li><b>{esc(n)}</b> — {esc(d)}</li>" for n, d in ORCHESTRATED_SKILLS)
-    workflow = "".join(f'<div class="step"><div class="sh">{esc(h)}</div><div class="sb">{b}</div></div>' for h, b in WORKFLOW_STEPS)
+    skills = "".join(f"<li><b>{esc(n)}</b> — {esc(zh if lang == 'zh' else en)}</li>"
+                     for n, en, zh in ORCHESTRATED_SKILLS)
+    workflow = "".join(
+        f'<div class="step"><div class="sh">{esc(zh_h if lang == "zh" else eh)}</div>'
+        f'<div class="sb">{zb if lang == "zh" else eb}</div></div>'
+        for eh, eb, zh_h, zb in WORKFLOW_STEPS)
 
     inner = f"""
 <h1>bodesign <span style="color:var(--accent)">MCP</span></h1>
-<p class="lead">An AI PCB-design copilot, delivered as an MCP server (docxmcp-style). Drive the full KiCad lifecycle — schematic → layout → fab — by conversation + raw data: ingest a project tree, plan, generate symbols/schematics, lay out, export fab files, and verify, all validated against KiCad and a known-good reference.</p>
-<p><span class="pill">{len(TOOLS)} tools</span><span class="pill">v{esc(SERVER_VERSION)}</span><span class="pill">MCP Streamable HTTP</span><span class="pill">UDS + TCP</span><span class="pill">token file API</span></p>
+<p class="lead">{L('lead')}</p>
+<p><span class="pill">{len(TOOLS)} {L('pill_tools')}</span><span class="pill">v{esc(SERVER_VERSION)}</span><span class="pill">MCP Streamable HTTP</span><span class="pill">UDS + TCP</span><span class="pill">token file API</span></p>
 
-<h2>Endpoints</h2>
+<h2>{L('sec_arch')}</h2>
+<div class="card"><img src="{b}/idef0.svg" alt="bodesign IDEF0" style="width:100%;background:#fff;border-radius:10px;padding:10px"></div>
+
+<h2>{L('sec_endpoints')}</h2>
 <div class="card">
 <p>MCP: <code>POST /mcp/</code> · Files: <code>POST /files</code>, <code>GET /files/{{token}}/blob/{{rel}}</code> · Health: <code>GET /healthz</code></p>
 <p><b>Local (UDS):</b> <code>unix://{esc(uds)}:/mcp/</code><br><b>External (TCP):</b> <code>http://&lt;host&gt;:{port}/mcp/</code></p>
 </div>
 
-<h2>Install &amp; run</h2>
+<h2>{L('sec_install')}</h2>
 <div class="card">
-<p><b>Docker (portable, recommended)</b> — bundles KiCad 9 + LibreOffice + pygerber + the mcp SDK:</p>
+<p>{L('install_docker')}</p>
 <pre>./mcpctl.sh start        # build image + start container (UDS + TCP :{port})
-./mcpctl.sh status       # health + socket
-./mcpctl.sh log          # follow logs
+./mcpctl.sh status
+./mcpctl.sh log
 ./mcpctl.sh stop</pre>
-<p><b>Host (no Docker)</b> — needs kicad-cli + pcbnew + soffice + ngspice on PATH:</p>
+<p>{L('install_host')}</p>
 <pre>pip install -r services/mcp/requirements.txt
 python services/mcp/server.py --transport http --uds .run/bodesign.sock --port {port}</pre>
-<p><b>Register in an MCP client</b> (see <code>mcp.json</code>): transport <code>streamable-http</code>, url <code>unix://…/bodesign.sock:/mcp/</code> (local) or <code>http://&lt;host&gt;:{port}/mcp/</code> (TCP).</p>
+<p>{L('install_register').format(port=port)}</p>
 </div>
 
-<h2>File model (docxmcp-style)</h2>
+<h2>{L('sec_filemodel')}</h2>
 <div class="card">
-<p>Upload your whole project tree as a tarball → a <b>token</b> whose <code>doc_dir</code> is your tree; pass <code>token</code> to any tool (its path args resolve inside it) and download produced files by token. No host bind mount needed.</p>
+<p>{L('file_body')}</p>
 <pre>tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \\
      -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
-# → {{"token":"tok_…","doc_dir":"…","files":[…]}}
 curl --unix-socket .run/bodesign.sock http://bd/files/{{token}}/blob/{{rel}}</pre>
-<p>Or stage inline with the <a href="{b}/tools/bodesign_stage_dir"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.</p>
+<p>{L('file_stage').format(b=b)}</p>
 </div>
 
-<h2>Circuit-design workflow</h2>
+<h2>{L('sec_workflow')}</h2>
 <div class="card">{workflow}</div>
-<p class="warn">Reliability is <b>shown, not asserted</b>: bodesign cross-checks against a known-good shipped board (control group) and runs SPICE/EMC. These are pre-silicon risk layers — they do not replace accredited EMC / EVT / DVT at the lab/factory, and no send-to-fab output is emitted without validation + explicit approval.</p>
+<p class="warn">{L('caveat')}</p>
 
-<h2>Skill packages it orchestrates</h2>
-<div class="card"><p>bodesign generates; mature skills verify/source/document. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>); install the ones you need:</p>
+<h2>{L('sec_skills')}</h2>
+<div class="card"><p>{L('skills_intro')}</p>
 <ul>{skills}</ul></div>
 
-<h2>Tools ({len(TOOLS)}) — <a href="{b}/tools">full call schemas →</a></h2>
+<h2>{L('sec_tools')} ({len(TOOLS)}) — <a href="{b}/tools">{L('tools_full')}</a></h2>
 <div class="grid">{''.join(tool_cards)}</div>
 """
-    return _page("bodesign MCP", inner)
+    return _page("bodesign MCP", inner, lang)
 
 
-def _tools_index_html() -> str:
+def _tools_index_html(lang: str = "en") -> str:
     import html
 
     def esc(x):
         return html.escape(str(x))
+
+    def L(k):
+        return _t(k, lang)
 
     b = _base()
     rows = []
@@ -423,26 +509,29 @@ def _tools_index_html() -> str:
         req = ", ".join(f"<code>{esc(r)}</code>" for r in (t["schema"].get("required") or [])) or "—"
         rows.append(f'<tr><td><a href="{b}/tools/{esc(t["name"])}">{esc(t["name"])}</a></td>'
                     f'<td>{esc(t["description"])}</td><td>{req}</td></tr>')
-    inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / tools</p>'
-             f'<h1>Tool catalog <span style="color:var(--muted);font-size:1rem">({len(TOOLS)})</span></h1>'
-             f'<p class="lead">Click a tool for its full MCP <code>inputSchema</code> and a ready-to-send <code>tools/call</code> payload.</p>'
-             f'<div class="card"><table><tr><th>Tool</th><th>Description</th><th>Required</th></tr>{"".join(rows)}</table></div>')
-    return _page("bodesign MCP — tools", inner)
+    inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / {L("idx_crumb")}</p>'
+             f'<h1>{L("idx_title")} <span style="color:var(--muted);font-size:1rem">({len(TOOLS)})</span></h1>'
+             f'<p class="lead">{L("idx_lead")}</p>'
+             f'<div class="card"><table><tr><th>{L("th_tool")}</th><th>{L("th_desc")}</th><th>{L("th_required")}</th></tr>{"".join(rows)}</table></div>')
+    return _page("bodesign MCP — tools", inner, lang)
 
 
-def _tool_detail_html(name: str) -> str:
+def _tool_detail_html(name: str, lang: str = "en") -> str:
     import html
 
     def esc(x):
         return html.escape(str(x))
 
+    def L(k):
+        return _t(k, lang)
+
     b = _base()
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
-        inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / <a href="{b}/tools">tools</a> / {esc(name)}</p>'
-                 f'<h1>Unknown tool</h1><p class="lead"><code>{esc(name)}</code> is not registered. '
-                 f'<a href="{b}/tools">See the catalog →</a></p>')
-        return _page("bodesign MCP — unknown tool", inner)
+        inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / <a href="{b}/tools">{L("idx_crumb")}</a> / {esc(name)}</p>'
+                 f'<h1>{L("unknown")}</h1><p class="lead"><code>{esc(name)}</code> {L("unknown_body")} '
+                 f'<a href="{b}/tools">{L("det_back")}</a></p>')
+        return _page("bodesign MCP — unknown tool", inner, lang)
 
     schema = spec["schema"]
     props = schema.get("properties", {})
@@ -450,20 +539,21 @@ def _tool_detail_html(name: str) -> str:
     prop_rows = []
     for pname, pdef in props.items():
         typ = pdef.get("type", "any") if isinstance(pdef, dict) else "any"
-        tag = '<span class="req">required</span>' if pname in required else '<span class="opt">optional</span>'
+        tag = (f'<span class="req">{L("req")}</span>' if pname in required
+               else f'<span class="opt">{L("opt")}</span>')
         prop_rows.append(f"<tr><td><code>{esc(pname)}</code></td><td>{esc(typ)}</td><td>{tag}</td></tr>")
     schema_json = esc(json.dumps(schema, indent=2, ensure_ascii=False))
-    example_args = {p: ("…" if p in required else "…") for p in list(required)[:4]} or {"…": "…"}
+    example_args = {p: "…" for p in list(required)[:4]} or {"…": "…"}
     call_payload = esc(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                                    "params": {"name": name, "arguments": example_args}}, indent=2, ensure_ascii=False))
-    inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / <a href="{b}/tools">tools</a> / {esc(name)}</p>'
+    inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / <a href="{b}/tools">{L("idx_crumb")}</a> / {esc(name)}</p>'
              f'<h1 style="font-family:ui-monospace,monospace;color:var(--accent)">{esc(name)}</h1>'
              f'<p class="lead">{esc(spec["description"])}</p>'
-             f'<h2>Parameters</h2><div class="card"><table><tr><th>Name</th><th>Type</th><th></th></tr>{"".join(prop_rows) or "<tr><td>—</td></tr>"}</table></div>'
-             f'<h2>inputSchema (JSON Schema)</h2><pre>{schema_json}</pre>'
-             f'<h2>tools/call payload</h2><pre>{call_payload}</pre>'
-             f'<p class="crumb"><a href="{b}/tools">← back to catalog</a></p>')
-    return _page(f"bodesign MCP — {name}", inner)
+             f'<h2>{L("det_params")}</h2><div class="card"><table><tr><th>{L("th_name")}</th><th>{L("th_type")}</th><th></th></tr>{"".join(prop_rows) or "<tr><td>—</td></tr>"}</table></div>'
+             f'<h2>{L("det_schema")}</h2><pre>{schema_json}</pre>'
+             f'<h2>{L("det_payload")}</h2><pre>{call_payload}</pre>'
+             f'<p class="crumb"><a href="{b}/tools">{L("det_back")}</a></p>')
+    return _page(f"bodesign MCP — {name}", inner, lang)
 
 
 # ── MCP server wiring ──────────────────────────────────────────────────
@@ -519,14 +609,21 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
     async def healthz(request: Request) -> Response:
         return JSONResponse({"status": "ok", "service": SERVER_NAME, "tools": len(TOOLS)})
 
+    async def idef0_svg(request: Request) -> Response:
+        svg = Path(__file__).resolve().parent / "assets" / "idef0.zh.svg"
+        if not svg.is_file():
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        return Response(svg.read_text(encoding="utf-8"), media_type="image/svg+xml",
+                        headers={"Cache-Control": "no-store"})
+
     async def landing(request: Request) -> Response:
-        return Response(_landing_html(uds, port), media_type="text/html; charset=utf-8")
+        return Response(_landing_html(uds, port, _lang_of(request)), media_type="text/html; charset=utf-8")
 
     async def tools_index(request: Request) -> Response:
-        return Response(_tools_index_html(), media_type="text/html; charset=utf-8")
+        return Response(_tools_index_html(_lang_of(request)), media_type="text/html; charset=utf-8")
 
     async def tool_detail(request: Request) -> Response:
-        return Response(_tool_detail_html(request.path_params["name"]), media_type="text/html; charset=utf-8")
+        return Response(_tool_detail_html(request.path_params["name"], _lang_of(request)), media_type="text/html; charset=utf-8")
 
     async def upload_file(request: Request) -> Response:
         """POST /files — ingest a file tree into a fresh token namespace.
@@ -568,6 +665,7 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         Route("/", landing),
         Route("/tools", tools_index),
         Route("/tools/{name}", tool_detail),
+        Route("/idef0.svg", idef0_svg),
         Route("/healthz", healthz),
         Route("/files", upload_file, methods=["POST"]),
         Route("/files/{token}/blob/{rel:path}", get_blob),

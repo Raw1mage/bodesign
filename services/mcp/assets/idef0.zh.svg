@@ -1,0 +1,72 @@
+<svg width="1860.1" height="841.8" viewBox="-332.6 -170.0 1860.1 841.8" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="black" /></marker>
+<marker id="call_arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 M 0 2 L 6 5 L 0 8" fill="none" stroke="black" stroke-width="1" /></marker>
+</defs>
+<rect x="-332.6" y="-170.0" width="1860.1" height="841.8" fill="white" />
+<rect x="130.0" y="120.0" width="200.0" height="160.0" stroke="black" fill="white" stroke-width="1.5" data-id="A1" />
+<text x="230.0" y="158.0" text-anchor="middle" font-size="23" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >A1</text>
+<text x="230.0" y="200.8" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >匯入專案與</text>
+<text x="230.0" y="247.7" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >需求規劃</text>
+<rect x="470.0" y="120.0" width="200.0" height="160.0" stroke="black" fill="white" stroke-width="1.5" data-id="A2" />
+<text x="570.0" y="158.0" text-anchor="middle" font-size="23" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >A2</text>
+<text x="570.0" y="200.8" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >蒐集參考</text>
+<text x="570.0" y="247.7" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >設計證據</text>
+<rect x="825.0" y="120.0" width="200.0" height="160.0" stroke="black" fill="white" stroke-width="1.5" data-id="A3" />
+<text x="925.0" y="158.0" text-anchor="middle" font-size="23" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >A3</text>
+<text x="925.0" y="200.8" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >產生符號</text>
+<text x="925.0" y="247.7" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >與原理圖</text>
+<rect x="130.0" y="420.0" width="200.0" height="160.0" stroke="black" fill="white" stroke-width="1.5" data-id="A4" />
+<text x="230.0" y="480.4" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >A4</text>
+<text x="230.0" y="526.1" text-anchor="middle" font-size="27" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >佈局與製造輸出</text>
+<rect x="470.0" y="420.0" width="200.0" height="160.0" stroke="black" fill="white" stroke-width="1.5" data-id="A5" />
+<text x="570.0" y="468.1" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >A5</text>
+<text x="570.0" y="501.0" text-anchor="middle" font-size="18" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >驗證（ERC/DRC・對</text>
+<text x="570.0" y="534.7" text-anchor="middle" font-size="18" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >照組・SPICE・EMC）</text>
+<rect x="825.0" y="420.0" width="200.0" height="160.0" stroke="black" fill="white" stroke-width="1.5" data-id="A6" />
+<text x="925.0" y="458.0" text-anchor="middle" font-size="23" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A6" >A6</text>
+<text x="925.0" y="500.8" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A6" >文件產出與</text>
+<text x="925.0" y="547.7" text-anchor="middle" font-size="25" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A6" >就緒度追蹤</text>
+<rect x="40.0" y="40.0" width="1115.0" height="621.8" stroke="black" fill="none" stroke-width="2" />
+<rect x="403.0" y="-160.0" width="389.0" height="110.0" stroke="black" fill="white" stroke-width="1.5" data-id="A0" />
+<text x="597.5" y="-134.0" text-anchor="middle" font-size="14" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >A0</text>
+<text x="597.5" y="-104.0" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >BODESIGN：AI 電路設計</text>
+<text x="597.5" y="-74.0" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >MCP 功能分解（IDEF0）</text>
+<line x1="403.0" y1="-160.0" x2="40.0" y2="40.0" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="792.0" y1="-160.0" x2="1155.0" y2="40.0" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="403.0" y1="-50.0" x2="40.0" y2="661.8" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="792.0" y1="-50.0" x2="1155.0" y2="661.8" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<path d="M 330.0 226.7 L 470.0 226.7" stroke="black" stroke-width="1.2" data-arrow-id="f1" data-waypoints="330.0,226.7 470.0,226.7" marker-end="url(#arrow)" fill="none" />
+<path d="M 670.0 200.0 L 825.0 200.0" stroke="black" stroke-width="1.2" data-arrow-id="f2" data-waypoints="670.0,200.0 825.0,200.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 330.0 500.0 L 470.0 500.0" stroke="black" stroke-width="1.2" data-arrow-id="f5" data-waypoints="330.0,500.0 470.0,500.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 670.0 500.0 L 825.0 500.0" stroke="black" stroke-width="1.2" data-arrow-id="f6" data-waypoints="670.0,500.0 825.0,500.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1025.0 226.7 L 1055.0 226.7 Q 1065.0 226.7 1065.0 236.7 L 1065.0 320.0 Q 1065.0 330.0 1055.0 330.0 L 100.0 330.0 Q 90.0 330.0 90.0 340.0 L 90.0 490.0 Q 90.0 500.0 100.0 500.0 L 130.0 500.0" stroke="black" stroke-width="1.2" data-arrow-id="f3" data-waypoints="1025.0,226.7 1065.0,226.7 1065.0,330.0 90.0,330.0 90.0,500.0 130.0,500.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1025.0 173.3 L 1095.0 173.3 Q 1105.0 173.3 1105.0 183.3 L 1105.0 360.0 Q 1105.0 370.0 1095.0 370.0 L 410.0 370.0 Q 400.0 370.0 400.0 380.0 L 400.0 450.0 Q 400.0 460.0 410.0 460.0 L 470.0 460.0" stroke="black" stroke-width="1.2" data-arrow-id="f4" data-waypoints="1025.0,173.3 1105.0,173.3 1105.0,370.0 400.0,370.0 400.0,460.0 470.0,460.0" marker-end="url(#arrow)" fill="none" />
+<path d="M -10.0 200.0 L 130.0 200.0" stroke="black" stroke-width="1.2" data-arrow-id="i1" data-waypoints="-10.0,200.0 130.0,200.0" marker-end="url(#arrow)" fill="none" />
+<path d="M -10.0 80.0 L 390.0 80.0 Q 400.0 80.0 400.0 90.0 L 400.0 163.3 Q 400.0 173.3 410.0 173.3 L 470.0 173.3" stroke="black" stroke-width="1.2" data-arrow-id="i2" data-waypoints="-10.0,80.0 400.0,80.0 400.0,173.3 470.0,173.3" marker-end="url(#arrow)" fill="none" />
+<path d="M 330.0 540.0 L 390.0 540.0 Q 400.0 540.0 400.0 550.0 L 400.0 611.8 Q 400.0 621.8 410.0 621.8 L 1205.0 621.8" stroke="black" stroke-width="1.2" data-arrow-id="o1" data-waypoints="330.0,540.0 400.0,540.0 400.0,621.8 1205.0,621.8" marker-end="url(#arrow)" fill="none" />
+<path d="M 1025.0 500.0 L 1205.0 500.0" stroke="black" stroke-width="1.2" data-arrow-id="o2" data-waypoints="1025.0,500.0 1205.0,500.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 925.0 84.2 L 925.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="c1" data-waypoints="925.0,84.2 925.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 384.2 L 230.0 420.0" stroke="black" stroke-width="1.2" data-arrow-id="c2" data-waypoints="230.0,384.2 230.0,420.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 925.0 315.8 L 925.0 280.0" stroke="black" stroke-width="1.2" data-arrow-id="m1" data-waypoints="925.0,315.8 925.0,280.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 570.0 615.8 L 570.0 580.0" stroke="black" stroke-width="1.2" data-arrow-id="m2" data-waypoints="570.0,615.8 570.0,580.0" marker-end="url(#arrow)" fill="none" />
+<text x="925.0" y="78.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="c1">KiCad 設計規則</text>
+<text x="230.0" y="378.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="c2">送廠批准閘門</text>
+<text x="919.0" y="296.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="m1">KiCad9</text>
+<text x="931.0" y="296.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="m1">／pcbnew</text>
+<text x="564.0" y="596.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="m2">ngspice／emc／kicad</text>
+<text x="576.0" y="596.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="m2">skills</text>
+<text x="400.0" y="218.7" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f1" >子系統與零件清單</text>
+<text x="747.5" y="192.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f2" >參考證據＋零件知識</text>
+<text x="400.0" y="495.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f5">PCB</text>
+<text x="400.0" y="512.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f5">佈局</text>
+<text x="747.5" y="492.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f6" >驗證結果</text>
+<text x="570.0" y="348.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f3" >原理圖＋網表</text>
+<text x="925.0" y="362.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="f4" >原理圖</text>
+<text x="-14.0" y="191.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="i1">自然語言規格</text>
+<text x="-14.0" y="217.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="i1">＋專案資料夾</text>
+<text x="-14.0" y="71.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="i2">參考開發板語料（</text>
+<text x="-14.0" y="97.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="i2">OpenMV/Rockbox）</text>
+<text x="1209.0" y="625.8" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="o1">製造輸出（Gerber/鑽孔/STEP）</text>
+<text x="1209.0" y="504.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="o2">就緒度＋文件包</text>
+</svg>

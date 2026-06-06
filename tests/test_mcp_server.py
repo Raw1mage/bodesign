@@ -35,10 +35,19 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("error", r)
 
     def test_landing_page_has_guide_sections(self):
-        page = self.server._landing_html("/x/bodesign.sock", 8077)
+        page = self.server._landing_html("/x/bodesign.sock", 8077, "en")
         for section in ("Install", "File model", "Circuit-design workflow", "Skill packages", "Endpoints"):
             self.assertIn(section, page)
         self.assertIn("/tools", page)
+        self.assertIn("/idef0.svg", page)
+
+    def test_landing_page_i18n_zh(self):
+        page = self.server._landing_html("/x/bodesign.sock", 8077, "zh")
+        for section in ("安裝與啟動", "檔案模型", "電路設計工作流", "編排的 skill 套件", "連線端點"):
+            self.assertIn(section, page)
+        self.assertIn('lang="zh-Hant"', page)
+        # tool detail also localizes
+        self.assertIn("參數", self.server._tool_detail_html("bodesign_emit_fab", "zh"))
 
     def test_tools_index_links_every_tool(self):
         idx = self.server._tools_index_html()
