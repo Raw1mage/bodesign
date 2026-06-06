@@ -55,7 +55,7 @@ Status · dependency · acceptance.
 **Capability tools complete (G1–G9).** All bodesign-unique workflow tools are built + tested; the forward pipeline (ingest → plan → source → symbol → compose → schematic → pin-table → layout → fab) plus surface/state/trust/doc layers are in place.
 
 ### Deployment gap (G10) — package as an MCP server (mirrors docxmcp; see design.md §Deployment, DD-9..DD-13)
-- [ ] **G10a MCP server** — `mcp.server.Server` + starlette/uvicorn; transports `stdio` / `http` (TCP) / **`http`-over-UDS**; tool registry exposing the bodesign capabilities (ingest, requirement-plan, evidence-sourcing, symbol, compose, schematic+validate, pin-allocation, layout, fab, companion-render, doc-emit, readiness, reference-crosscheck, gap-report) + token-based file upload/download. *Needs `pip install mcp`.*
+- [x] **G10a MCP server** — `mcp.server.Server` + starlette/uvicorn; transports `stdio` / `http` (TCP) / **`http`-over-UDS**; tool registry exposing the bodesign capabilities (ingest, requirement-plan, evidence-sourcing, symbol, compose, schematic+validate, pin-allocation, layout, fab, companion-render, doc-emit, readiness, reference-crosscheck, gap-report) + token-based file upload/download. *Needs `pip install mcp`.*
 - [ ] **G10b `mcpctl.sh`** — start / stop / reload / status / log (docker-compose-backed).
 - [ ] **G10c Dockerfile** — python + KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + `mcp`.
 - [ ] **G10d docker-compose.yml** — per-user container, `./.run/<sock>` UDS bind + named volumes (cache/sessions) + socket healthcheck.

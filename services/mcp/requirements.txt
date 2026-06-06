@@ -1,0 +1,7 @@
+# bodesign MCP server (G10a) runtime deps.
+mcp>=1.27
+starlette
+uvicorn
+# Tool capabilities additionally need: pygerber (gerber render), and the
+# system toolchain KiCad 9 (kicad-cli + pcbnew) + LibreOffice (soffice).
+pygerber
