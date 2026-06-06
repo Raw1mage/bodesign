@@ -62,6 +62,12 @@ Status · dependency · acceptance.
 - [x] **G10e `mcp.json`** — registration manifest (transport `streamable-http`, `unix://…/bodesign.sock:/mcp/`).
 - **Acceptance:** `mcpctl.sh start` brings the container up; an MCP client lists + calls a bodesign tool over the UDS; a tool producing a file (e.g. a rendered schematic PDF) is downloadable by token over the UDS.
 
+### File-model parity gap (G11) — full docxmcp-style client-tree + upload/download (see design.md DD-14)
+G10a's `/files` is minimal (single-file upload + token download); tools take host paths. G11 brings full docxmcp parity so the portable/container model works (upload your whole project tree → token → tools run inside it → download results).
+- [x] **G11a Token store + directory ingest** — a dir-based token store (`services/mcp/token_store.py`): `POST /files` accepts `application/x-tar`/`gzip` (unpack into a fresh token `doc_dir`), multipart, and raw (x-filename); returns `{token, doc_dir, files}`. Plus a **`bodesign_stage_dir`** tool (inline `{relpath:{content,encoding}}` map → token). Traversal-defended.
+- [x] **G11b Token-aware tool dispatch + produced-file surfacing** — when a tool call includes `token`, resolve its path args (folder/out_dir/path/md_path/board_path) relative to the token `doc_dir`; snapshot-diff the token dir after the call and append produced files as `{rel, url:/files/{token}/blob/{rel}}` to the result. Host-path mode unchanged when no token.
+- **Acceptance:** upload a directory tarball over the UDS → `{token}`; call `bodesign_package_readiness` (or `ingest`) with that token (operates inside the token tree); a produced companion is downloadable via `GET /files/{token}/blob/{rel}`. End-to-end docxmcp-style round trip.
+
 The other remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, scored vs the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
 
 Orchestration wiring (not bodesign gaps, but workflow steps): **N16** install+wire `spice`/`emc`; **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.

@@ -30,8 +30,13 @@ INSTRUCTIONS = (
     "bodesign is an AI PCB design copilot exposed as MCP tools. It ingests a client project "
     "folder, plans requirements, sources reference evidence, generates KiCad symbols/schematics, "
     "lays out + exports fab files, and tracks readiness — validating against KiCad and a known-good "
-    "reference (control group). Tools operate on host paths; produced files are also fetchable via "
-    "GET /files/{token}/blob/{rel} after staging. No send-to-fab output without validation + approval."
+    "reference (control group).\n\n"
+    "FILE MODEL (docxmcp-style): upload a whole project tree as a tarball to POST /files "
+    "(Content-Type application/x-tar or gzip) or call bodesign_stage_dir with an inline "
+    "{relpath:{content,encoding}} map -> {token, doc_dir, files}. Pass `token` to any tool: its path "
+    "args resolve inside the token's doc_dir and the result lists produced files as {rel, url}; fetch "
+    "via GET /files/{token}/blob/{rel}. Tools also accept plain host paths (local same-host UDS).\n\n"
+    "No send-to-fab output without deterministic validation + explicit approval."
 )
 
 
@@ -123,8 +128,16 @@ def _h_crosscheck(a: dict) -> Any:
                            a.get("label", "interface"), a.get("provenance")).to_dict()
 
 
+def _h_stage_dir(a: dict) -> Any:
+    from token_store import default_store
+    return default_store().stage_files(a["files"])
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
+    {"name": "bodesign_stage_dir", "handler": _h_stage_dir,
+     "description": "Stage an inline file tree {relpath:{content,encoding}} into a token namespace; returns {token, doc_dir, files}. Pass the token to other tools to operate inside that tree (docxmcp-style).",
+     "schema": {"type": "object", "properties": {"files": {"type": "object"}}, "required": ["files"]}},
     {"name": "bodesign_ingest_project", "handler": _h_ingest,
      "description": "Ingest a KiCad/EDA project folder read-only; classify files, detect C0* sections, flag non-readable files needing a companion.",
      "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
@@ -170,14 +183,58 @@ TOOLS: list[dict] = [
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
 
+# Path-like arg keys resolved inside a token's doc_dir when a tool call carries
+# a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
+# local same-host UDS mode).
+PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "output_path", "corpus_dir")
+
+
+def _snapshot(doc_dir: Path) -> dict:
+    snap = {}
+    for p in doc_dir.rglob("*"):
+        if p.is_file():
+            st = p.stat()
+            snap[str(p.relative_to(doc_dir))] = (st.st_size, st.st_mtime_ns)
+    return snap
+
+
+def _produced(doc_dir: Path, before: dict) -> list[str]:
+    out = []
+    for p in doc_dir.rglob("*"):
+        if p.is_file():
+            rel = str(p.relative_to(doc_dir))
+            st = p.stat()
+            if before.get(rel) != (st.st_size, st.st_mtime_ns):
+                out.append(rel)
+    return sorted(out)
+
+
 def run_tool(name: str, arguments: dict) -> dict:
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
         return {"error": f"unknown tool: {name}"}
+    args = dict(arguments or {})
+    token = args.pop("token", None)
+    doc_dir = before = None
+    if token:
+        from token_store import TokenError, default_store
+        try:
+            doc_dir = default_store().resolve(token)
+        except TokenError as error:
+            return {"ok": False, "error": f"token: {error}"}
+        for key in PATH_ARG_KEYS:
+            if isinstance(args.get(key), str):
+                args[key] = str((doc_dir / args[key].lstrip("/")).resolve())
+        before = _snapshot(doc_dir)
     try:
-        return {"ok": True, "result": _jsonable(spec["handler"](arguments or {}))}
+        result = {"ok": True, "result": _jsonable(spec["handler"](args))}
     except Exception as error:  # surface tool errors as data, not transport failures
         return {"ok": False, "error": f"{type(error).__name__}: {error}"}
+    if token:
+        result["token"] = token
+        result["doc_dir"] = str(doc_dir)
+        result["produced"] = [{"rel": r, "url": f"/files/{token}/blob/{r}"} for r in _produced(doc_dir, before)]
+    return result
 
 
 # ── MCP server wiring ──────────────────────────────────────────────────
@@ -239,21 +296,35 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                         media_type="text/html")
 
     async def upload_file(request: Request) -> Response:
-        token = "tok_" + uuid.uuid4().hex[:16]
-        tok_dir = _sessions_root() / token
-        tok_dir.mkdir(parents=True, exist_ok=True)
-        filename = request.headers.get("x-filename", "upload.bin")
+        """POST /files — ingest a file tree into a fresh token namespace.
+
+        Content-Type discriminates: application/x-tar / application/gzip = a
+        directory tarball (the docxmcp client-tree path); else raw single file
+        (set x-filename). Returns {token, doc_dir, files}.
+        """
+        from token_store import TokenError, default_store
+        store = default_store()
+        ctype = request.headers.get("content-type", "")
         body = await request.body()
-        (tok_dir / filename).write_bytes(body)
-        return JSONResponse({"token": token, "filename": filename, "size": len(body)})
+        try:
+            if ctype.startswith("application/x-tar") or ctype.startswith("application/gzip"):
+                result = store.stage_tarball(body, gz=ctype.startswith("application/gzip"))
+            else:
+                result = store.stage_raw(body, request.headers.get("x-filename", "upload.bin"))
+        except TokenError as error:
+            return JSONResponse({"error": "stage_failed", "message": str(error)}, status_code=400)
+        return JSONResponse(result)
 
     async def get_blob(request: Request) -> Response:
+        from token_store import TokenNotFoundError, default_store
+        store = default_store()
         token = request.path_params["token"]
         rel = request.path_params["rel"]
-        root = (_sessions_root() / token).resolve()
         try:
-            target = (root / rel).resolve()
-            target.relative_to(root)
+            doc_dir = store.resolve(token)
+            target = store.safe_join(doc_dir, rel)
+        except TokenNotFoundError:
+            return JSONResponse({"error": "token_not_found"}, status_code=404)
         except (ValueError, OSError):
             return JSONResponse({"error": "path_escape"}, status_code=403)
         if not target.is_file():

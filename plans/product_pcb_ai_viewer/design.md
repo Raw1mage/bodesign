@@ -50,6 +50,7 @@ bodesign is delivered as an **MCP server**, packaged like `docxmcp`:
 - **DD-11** File transfer = token-based upload/download over the same endpoint (clients submit whole project folders / datasheets; tool results reference produced files by token), mirroring docxmcp's `/files` + `stage_dir`.
 - **DD-12** Packaged as a **per-user Docker container** (`Dockerfile` + `docker-compose.yml`): image bundles KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + the `mcp` SDK; `./.run/<sock>` bind for the UDS rendezvous + named volumes for cache/sessions; socket healthcheck. Image is heavy (~GB) because KiCad/LibreOffice are required by the tools — accepted for portability.
 - **DD-13** Operated by **`mcpctl.sh`** (start / stop / reload / status / log), docker-compose-backed (the FastAPI `webctl.sh` is superseded).
+- **DD-14** File model has **full docxmcp parity (G11)**: the client's project tree is uploaded as a **tarball** (`POST /files`, `application/x-tar`/gzip) or via a **`bodesign_stage_dir`** tool (inline `{relpath:{content,encoding}}` map) into a fresh **token** namespace whose `doc_dir` *is* the project tree inside the container; tools accept a `token` and operate inside its `doc_dir` (path args resolved relative to it), with no host data bind mount; produced files are surfaced as `{token, rel}` + a `GET /files/{token}/blob/{rel}` URL (snapshot-diff of the token dir, like docxmcp DD-10). Host-path mode stays for the local same-host UDS case.
 
 ## Pending design (build queue, see tasks.md §4)
 

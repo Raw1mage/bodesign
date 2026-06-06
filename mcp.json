@@ -5,7 +5,11 @@
   "version": "0.1.0",
   "transport": "streamable-http",
   "url": "unix:///home/pkcs12/projects/bodesign/.run/bodesign.sock:/mcp/",
-  "auth": { "type": "none" },
-  "source": { "type": "local" },
-  "instructions": "bodesign exposes AI PCB-design tools (prefix `bodesign_`): ingest_project, plan_design_intent, evidence_manifest, emit_symbol, compose_schematic, pin_allocation, emit_layout, emit_fab, render_companion, emit_doc, package_readiness, reference_crosscheck.\n\nTools operate on host paths (the local files-land-in-the-client-folder model). Produced files are also fetchable over the socket:\n  curl --unix-socket /home/pkcs12/projects/bodesign/.run/bodesign.sock http://bodesign.local/files/{token}/blob/{rel}\nUpload host files via POST /files (set x-filename) -> returns {token}.\n\nNo send-to-fab output without deterministic validation + explicit user approval. Reliability is shown by cross-check vs a known-good reference (control group), not asserted."
+  "auth": {
+    "type": "none"
+  },
+  "source": {
+    "type": "local"
+  },
+  "instructions": "bodesign exposes AI PCB-design tools (prefix `bodesign_`): stage_dir, ingest_project, plan_design_intent, evidence_manifest, emit_symbol, compose_schematic, pin_allocation, emit_layout, emit_fab, render_companion, emit_doc, package_readiness, reference_crosscheck.\n\nFILE MODEL (docxmcp-style). Upload your whole project tree as a tarball:\n  tar -C dir -cf - . | curl --unix-socket .../.run/bodesign.sock -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bodesign.local/files\n-> returns {token, doc_dir, files}. Or call `bodesign_stage_dir` with an inline {relpath:{content,encoding}} map. Then pass `token` to any tool: its path args (folder/out_dir/path/...) resolve inside the token's doc_dir, and the result lists produced files as {rel, url}. Download them:\n  curl --unix-socket .../.run/bodesign.sock http://bodesign.local/files/{token}/blob/{rel}\nTools also accept plain host paths for the local same-host UDS case.\n\nNo send-to-fab output without deterministic validation + explicit user approval. Reliability is shown by cross-check vs a known-good reference (control group), not asserted."
 }
