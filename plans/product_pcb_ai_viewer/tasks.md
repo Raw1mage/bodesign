@@ -23,7 +23,7 @@
 | N2 | Decompose docs (datasheet/BOM/schematic) | `datasheets` skill + `kicad` (PDF sch) | orchestrate | partial |
 | N3 | Render readable companions | `companion_render` (kicad-cli/pygerber) | bodesign | ✅ **G1** |
 | N4 | Requirements → clarify → plan | `plan_design_intent` | bodesign | ✅ R5 |
-| N5 | PRD / doc emit (docx/pdf) | emitter + libreoffice | bodesign | ⬜ **G4** |
+| N5 | PRD / doc emit (docx/pdf) | `doc_emit` + libreoffice | bodesign | ✅ **G4** |
 | N6 | Evidence / reference sourcing | `build_design_evidence_manifest` + `digikey`/`lcsc` | bodesign+orch | ✅ R6 |
 | N7 | Datasheet → ComponentKnowledge (pinout) | `datasheets` skill + pin_tables | orchestrate | ✅(ST) ⬜ **G6** |
 | N8 | Symbol generation | `emit_kicad_symbol_library_from_pin_table` | bodesign | ✅ |
@@ -46,7 +46,7 @@ Status · dependency · acceptance.
 - [x] **G2 Package readiness compass** (N18) — done. `workflow-core.package_readiness`; TheSmartAI 67%.
 - [x] **G7 Reference cross-check / trust** (N19) — done. `workflow-core.reference_crosscheck`; flash 75% vs OpenMV.
 - [ ] **G3 Generalized subsystem composer** (N10) — *dep: G6.* spec + harvested evidence → IR → schematic. **Acceptance:** kicad-cli ERC clean + cross-check coverage vs control group ≥ target (e.g. flash 75%→100%).
-- [ ] **G4 PRD/doc emitter** (N5) — *unblocked.* structured md → docx/pdf companion (libreoffice). **Acceptance:** PRD/readiness render to docx+pdf that open cleanly.
+- [x] **G4 PRD/doc emitter** (N5) — done. `reverse-core.doc_emit` (`markdown_to_html` + `emit_document`): any markdown deliverable → docx + pdf via LibreOffice (per-format profile to avoid the LO lock; explicit `docx:MS Word 2007 XML` filter so html→docx doesn't drop silently). Verified on the real PRD → docx (10 KB) + pdf (106 KB), status `ok`. Markdown stays the editable source; docx/pdf are shareable companions.
 - [ ] **G5 Pin/GPIO allocation table** (N13) — *unblocked.* net/pin evidence → C03↔FW interface table (xlsx/csv). **Acceptance:** table matches the schematic nets.
 - [ ] **G6 Per-part symbol harvest** (N7/N8) — *unblocked.* orchestrate `datasheets` → pinout → symbol for V1 parts beyond STM32N657/MX25 (WiFi `LBEE5KL1YN`, charger `BQ24075`, mic, camera connector). Feeds G3. **Acceptance:** each symbol parses + kicad-cli accepts.
 - [ ] **G8 Layout** (N14) — *dep: G3.* wrap `pcbnew`: assign footprints, place, run `kicad-cli pcb drc`; emit `.kicad_pcb` + readable PDF/PNG companion. **Acceptance:** DRC runs, board opens, companion rendered. (Auto-routing = freerouting/manual, bounded.)
