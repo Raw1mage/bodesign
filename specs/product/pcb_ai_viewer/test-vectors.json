@@ -1,0 +1,148 @@
+[
+  {
+    "id": "TV1",
+    "requirement": "B1",
+    "given": "a project tree",
+    "when": "ingest_project_folder runs",
+    "then": "an index is produced and no input file is modified",
+    "tests": [
+      "test_project_ingest",
+      "test_companion_render"
+    ]
+  },
+  {
+    "id": "TV2",
+    "requirement": "B2",
+    "given": "a verified pin list / compose plan",
+    "when": "emit_kicad_symbol / compose_schematic / emit_kicad_schematic runs",
+    "then": "a .kicad_sym / schematic is emitted and only reported ready if kicad-cli validation passed",
+    "tests": [
+      "test_eda_bridge",
+      "test_composer",
+      "test_kicad_emit"
+    ]
+  },
+  {
+    "id": "TV3",
+    "requirement": "B2",
+    "given": "an invalid pin table (validation not passed / no rows)",
+    "when": "emit_kicad_symbol_library_from_pin_table runs",
+    "then": "it raises rather than emitting a bogus symbol",
+    "tests": [
+      "test_eda_bridge"
+    ]
+  },
+  {
+    "id": "TV4",
+    "requirement": "B3",
+    "given": "a generated schematic + a control-group reference",
+    "when": "reference_crosscheck runs",
+    "then": "agreements/divergences are reported with provenance and uncovered nets are flagged as gaps",
+    "tests": [
+      "test_reference_crosscheck"
+    ]
+  },
+  {
+    "id": "TV5",
+    "requirement": "B4",
+    "given": "no SPICE engine / no skills available",
+    "when": "simulate_schematic runs",
+    "then": "it returns skipped-with-reason, never a false passed",
+    "tests": [
+      "test_simulate"
+    ]
+  },
+  {
+    "id": "TV6",
+    "requirement": "B4",
+    "given": "schematic + PCB analyzer output",
+    "when": "analyze_emc / analyze_thermal run",
+    "then": "a verdict with rule coverage is returned (18 EMC categories / 44 rule IDs)",
+    "tests": [
+      "test_pcb_verify"
+    ]
+  },
+  {
+    "id": "TV7",
+    "requirement": "B5",
+    "given": "a non-readable engineering file (e.g. .kicad_sch / gerber)",
+    "when": "render_companion runs",
+    "then": "a readable companion (pdf/png/svg) is produced",
+    "tests": [
+      "test_companion_render"
+    ]
+  },
+  {
+    "id": "TV8",
+    "requirement": "B5",
+    "given": "a markdown design doc",
+    "when": "emit_document runs",
+    "then": "a docx and pdf are produced (explicit LO filter, per-format profile)",
+    "tests": [
+      "test_doc_core"
+    ]
+  },
+  {
+    "id": "TV9",
+    "requirement": "B6",
+    "given": "a package folder at some maturity",
+    "when": "package_readiness / gap_report run",
+    "then": "a readiness% + single next step + blockers are computed from folder contents",
+    "tests": [
+      "test_gap_report"
+    ]
+  },
+  {
+    "id": "TV10",
+    "requirement": "B2",
+    "given": "fab inputs + approval",
+    "when": "emit_fab_outputs / export_bom / export_netlist run",
+    "then": "gerbers/drill/pos/STEP + BOM + netlist are produced via kicad-cli",
+    "tests": [
+      "test_gerber_geometry",
+      "test_footprint_map"
+    ]
+  },
+  {
+    "id": "TV11",
+    "requirement": "B8",
+    "given": "a clean clone with no BODESIGN_DATA_DIR",
+    "when": "the full suite runs",
+    "then": "it is green; data-dependent tests skip via data_root() guards",
+    "tests": [
+      "(suite) clean-clone run"
+    ]
+  },
+  {
+    "id": "TV12",
+    "requirement": "B9",
+    "given": "the server started with --uds + --port",
+    "when": "a client connects to /mcp/ and /healthz",
+    "then": "both transports respond from one process",
+    "tests": [
+      "test_mcp_server",
+      "container healthcheck"
+    ]
+  },
+  {
+    "id": "TV13",
+    "requirement": "non-functional/determinism",
+    "given": "identical inputs",
+    "when": "an emitter runs twice",
+    "then": "byte-identical output (stable ordering)",
+    "tests": [
+      "test_eda_bridge",
+      "test_composer"
+    ]
+  },
+  {
+    "id": "TV14",
+    "requirement": "B8/Token",
+    "given": "token store with a short TTL",
+    "when": "new_token / resolve run",
+    "then": "expired token dirs are reaped; resolve refreshes mtime (LRU keep-alive)",
+    "tests": [
+      "test_token_store"
+    ]
+  }
+]

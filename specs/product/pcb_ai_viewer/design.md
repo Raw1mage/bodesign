@@ -2,6 +2,24 @@
 
 > The build queue, full-lifecycle node table, and per-gap status live in `tasks.md` §1–7 (authoritative). This file holds the architecture and the decision record.
 
+## Context
+
+PCB design is gated on EE expertise + hand-stitched tooling, and existing AI/EDA tools *analyze* but do not *generate* a design from conversation + raw files, nor *demonstrate* reliability. bodesign sits at that gap: a standalone, host-agnostic **MCP server** (no host shell/gateway) that exposes the KiCad lifecycle as tools over a docxmcp-style token file surface. It generates the forward-generation layer itself and orchestrates the mature EDA skill suite for analysis/docs/sim/sourcing/fab. KiCad remains the editor; accredited labs remain the certifier.
+
+## Goals / Non-Goals
+
+**Goals**
+- Conversation- + file-driven path from idea to a submittable, reliability-scored design package.
+- Forward generation no analysis tool does: requirements→plan, evidence sourcing, symbol gen, subsystem composition, `kicad-cli`-validated schematic, layout/fab.
+- Demonstrated reliability: reference cross-check (control group) + SPICE + EMC/thermal, with provenance.
+- Generic + publishable: zero working data in the program; runtime token store with TTL/GC.
+
+**Non-Goals**
+- A browser-native schematic/PCB editor (native KiCad owns editing; no web UI — DD-1).
+- From-scratch pin-level netlist synthesis of novel circuits (unverifiable — DD-4); only reference-grounded reuse is high-confidence.
+- Autonomous auto-route to a finished layout; physical EVT/DVT + certification (outsourced labs).
+- ID/ME/firmware content (other teams; bodesign supplies interface constraints only).
+
 ## Architecture
 
 - **Core engine = KiCad's circuit-design capability** across the full lifecycle (schematic → layout → simulation/verification). Principle: *whatever KiCad can do, wrap it in.*
@@ -57,4 +75,25 @@ bodesign is delivered as an **MCP server**, packaged like `docxmcp`:
 
 ## Pending design (build queue, see tasks.md §4)
 
-G6/G3 execution on the V1 device; G10 MCP server packaging (server + mcpctl.sh + Docker + mcp.json). Orchestration wiring: `spice`/`emc`, `kidoc` doc packages (unlocked by G8), `datasheets` extraction.
+G6/G3 execution on a concrete device; orchestration wiring polish. The build queue G1–G12 + MCP delivery (G10/G11) + verification ladder are complete; remaining items are roadmap (tasks.md §Roadmap).
+
+## Risks / Trade-offs
+
+- **From-scratch correctness is unsolved (DD-4).** Mitigation: only reference-grounded reuse is high-confidence; novel parts fall back to analysis skills + explicit EE/user approval; no fab output without validation + approval (DD-8).
+- **Cross-check coverage gap.** A control-group cross-check is only as good as the reference's coverage; uncovered nets are reported as gaps, never silently passed.
+- **Pre-silicon ≠ certification.** SPICE/EMC/thermal are risk layers, not accredited EMC/EVT/DVT — surfaced explicitly so the verdict is not over-read.
+- **Heavy image (~GB).** KiCad 9 + LibreOffice are required by the tools; accepted for portability (DD-12). Host mode avoids the image when the toolchain is already present.
+- **Headless boundary.** The in-KiCad Action Plugin (A-plugin) cannot be exercised on the headless server; it is roadmap, scoped to the user's KiCad.
+- **Generation determinism.** Emitters are deterministic (stable ordering) so cross-check + re-runs are reproducible; non-determinism would break provenance.
+
+## Critical Files
+
+- `services/mcp/server.py` — the MCP server: tool dispatch, token path-arg resolution, dual UDS+TCP binds, self-documenting landing/tools pages.
+- `services/mcp/token_store.py` — docxmcp-style token file store + TTL/GC.
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py` — schematic emit + `kicad-cli` validation (multi-source `load_symbol`).
+- `packages/eda-bridge/bodesign_eda_bridge/composer.py` — generic subsystem composer (the spec-driven generalization that replaced product recipes).
+- `packages/workflow-core/bodesign_workflow_core/reference_crosscheck.py` — the trust layer (control-group cross-check).
+- `packages/workflow-core/bodesign_workflow_core/package_readiness.py` — the readiness compass that drives the loop.
+- `packages/shared/bodesign_shared/paths.py` — `data_root()`: the program↔working-data isolation boundary.
+
+(Full N1–N19 node→file map in the Code anchors section above + `tasks.md` §3.)

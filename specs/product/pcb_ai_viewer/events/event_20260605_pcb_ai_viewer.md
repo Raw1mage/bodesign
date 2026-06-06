@@ -121,9 +121,9 @@
 
 ## Verification
 
-- Planning artifacts created under `plans/product_pcb_ai_viewer/`。
+- Planning artifacts created under `specs/product/pcb_ai_viewer/`。
 - Architecture baseline created at `specs/architecture.md`。
-- Technology research updated at `plans/product_pcb_ai_viewer/technology-research.md`。
+- Technology research updated at `specs/product/pcb_ai_viewer/technology-research.md`。
 - Architecture Sync: Updated from source-first assumption to Gerber/drill/IPC reverse-to-source copilot with confidence-scored reconstructed model。
 - Scaffold validation: FastAPI app exposes `GET /health`, `GET /bodesign/`, and `GET /api/projects`; syntax/import validation attempted without installing dependencies。
 - Contract validation: FastAPI app now exposes `GET /api/schema-summary` and `GET /api/projects/{project_id}/board-design`; Python compile validation covers the touched service and contract modules。

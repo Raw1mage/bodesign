@@ -19,9 +19,9 @@ shell or gateway is required.
 - **Verify** in four layers: ERC/DRC · reference cross-check (control group) · SPICE · EMC/thermal.
 - **Track readiness** and emit shareable docs (docx/pdf) + readable companions for every engineering file.
 
-Architecture overview: [IDEF0 functional decomposition](plans/product_pcb_ai_viewer/idef0.svg) ·
-[GRAFCET runtime](plans/product_pcb_ai_viewer/grafcet.svg) · full spec in
-[`plans/product_pcb_ai_viewer/`](plans/product_pcb_ai_viewer/README.md).
+Architecture overview: [IDEF0 functional decomposition](specs/product/pcb_ai_viewer/idef0.svg) ·
+[GRAFCET runtime](specs/product/pcb_ai_viewer/grafcet.svg) · full spec in
+[`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md).
 
 ## Run
 
@@ -75,7 +75,7 @@ from the running service at `/skills/` (bundle + per-skill); install under your 
 
 - `services/mcp/` — the MCP server (`server.py`), token file store, requirements, the skill-pack assets.
 - `packages/` — the generic capability libraries (ingest, compose, layout, fab, BOM, verify, …).
-- `plans/product_pcb_ai_viewer/` — the design spec (proposal / design / tasks / IDEF0 / GRAFCET).
+- `specs/product/pcb_ai_viewer/` — the design spec (proposal / design / tasks / IDEF0 / GRAFCET).
 
 ## Reliability boundary
 

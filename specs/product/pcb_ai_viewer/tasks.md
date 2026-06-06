@@ -1,5 +1,7 @@
 # Tasks: bodesign — AI PCB Design Copilot (MCP)
 
+> Marker legend: `[x]` done · `⏭️ (deferred)` = post-1.0 roadmap, tracked for a future `extend` cycle (not in verified scope) · `⏭️ (superseded)` = obsoleted by the program↔working-data isolation refactor (product-specific OpenMV extraction; generic path is G6 + the `datasheets` skill).
+
 > **Authoritative consolidated plan (rewritten 2026-06-06).** Sections 1–7 are the single source of truth; the `Reorganized Roadmap` (R1–R10) and the `Historical Task Ledger` (T*/O*) below are kept only as record.
 
 ## 1. Identity & architecture
@@ -111,12 +113,12 @@ A non-EE owner cannot judge EE correctness, so reliability is **shown, not asser
 - [x] **R6** Reference-design / evidence discovery: `workflow-core.evidence_sourcing` extracts part candidates from a spec (`extract_part_candidates`) and builds a design-evidence manifest (`build_design_evidence_manifest`) — local-corpus-first scan for matching datasheets/schematics/BOM/pinout/PRD with role + trust grading, distributor pointers (digikey/lcsc, policy-gated) for parts with no local match. `POST /bodesign/api/design-intent/evidence` + an "Evidence sourcing" section on `/bodesign/design`. Verified live on the real ROCKBOX corpus: nRF9151 + MDBT53-P1M → grade-A local evidence (found the GPIO pinout table), 18650 → needs-sourcing. Generalizes OpenMV O0–O1 to any spec; actual web fetch/skill execution stays agent-side (host-agnostic).
 
 ### P2 — Generalize beyond OpenMV to an arbitrary spec
-- [ ] **R7** Multi-chip subsystem composition: planned subsystems + selected parts → composed IR → emit; prove on the running example (STM32N6 + nRF9151 + 8GB flash + USB-C PD/charging + 18650 battery/control).
-- [ ] **R8** Generalize symbol/footprint generation for any flagship-new part from a verified datasheet pinout (generalizes O3–O4 beyond STM32N657).
+- ⏭️ (deferred) **R7** Multi-chip subsystem composition: planned subsystems + selected parts → composed IR → emit; prove on the running example (STM32N6 + nRF9151 + 8GB flash + USB-C PD/charging + 18650 battery/control).
+- ⏭️ (deferred) **R8** Generalize symbol/footprint generation for any flagship-new part from a verified datasheet pinout (generalizes O3–O4 beyond STM32N657).
 
 ### P3 — Round-trip & finish
-- [ ] **R9** A-plugin (= T31): in-KiCad Action Plugin for round-trip (open project context, present evidence/candidates, apply user-approved patches via KiCad-native APIs). Runs inside the user's KiCad.
-- [ ] **R10** Footprint/PCB emit + placement constraints; evaluate `freerouting`; export + deterministic validation + explicit approval gate.
+- ⏭️ (superseded) **R9** A-plugin (= T31): in-KiCad Action Plugin for round-trip (open project context, present evidence/candidates, apply user-approved patches via KiCad-native APIs). Runs inside the user's KiCad.
+- ⏭️ (deferred) **R10** Footprint/PCB emit + placement constraints; evaluate `freerouting`; export + deterministic validation + explicit approval gate.
 
 ### ⏸ Parked (revisit only when triggered)
 - **A2 represented contracts** (storage-share / project-tree / folder-open / save-back / cache-conflict / analysis status / evidence manifest / plugin handshake, T14a–T14o): keep as deterministic contracts; make real only when a real client folder handle or in-KiCad plugin exists.
@@ -183,14 +185,14 @@ North star (user-confirmed): natural-language spec → AI clarifying dialogue (s
 
 - [x] T28 Make the EDA bridge real (A-emit): emit a KiCad-openable schematic from IR + `kicad-cli` validation — eda-bridge `kicad_emit.py` loads symbol definitions/pin endpoints from the installed KiCad symbol libraries, embeds them into a self-contained `.kicad_sch`, connects pins via global labels at the pin endpoints (library Y-flip handled), writes `.kicad_pro`, and validates with `kicad-cli sch erc` + `sch export netlist`. Verified on this machine (KiCad 9.0.9 now installed): a 3-component R/C divider emits with 0 ERC errors and a correct 3-node `MID` net. Single-unit symbols + rotation-0 only for now.
 - [~] T29 Reference-design-grounded subsystem composition — pull dev-board/reference-design evidence + datasheet pinouts (via skills) for the target chips, compose subsystems into IR, then emit through T28. STM32N6 and other flagship-new parts are absent from KiCad's standard symbol libraries, so symbol/footprint generation from datasheet pinouts is a required sub-capability.
-- [ ] T29a OpenMV N6 public source feasibility plan — evaluate OpenMV N6 public firmware/product evidence plus STM32N657/MX25UM51245G/public module datasheets, then convert verified documents into KiCad-reusable component/source assets under `plans/product_openmv_datasheet_kicad_source/`
-- [ ] T29b Build OpenMV N6 evidence manifest — record public URLs, license/redistribution posture, source hashes, document roles, and source-trust grades before extracting pinout or schematic knowledge
-- [ ] T29c Extract STM32N657 pinout/package knowledge — parse datasheet/reference-manual chunks into ComponentKnowledge and generate a KiCad symbol source for the exact OpenMV N6 MCU/package variant, with unresolved package/pin gaps explicit
-- [ ] T29d Extract OpenMV N6 memory/camera/interface support parts — normalize external flash/PSRAM, camera connector, USB HS, power, IMU/audio/display interface evidence into reusable component/source records
-- [ ] T29e Emit KiCad reusable library/source package — produce project-local `.kicad_sym`, footprint-mapping metadata, source manifests, and a minimal OpenMV N6 subsystem schematic validated by `kicad-cli`
-- [ ] T29f Web/API evidence review for OpenMV KiCad source — expose extracted datasheet chunks, pin tables, generated symbols, unresolved gaps, and validation results in the KiCad companion dashboard before treating assets as reusable
-- [ ] T30 Interactive requirement→planning loop (the "vibe" front end): MCP/dialogue that intakes an NL spec, asks back for missing specs/dimensions/interfaces, and produces a structured DesignIntent + architecture plan before emission.
-- [ ] T31 A-plugin: in-KiCad Action Plugin for round-trip (open project context, present evidence/candidates, apply user-approved patches via KiCad-native APIs). Runs inside the user's KiCad; cannot be exercised on the headless server.
+- ⏭️ (superseded) T29a OpenMV N6 public source feasibility plan — evaluate OpenMV N6 public firmware/product evidence plus STM32N657/MX25UM51245G/public module datasheets, then convert verified documents into KiCad-reusable component/source assets under `plans/product_openmv_datasheet_kicad_source/`
+- ⏭️ (superseded) T29b Build OpenMV N6 evidence manifest — record public URLs, license/redistribution posture, source hashes, document roles, and source-trust grades before extracting pinout or schematic knowledge
+- ⏭️ (superseded) T29c Extract STM32N657 pinout/package knowledge — parse datasheet/reference-manual chunks into ComponentKnowledge and generate a KiCad symbol source for the exact OpenMV N6 MCU/package variant, with unresolved package/pin gaps explicit
+- ⏭️ (superseded) T29d Extract OpenMV N6 memory/camera/interface support parts — normalize external flash/PSRAM, camera connector, USB HS, power, IMU/audio/display interface evidence into reusable component/source records
+- ⏭️ (superseded) T29e Emit KiCad reusable library/source package — produce project-local `.kicad_sym`, footprint-mapping metadata, source manifests, and a minimal OpenMV N6 subsystem schematic validated by `kicad-cli`
+- ⏭️ (superseded) T29f Web/API evidence review for OpenMV KiCad source — expose extracted datasheet chunks, pin tables, generated symbols, unresolved gaps, and validation results in the KiCad companion dashboard before treating assets as reusable
+- ⏭️ (deferred) T30 Interactive requirement→planning loop (the "vibe" front end): MCP/dialogue that intakes an NL spec, asks back for missing specs/dimensions/interfaces, and produces a structured DesignIntent + architecture plan before emission.
+- ⏭️ (deferred) T31 A-plugin: in-KiCad Action Plugin for round-trip (open project context, present evidence/candidates, apply user-approved patches via KiCad-native APIs). Runs inside the user's KiCad; cannot be exercised on the headless server.
 
 ## Stop Gates
 

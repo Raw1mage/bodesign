@@ -1,0 +1,164 @@
+[
+  {
+    "title": "bodesign generation loop — one deliverable, MCP-driven",
+    "participants": [
+      {
+        "id": "user",
+        "name": "User / Agent (MCP client)"
+      },
+      {
+        "id": "mcp",
+        "name": "bodesign MCP server"
+      },
+      {
+        "id": "tokens",
+        "name": "Token file store"
+      },
+      {
+        "id": "kicad",
+        "name": "KiCad (kicad-cli / pcbnew)"
+      },
+      {
+        "id": "skills",
+        "name": "EDA skill suite (datasheets/spice/emc/...)"
+      },
+      {
+        "id": "ref",
+        "name": "Control-group reference"
+      }
+    ],
+    "messages": [
+      {
+        "seq": 1,
+        "from": "user",
+        "to": "mcp",
+        "text": "POST /files — upload project tree (tarball)",
+        "type": "request"
+      },
+      {
+        "seq": 2,
+        "from": "mcp",
+        "to": "tokens",
+        "text": "create token namespace (doc_dir) + reap expired",
+        "type": "internal"
+      },
+      {
+        "seq": 3,
+        "from": "mcp",
+        "to": "user",
+        "text": "{token}",
+        "type": "response"
+      },
+      {
+        "seq": 4,
+        "from": "user",
+        "to": "mcp",
+        "text": "package_readiness(token) — read compass",
+        "type": "request"
+      },
+      {
+        "seq": 5,
+        "from": "mcp",
+        "to": "user",
+        "text": "readiness% + the single next step",
+        "type": "response"
+      },
+      {
+        "seq": 6,
+        "from": "user",
+        "to": "mcp",
+        "text": "requirement_planning(spec) — clarify",
+        "type": "request"
+      },
+      {
+        "seq": 7,
+        "from": "mcp",
+        "to": "user",
+        "text": "DesignIntent + open questions",
+        "type": "response"
+      },
+      {
+        "seq": 8,
+        "from": "user",
+        "to": "mcp",
+        "text": "emit_kicad_symbol / compose_schematic / emit_kicad_schematic",
+        "type": "request"
+      },
+      {
+        "seq": 9,
+        "from": "mcp",
+        "to": "skills",
+        "text": "harvest pinout/evidence (datasheets) when novel",
+        "type": "request"
+      },
+      {
+        "seq": 10,
+        "from": "mcp",
+        "to": "kicad",
+        "text": "kicad-cli ERC on the emitted schematic",
+        "type": "request"
+      },
+      {
+        "seq": 11,
+        "from": "kicad",
+        "to": "mcp",
+        "text": "ERC result",
+        "type": "response"
+      },
+      {
+        "seq": 12,
+        "from": "mcp",
+        "to": "ref",
+        "text": "reference_crosscheck — nets vs control group",
+        "type": "request"
+      },
+      {
+        "seq": 13,
+        "from": "ref",
+        "to": "mcp",
+        "text": "agreement/divergence + provenance + gaps",
+        "type": "response"
+      },
+      {
+        "seq": 14,
+        "from": "mcp",
+        "to": "skills",
+        "text": "simulate_schematic + analyze_emc/thermal",
+        "type": "request"
+      },
+      {
+        "seq": 15,
+        "from": "mcp",
+        "to": "kicad",
+        "text": "emit_layout (pcbnew DRC) + emit_fab_outputs",
+        "type": "request"
+      },
+      {
+        "seq": 16,
+        "from": "mcp",
+        "to": "user",
+        "text": "produced files {token, rel} + readable companions + verdict",
+        "type": "response"
+      },
+      {
+        "seq": 17,
+        "from": "user",
+        "to": "mcp",
+        "text": "approve → fab outputs released (DD-8 gate)",
+        "type": "request"
+      },
+      {
+        "seq": 18,
+        "from": "mcp",
+        "to": "user",
+        "text": "recomputed compass → next deliverable (loop to 4)",
+        "type": "response"
+      }
+    ],
+    "notes": [
+      "Verify steps (10-14) return passed|failed|skipped with a reason; failure loops back to compose (seq 8).",
+      "Token store reaps entries older than BODESIGN_TOKEN_TTL_SECONDS on access (docxmcp-style GC).",
+      "The loop maps 1:1 to grafcet.json steps 1-8."
+    ]
+  }
+]

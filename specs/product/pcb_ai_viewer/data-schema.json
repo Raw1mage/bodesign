@@ -1,0 +1,94 @@
+{
+  "title": "bodesign data model — IRs + runtime store",
+  "version": 1,
+  "entities": [
+    {
+      "name": "DesignIntent",
+      "purpose": "Structured requirements derived from an NL spec (N4).",
+      "module": "packages/design-ir",
+      "fields": [
+        {"name": "id", "type": "string", "required": true},
+        {"name": "title", "type": "string", "required": true},
+        {"name": "target_functions", "type": "string[]", "required": true},
+        {"name": "components", "type": "string[]", "required": false},
+        {"name": "source_evidence", "type": "EvidenceRef[]", "required": false},
+        {"name": "constraints", "type": "string[]", "required": false},
+        {"name": "knowledge_gaps", "type": "string[]", "required": false},
+        {"name": "confidence", "type": "number", "required": true}
+      ]
+    },
+    {
+      "name": "EvidenceRef",
+      "purpose": "Provenance link from a generated fact to its source (datasheet/reference).",
+      "module": "packages/shared",
+      "fields": [
+        {"name": "source_id", "type": "string", "required": true},
+        {"name": "target_path", "type": "string", "required": true},
+        {"name": "confidence", "type": "number", "required": true},
+        {"name": "note", "type": "string", "required": false}
+      ]
+    },
+    {
+      "name": "ComponentKnowledge",
+      "purpose": "Reusable part knowledge (package/pinout/footprint) harvested from datasheets.",
+      "module": "packages/component-kb",
+      "fields": [
+        {"name": "mpn", "type": "string", "required": true},
+        {"name": "package", "type": "string", "required": false},
+        {"name": "pins", "type": "PinRow[]", "required": false},
+        {"name": "package_evidence", "type": "object", "required": false}
+      ]
+    },
+    {
+      "name": "KiCadSymbolEmitResult",
+      "purpose": "Output of symbol generation (N8/G6).",
+      "module": "packages/eda-bridge",
+      "fields": [
+        {"name": "symbol_name", "type": "string", "required": true},
+        {"name": "library_path", "type": "string", "required": true},
+        {"name": "pin_count", "type": "int", "required": true},
+        {"name": "source_artifact", "type": "string", "required": true},
+        {"name": "evidence_property", "type": "string", "required": true}
+      ]
+    },
+    {
+      "name": "CrosscheckResult",
+      "purpose": "Reliability verdict vs the control group (N19/G7).",
+      "module": "packages/workflow-core",
+      "fields": [
+        {"name": "coverage", "type": "number", "required": true},
+        {"name": "agreements", "type": "string[]", "required": true},
+        {"name": "divergences", "type": "object[]", "required": true},
+        {"name": "gaps", "type": "string[]", "required": true},
+        {"name": "provenance", "type": "EvidenceRef[]", "required": true}
+      ]
+    },
+    {
+      "name": "ReadinessCompass",
+      "purpose": "Computed package state — the loop driver (N18/G2).",
+      "module": "packages/workflow-core",
+      "fields": [
+        {"name": "readiness_pct", "type": "number", "required": true},
+        {"name": "next_step", "type": "string", "required": true},
+        {"name": "blockers", "type": "string[]", "required": true},
+        {"name": "artifacts_present", "type": "string[]", "required": true}
+      ]
+    },
+    {
+      "name": "Token",
+      "purpose": "Runtime file namespace (docxmcp-style); TTL-GC'd, never committed.",
+      "module": "services/mcp/token_store.py",
+      "fields": [
+        {"name": "token", "type": "string", "required": true},
+        {"name": "doc_dir", "type": "path", "required": true},
+        {"name": "created_at", "type": "mtime", "required": true},
+        {"name": "ttl_seconds", "type": "int", "required": true, "default_env": "BODESIGN_TOKEN_TTL_SECONDS"}
+      ]
+    }
+  ],
+  "invariants": [
+    "No entity is persisted in the repo; client data lives only in Token.doc_dir (runtime) or data_root() (external).",
+    "Every generated fact carries an EvidenceRef chain back to a source (datasheet or reference).",
+    "Emitter outputs are deterministic given identical inputs."
+  ]
+}
