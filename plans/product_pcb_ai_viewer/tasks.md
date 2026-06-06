@@ -19,7 +19,7 @@
 ### Lifecycle MCP tool surface (have → build)
 | Stage | KiCad capability to wrap | Status |
 |---|---|---|
-| Ingest project folder | read `.kicad_pro/.kicad_sch/.kicad_pcb`, BOM, Gerber, IPC (docxmcp-style decompose) | partial (reverse parsers exist; folder-ingest tool to build) |
+| Ingest project folder | `ingest_project_folder` — walk read-only, classify every file by EDA role/format, index, detect C0* sections, flag non-readable engineering files + auto-detect existing readable companions | ✅ (verified on the real 243-file Rockbox project) |
 | Requirements → plan | `plan_design_intent` (R5) | ✅ |
 | Evidence/reference sourcing | `build_design_evidence_manifest` (R6) | ✅ |
 | Symbol generation | `emit_kicad_symbol_library_from_pin_table` | ✅ |
