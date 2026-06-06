@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -60,6 +60,7 @@ except ImportError:
     plan_gerber_export = None
     produce_design_report = None
     build_default_storage_share_manifest = None
+    build_cache_conflict_status = None
     build_folder_open_request = None
     build_kicad_happy_cache_mapping = None
     build_project_registry = None
@@ -95,6 +96,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/folder-open-request", "purpose": "Represent a client folder open/import request without filesystem access."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/save-back-proposals", "purpose": "Return represented client-applied save-back proposals without writing files."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/save-back-proposals", "purpose": "Represent client-applied save-back proposals without writing files."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/cache-conflict-status", "purpose": "Return disposable MCP cache freshness and explicit conflict status without resolving conflicts."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/project-tree", "purpose": "Return read-only client-owned folder tree evidence summary."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
@@ -228,6 +230,7 @@ def _render_project_workspace(project_id: str) -> str:
     kicad_foundation = get_project_kicad_foundation(project_id)
     folder_open_request = get_project_folder_open_request(project_id)
     save_back_proposals = get_project_save_back_proposals(project_id)
+    cache_conflict_status = get_project_cache_conflict_status(project_id)
     project_tree = get_project_tree(project_id)
     kicad_native_extension = get_project_kicad_native_extension(project_id)
     kicad_source_markup = _kicad_source_markup(kicad_foundation)
@@ -352,9 +355,10 @@ def _render_project_workspace(project_id: str) -> str:
                          <p class="muted">Folder sharing is not wired yet. The target flow indexes KiCad files from a client-owned folder and hands edit/canvas actions to a KiCad Action Plugin or sidecar.</p>
                         <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
                        </div>
-                       """ + _folder_open_request_markup(folder_open_request) + """
-                       """ + _save_back_proposals_markup(save_back_proposals) + """
-                       <div class="card">
+                        """ + _folder_open_request_markup(folder_open_request) + """
+                        """ + _save_back_proposals_markup(save_back_proposals) + """
+                        """ + _cache_conflict_status_markup(cache_conflict_status) + """
+                        <div class="card">
                         <h3>KiCad native foundation status</h3>
                        <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>
                        <p>storage owner: <code>""" + escape(str(kicad_foundation.get("storage_owner", "unknown"))) + """</code></p>
@@ -597,6 +601,35 @@ def get_project_save_back_proposals(project_id: str) -> dict[str, object]:
         "conflict_policy": manifest.conflict_policy,
         "proposals": [asdict(proposal) for proposal in proposals],
         "warnings": ["No MCP-side direct file mutation is performed by this endpoint."],
+    }
+
+
+@app.get("/api/projects/{project_id}/cache-conflict-status")
+@app.get("/bodesign/api/projects/{project_id}/cache-conflict-status")
+def get_project_cache_conflict_status(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or build_cache_conflict_status is None:
+        return {
+            "project_id": project_id,
+            "status": "cache-conflict-status-unavailable",
+            "cache_authority": "disposable-mcp-cache",
+            "source_authority": "client-owned-folder",
+            "freshness_state": "needs-client-refresh",
+            "conflict_policy": "explicit-user-resolution",
+            "silent_resolution_blocked": True,
+            "source_revision_anchors": [],
+            "cache_entries": [],
+            "required_actions": [],
+            "blockers": ["Cache/conflict status contract could not be built."],
+            "warnings": ["No filesystem access, cache deletion, or conflict resolution was attempted."],
+        }
+    manifest = build_default_storage_share_manifest(project_id)
+    status = build_cache_conflict_status(project_id, _project_taxonomy_paths(project_id), manifest)
+    return {
+        **asdict(status),
+        "status": "cache-conflict-status-represented",
+        "filesystem_access": "not-attempted",
+        "cache_mutation": "not-attempted",
+        "conflict_resolution": "not-attempted",
     }
 
 
@@ -1541,6 +1574,23 @@ def _save_back_proposals_markup(envelope: dict[str, object]) -> str:
         f'<p>target: <code>{escape(str(proposal.get("target_path", "none")))}</code></p>'
         '<p class="muted">No direct MCP file mutation. Proposed edits are evidence-backed patches for the client or native KiCad plugin to apply after approval and conflict checks.</p>'
         f'<h4>Next actions</h4><ul>{action_items}</ul>'
+        '</div>'
+    )
+
+
+def _cache_conflict_status_markup(status: dict[str, object]) -> str:
+    actions = status.get("required_actions") if isinstance(status.get("required_actions"), list) else []
+    action_items = "".join(f"<li><code>{escape(str(action))}</code></li>" for action in actions[:6]) or '<li class="muted">No refresh actions recorded.</li>'
+    return (
+        '<div class="card">'
+        '<h3>Cache / conflict status</h3>'
+        f'<p><code>{escape(str(status.get("status", "cache-conflict-status-represented")))}</code></p>'
+        f'<p>freshness: <code>{escape(str(status.get("freshness_state", "needs-client-refresh")))}</code></p>'
+        f'<p>cache: <code>{escape(str(status.get("cache_authority", "disposable-mcp-cache")))}</code></p>'
+        f'<p>source: <code>{escape(str(status.get("source_authority", "client-owned-folder")))}</code></p>'
+        f'<p>conflict policy: <code>{escape(str(status.get("conflict_policy", "explicit-user-resolution")))}</code></p>'
+        '<p class="muted">MCP cache is not authoritative. Silent conflict resolution is blocked; refresh and conflict decisions must come from client-owned source anchors.</p>'
+        f'<h4>Required actions</h4><ul>{action_items}</ul>'
         '</div>'
     )
 

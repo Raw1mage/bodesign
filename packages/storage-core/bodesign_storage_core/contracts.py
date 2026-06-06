@@ -170,6 +170,21 @@ class SaveBackProposal:
     next_actions: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class CacheConflictStatus:
+    project_id: str
+    cache_authority: str
+    source_authority: str
+    freshness_state: str
+    conflict_policy: str
+    silent_resolution_blocked: bool
+    source_revision_anchors: list[str] = field(default_factory=list)
+    cache_entries: list[HiddenWorkspaceSummary] = field(default_factory=list)
+    required_actions: list[str] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -447,6 +462,51 @@ def build_save_back_proposals(project_id: str, manifest: StorageShareManifest | 
             ],
         )
     ]
+
+
+def build_cache_conflict_status(project_id: str, paths: list[str] | None = None, manifest: StorageShareManifest | None = None) -> CacheConflictStatus:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    taxonomy = classify_project_folder_taxonomy(paths or [], storage_manifest.hidden_workspace)
+    cache_categories = sorted({path.split("/", 3)[1] if "/" in path else storage_manifest.hidden_workspace for path in taxonomy.hidden_paths})
+    cache_entries = [
+        HiddenWorkspaceSummary(
+            path=storage_manifest.hidden_workspace,
+            visibility="hidden-system-summary",
+            source_count=len(taxonomy.hidden_paths),
+            cache_policy=storage_manifest.cache_policy,
+            categories=cache_categories,
+            sample_paths=taxonomy.hidden_paths[:8],
+        )
+    ]
+    return CacheConflictStatus(
+        project_id=project_id,
+        cache_authority="disposable-mcp-cache",
+        source_authority="client-owned-folder",
+        freshness_state="fixture-stale/needs-client-refresh",
+        conflict_policy="explicit-user-resolution",
+        silent_resolution_blocked=True,
+        source_revision_anchors=[
+            f"client-folder-handle:{project_id}:not-granted",
+            f"storage-share:{project_id}:manifest-fixture",
+            f"project-tree:{project_id}:fixture-taxonomy",
+        ],
+        cache_entries=cache_entries,
+        required_actions=[
+            "refresh-from-client-folder",
+            "invalidate-disposable-mcp-cache",
+            "review-save-back-proposals",
+            "require-user-conflict-resolution",
+        ],
+        blockers=[
+            "Client folder handle is not granted; cache freshness cannot be verified against authoritative source files.",
+            "MCP cache is disposable and must not be treated as authoritative project storage.",
+            "Conflicts require explicit user/client resolution; silent resolution is blocked.",
+        ],
+        warnings=[
+            "No filesystem scan, cache deletion, or conflict resolution is performed by this status contract.",
+            "Refresh actions must be driven by client-owned source anchors.",
+        ],
+    )
 
 
 def _normalize_relative_path(path: str) -> str:

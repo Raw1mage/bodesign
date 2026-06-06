@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy
+from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -134,6 +134,30 @@ class StorageCoreTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/openmv/kicad-foundation", proposal.evidence_refs)
         self.assertIn("client-checks-conflicts", proposal.next_actions)
         self.assertTrue(any("does not write client files directly" in warning for warning in proposal.warnings))
+
+    def test_builds_cache_conflict_status_without_resolution(self):
+        status = build_cache_conflict_status(
+            "openmv",
+            [
+                "eda/openmv/openmv.kicad_pro",
+                ".bodesign/analysis/kicad-happy/manifest.json",
+                ".bodesign/render/board.png",
+            ],
+        )
+
+        self.assertEqual("disposable-mcp-cache", status.cache_authority)
+        self.assertEqual("client-owned-folder", status.source_authority)
+        self.assertEqual("fixture-stale/needs-client-refresh", status.freshness_state)
+        self.assertEqual("explicit-user-resolution", status.conflict_policy)
+        self.assertTrue(status.silent_resolution_blocked)
+        self.assertIn("refresh-from-client-folder", status.required_actions)
+        self.assertIn("invalidate-disposable-mcp-cache", status.required_actions)
+        self.assertIn("review-save-back-proposals", status.required_actions)
+        self.assertTrue(any(anchor.startswith("client-folder-handle:openmv") for anchor in status.source_revision_anchors))
+        self.assertEqual(".bodesign", status.cache_entries[0].path)
+        self.assertIn("analysis", status.cache_entries[0].categories)
+        self.assertIn("render", status.cache_entries[0].categories)
+        self.assertTrue(any("silent resolution is blocked" in blocker for blocker in status.blockers))
 
 
 if __name__ == "__main__":

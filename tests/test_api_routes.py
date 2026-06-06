@@ -27,6 +27,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/storage-share", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/folder-open-request", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/save-back-proposals", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/cache-conflict-status", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
@@ -160,6 +161,11 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("client-applied/native-kicad-plugin", html)
         self.assertIn("No direct MCP file mutation", html)
         self.assertIn("reports/bodesign-analysis-summary.md", html)
+        self.assertIn("Cache / conflict status", html)
+        self.assertIn("cache-conflict-status-represented", html)
+        self.assertIn("disposable-mcp-cache", html)
+        self.assertIn("explicit-user-resolution", html)
+        self.assertIn("Silent conflict resolution is blocked", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -331,6 +337,28 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/rockbox/kicad-foundation", proposal["evidence_refs"])
         self.assertIn("client-checks-conflicts", proposal["next_actions"])
         self.assertTrue(any("No MCP-side direct file mutation" in warning for warning in envelope["warnings"]))
+
+    def test_cache_conflict_status_is_explicit_and_read_only(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        status = api_main.get_project_cache_conflict_status("rockbox")
+
+        self.assertEqual("cache-conflict-status-represented", status["status"])
+        self.assertEqual("disposable-mcp-cache", status["cache_authority"])
+        self.assertEqual("client-owned-folder", status["source_authority"])
+        self.assertEqual("fixture-stale/needs-client-refresh", status["freshness_state"])
+        self.assertEqual("explicit-user-resolution", status["conflict_policy"])
+        self.assertTrue(status["silent_resolution_blocked"])
+        self.assertEqual("not-attempted", status["filesystem_access"])
+        self.assertEqual("not-attempted", status["cache_mutation"])
+        self.assertEqual("not-attempted", status["conflict_resolution"])
+        self.assertIn("refresh-from-client-folder", status["required_actions"])
+        self.assertIn("invalidate-disposable-mcp-cache", status["required_actions"])
+        self.assertIn("review-save-back-proposals", status["required_actions"])
+        self.assertTrue(any(anchor.startswith("client-folder-handle:rockbox") for anchor in status["source_revision_anchors"]))
+        self.assertTrue(any("silent resolution is blocked" in blocker for blocker in status["blockers"]))
 
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()
