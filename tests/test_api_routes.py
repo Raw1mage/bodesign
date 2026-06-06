@@ -26,6 +26,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/geometry", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/storage-share", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/folder-open-request", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/save-back-proposals", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
@@ -154,6 +155,11 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("needs-client-grant/not-approved", html)
         self.assertIn("no-server-filesystem-access", html)
         self.assertIn("does not scan arbitrary filesystem paths or mutate files", html)
+        self.assertIn("Client-applied save-back proposals", html)
+        self.assertIn("save-back-proposals-represented", html)
+        self.assertIn("client-applied/native-kicad-plugin", html)
+        self.assertIn("No direct MCP file mutation", html)
+        self.assertIn("reports/bodesign-analysis-summary.md", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -302,6 +308,29 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("refresh-kicad-foundation", request["post_grant_actions"])
         self.assertTrue(any("must not scan arbitrary server filesystem" in blocker for blocker in request["blockers"]))
         self.assertTrue(any("not a server filesystem operation" in warning for warning in request["warnings"]))
+
+    def test_save_back_proposals_are_represented_without_file_mutation(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        envelope = api_main.get_project_save_back_proposals("rockbox")
+        proposal = envelope["proposals"][0]
+
+        self.assertEqual("save-back-proposals-represented", envelope["status"])
+        self.assertEqual("client", envelope["durable_owner"])
+        self.assertEqual("client-applied/native-kicad-plugin", envelope["application_mode"])
+        self.assertEqual("not-approved", envelope["approval_state"])
+        self.assertTrue(envelope["direct_mcp_mutation_blocked"])
+        self.assertEqual([], envelope["mutation_capabilities"])
+        self.assertEqual("save-back-rockbox-analysis-report", proposal["proposal_id"])
+        self.assertEqual("mcp-save-back", proposal["target_scope"])
+        self.assertEqual("reports/bodesign-analysis-summary.md", proposal["target_path"])
+        self.assertEqual("create-or-update-report", proposal["operation_intent"])
+        self.assertTrue(proposal["direct_mcp_mutation_blocked"])
+        self.assertIn("/bodesign/api/projects/rockbox/kicad-foundation", proposal["evidence_refs"])
+        self.assertIn("client-checks-conflicts", proposal["next_actions"])
+        self.assertTrue(any("No MCP-side direct file mutation" in warning for warning in envelope["warnings"]))
 
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()

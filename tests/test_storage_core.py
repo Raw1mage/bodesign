@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy
+from bodesign_storage_core import build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -118,6 +118,22 @@ class StorageCoreTests(unittest.TestCase):
         self.assertIn("refresh-kicad-foundation", request.post_grant_actions)
         self.assertTrue(any("must not scan arbitrary server filesystem" in blocker for blocker in request.blockers))
         self.assertTrue(any("not a server filesystem operation" in warning for warning in request.warnings))
+
+    def test_builds_client_applied_save_back_proposal_without_mutation(self):
+        proposals = build_save_back_proposals("openmv")
+        proposal = proposals[0]
+
+        self.assertEqual("save-back-openmv-analysis-report", proposal.proposal_id)
+        self.assertEqual("openmv", proposal.project_id)
+        self.assertEqual("mcp-save-back", proposal.target_scope)
+        self.assertEqual("reports/bodesign-analysis-summary.md", proposal.target_path)
+        self.assertEqual("create-or-update-report", proposal.operation_intent)
+        self.assertEqual("client-applied/native-kicad-plugin", proposal.application_mode)
+        self.assertEqual("not-approved", proposal.approval_state)
+        self.assertTrue(proposal.direct_mcp_mutation_blocked)
+        self.assertIn("/bodesign/api/projects/openmv/kicad-foundation", proposal.evidence_refs)
+        self.assertIn("client-checks-conflicts", proposal.next_actions)
+        self.assertTrue(any("does not write client files directly" in warning for warning in proposal.warnings))
 
 
 if __name__ == "__main__":

@@ -154,6 +154,22 @@ class FolderOpenRequest:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class SaveBackProposal:
+    proposal_id: str
+    project_id: str
+    target_scope: str
+    target_path: str
+    operation_intent: str
+    application_mode: str
+    approval_state: str
+    conflict_policy: str
+    direct_mcp_mutation_blocked: bool
+    evidence_refs: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -399,6 +415,38 @@ def build_folder_open_request(project_id: str, manifest: StorageShareManifest | 
             "Durable project files remain client-owned after approval.",
         ],
     )
+
+
+def build_save_back_proposals(project_id: str, manifest: StorageShareManifest | None = None) -> list[SaveBackProposal]:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    return [
+        SaveBackProposal(
+            proposal_id=f"save-back-{project_id}-analysis-report",
+            project_id=project_id,
+            target_scope="mcp-save-back",
+            target_path="reports/bodesign-analysis-summary.md",
+            operation_intent="create-or-update-report",
+            application_mode="client-applied/native-kicad-plugin",
+            approval_state="not-approved",
+            conflict_policy=storage_manifest.conflict_policy,
+            direct_mcp_mutation_blocked=True,
+            evidence_refs=[
+                f"/bodesign/api/projects/{project_id}/kicad-foundation",
+                f"/bodesign/api/projects/{project_id}/project-tree",
+            ],
+            warnings=[
+                "This proposal is represented only; the MCP does not write client files directly.",
+                "Client or native KiCad plugin must apply the patch after explicit approval and conflict checks.",
+            ],
+            next_actions=[
+                "review-proposal-evidence",
+                "approve-client-applied-patch",
+                "client-checks-conflicts",
+                "apply-through-client-or-native-kicad-plugin",
+                "refresh-project-tree",
+            ],
+        )
+    ]
 
 
 def _normalize_relative_path(path: str) -> str:

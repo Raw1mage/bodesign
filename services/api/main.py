@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -64,6 +64,7 @@ except ImportError:
     build_kicad_happy_cache_mapping = None
     build_project_registry = None
     build_project_tree_browse_contract = None
+    build_save_back_proposals = None
     classify_project_folder_taxonomy = None
     validate_storage_share_manifest = None
     build_generated_design_candidate_workspace = None
@@ -92,6 +93,8 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/storage-share", "purpose": "Return client-owned project folder storage-share manifest."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/folder-open-request", "purpose": "Return represented client folder open/import request without filesystem access."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/folder-open-request", "purpose": "Represent a client folder open/import request without filesystem access."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/save-back-proposals", "purpose": "Return represented client-applied save-back proposals without writing files."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/save-back-proposals", "purpose": "Represent client-applied save-back proposals without writing files."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/project-tree", "purpose": "Return read-only client-owned folder tree evidence summary."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
@@ -224,6 +227,7 @@ def _render_project_workspace(project_id: str) -> str:
         fusion_markup = '<tr><td colspan="5">No component↔net fusion evidence yet.</td></tr>'
     kicad_foundation = get_project_kicad_foundation(project_id)
     folder_open_request = get_project_folder_open_request(project_id)
+    save_back_proposals = get_project_save_back_proposals(project_id)
     project_tree = get_project_tree(project_id)
     kicad_native_extension = get_project_kicad_native_extension(project_id)
     kicad_source_markup = _kicad_source_markup(kicad_foundation)
@@ -347,9 +351,10 @@ def _render_project_workspace(project_id: str) -> str:
                          <h3>Connect native KiCad project</h3>
                          <p class="muted">Folder sharing is not wired yet. The target flow indexes KiCad files from a client-owned folder and hands edit/canvas actions to a KiCad Action Plugin or sidecar.</p>
                         <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
-                      </div>
-                      """ + _folder_open_request_markup(folder_open_request) + """
-                      <div class="card">
+                       </div>
+                       """ + _folder_open_request_markup(folder_open_request) + """
+                       """ + _save_back_proposals_markup(save_back_proposals) + """
+                       <div class="card">
                         <h3>KiCad native foundation status</h3>
                        <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>
                        <p>storage owner: <code>""" + escape(str(kicad_foundation.get("storage_owner", "unknown"))) + """</code></p>
@@ -560,6 +565,38 @@ def get_project_folder_open_request(project_id: str) -> dict[str, object]:
         "status": "folder-open-request-represented",
         "mutation_capabilities": [],
         "filesystem_access": "not-attempted",
+    }
+
+
+@app.get("/api/projects/{project_id}/save-back-proposals")
+@app.get("/bodesign/api/projects/{project_id}/save-back-proposals")
+@app.post("/api/projects/{project_id}/save-back-proposals")
+@app.post("/bodesign/api/projects/{project_id}/save-back-proposals")
+def get_project_save_back_proposals(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or build_save_back_proposals is None:
+        return {
+            "project_id": project_id,
+            "status": "save-back-proposals-unavailable",
+            "application_mode": "client-applied/native-kicad-plugin",
+            "approval_state": "not-approved",
+            "direct_mcp_mutation_blocked": True,
+            "mutation_capabilities": [],
+            "proposals": [],
+            "warnings": ["Save-back proposal contract could not be built; no files were written."],
+        }
+    manifest = build_default_storage_share_manifest(project_id)
+    proposals = build_save_back_proposals(project_id, manifest)
+    return {
+        "project_id": project_id,
+        "status": "save-back-proposals-represented",
+        "durable_owner": manifest.durable_owner,
+        "application_mode": "client-applied/native-kicad-plugin",
+        "approval_state": "not-approved",
+        "direct_mcp_mutation_blocked": True,
+        "mutation_capabilities": [],
+        "conflict_policy": manifest.conflict_policy,
+        "proposals": [asdict(proposal) for proposal in proposals],
+        "warnings": ["No MCP-side direct file mutation is performed by this endpoint."],
     }
 
 
@@ -1486,6 +1523,24 @@ def _folder_open_request_markup(request: dict[str, object]) -> str:
         '<p class="muted">Fail-fast represented request only; bodesign does not scan arbitrary filesystem paths or mutate files.</p>'
         f'<h4>Post-grant refresh</h4><ul>{action_items}</ul>'
         f'<h4>Blockers</h4><ul>{blocker_items}</ul>'
+        '</div>'
+    )
+
+
+def _save_back_proposals_markup(envelope: dict[str, object]) -> str:
+    proposals = envelope.get("proposals") if isinstance(envelope.get("proposals"), list) else []
+    proposal = proposals[0] if proposals and isinstance(proposals[0], dict) else {}
+    next_actions = proposal.get("next_actions") if isinstance(proposal.get("next_actions"), list) else []
+    action_items = "".join(f"<li><code>{escape(str(action))}</code></li>" for action in next_actions[:5]) or '<li class="muted">No next actions recorded.</li>'
+    return (
+        '<div class="card">'
+        '<h3>Client-applied save-back proposals</h3>'
+        f'<p><code>{escape(str(envelope.get("status", "save-back-proposals-represented")))}</code></p>'
+        f'<p>approval: <code>{escape(str(envelope.get("approval_state", "not-approved")))}</code></p>'
+        f'<p>application: <code>{escape(str(envelope.get("application_mode", "client-applied/native-kicad-plugin")))}</code></p>'
+        f'<p>target: <code>{escape(str(proposal.get("target_path", "none")))}</code></p>'
+        '<p class="muted">No direct MCP file mutation. Proposed edits are evidence-backed patches for the client or native KiCad plugin to apply after approval and conflict checks.</p>'
+        f'<h4>Next actions</h4><ul>{action_items}</ul>'
         '</div>'
     )
 

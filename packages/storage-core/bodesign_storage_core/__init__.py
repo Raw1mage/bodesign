@@ -1,4 +1,4 @@
-from .contracts import FolderOpenRequest, HiddenWorkspaceSummary, KiCadHappyArtifactPath, KiCadHappyCacheMapping, ProjectFolderTaxonomy, ProjectPathClassification, ProjectRecord, ProjectRegistry, ProjectRegistryLinks, ProjectTreeBrowseContract, ProjectTreeNode, StorageFolderRole, StorageShareManifest, StorageShareScope, build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_record, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
+from .contracts import FolderOpenRequest, HiddenWorkspaceSummary, KiCadHappyArtifactPath, KiCadHappyCacheMapping, ProjectFolderTaxonomy, ProjectPathClassification, ProjectRecord, ProjectRegistry, ProjectRegistryLinks, ProjectTreeBrowseContract, ProjectTreeNode, SaveBackProposal, StorageFolderRole, StorageShareManifest, StorageShareScope, build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_record, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, classify_project_folder_taxonomy, validate_storage_share_manifest
 
 __all__ = [
     "FolderOpenRequest",
@@ -12,6 +12,7 @@ __all__ = [
     "ProjectRegistryLinks",
     "ProjectTreeBrowseContract",
     "ProjectTreeNode",
+    "SaveBackProposal",
     "StorageFolderRole",
     "StorageShareManifest",
     "StorageShareScope",
@@ -21,6 +22,7 @@ __all__ = [
     "build_project_record",
     "build_project_registry",
     "build_project_tree_browse_contract",
+    "build_save_back_proposals",
     "classify_project_folder_taxonomy",
     "validate_storage_share_manifest",
 ]
