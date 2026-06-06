@@ -60,6 +60,23 @@ class TokenStoreTests(unittest.TestCase):
         with self.assertRaises(self.ts.TokenNotFoundError):
             self.store.resolve("tok_doesnotexist")
 
+    def test_ttl_gc_reaps_expired_keeps_fresh(self):
+        os.environ["BODESIGN_TOKEN_TTL_SECONDS"] = "3600"
+        old = self.store.stage_files({"a.txt": {"content": "x"}})["token"]
+        fresh = self.store.stage_files({"b.txt": {"content": "y"}})["token"]
+        import time
+        past = time.time() - 7200  # 2h ago, older than the 1h TTL
+        os.utime(self.work / old, (past, past))
+        removed = self.store.reap()
+        self.assertGreaterEqual(removed, 1)
+        self.assertFalse((self.work / old).exists())
+        self.assertTrue((self.work / fresh).exists())
+        # resolve() touches mtime so active tokens survive a later reap
+        os.utime(self.work / fresh, (past, past))
+        self.store.resolve(fresh)
+        self.assertEqual(0, self.store.reap())
+        self.assertTrue((self.work / fresh).exists())
+
 
 class TokenAwareDispatchTests(unittest.TestCase):
     """G11b: a tool call with `token` operates inside the token doc_dir and

@@ -15,10 +15,20 @@ from __future__ import annotations
 import base64
 import io
 import os
+import shutil
 import tarfile
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def _ttl_seconds() -> int:
+    """Token-dir TTL; 0/negative disables GC. Default 1h (docxmcp-style)."""
+    try:
+        return int(os.environ.get("BODESIGN_TOKEN_TTL_SECONDS", "3600"))
+    except ValueError:
+        return 3600
 
 
 class TokenError(Exception):
@@ -40,7 +50,25 @@ def sessions_root() -> Path:
 class TokenStore:
     root: Path
 
+    def reap(self) -> int:
+        """Garbage-collect token dirs older than the TTL (mtime-based). Server-side
+        working data thus auto-cleans — nothing persists, nothing pollutes."""
+        ttl = _ttl_seconds()
+        if ttl <= 0:
+            return 0
+        cutoff = time.time() - ttl
+        removed = 0
+        for d in self.root.glob("tok_*"):
+            try:
+                if d.is_dir() and d.stat().st_mtime < cutoff:
+                    shutil.rmtree(d, ignore_errors=True)
+                    removed += 1
+            except OSError:
+                pass
+        return removed
+
     def new_token(self) -> tuple[str, Path]:
+        self.reap()  # opportunistic GC on each new session
         token = "tok_" + uuid.uuid4().hex[:16]
         doc_dir = self.root / token
         doc_dir.mkdir(parents=True, exist_ok=True)
@@ -50,6 +78,10 @@ class TokenStore:
         doc_dir = (self.root / token)
         if not token.startswith("tok_") or not doc_dir.is_dir():
             raise TokenNotFoundError(f"token not found: {token}")
+        try:
+            os.utime(doc_dir, None)  # touch → keep active tokens alive (LRU)
+        except OSError:
+            pass
         return doc_dir.resolve()
 
     def safe_join(self, doc_dir: Path, rel: str) -> Path:
