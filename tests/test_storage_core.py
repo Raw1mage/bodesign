@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy
+from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -176,6 +176,24 @@ class StorageCoreTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/openmv/project-tree", first_chunk.evidence_refs)
         self.assertIn("run-docxmcp-client-side-decomposition", materialization.next_actions)
         self.assertTrue(any("does not read or copy files" in warning for warning in materialization.warnings))
+
+    def test_builds_kicad_analysis_status_without_native_execution(self):
+        status = build_kicad_analysis_status("openmv")
+
+        self.assertEqual("kicad-analysis-openmv", status.request_id)
+        self.assertEqual("native-kicad-plugin/client-orchestrated-kicad-happy", status.orchestration_mode)
+        self.assertEqual("not-approved/needs-client-grant", status.approval_state)
+        self.assertEqual("represented-not-run", status.run_state)
+        self.assertEqual(".bodesign/analysis/kicad-happy", status.analysis_root)
+        self.assertTrue(status.direct_server_execution_blocked)
+        self.assertIn("drc", status.requested_checks)
+        self.assertIn("erc", status.requested_checks)
+        self.assertIn("emc", status.requested_checks)
+        self.assertIn("/bodesign/api/projects/openmv/kicad-plugin-handshake", status.evidence_refs)
+        self.assertTrue(all(output.target_path.startswith(".bodesign/analysis/kicad-happy/") for output in status.expected_outputs))
+        self.assertEqual("represented-not-run", status.expected_outputs[0].cache_state)
+        self.assertIn("run-analysis-through-kicad-plugin-or-client", status.next_actions)
+        self.assertTrue(any("must not run KiCad" in blocker for blocker in status.blockers))
 
 
 if __name__ == "__main__":

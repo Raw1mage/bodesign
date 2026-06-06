@@ -29,6 +29,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/save-back-proposals", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/cache-conflict-status", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/source-chunks/materialization", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/kicad-analysis-status", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
@@ -172,6 +173,11 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("client-applied/docxmcp-orchestration", html)
         self.assertIn(".bodesign/sources", html)
         self.assertIn("Direct server copy is blocked", html)
+        self.assertIn("KiCad analysis request/status", html)
+        self.assertIn("kicad-analysis-status-represented", html)
+        self.assertIn("native-kicad-plugin/client-orchestrated-kicad-happy", html)
+        self.assertIn("represented-not-run", html)
+        self.assertIn("No server-side KiCad execution", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -389,6 +395,28 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("run-docxmcp-client-side-decomposition", materialization["next_actions"])
         self.assertTrue(any("Direct server-side copy" in blocker for blocker in materialization["blockers"]))
 
+    def test_kicad_analysis_status_is_represented_without_native_execution(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        status = api_main.get_project_kicad_analysis_status("rockbox")
+
+        self.assertEqual("kicad-analysis-status-represented", status["status"])
+        self.assertEqual("kicad-analysis-rockbox", status["request_id"])
+        self.assertEqual("native-kicad-plugin/client-orchestrated-kicad-happy", status["orchestration_mode"])
+        self.assertEqual("not-approved/needs-client-grant", status["approval_state"])
+        self.assertEqual("represented-not-run", status["run_state"])
+        self.assertEqual(".bodesign/analysis/kicad-happy", status["analysis_root"])
+        self.assertTrue(status["direct_server_execution_blocked"])
+        self.assertEqual("not-attempted", status["native_execution"])
+        self.assertEqual("not-attempted", status["filesystem_access"])
+        self.assertEqual([], status["mutation_capabilities"])
+        self.assertIn("drc", status["requested_checks"])
+        self.assertIn("erc", status["requested_checks"])
+        self.assertTrue(all(output["target_path"].startswith(".bodesign/analysis/kicad-happy/") for output in status["expected_outputs"]))
+        self.assertTrue(any("must not run KiCad" in blocker for blocker in status["blockers"]))
+
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()
         sys.modules.pop("services.api.main", None)
@@ -447,6 +475,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertEqual("kicad-action-plugin-plus-bodesign-mcp-sidecar", handshake["integration_model"])
         self.assertEqual("/bodesign/projects/rockbox", handshake["urls"]["dashboard"])
         self.assertEqual("/bodesign/api/projects/rockbox/kicad-foundation", handshake["urls"]["foundation"])
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-analysis-status", handshake["urls"]["request_analysis"])
         self.assertIn("request-analysis-plan", handshake["approved_capabilities"])
         self.assertIn("represent-approved-patch", handshake["approved_capabilities"])
         self.assertIn("mutate-kicad-files-without-user-approval", handshake["blocked_capabilities"])

@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -62,6 +62,7 @@ except ImportError:
     build_default_storage_share_manifest = None
     build_cache_conflict_status = None
     build_folder_open_request = None
+    build_kicad_analysis_status = None
     build_kicad_happy_cache_mapping = None
     build_project_registry = None
     build_project_tree_browse_contract = None
@@ -100,6 +101,8 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/cache-conflict-status", "purpose": "Return disposable MCP cache freshness and explicit conflict status without resolving conflicts."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/source-chunks/materialization", "purpose": "Return represented source chunk materialization plan without reading or copying files."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/source-chunks/materialization", "purpose": "Represent source chunk materialization plan without reading or copying files."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-analysis-status", "purpose": "Return represented KiCad/KiCad Happy analysis request/status without running native tools."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/kicad-analysis-status", "purpose": "Represent KiCad/KiCad Happy analysis request without running native tools."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/project-tree", "purpose": "Return read-only client-owned folder tree evidence summary."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
@@ -235,11 +238,13 @@ def _render_project_workspace(project_id: str) -> str:
     save_back_proposals = get_project_save_back_proposals(project_id)
     cache_conflict_status = get_project_cache_conflict_status(project_id)
     source_chunk_materialization = get_project_source_chunk_materialization(project_id)
+    kicad_analysis_status = get_project_kicad_analysis_status(project_id)
     project_tree = get_project_tree(project_id)
     kicad_native_extension = get_project_kicad_native_extension(project_id)
     kicad_source_markup = _kicad_source_markup(kicad_foundation)
     kicad_taxonomy_markup = _kicad_taxonomy_markup(kicad_foundation)
     kicad_analysis_markup = _kicad_analysis_markup(kicad_foundation)
+    kicad_analysis_status_markup = _kicad_analysis_status_markup(kicad_analysis_status)
     kicad_blocker_markup = _kicad_blocker_markup(kicad_foundation)
     kicad_native_markup = _kicad_native_extension_markup(kicad_native_extension)
     candidate_workspace = get_generated_design_candidate_workspace(project_id)
@@ -361,9 +366,10 @@ def _render_project_workspace(project_id: str) -> str:
                        </div>
                         """ + _folder_open_request_markup(folder_open_request) + """
                          """ + _save_back_proposals_markup(save_back_proposals) + """
-                         """ + _cache_conflict_status_markup(cache_conflict_status) + """
-                         """ + _source_chunk_materialization_markup(source_chunk_materialization) + """
-                         <div class="card">
+                          """ + _cache_conflict_status_markup(cache_conflict_status) + """
+                          """ + _source_chunk_materialization_markup(source_chunk_materialization) + """
+                          """ + kicad_analysis_status_markup + """
+                          <div class="card">
                         <h3>KiCad native foundation status</h3>
                        <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>
                        <p>storage owner: <code>""" + escape(str(kicad_foundation.get("storage_owner", "unknown"))) + """</code></p>
@@ -430,6 +436,8 @@ def _render_project_workspace(project_id: str) -> str:
                    <p class="muted">KiCad Happy analyzer output, trust summaries, DRC/ERC/DFM evidence, and reconstruction previews appear here as evidence/cache views.</p>
                    <h3>KiCad Happy hidden analysis cache</h3>
                    """ + kicad_analysis_markup + """
+                   <h3>KiCad analysis request/status</h3>
+                   """ + kicad_analysis_status_markup + """
                    <h3>Component-Net fusion evidence</h3>
                   <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Pins</th><th>Nets</th><th>Sample nets</th></tr></thead><tbody>""" + fusion_markup + """</tbody></table></div>
                   <h3>BoardDesign IR</h3>
@@ -668,6 +676,37 @@ def get_project_source_chunk_materialization(project_id: str) -> dict[str, objec
     }
 
 
+@app.get("/api/projects/{project_id}/kicad-analysis-status")
+@app.get("/bodesign/api/projects/{project_id}/kicad-analysis-status")
+@app.post("/api/projects/{project_id}/kicad-analysis-status")
+@app.post("/bodesign/api/projects/{project_id}/kicad-analysis-status")
+def get_project_kicad_analysis_status(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or build_kicad_analysis_status is None or build_kicad_happy_cache_mapping is None:
+        return {
+            "project_id": project_id,
+            "status": "kicad-analysis-status-unavailable",
+            "orchestration_mode": "native-kicad-plugin/client-orchestrated-kicad-happy",
+            "approval_state": "not-approved/needs-client-grant",
+            "run_state": "represented-not-run",
+            "analysis_root": ".bodesign/analysis/kicad-happy",
+            "direct_server_execution_blocked": True,
+            "requested_checks": [],
+            "expected_outputs": [],
+            "blockers": ["KiCad analysis status contract could not be built."],
+            "warnings": ["No KiCad, DRC, ERC, analyzer subprocess, filesystem read, or file mutation was attempted."],
+        }
+    manifest = build_default_storage_share_manifest(project_id)
+    cache_mapping = build_kicad_happy_cache_mapping(manifest.hidden_workspace)
+    analysis_status = build_kicad_analysis_status(project_id, manifest, cache_mapping)
+    return {
+        **asdict(analysis_status),
+        "status": "kicad-analysis-status-represented",
+        "native_execution": "not-attempted",
+        "filesystem_access": "not-attempted",
+        "mutation_capabilities": [],
+    }
+
+
 @app.get("/api/projects/{project_id}/project-tree")
 @app.get("/bodesign/api/projects/{project_id}/project-tree")
 def get_project_tree(project_id: str) -> dict[str, object]:
@@ -773,7 +812,7 @@ def get_project_kicad_plugin_handshake(project_id: str) -> dict[str, object]:
             "dashboard": f"/bodesign/projects/{project_id}",
             "foundation": f"{base_path}/kicad-foundation",
             "native_extension": f"{base_path}/kicad-native-extension",
-            "request_analysis": f"{base_path}/workflow/reference-board",
+            "request_analysis": f"{base_path}/kicad-analysis-status",
             "generated_candidate": f"{base_path}/candidates/generated-design",
         },
         "approved_capabilities": approved_capabilities,
@@ -1644,6 +1683,36 @@ def _source_chunk_materialization_markup(materialization: dict[str, object]) -> 
         f'<p>sample: <code>{escape(str(first_chunk.get("target_path", ".bodesign/sources")))}</code></p>'
         '<p class="muted">docxmcp/client orchestration boundary: source chunks are represented with provenance only. Direct server copy is blocked and durable chunks stay in client-owned hidden storage.</p>'
         f'<h4>Next actions</h4><ul>{action_items}</ul>'
+        '</div>'
+    )
+
+
+def _kicad_analysis_status_markup(status: dict[str, object]) -> str:
+    checks = status.get("requested_checks") if isinstance(status.get("requested_checks"), list) else []
+    check_items = "".join(f"<span class=\"pill\">{escape(str(check))}</span>" for check in checks[:8]) or '<span class="muted">No checks requested.</span>'
+    outputs = status.get("expected_outputs") if isinstance(status.get("expected_outputs"), list) else []
+    output_rows = "".join(
+        "<tr>"
+        f"<td><code>{escape(str(output.get('category', '')))}</code></td>"
+        f"<td><code>{escape(str(output.get('target_path', '')))}</code></td>"
+        f"<td>{escape(str(output.get('cache_state', '')))}</td>"
+        "</tr>"
+        for output in outputs[:12]
+        if isinstance(output, dict)
+    )
+    if not output_rows:
+        output_rows = '<tr><td colspan="3">No analysis evidence outputs are represented.</td></tr>'
+    return (
+        '<div class="card">'
+        '<h3>KiCad analysis request/status</h3>'
+        f'<p><code>{escape(str(status.get("status", "kicad-analysis-status-represented")))}</code></p>'
+        f'<p>run: <code>{escape(str(status.get("run_state", "represented-not-run")))}</code></p>'
+        f'<p>approval: <code>{escape(str(status.get("approval_state", "not-approved/needs-client-grant")))}</code></p>'
+        f'<p>mode: <code>{escape(str(status.get("orchestration_mode", "native-kicad-plugin/client-orchestrated-kicad-happy")))}</code></p>'
+        f'<p>target: <code>{escape(str(status.get("analysis_root", ".bodesign/analysis/kicad-happy")))}</code></p>'
+        '<p class="muted">No server-side KiCad execution. DRC/ERC/KiCad Happy runs must be approved and orchestrated by native KiCad plugin or client, with evidence cached under the hidden analysis workspace.</p>'
+        f'<h4>Requested checks</h4><div class="pin-list">{check_items}</div>'
+        f'<div class="scroll"><table><thead><tr><th>Output</th><th>Target path</th><th>State</th></tr></thead><tbody>{output_rows}</tbody></table></div>'
         '</div>'
     )
 

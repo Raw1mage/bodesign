@@ -16,6 +16,7 @@ class KiCadPluginTests(unittest.TestCase):
         self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-foundation", config.foundation_api_url)
         self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-native-extension", config.native_extension_api_url)
         self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-plugin-handshake", config.handshake_api_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-analysis-status", config.request_analysis_api_url)
 
     def test_discovers_project_context_from_kicad_paths(self):
         project_context = discover_project_context("/work/demo/eda/demo.kicad_pro")
@@ -32,7 +33,9 @@ class KiCadPluginTests(unittest.TestCase):
         call = build_request_analysis_call(config, context)
 
         self.assertEqual("POST", call["method"])
-        self.assertIn("/workflow/reference-board", call["endpoint"])
+        self.assertIn("/kicad-analysis-status", call["endpoint"])
+        self.assertEqual(".bodesign/analysis/kicad-happy", call["payload"]["analysis_root"])
+        self.assertIn("drc", call["payload"]["requested_checks"])
         self.assertFalse(call["payload"]["approved_for_execution"])
         self.assertEqual("represented-not-executed", call["status"])
 

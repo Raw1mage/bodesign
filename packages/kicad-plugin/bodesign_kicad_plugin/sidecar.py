@@ -29,7 +29,7 @@ class SidecarConfig:
 
     @property
     def request_analysis_api_url(self) -> str:
-        return f"{self.base_url.rstrip('/')}/api/projects/{self.project_id}/workflow/reference-board"
+        return f"{self.base_url.rstrip('/')}/api/projects/{self.project_id}/kicad-analysis-status"
 
 
 @dataclass(slots=True)
@@ -95,6 +95,8 @@ def build_request_analysis_call(config: SidecarConfig, context: KiCadProjectCont
             "project_source": config.project_source,
             "kicad_project_path": context.project_path,
             "source_type": context.source_type,
+            "requested_checks": ["kicad-happy-analysis", "drc", "erc", "dfm", "emc", "thermal"],
+            "analysis_root": ".bodesign/analysis/kicad-happy",
             "approved_for_execution": False,
         },
         "status": "represented-not-executed",

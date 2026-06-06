@@ -209,6 +209,31 @@ class SourceChunkMaterialization:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class KiCadAnalysisEvidenceOutput:
+    category: str
+    target_path: str
+    cache_state: str
+    purpose: str
+
+
+@dataclass(slots=True)
+class KiCadAnalysisStatus:
+    project_id: str
+    request_id: str
+    orchestration_mode: str
+    approval_state: str
+    run_state: str
+    analysis_root: str
+    direct_server_execution_blocked: bool
+    requested_checks: list[str] = field(default_factory=list)
+    expected_outputs: list[KiCadAnalysisEvidenceOutput] = field(default_factory=list)
+    evidence_refs: list[str] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -582,6 +607,55 @@ def build_source_chunk_materialization(project_id: str, manifest: StorageShareMa
         warnings=[
             "This contract represents source chunk materialization only; it does not read or copy files.",
             "Durable source chunks remain under client-owned hidden .bodesign/sources/ storage.",
+        ],
+    )
+
+
+def build_kicad_analysis_status(project_id: str, manifest: StorageShareManifest | None = None, cache_mapping: KiCadHappyCacheMapping | None = None) -> KiCadAnalysisStatus:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    mapping = cache_mapping or build_kicad_happy_cache_mapping(storage_manifest.hidden_workspace)
+    output_categories = {"manifest", "analyzer-json", "trust-summary", "diffs", "renders", "drc", "erc", "dfm", "emc", "thermal"}
+    expected_outputs = [
+        KiCadAnalysisEvidenceOutput(
+            category=artifact.category,
+            target_path=artifact.path,
+            cache_state="represented-not-run",
+            purpose=artifact.purpose,
+        )
+        for artifact in mapping.artifact_paths
+        if artifact.category in output_categories
+    ]
+    return KiCadAnalysisStatus(
+        project_id=project_id,
+        request_id=f"kicad-analysis-{project_id}",
+        orchestration_mode="native-kicad-plugin/client-orchestrated-kicad-happy",
+        approval_state="not-approved/needs-client-grant",
+        run_state="represented-not-run",
+        analysis_root=mapping.analysis_root,
+        direct_server_execution_blocked=True,
+        requested_checks=["kicad-happy-analysis", "drc", "erc", "dfm", "emc", "thermal", "trust-summary", "prior-run-diff"],
+        expected_outputs=expected_outputs,
+        evidence_refs=[
+            f"/bodesign/api/projects/{project_id}/kicad-foundation",
+            f"/bodesign/api/projects/{project_id}/kicad-plugin-handshake",
+            f"/bodesign/api/projects/{project_id}/cache-conflict-status",
+        ],
+        blockers=[
+            "Client folder handle is not granted; analysis cannot be anchored to authoritative KiCad source revisions.",
+            "User has not approved native KiCad/KiCad Happy execution.",
+            "bodesign server must not run KiCad, DRC, ERC, or analyzer subprocesses directly.",
+            "Analysis evidence cache is disposable and must not be treated as authoritative project source.",
+        ],
+        next_actions=[
+            "grant-client-folder-handle",
+            "approve-native-kicad-analysis-run",
+            "run-analysis-through-kicad-plugin-or-client",
+            "materialize-evidence-under-hidden-analysis-cache",
+            "refresh-cache-conflict-status",
+        ],
+        warnings=[
+            "This contract represents KiCad analysis request/status only; it does not execute native tools.",
+            "Expected evidence outputs target hidden .bodesign analysis cache under client control.",
         ],
     )
 
