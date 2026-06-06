@@ -15,6 +15,7 @@ from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
 from .layout import LayoutResult, PCBNEW_AVAILABLE, emit_layout
 from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocation, render_pin_allocation_csv, render_pin_allocation_md
+from .simulate import SimResult, simulate_schematic
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints, openmv_package_queries
 
 __all__ = [
@@ -36,6 +37,8 @@ __all__ = [
     "PackageQuery",
     "PinAllocation",
     "PinAllocationRow",
+    "SimResult",
+    "simulate_schematic",
     "build_pin_allocation",
     "render_pin_allocation_csv",
     "render_pin_allocation_md",

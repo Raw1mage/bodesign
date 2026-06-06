@@ -37,6 +37,7 @@ The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` 
 - `packages/eda-bridge/bodesign_eda_bridge/layout.py` — N14 layout via pcbnew + DRC + render (G8).
 - `packages/eda-bridge/bodesign_eda_bridge/fab.py` — N15 fab outputs via kicad-cli (G9).
 - `packages/eda-bridge/bodesign_eda_bridge/bom_export.py` — N12 BOM + netlist export via kicad-cli (G12).
+- `packages/eda-bridge/bodesign_eda_bridge/simulate.py` — N16 SPICE orchestration (kicad analyzer + spice skill).
 - `packages/workflow-core/bodesign_workflow_core/requirement_planning.py` — N4 requirements→plan (R5).
 - `packages/workflow-core/bodesign_workflow_core/evidence_sourcing.py` — N6 evidence sourcing (R6).
 - `packages/workflow-core/bodesign_workflow_core/package_readiness.py` — N18 readiness compass (G2).

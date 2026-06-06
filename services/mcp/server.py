@@ -128,6 +128,11 @@ def _h_crosscheck(a: dict) -> Any:
                            a.get("label", "interface"), a.get("provenance")).to_dict()
 
 
+def _h_simulate(a: dict) -> Any:
+    from bodesign_eda_bridge import simulate_schematic
+    return asdict(simulate_schematic(a["schematic_path"], a["out_dir"], simulator=a.get("simulator", "ngspice"), types=a.get("types")))
+
+
 def _h_export_bom(a: dict) -> Any:
     from bodesign_eda_bridge import export_bom
     return asdict(export_bom(a["schematic_path"], a["out_dir"], group_by=a.get("group_by", "Value"), xlsx=a.get("xlsx", False)))
@@ -175,6 +180,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_emit_fab", "handler": _h_fab,
      "description": "Export fab outputs (gerbers/drill/pos/step/pdf) from a .kicad_pcb via kicad-cli.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_dir": _STR, "formats": {"type": "array", "items": _STR}}, "required": ["board_path", "out_dir"]}},
+    {"name": "bodesign_simulate", "handler": _h_simulate,
+     "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer.",
+     "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "simulator": _STR, "types": _STR}, "required": ["schematic_path", "out_dir"]}},
     {"name": "bodesign_export_bom", "handler": _h_export_bom,
      "description": "Export a grouped Bill of Materials (CSV, qty + MPN, DNP excluded) from a schematic; optional xlsx companion.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "group_by": _STR, "xlsx": {"type": "boolean"}}, "required": ["schematic_path", "out_dir"]}},
