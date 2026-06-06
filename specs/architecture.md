@@ -2,14 +2,13 @@
 
 ## Product Boundary
 
-This repository will host `bodesign` as a host-agnostic MCP server plus web server. Agents and IDEs provide files or design instructions through MCP; the web server mounts the primary viewer at `/bodesign/`. The system boundary starts with source ingestion and normalization: datasheet/schematic/BOM-like evidence extraction, Gerber/drill/IPC upload, public reference-board evidence, and normalized component/design knowledge. Those normalized records feed `BoardDesign IR` generation/reconstruction, layout planning, `/bodesign/` circuit/PCB rendering, Gerber generation, deterministic validation, approval, and export. opencms/opencode is an optional first-class integration, not the product boundary. Factory test/debug guidance is deferred to a later phase.
+This repository will host `bodesign` as a host-agnostic MCP server plus web server. Any MCP-capable client (IDE, agent, or HTTP caller) provides files or design instructions through MCP over a Unix socket (local) or TCP port (external). The system boundary starts with source ingestion and normalization: datasheet/schematic/BOM-like evidence extraction, Gerber/drill/IPC upload, public reference-board evidence, and normalized component/design knowledge. Those normalized records feed `BoardDesign IR` generation/reconstruction, layout planning, `/bodesign/` circuit/PCB rendering, Gerber generation, deterministic validation, approval, and export. bodesign is independently operable; no host shell or gateway owns the product boundary. Factory test/debug guidance is deferred to a later phase.
 
 ## Planned Modules
 
 - `apps/web`: `/bodesign/` web viewer for circuit/PCB view, Gerber layers, evidence overlays, confidence, component knowledge summaries, and reports.
 - `services/api`: FastAPI/Python backend for project APIs, Postgres-backed design jobs, storage access, web APIs, MCP tool handlers, AI orchestration, validation, approval, Gerber generation, and export.
-- `services/mcp`: Host-agnostic MCP server exposing bodesign tools to opencms, Cursor, Claude Desktop, VS Code, and other MCP-capable IDEs/agents.
-- `integrations/opencms`: Optional opencms gateway/fileview adapter around the same web/API/MCP surfaces.
+- `services/mcp`: Host-agnostic MCP server exposing bodesign tools to any MCP-capable IDE/agent/HTTP client.
 - `packages/design-ir`: Product-owned PCB source of truth, evidence model, schema validation, and versioning.
 - `packages/component-kb`: Datasheet ingestion, part-number resolution, pinout/package normalization, interface grouping, and layout-rule knowledge.
 - `packages/doc-core`: OpenMV schematic/datasheet evidence extraction and design-intent normalization.
@@ -37,7 +36,7 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 - OpenMV schematic/datasheet extraction: needed for datasheet-to-layout flow.
 - `ComponentKnowledge`: normalized datasheet and pinout knowledge is a Day 1 dependency for layout generation/reconstruction quality.
 - `BoardDesign IR`: core product-owned EDA kernel and source of truth.
-- Host integrations: opencms/opencode, Cursor, Claude Desktop, VS Code, and other MCP-capable clients can drive bodesign through MCP; no single host owns the product boundary.
+- Any MCP-capable client (Cursor, Claude Desktop, VS Code, custom agents/HTTP callers) can drive bodesign through MCP; no single host owns the product boundary.
 - KiCad bridge: first practical target for layout file/export/DRC compatibility, kept behind adapter boundaries.
 - `freerouting/freerouting`: candidate deterministic autorouter after IR emits placement, nets, keepouts, and routing constraints.
 - `skidl`: optional OpenMV document-to-circuit/netlist evidence layer.
