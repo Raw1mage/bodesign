@@ -1,57 +1,72 @@
-# Tasks: AI PCB Design Copilot
+# Tasks: bodesign — AI PCB Design Copilot (MCP)
 
-> **Reorganized 2026-06-06.** This roadmap is the authoritative forward plan. The detailed `T*`/`O*` task ledger below is preserved as the historical record.
+> **Authoritative consolidated plan (rewritten 2026-06-06).** Sections 1–7 are the single source of truth; the `Reorganized Roadmap` (R1–R10) and the `Historical Task Ledger` (T*/O*) below are kept only as record.
 
-## Architecture (consolidated 2026-06-06)
-
-- **Core = KiCad's circuit-design capability**, across the **full lifecycle**: schematic → layout → simulation/verification. Principle: **whatever KiCad can do, wrap it in.**
+## 1. Identity & architecture
+- **Core = KiCad's circuit-design capability**, across the full lifecycle: schematic → layout → simulation/verification. Principle: *whatever KiCad can do, wrap it in.*
 - **Surface = a docxmcp-style file/folder processor** — **no web UI** (retired). Ingest a whole client project folder (like 01.ROCKBOX), operate via MCP tools, emit files back into the client-owned folder.
-- **Interaction = prompt-driven.** The user communicates in natural language; the MCP lands files. The user reviews with native apps.
-- **Output format rule:** any non-readable engineering file (`.kicad_sch`, Gerber, drill, `.DSN`) ships with a **readable companion** (pdf/png/svg/xlsx). md/csv/html/docx/pdf/xlsx/png/pptx are all acceptable readable formats.
-- **North star (driving product):** TheSmartAI Edge AI device (see `product_edge_ai_device`), V1 OpenMV-derived.
+- **State = plan-builder-shaped, but the folder *is* the state.** No separate `.state.json` to drift; the package contents are the truth, and `package_readiness` (G2) computes the compass on demand.
+- **Interaction = prompt-driven, agent-as-wizard.** User talks + submits raw data → MCP lands files → user reviews in native apps. Each turn: read compass → one next step → produce artifact → recompute compass.
+- **Format rule:** any non-readable engineering file (`.kicad_sch`/Gerber/drill/`.DSN`) ships with a **readable companion** (pdf/png/svg/xlsx). md/csv/html/docx/pdf/xlsx/png/pptx all acceptable.
+- **Safety:** AI never emits send-to-fab outputs without deterministic validation + explicit approval.
+- **Driving product:** TheSmartAI Edge AI device (`product_edge_ai_device`), V1 OpenMV-derived. Current package readiness **67%**.
 
-### KiCad capabilities available on this host (KiCad 9.0.9)
-- Schematic: S-expr emit + `kicad-cli sch erc / export netlist|bom|pdf|svg`. ✅ used
-- PCB/layout: **`pcbnew` Python API** (place/edit/DRC/plot) + `kicad-cli pcb drc / export gerber|drill|pos|step|pdf|svg|ipc2581|ipcd356`. ✅ available, not yet wired
-- Simulation: ngspice (not installed — add when reached) via the `spice` skill.
-- Autorouting: freerouting (not installed — add when reached).
+## 2. Division of labour
+- **bodesign builds (forward-generation + surface + state + trust)** — nothing else does this: ingest, requirements→plan, evidence sourcing, symbol generation, subsystem composition, schematic emit, layout (pcbnew), companion rendering, readiness compass, reference cross-check, doc/interface emitters.
+- **Orchestrate existing skills (analysis / docs / sim / sourcing / fab):** `kicad` (ERC/DRC/BOM/netlist/power-tree), `kidoc` (HDD/CE/ICD/Design-Review/Manufacturing-Transfer + renders/diagrams), `emc`, `spice`, `datasheets`, `bom`/`digikey`/`lcsc`/`element14`/`jlcpcb`/`pcbway`.
+- **Host (KiCad 9.0.9):** schematic S-expr emit + `kicad-cli sch erc/export`; **`pcbnew` Python API** + `kicad-cli pcb drc/export gerber|drill|pos|step|pdf|ipc2581|ipcd356` (available, layout/fab not yet wired); ngspice + freerouting not installed (add when reached).
 
-### Lifecycle MCP tool surface (have → build)
-| Stage | KiCad capability to wrap | Status |
-|---|---|---|
-| Ingest project folder | `ingest_project_folder` — walk read-only, classify every file by EDA role/format, index, detect C0* sections, flag non-readable engineering files + auto-detect existing readable companions | ✅ (verified on the real 243-file Rockbox project) |
-| Requirements → plan | `plan_design_intent` (R5) | ✅ |
-| Evidence/reference sourcing | `build_design_evidence_manifest` (R6) | ✅ |
-| Symbol generation | `emit_kicad_symbol_library_from_pin_table` | ✅ |
-| Schematic emit + validate | `emit_kicad_schematic` + `kicad-cli erc/netlist` | ✅ |
-| Footprint mapping | `build_footprint_map` (R3) | ✅ |
-| BOM | from schematic/netlist | partial |
-| **Layout** | `pcbnew` place + `kicad-cli pcb drc` | **build** |
-| **Fab outputs** | `kicad-cli pcb export gerber/drill/pos/step/ipc2581` (+ readable pdf/png companion) | **build** |
-| **Simulation/verify** | ngspice via `spice` skill; `kicad-cli pcb drc`, `sch erc` | **build** |
-| Gap/readiness report | `collect_source_gap_report` (R1) + readiness guide | ✅ |
+## 3. Workflow & tool coverage (full lifecycle)
+| # | Node | Tool | Owner | Status |
+|---|---|---|---|---|
+| N1 | Ingest project folder | `ingest_project_folder` | bodesign | ✅ G-done |
+| N2 | Decompose docs (datasheet/BOM/schematic) | `datasheets` skill + `kicad` (PDF sch) | orchestrate | partial |
+| N3 | Render readable companions | `companion_render` (kicad-cli/pygerber) | bodesign | ✅ **G1** |
+| N4 | Requirements → clarify → plan | `plan_design_intent` | bodesign | ✅ R5 |
+| N5 | PRD / doc emit (docx/pdf) | emitter + libreoffice | bodesign | ⬜ **G4** |
+| N6 | Evidence / reference sourcing | `build_design_evidence_manifest` + `digikey`/`lcsc` | bodesign+orch | ✅ R6 |
+| N7 | Datasheet → ComponentKnowledge (pinout) | `datasheets` skill + pin_tables | orchestrate | ✅(ST) ⬜ **G6** |
+| N8 | Symbol generation | `emit_kicad_symbol_library_from_pin_table` | bodesign | ✅ |
+| N9 | Footprint mapping/generation | `build_footprint_map` | bodesign | ✅ R3 (gen: G6) |
+| N10 | Subsystem composition (ref → IR) | composer | bodesign | ⬜ **G3** |
+| N11 | Schematic emit + ERC | `emit_kicad_schematic` + `kicad-cli erc` | bodesign | ✅ |
+| N12 | Netlist + BOM | `kicad` + `kicad-cli export` | orchestrate | partial |
+| N13 | Pin/GPIO allocation (→FW) | emitter | bodesign | ⬜ **G5** |
+| N14 | Layout (place + DRC) | `pcbnew` + `kicad-cli pcb drc` | bodesign | ⬜ **G8** |
+| N15 | Fab outputs + companions | `kicad-cli pcb export` | bodesign+orch | ⬜ **G9** |
+| N16 | Simulation / EMC / thermal | `spice` / `emc` skills | orchestrate | ⬜ (wire) |
+| N17 | Doc packages (HDD/MTP/Design-Review) | `kidoc` | orchestrate | ✅ verified (needs PCB) |
+| N18 | Gap / readiness | `collect_source_gap_report` + `package_readiness` | bodesign | ✅ R1/**G2** |
+| N19 | Reference cross-check (trust) | `reference_crosscheck` | bodesign | ✅ **G7** |
 
-### Skill orchestration — division of labour (verified 2026-06-06)
-**bodesign builds the forward-GENERATION gap** (no skill does this): requirements→plan (R5), symbol generation, subsystem composition, schematic emit, folder-ingest, gap/readiness. **Everything else = orchestrate the existing KiCad/EDA skills:** `kicad` (ERC/DRC/BOM/netlist/power-tree analysis), `kidoc` (HDD/CE/ICD/Design-Review/Manufacturing-Transfer doc packages + schematic/PCB renders + block/power-tree diagrams), `emc`, `spice`, `datasheets`, `bom`/`digikey`/`lcsc`/`jlcpcb`/`pcbway`.
-- **Verified on bodesign's own generated OpenMV schematic:** `kicad` analyzer ingested it cleanly — 6 components, rail voltages auto-inferred (1.8/3.3V), decoupling detected, actionable findings (SS-001 no-MPN, NT-001 single-pin nets). The generate→analyze loop is closed.
-- **`kidoc` verified** to ingest the same project, auto-run schematic analysis, render the schematic SVG, and generate power-tree/EMC diagrams; **full HDD/doc-package assembly currently needs PCB data** (schematic-only hit an edge case) — so the doc-package node is unlocked once layout exists (or with a schematic-only path).
-- Chain confirmed: **`kicad` analyze (`--analysis-dir analysis/`) → `kidoc` consumes it** to render + document.
+## 4. Build queue — bodesign-unique gaps (complete)
+Status · dependency · acceptance.
 
-## Gaps to fill (bodesign-unique build queue)
+- [x] **G1 Companion rendering** (N3) — done. `reverse-core.companion_render`; verified sch→PDF, gerber→PNG, .DSN→unsupported.
+- [x] **G2 Package readiness compass** (N18) — done. `workflow-core.package_readiness`; TheSmartAI 67%.
+- [x] **G7 Reference cross-check / trust** (N19) — done. `workflow-core.reference_crosscheck`; flash 75% vs OpenMV.
+- [ ] **G3 Generalized subsystem composer** (N10) — *dep: G6.* spec + harvested evidence → IR → schematic. **Acceptance:** kicad-cli ERC clean + cross-check coverage vs control group ≥ target (e.g. flash 75%→100%).
+- [ ] **G4 PRD/doc emitter** (N5) — *unblocked.* structured md → docx/pdf companion (libreoffice). **Acceptance:** PRD/readiness render to docx+pdf that open cleanly.
+- [ ] **G5 Pin/GPIO allocation table** (N13) — *unblocked.* net/pin evidence → C03↔FW interface table (xlsx/csv). **Acceptance:** table matches the schematic nets.
+- [ ] **G6 Per-part symbol harvest** (N7/N8) — *unblocked.* orchestrate `datasheets` → pinout → symbol for V1 parts beyond STM32N657/MX25 (WiFi `LBEE5KL1YN`, charger `BQ24075`, mic, camera connector). Feeds G3. **Acceptance:** each symbol parses + kicad-cli accepts.
+- [ ] **G8 Layout** (N14) — *dep: G3.* wrap `pcbnew`: assign footprints, place, run `kicad-cli pcb drc`; emit `.kicad_pcb` + readable PDF/PNG companion. **Acceptance:** DRC runs, board opens, companion rendered. (Auto-routing = freerouting/manual, bounded.)
+- [ ] **G9 Fab outputs** (N15) — *dep: G8.* `kicad-cli pcb export` gerber/drill/pos/step/ipc2581 + companions; assemble the fab/assembly handoff package. **Acceptance:** outputs validate via `kicad` gerber analyzer; unlocks full `kidoc` Manufacturing-Transfer package.
 
-Everything else is **orchestrated** via skills (`kicad`/`kidoc`/`emc`/`spice`/`datasheets`/`bom`/`jlcpcb`). bodesign builds only the forward-generation/surface gaps below. Ordered by leverage (unblocked first):
+Orchestration wiring (not bodesign gaps, but workflow steps): **N16** install+wire `spice`/`emc`; **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.
 
-- [x] **G1 Companion rendering (N3)** — `reverse-core.companion_render` (`render_companion` + `render_all_companions`): `.kicad_sch`/`.kicad_pcb` → pdf via `kicad-cli`, Gerber → png via pygerber, others (OrCAD/3D/vector) reported unsupported. Verified: bodesign's generated schematic → 308 KB PDF, Rockbox `L1_top.art` → 165 KB PNG, `.DSN` → unsupported. Completes the ingest→readable surface + the format policy.
-- [x] **G2 Package readiness index (N28/N29)** — `workflow-core.package_readiness` (`assess_package_readiness` + `render_readiness_markdown`): scans a product folder (via ingest) against the POC deliverable checklist → per-deliverable status (present/partial/missing/external), readiness %, and the **single next step**; external (ID/ME/FW) sections are marked, not counted as gaps. This is the file-based **state/compass** the prompt-driven loop reads each turn (plan-builder-shaped, agent-as-wizard). Verified on TheSmartAI: **67%** — PRD ✅ + BOM ✅ present, schematic ⬜ → next step "run the C03 lifecycle", external = FW/ID/ME.
-- [ ] **G3 Generalized subsystem composer (N10→N11)** — spec + harvested reference evidence → IR → schematic (kicad-cli-validated). Core generation; full V1 needs per-part symbols (G6). *Partly blocked on G6.*
-- [ ] **G4 PRD/doc emitter (N5)** — structured PRD/report → docx/pdf companion (orchestrate libreoffice). *Unblocked.*
-- [ ] **G5 Pin/GPIO allocation table (N14)** — the C03↔C05 (FW) interface doc, from net/pin evidence. *Unblocked.*
-- [ ] **G6 Per-part symbol harvest (N7/N8 generalize)** — datasheet pinout → symbol for V1 parts beyond STM32N657/MX25 (orchestrate `datasheets`). Feeds G3. *Unblocked.*
-- [x] **G7 Reference cross-check — the trust layer** (user insight): the circuit design is a black box to a non-EE owner, so reliability is *demonstrated* by comparing bodesign's output against a known-good shipped product (OpenMV/Rockbox) as a **control group**. `workflow-core.reference_crosscheck` compares net sets → matched (confidence) / missing (reliability gap) / extra (novel, verify) + coverage % + provenance to the reference schematic. Verified: generated flash XSPI vs OpenMV = **75% (12/16), missing CLK_N/WP#/INT#/RSTO#**, traceable to `OpenMV-N6-Schematic-Rev4.pdf p.7`. Agreement = faithful reuse (high confidence for V1=OpenMV); deviations still need the analysis skills/EE. Pairs with G2 readiness as the "is it reliable + complete?" answer.
+## 5. Verification & trust model
+A non-EE owner cannot judge EE correctness, so reliability is **shown, not asserted**, by three layers:
+1. **Deterministic validation** — `kicad-cli` ERC/DRC, netlist export (must pass).
+2. **Reference cross-check (G7)** — coverage vs a known-good shipped product (control group); divergences surfaced with provenance. *Faithful-reuse confidence; novel parts excluded.*
+3. **Analysis skills** — `kicad`/`emc`/`spice` for correctness/EMC/sim of anything novel or beyond the reference; **EE/user approval** before send-to-fab.
+"Submittable" = readiness% (G2) + cross-check coverage (G7) + analysis-skill checks pass + explicit approval.
 
-The R1–R10 roadmap below is largely absorbed into this gap queue + the orchestrated skills; kept for history.
+## 6. Generation loop (how a deliverable is produced)
+`compass (G2) names next deliverable → ask user for raw data / decisions → harvest (G6) / compose (G3) → emit + companion (N3) → validate (kicad-cli + G7 cross-check vs control group) → recompute compass`. Repeat until coverage→100% and readiness→submittable.
 
-Prior north-star line (kept for history): *natural-language spec → clarifying dialogue → reference-design-grounded subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → finish in native KiCad.* AI never emits send-to-fab outputs without deterministic validation + explicit approval.
+## 7. Open process notes
+- Plan is now consolidated; future changes update §1–7 first, then implement.
+- Driving product status lives in `product_edge_ai_device`; per-deliverable status is computed (not stored) from the TheSmartAI folder.
 
 ## Reorganized Roadmap
 
