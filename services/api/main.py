@@ -226,7 +226,7 @@ def _openmv_footprint_map() -> list[dict[str, object]]:
     ]
 
 
-OPENMV_NON_EVIDENCE_JSON = {".state.json", "openmv-n6-evidence-dashboard.json"}
+OPENMV_NON_EVIDENCE_JSON = {".state.json", "openmv-n6-evidence-dashboard.json", "idef0.json", "grafcet.json"}
 
 
 def _openmv_evidence() -> dict[str, object]:
