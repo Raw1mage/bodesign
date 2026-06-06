@@ -31,6 +31,12 @@
 | **Simulation/verify** | ngspice via `spice` skill; `kicad-cli pcb drc`, `sch erc` | **build** |
 | Gap/readiness report | `collect_source_gap_report` (R1) + readiness guide | ✅ |
 
+### Skill orchestration — division of labour (verified 2026-06-06)
+**bodesign builds the forward-GENERATION gap** (no skill does this): requirements→plan (R5), symbol generation, subsystem composition, schematic emit, folder-ingest, gap/readiness. **Everything else = orchestrate the existing KiCad/EDA skills:** `kicad` (ERC/DRC/BOM/netlist/power-tree analysis), `kidoc` (HDD/CE/ICD/Design-Review/Manufacturing-Transfer doc packages + schematic/PCB renders + block/power-tree diagrams), `emc`, `spice`, `datasheets`, `bom`/`digikey`/`lcsc`/`jlcpcb`/`pcbway`.
+- **Verified on bodesign's own generated OpenMV schematic:** `kicad` analyzer ingested it cleanly — 6 components, rail voltages auto-inferred (1.8/3.3V), decoupling detected, actionable findings (SS-001 no-MPN, NT-001 single-pin nets). The generate→analyze loop is closed.
+- **`kidoc` verified** to ingest the same project, auto-run schematic analysis, render the schematic SVG, and generate power-tree/EMC diagrams; **full HDD/doc-package assembly currently needs PCB data** (schematic-only hit an edge case) — so the doc-package node is unlocked once layout exists (or with a schematic-only path).
+- Chain confirmed: **`kicad` analyze (`--analysis-dir analysis/`) → `kidoc` consumes it** to render + document.
+
 Prior north-star line (kept for history): *natural-language spec → clarifying dialogue → reference-design-grounded subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → finish in native KiCad.* AI never emits send-to-fab outputs without deterministic validation + explicit approval.
 
 ## Reorganized Roadmap
