@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy
+from bodesign_storage_core import build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -101,6 +101,23 @@ class StorageCoreTests(unittest.TestCase):
         self.assertEqual("/bodesign/api/projects/rockbox/kicad-plugin-handshake", rockbox.links.kicad_plugin_handshake)
         self.assertTrue(any("not granted" in blocker for blocker in rockbox.blockers))
         self.assertTrue(any("not a server-owned durable file store" in warning for warning in registry.warnings))
+
+    def test_builds_folder_open_request_without_filesystem_access(self):
+        request = build_folder_open_request("openmv")
+
+        self.assertEqual("folder-open-openmv", request.request_id)
+        self.assertEqual("openmv", request.project_id)
+        self.assertEqual("client", request.durable_owner)
+        self.assertEqual("no-server-filesystem-access", request.access_mode)
+        self.assertEqual("needs-client-grant/not-approved", request.approval_state)
+        self.assertIn("read-project-tree", request.requested_permissions)
+        self.assertIn("represent-client-approved-save-back", request.requested_permissions)
+        self.assertEqual(["project-read"], [scope.scope_id for scope in request.read_scopes])
+        self.assertEqual(["mcp-save-back"], [scope.scope_id for scope in request.write_scopes])
+        self.assertIn("refresh-project-registry", request.post_grant_actions)
+        self.assertIn("refresh-kicad-foundation", request.post_grant_actions)
+        self.assertTrue(any("must not scan arbitrary server filesystem" in blocker for blocker in request.blockers))
+        self.assertTrue(any("not a server filesystem operation" in warning for warning in request.warnings))
 
 
 if __name__ == "__main__":

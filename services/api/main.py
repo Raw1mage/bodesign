@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_default_storage_share_manifest, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_default_storage_share_manifest, build_folder_open_request, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -60,6 +60,7 @@ except ImportError:
     plan_gerber_export = None
     produce_design_report = None
     build_default_storage_share_manifest = None
+    build_folder_open_request = None
     build_kicad_happy_cache_mapping = None
     build_project_registry = None
     build_project_tree_browse_contract = None
@@ -89,6 +90,8 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", "purpose": "Return artifact metadata and preview."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/geometry", "purpose": "Return parsed Gerber/drill geometry summary for the board view."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/storage-share", "purpose": "Return client-owned project folder storage-share manifest."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/folder-open-request", "purpose": "Return represented client folder open/import request without filesystem access."},
+    {"method": "POST", "path": "/bodesign/api/projects/{project_id}/folder-open-request", "purpose": "Represent a client folder open/import request without filesystem access."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/project-tree", "purpose": "Return read-only client-owned folder tree evidence summary."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
@@ -220,6 +223,7 @@ def _render_project_workspace(project_id: str) -> str:
     if not fusion_markup:
         fusion_markup = '<tr><td colspan="5">No component↔net fusion evidence yet.</td></tr>'
     kicad_foundation = get_project_kicad_foundation(project_id)
+    folder_open_request = get_project_folder_open_request(project_id)
     project_tree = get_project_tree(project_id)
     kicad_native_extension = get_project_kicad_native_extension(project_id)
     kicad_source_markup = _kicad_source_markup(kicad_foundation)
@@ -339,12 +343,13 @@ def _render_project_workspace(project_id: str) -> str:
                    <p class="muted">Open or import client-owned KiCad projects. bodesign is a companion dashboard; native KiCad owns editing, canvas, libraries, DRC, and ERC. Project registry records are fixture-backed metadata, not server-owned durable file storage.</p>
                     <div class="grid"><div class="card"><h3>Client-owned project registry</h3><p><code>""" + escape(str(registry.get("status", "unknown"))) + """</code></p><p>access: <code>""" + escape(str(registry.get("access_mode", "unknown"))) + """</code></p><p>durable owner: <code>""" + escape(str(registry.get("durable_owner", "client"))) + """</code></p></div></div>
                    <div class="grid">""" + project_markup + """
-                     <div class="card">
-                        <h3>Connect native KiCad project</h3>
-                        <p class="muted">Folder sharing is not wired yet. The target flow indexes KiCad files from a client-owned folder and hands edit/canvas actions to a KiCad Action Plugin or sidecar.</p>
-                       <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
-                     </div>
-                     <div class="card">
+                      <div class="card">
+                         <h3>Connect native KiCad project</h3>
+                         <p class="muted">Folder sharing is not wired yet. The target flow indexes KiCad files from a client-owned folder and hands edit/canvas actions to a KiCad Action Plugin or sidecar.</p>
+                        <p><a class="button secondary" href="/bodesign/routes">View available API routes</a></p>
+                      </div>
+                      """ + _folder_open_request_markup(folder_open_request) + """
+                      <div class="card">
                         <h3>KiCad native foundation status</h3>
                        <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>
                        <p>storage owner: <code>""" + escape(str(kicad_foundation.get("storage_owner", "unknown"))) + """</code></p>
@@ -526,6 +531,35 @@ def get_project_storage_share(project_id: str) -> dict[str, object]:
         "validation_errors": validate_storage_share_manifest(manifest),
         "folder_taxonomy": asdict(taxonomy) if taxonomy is not None else {"warnings": ["Storage folder taxonomy classifier is unavailable."]},
         "kicad_happy_cache": asdict(kicad_happy_cache) if kicad_happy_cache is not None else {"warnings": ["KiCad Happy cache mapping is unavailable."]},
+    }
+
+
+@app.get("/api/projects/{project_id}/folder-open-request")
+@app.get("/bodesign/api/projects/{project_id}/folder-open-request")
+@app.post("/api/projects/{project_id}/folder-open-request")
+@app.post("/bodesign/api/projects/{project_id}/folder-open-request")
+def get_project_folder_open_request(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or build_folder_open_request is None:
+        return {
+            "request_id": f"folder-open-{project_id}",
+            "project_id": project_id,
+            "durable_owner": "client",
+            "access_mode": "no-server-filesystem-access",
+            "approval_state": "needs-client-grant/not-approved",
+            "requested_permissions": [],
+            "read_scopes": [],
+            "write_scopes": [],
+            "blockers": ["Folder open request contract could not be built."],
+            "post_grant_actions": [],
+            "warnings": ["No filesystem access was attempted."],
+            "mutation_capabilities": [],
+        }
+    request = build_folder_open_request(project_id, build_default_storage_share_manifest(project_id))
+    return {
+        **asdict(request),
+        "status": "folder-open-request-represented",
+        "mutation_capabilities": [],
+        "filesystem_access": "not-attempted",
     }
 
 
@@ -1436,6 +1470,24 @@ def _kicad_taxonomy_markup(foundation: dict[str, object]) -> str:
         items = "".join(f"<li><code>{escape(str(path))}</code></li>" for path in paths[:8]) or '<li class="muted">No paths classified yet.</li>'
         cards.append(f'<div class="card"><h3>{escape(role)}</h3><ul>{items}</ul></div>')
     return "".join(cards)
+
+
+def _folder_open_request_markup(request: dict[str, object]) -> str:
+    blockers = request.get("blockers") if isinstance(request.get("blockers"), list) else []
+    blocker_items = "".join(f"<li>{escape(str(blocker))}</li>" for blocker in blockers[:6]) or '<li class="muted">No blockers recorded.</li>'
+    post_grant_actions = request.get("post_grant_actions") if isinstance(request.get("post_grant_actions"), list) else []
+    action_items = "".join(f"<li><code>{escape(str(action))}</code></li>" for action in post_grant_actions[:6]) or '<li class="muted">No post-grant actions recorded.</li>'
+    return (
+        '<div class="card">'
+        '<h3>Open client folder request</h3>'
+        f'<p><code>{escape(str(request.get("status", "folder-open-request-represented")))}</code></p>'
+        f'<p>approval: <code>{escape(str(request.get("approval_state", "needs-client-grant/not-approved")))}</code></p>'
+        f'<p>access: <code>{escape(str(request.get("access_mode", "no-server-filesystem-access")))}</code></p>'
+        '<p class="muted">Fail-fast represented request only; bodesign does not scan arbitrary filesystem paths or mutate files.</p>'
+        f'<h4>Post-grant refresh</h4><ul>{action_items}</ul>'
+        f'<h4>Blockers</h4><ul>{blocker_items}</ul>'
+        '</div>'
+    )
 
 
 def _project_tree_markup(project_tree: dict[str, object]) -> str:

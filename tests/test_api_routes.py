@@ -25,6 +25,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/geometry", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/storage-share", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/folder-open-request", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
@@ -148,6 +149,11 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("Project registry records are fixture-backed metadata", html)
         self.assertIn("fixture-not-granted", html)
         self.assertIn("not server-owned durable file storage", html)
+        self.assertIn("Open client folder request", html)
+        self.assertIn("folder-open-request-represented", html)
+        self.assertIn("needs-client-grant/not-approved", html)
+        self.assertIn("no-server-filesystem-access", html)
+        self.assertIn("does not scan arbitrary filesystem paths or mutate files", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -274,6 +280,28 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertEqual("hidden-system-summary", tree["hidden_workspace"]["visibility"])
         self.assertTrue(any("arbitrary server filesystem" in blocker for blocker in tree["blockers"]))
         self.assertTrue(any("client-owned" in warning for warning in tree["warnings"]))
+
+    def test_folder_open_request_is_represented_without_filesystem_access(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        request = api_main.get_project_folder_open_request("rockbox")
+
+        self.assertEqual("folder-open-request-represented", request["status"])
+        self.assertEqual("folder-open-rockbox", request["request_id"])
+        self.assertEqual("rockbox", request["project_id"])
+        self.assertEqual("client", request["durable_owner"])
+        self.assertEqual("no-server-filesystem-access", request["access_mode"])
+        self.assertEqual("needs-client-grant/not-approved", request["approval_state"])
+        self.assertEqual("not-attempted", request["filesystem_access"])
+        self.assertEqual([], request["mutation_capabilities"])
+        self.assertIn("read-project-tree", request["requested_permissions"])
+        self.assertIn("represent-client-approved-save-back", request["requested_permissions"])
+        self.assertIn("refresh-project-registry", request["post_grant_actions"])
+        self.assertIn("refresh-kicad-foundation", request["post_grant_actions"])
+        self.assertTrue(any("must not scan arbitrary server filesystem" in blocker for blocker in request["blockers"]))
+        self.assertTrue(any("not a server filesystem operation" in warning for warning in request["warnings"]))
 
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()

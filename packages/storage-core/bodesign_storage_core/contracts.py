@@ -139,6 +139,21 @@ class ProjectRegistry:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class FolderOpenRequest:
+    request_id: str
+    project_id: str
+    durable_owner: str
+    access_mode: str
+    approval_state: str
+    requested_permissions: list[str] = field(default_factory=list)
+    read_scopes: list[StorageShareScope] = field(default_factory=list)
+    write_scopes: list[StorageShareScope] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
+    post_grant_actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -354,6 +369,35 @@ def build_project_record(project_id: str, display_name: str | None = None) -> Pr
             "MCP-side mutation is blocked until approved save-back semantics exist.",
         ],
         warnings=["Project record is an index/evidence pointer, not durable server-owned content."],
+    )
+
+
+def build_folder_open_request(project_id: str, manifest: StorageShareManifest | None = None) -> FolderOpenRequest:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    return FolderOpenRequest(
+        request_id=f"folder-open-{project_id}",
+        project_id=project_id,
+        durable_owner=storage_manifest.durable_owner,
+        access_mode="no-server-filesystem-access",
+        approval_state="needs-client-grant/not-approved",
+        requested_permissions=["read-project-tree", "read-kicad-sources", "read-documents", "represent-client-approved-save-back"],
+        read_scopes=storage_manifest.read_scopes,
+        write_scopes=storage_manifest.write_scopes,
+        blockers=[
+            "Client folder handle has not been granted; the MCP must not scan arbitrary server filesystem paths.",
+            "File mutation and save-back are blocked until the client grants scoped access and approves conflict policy.",
+            "Native KiCad editing remains outside this request and must go through the approved plugin/sidecar workflow.",
+        ],
+        post_grant_actions=[
+            "refresh-project-registry",
+            "refresh-storage-share",
+            "refresh-project-tree",
+            "refresh-kicad-foundation",
+        ],
+        warnings=[
+            "This is a represented client-side folder handle request, not a server filesystem operation.",
+            "Durable project files remain client-owned after approval.",
+        ],
     )
 
 
