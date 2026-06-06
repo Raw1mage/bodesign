@@ -34,6 +34,24 @@ class McpServerTests(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertIn("error", r)
 
+    def test_landing_page_has_guide_sections(self):
+        page = self.server._landing_html("/x/bodesign.sock", 8077)
+        for section in ("Install", "File model", "Circuit-design workflow", "Skill packages", "Endpoints"):
+            self.assertIn(section, page)
+        self.assertIn("/tools", page)
+
+    def test_tools_index_links_every_tool(self):
+        idx = self.server._tools_index_html()
+        for t in self.server.TOOLS:
+            self.assertIn(f'/tools/{t["name"]}', idx)
+
+    def test_tool_detail_shows_full_schema(self):
+        detail = self.server._tool_detail_html("bodesign_compose_schematic")
+        self.assertIn("inputSchema", detail)
+        self.assertIn("tools/call", detail)
+        self.assertIn("bodesign_compose_schematic", detail)
+        self.assertIn("Unknown tool", self.server._tool_detail_html("nope_not_a_tool"))
+
     def test_build_server_when_mcp_available(self):
         try:
             import mcp  # noqa: F401

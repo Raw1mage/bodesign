@@ -277,6 +277,181 @@ def run_tool(name: str, arguments: dict) -> dict:
     return result
 
 
+# ── Self-documenting landing page ──────────────────────────────────────
+# Orchestrated skills (run agent-side / on the server host; not bundled in the
+# container image) that bodesign drives for analysis / docs / sim / sourcing / fab.
+ORCHESTRATED_SKILLS = [
+    ("kicad", "Schematic/PCB/Gerber analysis — ERC/DRC, netlist, power tree, subcircuit detection. Consumed by simulate/EMC."),
+    ("kidoc", "Engineering doc packages — HDD, CE technical file, ICD, design-review, manufacturing-transfer; renders + diagrams."),
+    ("spice", "ngspice simulation of detected subcircuits (filters, dividers, opamp, crystal). Driven by bodesign_simulate."),
+    ("emc", "EMC pre-compliance risk analysis (FCC/CISPR). Driven by bodesign_analyze_emc."),
+    ("datasheets", "Extract pinouts/specs from datasheet PDFs → feeds symbol generation (N7)."),
+    ("bom / digikey / lcsc / element14 / mouser", "Part sourcing, pricing, stock, datasheet download."),
+    ("jlcpcb / pcbway", "Fabrication + assembly ordering, DFM rules."),
+]
+
+WORKFLOW_STEPS = [
+    ("1. Ingest", "Upload your project tree (tarball→token) or point at a folder; <code>bodesign_ingest_project</code> classifies files + flags non-readable ones."),
+    ("2. Plan", "<code>bodesign_plan_design_intent</code> turns a natural-language spec into requirements, clarifying questions, and subsystems."),
+    ("3. Source evidence", "<code>bodesign_evidence_manifest</code> grounds each part in a reference (local corpus first), so design = faithful reuse of known-good boards."),
+    ("4. Symbols", "<code>bodesign_emit_symbol</code> turns a datasheet pinout into a KiCad symbol (harvest via the datasheets skill)."),
+    ("5. Compose + ERC", "<code>bodesign_compose_schematic</code> auto-places components + nets → a kicad-cli-validated schematic (0 ERC)."),
+    ("6. BOM + pins", "<code>bodesign_export_bom</code> (grouped, MPN) + <code>bodesign_pin_allocation</code> (the C03↔firmware interface)."),
+    ("7. Layout", "<code>bodesign_emit_layout</code> places footprints via pcbnew + DRC + an SVG companion (a starting board to route)."),
+    ("8. Fab", "<code>bodesign_emit_fab</code> exports gerbers/drill/pos/STEP/PDF for the factory."),
+    ("9. Verify", "Four layers: ERC/DRC · <code>reference_crosscheck</code> vs a control group · <code>simulate</code> (SPICE) · <code>analyze_emc</code>/<code>analyze_thermal</code>."),
+    ("10. Track", "<code>bodesign_package_readiness</code> recomputes the compass + next step until the package is factory-submittable."),
+]
+
+
+_CSS = """
+:root{color-scheme:dark;--bg:#0e1116;--panel:#161b22;--panel2:#1c232c;--line:#30363d;--text:#e6edf3;--muted:#9aa7b4;--accent:#7ee787;--accent2:#79c0ff}
+*{box-sizing:border-box}body{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;margin:0;background:var(--bg);color:var(--text);line-height:1.55}
+main{max-width:1080px;margin:0 auto;padding:40px 22px 80px}
+h1{font-size:2.2rem;margin:0 0 6px}h2{margin:34px 0 12px;font-size:1.3rem;border-bottom:1px solid var(--line);padding-bottom:6px}
+.lead{color:var(--muted);font-size:1.05rem;max-width:760px}.crumb{color:var(--muted);font-size:.9rem;margin-bottom:18px}
+code{background:var(--panel2);padding:1px 6px;border-radius:6px;font-family:ui-monospace,monospace;font-size:.9em}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;font-family:ui-monospace,monospace;font-size:.85rem}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.tool{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tname{font-weight:700;font-family:ui-monospace,monospace}.tname a{color:var(--accent)}.tdesc{color:var(--text);font-size:.9rem;margin:5px 0}.treq{color:var(--muted);font-size:.8rem}
+.step{display:flex;gap:14px;padding:9px 0;border-bottom:1px dashed var(--line)}.sh{flex:0 0 150px;color:var(--accent2);font-weight:600}.sb{color:var(--muted)}
+ul{color:var(--muted)}.pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin:2px;font-size:.8rem;color:var(--accent)}
+.warn{border-left:3px solid #d29922;padding-left:12px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}.req{color:var(--accent2)}.opt{color:var(--muted)}
+"""
+
+
+def _page(title: str, inner: str) -> str:
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>'
+            f'<style>{_CSS}</style></head><body><main>{inner}</main></body></html>')
+
+
+def _landing_html(uds_path: str | None = None, tcp_port: int | None = None) -> str:
+    import html
+
+    def esc(x):
+        return html.escape(str(x))
+
+    uds = uds_path or "<server>.run/bodesign.sock"
+    port = tcp_port or 8077
+
+    tool_cards = []
+    for t in TOOLS:
+        req = ", ".join(f"<code>{esc(r)}</code>" for r in (t["schema"].get("required") or [])) or "—"
+        tool_cards.append(
+            f'<div class="tool"><div class="tname"><a href="/tools/{esc(t["name"])}">{esc(t["name"])}</a></div>'
+            f'<div class="tdesc">{esc(t["description"])}</div>'
+            f'<div class="treq">required: {req}</div></div>'
+        )
+    skills = "".join(f"<li><b>{esc(n)}</b> — {esc(d)}</li>" for n, d in ORCHESTRATED_SKILLS)
+    workflow = "".join(f'<div class="step"><div class="sh">{esc(h)}</div><div class="sb">{b}</div></div>' for h, b in WORKFLOW_STEPS)
+
+    inner = f"""
+<h1>bodesign <span style="color:var(--accent)">MCP</span></h1>
+<p class="lead">An AI PCB-design copilot, delivered as an MCP server (docxmcp-style). Drive the full KiCad lifecycle — schematic → layout → fab — by conversation + raw data: ingest a project tree, plan, generate symbols/schematics, lay out, export fab files, and verify, all validated against KiCad and a known-good reference.</p>
+<p><span class="pill">{len(TOOLS)} tools</span><span class="pill">v{esc(SERVER_VERSION)}</span><span class="pill">MCP Streamable HTTP</span><span class="pill">UDS + TCP</span><span class="pill">token file API</span></p>
+
+<h2>Endpoints</h2>
+<div class="card">
+<p>MCP: <code>POST /mcp/</code> · Files: <code>POST /files</code>, <code>GET /files/{{token}}/blob/{{rel}}</code> · Health: <code>GET /healthz</code></p>
+<p><b>Local (UDS):</b> <code>unix://{esc(uds)}:/mcp/</code><br><b>External (TCP):</b> <code>http://&lt;host&gt;:{port}/mcp/</code></p>
+</div>
+
+<h2>Install &amp; run</h2>
+<div class="card">
+<p><b>Docker (portable, recommended)</b> — bundles KiCad 9 + LibreOffice + pygerber + the mcp SDK:</p>
+<pre>./mcpctl.sh start        # build image + start container (UDS + TCP :{port})
+./mcpctl.sh status       # health + socket
+./mcpctl.sh log          # follow logs
+./mcpctl.sh stop</pre>
+<p><b>Host (no Docker)</b> — needs kicad-cli + pcbnew + soffice + ngspice on PATH:</p>
+<pre>pip install -r services/mcp/requirements.txt
+python services/mcp/server.py --transport http --uds .run/bodesign.sock --port {port}</pre>
+<p><b>Register in an MCP client</b> (see <code>mcp.json</code>): transport <code>streamable-http</code>, url <code>unix://…/bodesign.sock:/mcp/</code> (local) or <code>http://&lt;host&gt;:{port}/mcp/</code> (TCP).</p>
+</div>
+
+<h2>File model (docxmcp-style)</h2>
+<div class="card">
+<p>Upload your whole project tree as a tarball → a <b>token</b> whose <code>doc_dir</code> is your tree; pass <code>token</code> to any tool (its path args resolve inside it) and download produced files by token. No host bind mount needed.</p>
+<pre>tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \\
+     -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
+# → {{"token":"tok_…","doc_dir":"…","files":[…]}}
+curl --unix-socket .run/bodesign.sock http://bd/files/{{token}}/blob/{{rel}}</pre>
+<p>Or stage inline with the <a href="/tools/bodesign_stage_dir"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.</p>
+</div>
+
+<h2>Circuit-design workflow</h2>
+<div class="card">{workflow}</div>
+<p class="warn">Reliability is <b>shown, not asserted</b>: bodesign cross-checks against a known-good shipped board (control group) and runs SPICE/EMC. These are pre-silicon risk layers — they do not replace accredited EMC / EVT / DVT at the lab/factory, and no send-to-fab output is emitted without validation + explicit approval.</p>
+
+<h2>Skill packages it orchestrates</h2>
+<div class="card"><p>bodesign generates; mature skills verify/source/document. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>); install the ones you need:</p>
+<ul>{skills}</ul></div>
+
+<h2>Tools ({len(TOOLS)}) — <a href="/tools">full call schemas →</a></h2>
+<div class="grid">{''.join(tool_cards)}</div>
+"""
+    return _page("bodesign MCP", inner)
+
+
+def _tools_index_html() -> str:
+    import html
+
+    def esc(x):
+        return html.escape(str(x))
+
+    rows = []
+    for t in TOOLS:
+        req = ", ".join(f"<code>{esc(r)}</code>" for r in (t["schema"].get("required") or [])) or "—"
+        rows.append(f'<tr><td><a href="/tools/{esc(t["name"])}">{esc(t["name"])}</a></td>'
+                    f'<td>{esc(t["description"])}</td><td>{req}</td></tr>')
+    inner = (f'<p class="crumb"><a href="/">bodesign MCP</a> / tools</p>'
+             f'<h1>Tool catalog <span style="color:var(--muted);font-size:1rem">({len(TOOLS)})</span></h1>'
+             f'<p class="lead">Click a tool for its full MCP <code>inputSchema</code> and a ready-to-send <code>tools/call</code> payload.</p>'
+             f'<div class="card"><table><tr><th>Tool</th><th>Description</th><th>Required</th></tr>{"".join(rows)}</table></div>')
+    return _page("bodesign MCP — tools", inner)
+
+
+def _tool_detail_html(name: str) -> str:
+    import html
+
+    def esc(x):
+        return html.escape(str(x))
+
+    spec = TOOLS_BY_NAME.get(name)
+    if spec is None:
+        inner = (f'<p class="crumb"><a href="/">bodesign MCP</a> / <a href="/tools">tools</a> / {esc(name)}</p>'
+                 f'<h1>Unknown tool</h1><p class="lead"><code>{esc(name)}</code> is not registered. '
+                 f'<a href="/tools">See the catalog →</a></p>')
+        return _page("bodesign MCP — unknown tool", inner)
+
+    schema = spec["schema"]
+    props = schema.get("properties", {})
+    required = set(schema.get("required", []))
+    prop_rows = []
+    for pname, pdef in props.items():
+        typ = pdef.get("type", "any") if isinstance(pdef, dict) else "any"
+        tag = '<span class="req">required</span>' if pname in required else '<span class="opt">optional</span>'
+        prop_rows.append(f"<tr><td><code>{esc(pname)}</code></td><td>{esc(typ)}</td><td>{tag}</td></tr>")
+    schema_json = esc(json.dumps(schema, indent=2, ensure_ascii=False))
+    example_args = {p: ("…" if p in required else "…") for p in list(required)[:4]} or {"…": "…"}
+    call_payload = esc(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                   "params": {"name": name, "arguments": example_args}}, indent=2, ensure_ascii=False))
+    inner = (f'<p class="crumb"><a href="/">bodesign MCP</a> / <a href="/tools">tools</a> / {esc(name)}</p>'
+             f'<h1 style="font-family:ui-monospace,monospace;color:var(--accent)">{esc(name)}</h1>'
+             f'<p class="lead">{esc(spec["description"])}</p>'
+             f'<h2>Parameters</h2><div class="card"><table><tr><th>Name</th><th>Type</th><th></th></tr>{"".join(prop_rows) or "<tr><td>—</td></tr>"}</table></div>'
+             f'<h2>inputSchema (JSON Schema)</h2><pre>{schema_json}</pre>'
+             f'<h2>tools/call payload</h2><pre>{call_payload}</pre>'
+             f'<p class="crumb"><a href="/tools">← back to catalog</a></p>')
+    return _page(f"bodesign MCP — {name}", inner)
+
+
 # ── MCP server wiring ──────────────────────────────────────────────────
 
 def build_server():
@@ -331,9 +506,13 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         return JSONResponse({"status": "ok", "service": SERVER_NAME, "tools": len(TOOLS)})
 
     async def landing(request: Request) -> Response:
-        rows = "".join(f"<li><code>{t['name']}</code> — {t['description']}</li>" for t in TOOLS)
-        return Response(f"<h1>bodesign MCP</h1><p>MCP: <code>/mcp</code> · files: <code>/files</code> · health: <code>/healthz</code></p><ul>{rows}</ul>",
-                        media_type="text/html")
+        return Response(_landing_html(uds, port), media_type="text/html; charset=utf-8")
+
+    async def tools_index(request: Request) -> Response:
+        return Response(_tools_index_html(), media_type="text/html; charset=utf-8")
+
+    async def tool_detail(request: Request) -> Response:
+        return Response(_tool_detail_html(request.path_params["name"]), media_type="text/html; charset=utf-8")
 
     async def upload_file(request: Request) -> Response:
         """POST /files — ingest a file tree into a fresh token namespace.
@@ -373,6 +552,8 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
 
     app = Starlette(routes=[
         Route("/", landing),
+        Route("/tools", tools_index),
+        Route("/tools/{name}", tool_detail),
         Route("/healthz", healthz),
         Route("/files", upload_file, methods=["POST"]),
         Route("/files/{token}/blob/{rel:path}", get_blob),

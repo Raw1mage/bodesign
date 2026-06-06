@@ -267,6 +267,8 @@
 
 - Dual transport (2026-06-07): made the MCP server serve UDS (local) + TCP (external) **simultaneously** from one process — `run_http` now builds one app + session manager and runs two uvicorn binds under a single `session_manager.run()` (`--uds` and/or `--port`; default TCP 8077). docker-compose updated to `--uds … --host 0.0.0.0 --port 8077` + `ports: 8077:8077`. Rebuilt/recreated the container and verified BOTH on the same container: UDS /healthz=200, TCP :8077 /healthz=200, and a TCP MCP tools/call (package_readiness) ok. Suite 125 pass. mcp.json notes the TCP endpoint; DD-10 updated.
 
+- Self-documenting landing pages (2026-06-07): made the HTTP root a comprehensive, hierarchical MCP guide. `/` = overview + endpoints (UDS+TCP) + install/run (mcpctl/Docker/host + mcp.json) + docxmcp-style file model + the 10-step circuit-design workflow + verification caveat + orchestrated skill packages (kicad/kidoc/spice/emc/datasheets/bom/distributors/fab) + a tool grid; `/tools` = full catalog table; `/tools/{name}` = full MCP inputSchema (JSON Schema) + parameter table + a ready-to-send tools/call payload. Shared dark-theme shell (`_page`). Verified over the live container (TCP :8077): / has 5 sections, /tools links all 18 tools, per-tool schema renders. tests/test_mcp_server.py covers the three page levels. Suite 128 pass (2 skipped).
+
 ## Remaining
 
 - Extend Rockbox reconstruction from first-pass placement/IPC component-net summaries into spatial Gerber/drill fusion: board outline, copper tracks, zones, apertures, drill hits, pad/via matching, and drill-to-copper relationships。
