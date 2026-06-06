@@ -1,63 +1,62 @@
 # bodesign
 
-**bodesign** is an AI PCB-design copilot, delivered as a **standalone MCP server**.
-Driven by conversation and raw input files, it walks the full KiCad design lifecycle —
-schematic → layout → fab — and produces a manufacturer-ready document package, while
-*demonstrating* reliability (cross-check against a known-good reference + KiCad/SPICE/EMC)
-rather than asserting it.
+_語言：**繁體中文** · [English](./README.en.md)_
 
-It is **host-agnostic and independently operable**: any MCP-capable client (IDE, agent, or
-your own HTTP caller) drives it over a Unix socket (local) or a TCP port (external). No host
-shell or gateway is required.
+**bodesign** 是一個 AI 電路設計（PCB）副駕，以**獨立的 MCP server** 形式交付。
+它由對談與原始輸入檔驅動，走完整個 KiCad 設計生命週期——原理圖 → 佈局 → 製造——
+產出可送廠的文件包，並以**展示**可靠度（對照已知良品的交叉檢核＋KiCad/SPICE/EMC）
+而非「宣稱」可靠度。
 
-## What it does
+它**與宿主無關、可獨立對外營運**：任何支援 MCP 的客戶端（IDE、agent，或你自己的 HTTP 呼叫端）
+都能透過 Unix socket（本機）或 TCP port（對外）驅動它。**不需要任何宿主外殼或閘道。**
 
-- **Ingest** a whole project tree (datasheets, schematics, BOM, Gerbers) read-only.
-- **Plan** requirements from a natural-language spec (with clarifying questions).
-- **Generate** KiCad symbols + a `kicad-cli`-validated schematic from reference-grounded evidence.
-- **Lay out** (footprint placement + DRC via `pcbnew`) and **export fab** outputs (gerbers/drill/pos/STEP).
-- **Verify** in four layers: ERC/DRC · reference cross-check (control group) · SPICE · EMC/thermal.
-- **Track readiness** and emit shareable docs (docx/pdf) + readable companions for every engineering file.
+## 它做什麼
 
-Architecture overview: [IDEF0 functional decomposition](specs/product/pcb_ai_viewer/idef0.svg) ·
-[GRAFCET runtime](specs/product/pcb_ai_viewer/grafcet.svg) · full spec in
-[`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md).
+- **匯入**整個專案資料夾（datasheet、原理圖、BOM、Gerber），唯讀。
+- **規劃**需求：把自然語言規格轉成結構化計畫（並反問釐清）。
+- **生成** KiCad 符號與經 `kicad-cli` 驗證的原理圖（以參考設計為依據）。
+- **佈局**（`pcbnew` 擺件＋DRC）並**匯出製造輸出**（gerber／鑽孔／pos／STEP）。
+- **驗證**四層：ERC/DRC · 對照組交叉檢核 · SPICE · EMC/熱分析。
+- **追蹤就緒度**，並為每個工程檔產出可讀伴隨檔（docx/pdf）與分享文件。
 
-## Run
+架構總覽：[IDEF0 功能分解](specs/product/pcb_ai_viewer/idef0.svg) ·
+[GRAFCET 執行流程](specs/product/pcb_ai_viewer/grafcet.svg) · 完整規格見
+[`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md)。
 
-**Docker (portable, recommended)** — bundles KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + the toolchain:
+## 執行
+
+**Docker（可攜，建議）** — 內含 KiCad 9（`kicad-cli` + `pcbnew`）＋ LibreOffice ＋整套工具鏈：
 
 ```bash
-./mcpctl.sh start     # build image + start container (UDS at ./.run/bodesign.sock + TCP :8077)
-./mcpctl.sh status    # health + socket
-./mcpctl.sh log       # follow logs
+./mcpctl.sh start     # 建置映像＋啟動容器（UDS 於 ./.run/bodesign.sock + TCP :8077）
+./mcpctl.sh status    # 健康檢查＋socket
+./mcpctl.sh log       # 追蹤日誌
 ./mcpctl.sh stop
 ```
 
-**Host (no Docker)** — needs `kicad-cli` + `pcbnew` + `soffice` + `ngspice` on PATH:
+**主機（不用 Docker）** — 需要 PATH 上有 `kicad-cli`、`pcbnew`、`soffice`、`ngspice`：
 
 ```bash
 pip install -r services/mcp/requirements.txt
 python services/mcp/server.py --transport http --uds .run/bodesign.sock --port 8077
-# or --transport stdio for direct IDE/agent use
+# 或 --transport stdio 供 IDE/agent 直接使用
 ```
 
-## Connect (MCP)
+## 連線（MCP）
 
-MCP **Streamable HTTP**, served concurrently over UDS (local) and TCP (external):
+MCP **Streamable HTTP**，由同一個行程同時提供 UDS（本機）與 TCP（對外）：
 
-- Local: `unix:///…/.run/bodesign.sock:/mcp/`
-- External: `http://<host>:8077/mcp/`
+- 本機：`unix:///…/.run/bodesign.sock:/mcp/`
+- 對外：`http://<host>:8077/mcp/`
 
-See [`mcp.json`](mcp.json) for the registration manifest. Open `/` (or `http://<host>:8077/`)
-for the live, self-documenting guide — install, the file model, the circuit-design workflow,
-and the full tool-call schemas at `/tools` and `/tools/{name}`.
+註冊資訊見 [`mcp.json`](mcp.json)。開啟 `/`（或 `http://<host>:8077/`）即是即時的自我說明指南——
+安裝、檔案模型、電路設計工作流，以及 `/tools`、`/tools/{name}` 的完整 tool-call schema。
 
-## File model (docxmcp-style)
+## 檔案模型（docxmcp 風格）
 
-bodesign ships **no working data**. Upload a project tree as a tarball → a **token**; pass the
-token to any tool (path args resolve inside the token's `doc_dir`); download produced files by token.
-Server-side session data is TTL-garbage-collected. Tools also accept plain host paths for local use.
+bodesign **不內含任何工作資料**。把專案樹以 tarball 上傳 → 取得 **token**；將 token 傳給任一工具
+（路徑參數會在 token 的 `doc_dir` 內解析）；以 token 下載產出檔。伺服端的工作資料會依 TTL 自動垃圾回收。
+工具也接受一般的主機路徑（本機使用）。
 
 ```bash
 tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
@@ -65,20 +64,19 @@ tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
 curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
 ```
 
-## Skill suite
+## Skill 套件
 
-bodesign generates; it orchestrates a mature **EDA skill suite** for analysis/docs/sim/sourcing/fab
-(`kicad`, `kidoc`, `spice`, `emc`, `datasheets`, `bom`, distributors, fab). The suite is downloadable
-from the running service at `/skills/` (bundle + per-skill); install under your skill location.
+bodesign 負責生成；分析／文件／模擬／採購／製造則編排成熟的 **EDA skill 套件**
+（`kicad`、`kidoc`、`spice`、`emc`、`datasheets`、`bom`、distributors、fab）。可從執行中的服務在
+`/skills/` 下載（整包＋個別 skill），安裝到你的 skill 目錄。
 
-## Layout
+## 目錄結構
 
-- `services/mcp/` — the MCP server (`server.py`), token file store, requirements, the skill-pack assets.
-- `packages/` — the generic capability libraries (ingest, compose, layout, fab, BOM, verify, …).
-- `specs/product/pcb_ai_viewer/` — the design spec (proposal / design / tasks / IDEF0 / GRAFCET).
+- `services/mcp/` — MCP server（`server.py`）、token 檔案儲存、requirements、skill 套件資產。
+- `packages/` — 通用能力函式庫（匯入、組成、佈局、製造、BOM、驗證……）。
+- `specs/product/pcb_ai_viewer/` — 設計規格（proposal／design／tasks／IDEF0／GRAFCET）。
 
-## Reliability boundary
+## 可靠度邊界
 
-Cross-check + SPICE/EMC are **pre-silicon risk layers** — they catch problems before prototyping.
-They do not replace accredited EMC / EVT / DVT at the lab/factory, and bodesign emits no send-to-fab
-output without deterministic validation + explicit approval.
+交叉檢核＋SPICE/EMC 是**矽前風險層**——在打樣前抓出問題。它們**不取代**實驗室／工廠的
+認證 EMC／EVT／DVT；且 bodesign 在未經確定性驗證＋明確批准前，不會輸出任何送廠檔案。
