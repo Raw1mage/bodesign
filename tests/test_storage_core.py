@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy
+from bodesign_storage_core import build_cache_conflict_status, build_folder_open_request, build_kicad_analysis_evidence_manifest, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -194,6 +194,26 @@ class StorageCoreTests(unittest.TestCase):
         self.assertEqual("represented-not-run", status.expected_outputs[0].cache_state)
         self.assertIn("run-analysis-through-kicad-plugin-or-client", status.next_actions)
         self.assertTrue(any("must not run KiCad" in blocker for blocker in status.blockers))
+
+    def test_builds_kicad_analysis_evidence_manifest_without_browsing_files(self):
+        evidence = build_kicad_analysis_evidence_manifest("openmv")
+        categories = {artifact.category for artifact in evidence.artifacts}
+
+        self.assertEqual("kicad-analysis-evidence-openmv", evidence.manifest_id)
+        self.assertEqual(".bodesign/analysis/kicad-happy", evidence.analysis_root)
+        self.assertEqual("client-owned-kicad-project", evidence.source_authority)
+        self.assertEqual("disposable-mcp-evidence-cache", evidence.cache_authority)
+        self.assertEqual("fixture-stale/needs-client-refresh", evidence.freshness_state)
+        self.assertEqual("manifest-index-only/no-raw-filesystem-browse", evidence.access_mode)
+        self.assertTrue(evidence.direct_filesystem_browse_blocked)
+        self.assertIn("manifest", categories)
+        self.assertIn("trust-summary", categories)
+        self.assertIn("drc", categories)
+        self.assertIn("erc", categories)
+        self.assertTrue(all(artifact.path.startswith(".bodesign/analysis/kicad-happy/") for artifact in evidence.artifacts))
+        self.assertTrue(all(artifact.cache_state == "represented-not-materialized" for artifact in evidence.artifacts))
+        self.assertIn("refresh-analysis-evidence-manifest", evidence.next_actions)
+        self.assertTrue(any("must not browse raw hidden folders" in blocker for blocker in evidence.blockers))
 
 
 if __name__ == "__main__":

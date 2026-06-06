@@ -30,6 +30,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/cache-conflict-status", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/source-chunks/materialization", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-analysis-status", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/kicad-analysis-evidence", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
@@ -178,6 +179,11 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("native-kicad-plugin/client-orchestrated-kicad-happy", html)
         self.assertIn("represented-not-run", html)
         self.assertIn("No server-side KiCad execution", html)
+        self.assertIn("KiCad analysis evidence manifest", html)
+        self.assertIn("kicad-analysis-evidence-represented", html)
+        self.assertIn("disposable-mcp-evidence-cache", html)
+        self.assertIn("manifest-index-only/no-raw-filesystem-browse", html)
+        self.assertIn("Raw hidden folder browsing", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
@@ -416,6 +422,31 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("erc", status["requested_checks"])
         self.assertTrue(all(output["target_path"].startswith(".bodesign/analysis/kicad-happy/") for output in status["expected_outputs"]))
         self.assertTrue(any("must not run KiCad" in blocker for blocker in status["blockers"]))
+
+    def test_kicad_analysis_evidence_manifest_is_index_only(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        evidence = api_main.get_project_kicad_analysis_evidence("rockbox")
+        categories = {artifact["category"] for artifact in evidence["artifacts"]}
+
+        self.assertEqual("kicad-analysis-evidence-represented", evidence["status"])
+        self.assertEqual("kicad-analysis-evidence-rockbox", evidence["manifest_id"])
+        self.assertEqual(".bodesign/analysis/kicad-happy", evidence["analysis_root"])
+        self.assertEqual("client-owned-kicad-project", evidence["source_authority"])
+        self.assertEqual("disposable-mcp-evidence-cache", evidence["cache_authority"])
+        self.assertEqual("fixture-stale/needs-client-refresh", evidence["freshness_state"])
+        self.assertEqual("manifest-index-only/no-raw-filesystem-browse", evidence["access_mode"])
+        self.assertTrue(evidence["direct_filesystem_browse_blocked"])
+        self.assertEqual("not-attempted", evidence["filesystem_access"])
+        self.assertEqual("blocked", evidence["raw_hidden_folder_browse"])
+        self.assertEqual([], evidence["mutation_capabilities"])
+        self.assertIn("manifest", categories)
+        self.assertIn("trust-summary", categories)
+        self.assertIn("drc", categories)
+        self.assertTrue(all(artifact["path"].startswith(".bodesign/analysis/kicad-happy/") for artifact in evidence["artifacts"]))
+        self.assertTrue(any("must not browse raw hidden folders" in blocker for blocker in evidence["blockers"]))
 
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()

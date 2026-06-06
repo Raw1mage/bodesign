@@ -234,6 +234,33 @@ class KiCadAnalysisStatus:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class KiCadAnalysisEvidenceArtifact:
+    artifact_id: str
+    category: str
+    path: str
+    cache_state: str
+    source_anchor: str
+    purpose: str
+
+
+@dataclass(slots=True)
+class KiCadAnalysisEvidenceManifest:
+    project_id: str
+    manifest_id: str
+    analysis_root: str
+    source_authority: str
+    cache_authority: str
+    freshness_state: str
+    access_mode: str
+    direct_filesystem_browse_blocked: bool
+    artifacts: list[KiCadAnalysisEvidenceArtifact] = field(default_factory=list)
+    source_anchors: list[str] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -656,6 +683,56 @@ def build_kicad_analysis_status(project_id: str, manifest: StorageShareManifest 
         warnings=[
             "This contract represents KiCad analysis request/status only; it does not execute native tools.",
             "Expected evidence outputs target hidden .bodesign analysis cache under client control.",
+        ],
+    )
+
+
+def build_kicad_analysis_evidence_manifest(project_id: str, manifest: StorageShareManifest | None = None, cache_mapping: KiCadHappyCacheMapping | None = None) -> KiCadAnalysisEvidenceManifest:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    mapping = cache_mapping or build_kicad_happy_cache_mapping(storage_manifest.hidden_workspace)
+    source_anchors = [
+        f"{storage_manifest.project_root}/eda/{project_id}/{project_id}.kicad_pro",
+        f"{storage_manifest.project_root}/eda/{project_id}/{project_id}.kicad_sch",
+        f"{storage_manifest.project_root}/eda/{project_id}/{project_id}.kicad_pcb",
+    ]
+    artifact_categories = {"manifest", "analyzer-json", "trust-summary", "diffs", "renders", "report-figures", "drc", "erc", "dfm", "emc", "thermal"}
+    artifacts = [
+        KiCadAnalysisEvidenceArtifact(
+            artifact_id=f"{project_id}-{artifact.category}",
+            category=artifact.category,
+            path=artifact.path,
+            cache_state="represented-not-materialized",
+            source_anchor=source_anchors[0],
+            purpose=artifact.purpose,
+        )
+        for artifact in mapping.artifact_paths
+        if artifact.category in artifact_categories
+    ]
+    return KiCadAnalysisEvidenceManifest(
+        project_id=project_id,
+        manifest_id=f"kicad-analysis-evidence-{project_id}",
+        analysis_root=mapping.analysis_root,
+        source_authority="client-owned-kicad-project",
+        cache_authority="disposable-mcp-evidence-cache",
+        freshness_state="fixture-stale/needs-client-refresh",
+        access_mode="manifest-index-only/no-raw-filesystem-browse",
+        direct_filesystem_browse_blocked=True,
+        artifacts=artifacts,
+        source_anchors=source_anchors,
+        blockers=[
+            "Client has not materialized KiCad Happy evidence outputs under the hidden analysis cache.",
+            "bodesign server must not browse raw hidden folders or read arbitrary analysis files.",
+            "Analysis evidence cache is disposable and must be refreshed from client-owned KiCad source anchors.",
+        ],
+        next_actions=[
+            "approve-native-kicad-analysis-run",
+            "materialize-evidence-via-kicad-plugin-or-client",
+            "refresh-analysis-evidence-manifest",
+            "review-trust-summary-and-drc-erc-evidence",
+        ],
+        warnings=[
+            "This manifest is an evidence index only; it does not execute KiCad or read hidden cache files.",
+            "Durable schematic/PCB sources remain in the client-owned KiCad project folder.",
         ],
     )
 

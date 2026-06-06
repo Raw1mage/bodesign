@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_evidence_manifest, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -62,6 +62,7 @@ except ImportError:
     build_default_storage_share_manifest = None
     build_cache_conflict_status = None
     build_folder_open_request = None
+    build_kicad_analysis_evidence_manifest = None
     build_kicad_analysis_status = None
     build_kicad_happy_cache_mapping = None
     build_project_registry = None
@@ -103,6 +104,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/source-chunks/materialization", "purpose": "Represent source chunk materialization plan without reading or copying files."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-analysis-status", "purpose": "Return represented KiCad/KiCad Happy analysis request/status without running native tools."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/kicad-analysis-status", "purpose": "Represent KiCad/KiCad Happy analysis request without running native tools."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-analysis-evidence", "purpose": "Return represented KiCad Happy analysis evidence manifest without browsing files."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/project-tree", "purpose": "Return read-only client-owned folder tree evidence summary."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
@@ -239,12 +241,14 @@ def _render_project_workspace(project_id: str) -> str:
     cache_conflict_status = get_project_cache_conflict_status(project_id)
     source_chunk_materialization = get_project_source_chunk_materialization(project_id)
     kicad_analysis_status = get_project_kicad_analysis_status(project_id)
+    kicad_analysis_evidence = get_project_kicad_analysis_evidence(project_id)
     project_tree = get_project_tree(project_id)
     kicad_native_extension = get_project_kicad_native_extension(project_id)
     kicad_source_markup = _kicad_source_markup(kicad_foundation)
     kicad_taxonomy_markup = _kicad_taxonomy_markup(kicad_foundation)
     kicad_analysis_markup = _kicad_analysis_markup(kicad_foundation)
     kicad_analysis_status_markup = _kicad_analysis_status_markup(kicad_analysis_status)
+    kicad_analysis_evidence_markup = _kicad_analysis_evidence_markup(kicad_analysis_evidence)
     kicad_blocker_markup = _kicad_blocker_markup(kicad_foundation)
     kicad_native_markup = _kicad_native_extension_markup(kicad_native_extension)
     candidate_workspace = get_generated_design_candidate_workspace(project_id)
@@ -367,9 +371,10 @@ def _render_project_workspace(project_id: str) -> str:
                         """ + _folder_open_request_markup(folder_open_request) + """
                          """ + _save_back_proposals_markup(save_back_proposals) + """
                           """ + _cache_conflict_status_markup(cache_conflict_status) + """
-                          """ + _source_chunk_materialization_markup(source_chunk_materialization) + """
-                          """ + kicad_analysis_status_markup + """
-                          <div class="card">
+                           """ + _source_chunk_materialization_markup(source_chunk_materialization) + """
+                           """ + kicad_analysis_status_markup + """
+                           """ + kicad_analysis_evidence_markup + """
+                           <div class="card">
                         <h3>KiCad native foundation status</h3>
                        <p><code>""" + escape(str(kicad_foundation.get("status", "unknown"))) + """</code></p>
                        <p>storage owner: <code>""" + escape(str(kicad_foundation.get("storage_owner", "unknown"))) + """</code></p>
@@ -436,9 +441,11 @@ def _render_project_workspace(project_id: str) -> str:
                    <p class="muted">KiCad Happy analyzer output, trust summaries, DRC/ERC/DFM evidence, and reconstruction previews appear here as evidence/cache views.</p>
                    <h3>KiCad Happy hidden analysis cache</h3>
                    """ + kicad_analysis_markup + """
-                   <h3>KiCad analysis request/status</h3>
-                   """ + kicad_analysis_status_markup + """
-                   <h3>Component-Net fusion evidence</h3>
+                    <h3>KiCad analysis request/status</h3>
+                    """ + kicad_analysis_status_markup + """
+                    <h3>KiCad analysis evidence manifest</h3>
+                    """ + kicad_analysis_evidence_markup + """
+                    <h3>Component-Net fusion evidence</h3>
                   <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Pins</th><th>Nets</th><th>Sample nets</th></tr></thead><tbody>""" + fusion_markup + """</tbody></table></div>
                   <h3>BoardDesign IR</h3>
                   <pre>""" + ir_json + """</pre>
@@ -703,6 +710,35 @@ def get_project_kicad_analysis_status(project_id: str) -> dict[str, object]:
         "status": "kicad-analysis-status-represented",
         "native_execution": "not-attempted",
         "filesystem_access": "not-attempted",
+        "mutation_capabilities": [],
+    }
+
+
+@app.get("/api/projects/{project_id}/kicad-analysis-evidence")
+@app.get("/bodesign/api/projects/{project_id}/kicad-analysis-evidence")
+def get_project_kicad_analysis_evidence(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or build_kicad_analysis_evidence_manifest is None or build_kicad_happy_cache_mapping is None:
+        return {
+            "project_id": project_id,
+            "status": "kicad-analysis-evidence-unavailable",
+            "analysis_root": ".bodesign/analysis/kicad-happy",
+            "source_authority": "client-owned-kicad-project",
+            "cache_authority": "disposable-mcp-evidence-cache",
+            "freshness_state": "fixture-stale/needs-client-refresh",
+            "access_mode": "manifest-index-only/no-raw-filesystem-browse",
+            "direct_filesystem_browse_blocked": True,
+            "artifacts": [],
+            "blockers": ["KiCad analysis evidence manifest could not be built."],
+            "warnings": ["No hidden cache file read, filesystem browse, or file mutation was attempted."],
+        }
+    manifest = build_default_storage_share_manifest(project_id)
+    cache_mapping = build_kicad_happy_cache_mapping(manifest.hidden_workspace)
+    evidence = build_kicad_analysis_evidence_manifest(project_id, manifest, cache_mapping)
+    return {
+        **asdict(evidence),
+        "status": "kicad-analysis-evidence-represented",
+        "filesystem_access": "not-attempted",
+        "raw_hidden_folder_browse": "blocked",
         "mutation_capabilities": [],
     }
 
@@ -1713,6 +1749,36 @@ def _kicad_analysis_status_markup(status: dict[str, object]) -> str:
         '<p class="muted">No server-side KiCad execution. DRC/ERC/KiCad Happy runs must be approved and orchestrated by native KiCad plugin or client, with evidence cached under the hidden analysis workspace.</p>'
         f'<h4>Requested checks</h4><div class="pin-list">{check_items}</div>'
         f'<div class="scroll"><table><thead><tr><th>Output</th><th>Target path</th><th>State</th></tr></thead><tbody>{output_rows}</tbody></table></div>'
+        '</div>'
+    )
+
+
+def _kicad_analysis_evidence_markup(evidence: dict[str, object]) -> str:
+    artifacts = evidence.get("artifacts") if isinstance(evidence.get("artifacts"), list) else []
+    rows = "".join(
+        "<tr>"
+        f"<td><code>{escape(str(artifact.get('category', '')))}</code></td>"
+        f"<td><code>{escape(str(artifact.get('path', '')))}</code></td>"
+        f"<td>{escape(str(artifact.get('cache_state', '')))}</td>"
+        f"<td><code>{escape(str(artifact.get('source_anchor', '')))}</code></td>"
+        "</tr>"
+        for artifact in artifacts[:16]
+        if isinstance(artifact, dict)
+    )
+    if not rows:
+        rows = '<tr><td colspan="4">No KiCad analysis evidence artifacts are represented.</td></tr>'
+    blockers = evidence.get("blockers") if isinstance(evidence.get("blockers"), list) else []
+    blocker_items = "".join(f"<li>{escape(str(blocker))}</li>" for blocker in blockers[:6]) or '<li class="muted">No evidence blockers recorded.</li>'
+    return (
+        '<div class="card">'
+        '<h3>KiCad analysis evidence manifest</h3>'
+        f'<p><code>{escape(str(evidence.get("status", "kicad-analysis-evidence-represented")))}</code></p>'
+        f'<p>freshness: <code>{escape(str(evidence.get("freshness_state", "fixture-stale/needs-client-refresh")))}</code></p>'
+        f'<p>cache: <code>{escape(str(evidence.get("cache_authority", "disposable-mcp-evidence-cache")))}</code></p>'
+        f'<p>access: <code>{escape(str(evidence.get("access_mode", "manifest-index-only/no-raw-filesystem-browse")))}</code></p>'
+        '<p class="muted">Evidence manifest indexes client/plugin-produced hidden-cache artifacts only. Raw hidden folder browsing and server-side file reads are blocked.</p>'
+        f'<div class="scroll"><table><thead><tr><th>Evidence</th><th>Path</th><th>Cache state</th><th>Source anchor</th></tr></thead><tbody>{rows}</tbody></table></div>'
+        f'<h4>Evidence blockers</h4><ul>{blocker_items}</ul>'
         '</div>'
     )
 
