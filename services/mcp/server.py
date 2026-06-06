@@ -325,6 +325,17 @@ th{color:var(--muted);font-weight:600}.req{color:var(--accent2)}.opt{color:var(-
 """
 
 
+def _base() -> str:
+    """Public URL base for in-page links (e.g. '/bodesign' behind the gateway).
+
+    The gateway strips the prefix for UDS routes, so the server's *routes* stay
+    unprefixed, but browser-facing *links* must carry the prefix. Set via
+    BODESIGN_HTTP_BASE; empty for direct access.
+    """
+    import os
+    return os.environ.get("BODESIGN_HTTP_BASE", "").rstrip("/")
+
+
 def _page(title: str, inner: str) -> str:
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>'
@@ -339,12 +350,13 @@ def _landing_html(uds_path: str | None = None, tcp_port: int | None = None) -> s
 
     uds = uds_path or "<server>.run/bodesign.sock"
     port = tcp_port or 8077
+    b = _base()
 
     tool_cards = []
     for t in TOOLS:
         req = ", ".join(f"<code>{esc(r)}</code>" for r in (t["schema"].get("required") or [])) or "—"
         tool_cards.append(
-            f'<div class="tool"><div class="tname"><a href="/tools/{esc(t["name"])}">{esc(t["name"])}</a></div>'
+            f'<div class="tool"><div class="tname"><a href="{b}/tools/{esc(t["name"])}">{esc(t["name"])}</a></div>'
             f'<div class="tdesc">{esc(t["description"])}</div>'
             f'<div class="treq">required: {req}</div></div>'
         )
@@ -382,7 +394,7 @@ python services/mcp/server.py --transport http --uds .run/bodesign.sock --port {
      -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
 # → {{"token":"tok_…","doc_dir":"…","files":[…]}}
 curl --unix-socket .run/bodesign.sock http://bd/files/{{token}}/blob/{{rel}}</pre>
-<p>Or stage inline with the <a href="/tools/bodesign_stage_dir"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.</p>
+<p>Or stage inline with the <a href="{b}/tools/bodesign_stage_dir"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.</p>
 </div>
 
 <h2>Circuit-design workflow</h2>
@@ -393,7 +405,7 @@ curl --unix-socket .run/bodesign.sock http://bd/files/{{token}}/blob/{{rel}}</pr
 <div class="card"><p>bodesign generates; mature skills verify/source/document. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>); install the ones you need:</p>
 <ul>{skills}</ul></div>
 
-<h2>Tools ({len(TOOLS)}) — <a href="/tools">full call schemas →</a></h2>
+<h2>Tools ({len(TOOLS)}) — <a href="{b}/tools">full call schemas →</a></h2>
 <div class="grid">{''.join(tool_cards)}</div>
 """
     return _page("bodesign MCP", inner)
@@ -405,12 +417,13 @@ def _tools_index_html() -> str:
     def esc(x):
         return html.escape(str(x))
 
+    b = _base()
     rows = []
     for t in TOOLS:
         req = ", ".join(f"<code>{esc(r)}</code>" for r in (t["schema"].get("required") or [])) or "—"
-        rows.append(f'<tr><td><a href="/tools/{esc(t["name"])}">{esc(t["name"])}</a></td>'
+        rows.append(f'<tr><td><a href="{b}/tools/{esc(t["name"])}">{esc(t["name"])}</a></td>'
                     f'<td>{esc(t["description"])}</td><td>{req}</td></tr>')
-    inner = (f'<p class="crumb"><a href="/">bodesign MCP</a> / tools</p>'
+    inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / tools</p>'
              f'<h1>Tool catalog <span style="color:var(--muted);font-size:1rem">({len(TOOLS)})</span></h1>'
              f'<p class="lead">Click a tool for its full MCP <code>inputSchema</code> and a ready-to-send <code>tools/call</code> payload.</p>'
              f'<div class="card"><table><tr><th>Tool</th><th>Description</th><th>Required</th></tr>{"".join(rows)}</table></div>')
@@ -423,11 +436,12 @@ def _tool_detail_html(name: str) -> str:
     def esc(x):
         return html.escape(str(x))
 
+    b = _base()
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
-        inner = (f'<p class="crumb"><a href="/">bodesign MCP</a> / <a href="/tools">tools</a> / {esc(name)}</p>'
+        inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / <a href="{b}/tools">tools</a> / {esc(name)}</p>'
                  f'<h1>Unknown tool</h1><p class="lead"><code>{esc(name)}</code> is not registered. '
-                 f'<a href="/tools">See the catalog →</a></p>')
+                 f'<a href="{b}/tools">See the catalog →</a></p>')
         return _page("bodesign MCP — unknown tool", inner)
 
     schema = spec["schema"]
@@ -442,13 +456,13 @@ def _tool_detail_html(name: str) -> str:
     example_args = {p: ("…" if p in required else "…") for p in list(required)[:4]} or {"…": "…"}
     call_payload = esc(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                                    "params": {"name": name, "arguments": example_args}}, indent=2, ensure_ascii=False))
-    inner = (f'<p class="crumb"><a href="/">bodesign MCP</a> / <a href="/tools">tools</a> / {esc(name)}</p>'
+    inner = (f'<p class="crumb"><a href="{b}/">bodesign MCP</a> / <a href="{b}/tools">tools</a> / {esc(name)}</p>'
              f'<h1 style="font-family:ui-monospace,monospace;color:var(--accent)">{esc(name)}</h1>'
              f'<p class="lead">{esc(spec["description"])}</p>'
              f'<h2>Parameters</h2><div class="card"><table><tr><th>Name</th><th>Type</th><th></th></tr>{"".join(prop_rows) or "<tr><td>—</td></tr>"}</table></div>'
              f'<h2>inputSchema (JSON Schema)</h2><pre>{schema_json}</pre>'
              f'<h2>tools/call payload</h2><pre>{call_payload}</pre>'
-             f'<p class="crumb"><a href="/tools">← back to catalog</a></p>')
+             f'<p class="crumb"><a href="{b}/tools">← back to catalog</a></p>')
     return _page(f"bodesign MCP — {name}", inner)
 
 

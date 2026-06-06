@@ -24,6 +24,8 @@ services:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
       BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
+      # Gateway prefix for in-page links (gateway strips it for the UDS route).
+      BODESIGN_HTTP_BASE: "/bodesign"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "test", "-S", "/run/bodesign/bodesign.sock"]
