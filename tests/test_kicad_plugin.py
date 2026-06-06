@@ -4,8 +4,10 @@ from bodesign_kicad_plugin import BODESIGN_PLUGIN_METADATA, PCBNEW_AVAILABLE, Si
 
 
 class KiCadPluginTests(unittest.TestCase):
-    def test_imports_without_kicad_pcbnew(self):
-        self.assertFalse(PCBNEW_AVAILABLE)
+    def test_imports_safely_regardless_of_kicad_pcbnew(self):
+        # The plugin must import whether or not pcbnew is present; PCBNEW_AVAILABLE
+        # is informational only and must never gate import or change the contract.
+        self.assertIsInstance(PCBNEW_AVAILABLE, bool)
         self.assertIn("bodesign companion dashboard", BODESIGN_PLUGIN_METADATA["name"])
         self.assertIn("without replacing KiCad editors", BODESIGN_PLUGIN_METADATA["description"])
 

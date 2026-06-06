@@ -49,11 +49,20 @@
 - [x] T26 Add AI reference-board workflow: ingest sources → resolve knowledge → reconstruct IR → propose subsystem/layout intent → validate → approval — workflow-core now exposes a deterministic client-orchestrated reference-board workflow plan with explicit blockers and approval gates
 - [x] T27 Add generated design candidate workspace with diff/evidence/approval UI — workflow-core now exposes a generated design candidate workspace with diff summary, evidence refs, validation gates, and default `not-approved` approval state in API and web UI
 
+## Forward-Design (vibe-coding) Foundation
+
+North star (user-confirmed): natural-language spec → AI clarifying dialogue (specs/dimensions/interfaces) → architecture/subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → human + freerouting finish layout in native KiCad. AI does **not** synthesize pin-level netlists from scratch; it starts from the target chips' dev-board datasheets / reference designs and composes subsystems (Milestone G). Component/pinout knowledge reuses the existing skill ecosystem (bom / digikey / mouser / lcsc / datasheets / kicad / spice / emc). Full auto place-and-route to a finished layout is out of near-term scope.
+
+- [x] T28 Make the EDA bridge real (A-emit): emit a KiCad-openable schematic from IR + `kicad-cli` validation — eda-bridge `kicad_emit.py` loads symbol definitions/pin endpoints from the installed KiCad symbol libraries, embeds them into a self-contained `.kicad_sch`, connects pins via global labels at the pin endpoints (library Y-flip handled), writes `.kicad_pro`, and validates with `kicad-cli sch erc` + `sch export netlist`. Verified on this machine (KiCad 9.0.9 now installed): a 3-component R/C divider emits with 0 ERC errors and a correct 3-node `MID` net. Single-unit symbols + rotation-0 only for now.
+- [~] T29 Reference-design-grounded subsystem composition — pull dev-board/reference-design evidence + datasheet pinouts (via skills) for the target chips, compose subsystems into IR, then emit through T28. STM32N6 and other flagship-new parts are absent from KiCad's standard symbol libraries, so symbol/footprint generation from datasheet pinouts is a required sub-capability.
+- [ ] T30 Interactive requirement→planning loop (the "vibe" front end): MCP/dialogue that intakes an NL spec, asks back for missing specs/dimensions/interfaces, and produces a structured DesignIntent + architecture plan before emission.
+- [ ] T31 A-plugin: in-KiCad Action Plugin for round-trip (open project context, present evidence/candidates, apply user-approved patches via KiCad-native APIs). Runs inside the user's KiCad; cannot be exercised on the headless server.
+
 ## Stop Gates
 
 - [?] User approval required before creating the MCP/service/`/bodesign/` web scaffold.
 - [?] Datasheet fetching policy must be decided before automatic external downloads.
-- [?] KiCad/freerouting integration posture must be approved before embedding GPL/native tools directly.
+- [~] KiCad/freerouting integration posture: resolved for the current path — bodesign invokes `kicad-cli` as an external subprocess and emits standard `.kicad_sch`/`.kicad_pro`/netlist files (using the tool and its open file format, not linking GPL source into the product). Embedding GPL source (e.g. bundling KiCad/freerouting code or libraries into bodesign) still requires explicit license review.
 - [!] Debug/test guidance is deferred and must not shape the MVP schema unless needed by layout generation.
 - [!] No generated layout or Gerber is considered send-to-fab without deterministic validation and explicit user approval.
 - [!] Board View must not display decorative/fake circuit drawings or hand-written SVG approximations as the default PCB view; it must use a third-party Gerber/CAD renderer, verified evidence views, or an explicit unavailable/error state.
