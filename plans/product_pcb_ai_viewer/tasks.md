@@ -34,7 +34,7 @@
 | N13 | Pin/GPIO allocation (→FW) | `pin_allocation` | bodesign | ✅ **G5** |
 | N14 | Layout (place + DRC) | `layout.emit_layout` (pcbnew + kicad-cli drc) | bodesign | ✅ **G8** |
 | N15 | Fab outputs + companions | `fab.emit_fab_outputs` (kicad-cli export) | bodesign | ✅ **G9** |
-| N16 | Simulation / EMC / thermal | `simulate_schematic` (kicad+spice) / `emc` | bodesign+orch | ✅ SPICE (EMC/thermal same pattern) |
+| N16 | Simulation / EMC / thermal | `simulate_schematic` / `analyze_emc` / `analyze_thermal` | bodesign+orch | ✅ SPICE + EMC + thermal |
 | N17 | Doc packages (HDD/MTP/Design-Review) | `kidoc` | orchestrate | ✅ verified (needs PCB) |
 | N18 | Gap / readiness | `collect_source_gap_report` + `package_readiness` | bodesign | ✅ R1/**G2** |
 | N19 | Reference cross-check (trust) | `reference_crosscheck` | bodesign | ✅ **G7** |
@@ -73,7 +73,7 @@ G10a's `/files` is minimal (single-file upload + token download); tools take hos
 
 The other remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, scored vs the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
 
-Orchestration wiring (not bodesign gaps, but workflow steps): **N16** ✅ SPICE wired (`ngspice` installed; `simulate_schematic` orchestrates kicad+spice, divider sim verified 0.0% error) — EMC/thermal follow the same orchestration pattern on a generated board; **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.
+Orchestration wiring (not bodesign gaps, but workflow steps): **N16** ✅ fully wired — SPICE (`ngspice`; `simulate_schematic`, divider 0.0% error) + EMC (`analyze_emc` on a generated board: flags GP-002 no-ground-plane etc.) + thermal (`analyze_thermal`); **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.
 
 ## 5. Verification & trust model
 A non-EE owner cannot judge EE correctness, so reliability is **shown, not asserted**, by three layers:

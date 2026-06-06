@@ -133,6 +133,16 @@ def _h_simulate(a: dict) -> Any:
     return asdict(simulate_schematic(a["schematic_path"], a["out_dir"], simulator=a.get("simulator", "ngspice"), types=a.get("types")))
 
 
+def _h_analyze_emc(a: dict) -> Any:
+    from bodesign_eda_bridge import analyze_emc
+    return asdict(analyze_emc(a["schematic_path"], a["pcb_path"], a["out_dir"], standard=a.get("standard", "fcc-class-b")))
+
+
+def _h_analyze_thermal(a: dict) -> Any:
+    from bodesign_eda_bridge import analyze_thermal
+    return asdict(analyze_thermal(a["schematic_path"], a["pcb_path"], a["out_dir"], ambient=a.get("ambient", 25.0)))
+
+
 def _h_export_bom(a: dict) -> Any:
     from bodesign_eda_bridge import export_bom
     return asdict(export_bom(a["schematic_path"], a["out_dir"], group_by=a.get("group_by", "Value"), xlsx=a.get("xlsx", False)))
@@ -183,6 +193,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_simulate", "handler": _h_simulate,
      "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "simulator": _STR, "types": _STR}, "required": ["schematic_path", "out_dir"]}},
+    {"name": "bodesign_analyze_emc", "handler": _h_analyze_emc,
+     "description": "EMC pre-compliance risk analysis on a schematic + .kicad_pcb (via kicad analyzers + emc skill): severity-bucketed findings (ground plane, decoupling, return paths, stitching, …). Pre-silicon risk, not certification.",
+     "schema": {"type": "object", "properties": {"schematic_path": _STR, "pcb_path": _STR, "out_dir": _STR, "standard": _STR}, "required": ["schematic_path", "pcb_path", "out_dir"]}},
+    {"name": "bodesign_analyze_thermal", "handler": _h_analyze_thermal,
+     "description": "Thermal hotspot estimate on a schematic + .kicad_pcb (kicad analyze_thermal); per-component temps + thermal score.",
+     "schema": {"type": "object", "properties": {"schematic_path": _STR, "pcb_path": _STR, "out_dir": _STR, "ambient": {"type": "number"}}, "required": ["schematic_path", "pcb_path", "out_dir"]}},
     {"name": "bodesign_export_bom", "handler": _h_export_bom,
      "description": "Export a grouped Bill of Materials (CSV, qty + MPN, DNP excluded) from a schematic; optional xlsx companion.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "group_by": _STR, "xlsx": {"type": "boolean"}}, "required": ["schematic_path", "out_dir"]}},
@@ -210,7 +226,7 @@ TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
 # local same-host UDS mode).
-PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "output_path", "corpus_dir", "schematic_path")
+PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "output_path", "corpus_dir", "schematic_path", "pcb_path")
 
 
 def _snapshot(doc_dir: Path) -> dict:
