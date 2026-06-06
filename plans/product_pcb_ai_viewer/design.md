@@ -34,6 +34,7 @@ The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` 
 - `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py` — N13 pin/GPIO allocation table (G5).
 - `packages/eda-bridge/bodesign_eda_bridge/kicad_symbol.py` — N8 symbol generation (`emit_kicad_symbol` generic + ST pin-table variant) (G6).
 - `packages/eda-bridge/bodesign_eda_bridge/footprint_map.py` — N9 footprint mapping (R3).
+- `packages/eda-bridge/bodesign_eda_bridge/layout.py` — N14 layout via pcbnew + DRC + render (G8).
 - `packages/workflow-core/bodesign_workflow_core/requirement_planning.py` — N4 requirements→plan (R5).
 - `packages/workflow-core/bodesign_workflow_core/evidence_sourcing.py` — N6 evidence sourcing (R6).
 - `packages/workflow-core/bodesign_workflow_core/package_readiness.py` — N18 readiness compass (G2).

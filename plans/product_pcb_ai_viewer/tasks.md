@@ -32,7 +32,7 @@
 | N11 | Schematic emit + ERC | `emit_kicad_schematic` + `kicad-cli erc` | bodesign | ✅ |
 | N12 | Netlist + BOM | `kicad` + `kicad-cli export` | orchestrate | partial |
 | N13 | Pin/GPIO allocation (→FW) | `pin_allocation` | bodesign | ✅ **G5** |
-| N14 | Layout (place + DRC) | `pcbnew` + `kicad-cli pcb drc` | bodesign | ⬜ **G8** |
+| N14 | Layout (place + DRC) | `layout.emit_layout` (pcbnew + kicad-cli drc) | bodesign | ✅ **G8** |
 | N15 | Fab outputs + companions | `kicad-cli pcb export` | bodesign+orch | ⬜ **G9** |
 | N16 | Simulation / EMC / thermal | `spice` / `emc` skills | orchestrate | ⬜ (wire) |
 | N17 | Doc packages (HDD/MTP/Design-Review) | `kidoc` | orchestrate | ✅ verified (needs PCB) |
@@ -49,7 +49,7 @@ Status · dependency · acceptance.
 - [x] **G4 PRD/doc emitter** (N5) — done. `reverse-core.doc_emit` (`markdown_to_html` + `emit_document`): any markdown deliverable → docx + pdf via LibreOffice (per-format profile to avoid the LO lock; explicit `docx:MS Word 2007 XML` filter so html→docx doesn't drop silently). Verified on the real PRD → docx (10 KB) + pdf (106 KB), status `ok`. Markdown stays the editable source; docx/pdf are shareable companions.
 - [x] **G5 Pin/GPIO allocation table** (N13) — done. `eda-bridge.pin_allocation` (`build_pin_allocation` + csv/md renderers): net list → per-pin allocation table (RefDes/Pin/Net), MCU pins flagged as the GPIO/FW interface view, natural pin sort. Source-agnostic (composer spec nets / parsed netlist).
 - [x] **G6 Per-part symbol harvest** (N7/N8) — tool done. `eda-bridge.emit_kicad_symbol`: any pin list `{number,name,type}` → valid `.kicad_sym` (power/NC inferred, rectangular symbol). Verified: a generated charger symbol passes `kicad-cli sym export svg` and composes into a `kicad-cli`-validated schematic (full pins→symbol→schematic chain). The datasheet→pinout harvest itself is orchestrated agent-side via the `datasheets` skill; running on the actual V1 parts is execution (not tool-building).
-- [ ] **G8 Layout** (N14) — *dep: G3.* wrap `pcbnew`: assign footprints, place, run `kicad-cli pcb drc`; emit `.kicad_pcb` + readable PDF/PNG companion. **Acceptance:** DRC runs, board opens, companion rendered. (Auto-routing = freerouting/manual, bounded.)
+- [x] **G8 Layout** (N14) — tool done. `eda-bridge.layout.emit_layout`: load footprints from the KiCad libs via `pcbnew`, auto-place on a grid inside an Edge.Cuts outline, save `.kicad_pcb`, run `kicad-cli pcb drc`, render an SVG companion. Verified: 4 footprints (incl. USB-C receptacle) placed, board saved, DRC 0 violations, SVG rendered; unresolved footprints flagged. Starting layout for the engineer to route (auto-routing = freerouting/manual, bounded).
 - [ ] **G9 Fab outputs** (N15) — *dep: G8.* `kicad-cli pcb export` gerber/drill/pos/step/ipc2581 + companions; assemble the fab/assembly handoff package. **Acceptance:** outputs validate via `kicad` gerber analyzer; unlocks full `kidoc` Manufacturing-Transfer package.
 
 Orchestration wiring (not bodesign gaps, but workflow steps): **N16** install+wire `spice`/`emc`; **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.
