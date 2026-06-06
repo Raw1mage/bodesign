@@ -61,6 +61,13 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("bodesign_compose_schematic", detail)
         self.assertIn("Unknown tool", self.server._tool_detail_html("nope_not_a_tool"))
 
+    def test_skill_downloads_include_bundle_and_kicad(self):
+        names = [fn for fn, _, _ in self.server._skill_downloads()]
+        self.assertTrue(any(n.startswith("bodesign-eda") for n in names), "bundle missing")
+        self.assertIn("kicad.tar.gz", names)
+        page = self.server._landing_html("x", 8077, "en")
+        self.assertIn("/skills/kicad.tar.gz", page)
+
     def test_build_server_when_mcp_available(self):
         try:
             import mcp  # noqa: F401

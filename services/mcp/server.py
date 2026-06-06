@@ -341,6 +341,8 @@ I18N = {
                "可靠度是「<b>展示，而非宣稱</b>」：bodesign 以已量產良品（對照組）交叉檢核並執行 SPICE/EMC。這些是矽前風險層，無法取代實驗室／工廠的 EMC／EVT／DVT 認證；未經驗證與明確批准不會輸出送廠檔案。"),
     "skills_intro": ("bodesign generates; mature skills verify/source/document. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>); install the ones you need:",
                      "bodesign 負責生成；成熟 skills 負責驗證／採購／文件。它們在 agent 端執行（或在 server 主機，透過 <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>）；按需安裝："),
+    "skills_dl": ("Download skill packages", "下載 skill 套件"),
+    "skills_dl_bundle": ("Full EDA skill bundle", "完整 EDA skill 套件包"),
     "tools_full": ("full call schemas →", "完整呼叫 schema →"),
     "idx_crumb": ("tools", "工具"),
     "idx_title": ("Tool catalog", "工具目錄"),
@@ -404,6 +406,32 @@ def _base() -> str:
     return os.environ.get("BODESIGN_HTTP_BASE", "").rstrip("/")
 
 
+def _assets_dir() -> Path:
+    return Path(__file__).resolve().parent / "assets"
+
+
+def _human_size(n: int) -> str:
+    f = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if f < 1024 or unit == "GB":
+            return f"{f:.0f}{unit}" if unit == "B" else f"{f:.1f}{unit}"
+        f /= 1024
+    return f"{f:.1f}GB"
+
+
+def _skill_downloads() -> list[tuple[str, str, str]]:
+    """(filename, label, human_size) for vendored skill tarballs; bundle first."""
+    d = _assets_dir() / "skills"
+    if not d.is_dir():
+        return []
+    files = sorted(d.glob("*.tar.gz"), key=lambda p: (not p.name.startswith("bodesign-eda"), p.name))
+    out = []
+    for p in files:
+        label = "bundle" if p.name.startswith("bodesign-eda") else p.name[:-len(".tar.gz")]
+        out.append((p.name, label, _human_size(p.stat().st_size)))
+    return out
+
+
 def _page(title: str, inner: str, lang: str = "en") -> str:
     htmllang = "zh-Hant" if lang == "zh" else "en"
     on = ' style="color:var(--accent);font-weight:700"'
@@ -439,6 +467,16 @@ def _landing_html(uds_path: str | None = None, tcp_port: int | None = None, lang
         )
     skills = "".join(f"<li><b>{esc(n)}</b> — {esc(zh if lang == 'zh' else en)}</li>"
                      for n, en, zh in ORCHESTRATED_SKILLS)
+    dl = _skill_downloads()
+    dl_html = ""
+    if dl:
+        bundle = next((d for d in dl if d[1] == "bundle"), None)
+        per = [d for d in dl if d[1] != "bundle"]
+        links = " · ".join(f'<a href="{b}/skills/{esc(fn)}">{esc(lb)}</a> <span style="color:var(--muted)">({sz})</span>'
+                           for fn, lb, sz in per)
+        bundle_link = (f'<a href="{b}/skills/{esc(bundle[0])}" style="color:var(--accent);font-weight:700">⬇ {L("skills_dl_bundle")}</a> '
+                       f'<span style="color:var(--muted)">({bundle[2]})</span>' if bundle else "")
+        dl_html = f'<p style="margin-top:10px"><b>{L("skills_dl")}:</b> {bundle_link}</p><p style="font-size:.9rem">{links}</p>'
     workflow = "".join(
         f'<div class="step"><div class="sh">{esc(zh_h if lang == "zh" else eh)}</div>'
         f'<div class="sb">{zb if lang == "zh" else eb}</div></div>'
@@ -486,7 +524,7 @@ curl --unix-socket .run/bodesign.sock http://bd/files/{{token}}/blob/{{rel}}</pr
 
 <h2>{L('sec_skills')}</h2>
 <div class="card"><p>{L('skills_intro')}</p>
-<ul>{skills}</ul></div>
+<ul>{skills}</ul>{dl_html}</div>
 
 <h2>{L('sec_tools')} ({len(TOOLS)}) — <a href="{b}/tools">{L('tools_full')}</a></h2>
 <div class="grid">{''.join(tool_cards)}</div>
@@ -610,11 +648,23 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         return JSONResponse({"status": "ok", "service": SERVER_NAME, "tools": len(TOOLS)})
 
     async def idef0_svg(request: Request) -> Response:
-        svg = Path(__file__).resolve().parent / "assets" / "idef0.zh.svg"
+        svg = _assets_dir() / "idef0.zh.svg"
         if not svg.is_file():
             return JSONResponse({"error": "not_found"}, status_code=404)
         return Response(svg.read_text(encoding="utf-8"), media_type="image/svg+xml",
                         headers={"Cache-Control": "no-store"})
+
+    async def skill_download(request: Request) -> Response:
+        name = request.path_params["name"]
+        root = (_assets_dir() / "skills").resolve()
+        try:
+            target = (root / name).resolve()
+            target.relative_to(root)
+        except (ValueError, OSError):
+            return JSONResponse({"error": "path_escape"}, status_code=403)
+        if not target.is_file() or not target.name.endswith(".tar.gz"):
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        return FileResponse(str(target), media_type="application/gzip", filename=target.name)
 
     async def landing(request: Request) -> Response:
         return Response(_landing_html(uds, port, _lang_of(request)), media_type="text/html; charset=utf-8")
@@ -666,6 +716,7 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         Route("/tools", tools_index),
         Route("/tools/{name}", tool_detail),
         Route("/idef0.svg", idef0_svg),
+        Route("/skills/{name}", skill_download),
         Route("/healthz", healthz),
         Route("/files", upload_file, methods=["POST"]),
         Route("/files/{token}/blob/{rel:path}", get_blob),
