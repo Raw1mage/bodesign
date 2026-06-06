@@ -1,4 +1,42 @@
-# Tasks: AI Reference Board Rebuilder
+# Tasks: AI PCB Design Copilot
+
+> **Reorganized 2026-06-06.** This roadmap is the authoritative forward plan. The detailed `T*`/`O*` task ledger below is preserved as the historical record. North star: **natural-language spec → AI clarifying dialogue → reference-design-grounded subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → human + freerouting finish in native KiCad.** AI never synthesizes pin-level netlists from scratch and never emits send-to-fab outputs without deterministic validation + explicit approval.
+
+## Reorganized Roadmap
+
+### ✅ Done & real (validated)
+- **Scaffold + surface**: MCP/API, `/bodesign/` companion dashboard, published gateway. (T1–T12, routes)
+- **Reverse reconstruction (Rockbox)**: placement/IPC/Gerber/drill parsing, single-layer pygerber raster, component↔net fusion, cross-probe, **drill↔via spatial fusion**. (T13–T22, T18/T20)
+- **EDA bridge real — A-emit**: IR → self-contained `.kicad_sch` + `.kicad_pro`, connectivity via global labels, validated by `kicad-cli` ERC + netlist. (T28)
+- **Datasheet → KiCad source (OpenMV exemplar)**: PDF pin-table extraction → 223-pin STM32N657 symbol → minimal subsystem schematic, `kicad-cli`-validated. (OpenMV O0–O7, in `product_openmv_datasheet_kicad_source`)
+
+### P0 — Close & harden the forward-design slice (OpenMV as the exemplar)
+- [ ] **R1** OpenMV gap/evidence report (= O8): consolidate unresolved datasheet/package/footprint/schematic assumptions + per-artifact validation status into a reviewable report.
+- [ ] **R2** Expand OpenMV subsystem emit beyond MCU+flash: add power rails (1.8/3.3/VDDA), USB-C/USB-HS, and at least one peripheral subsystem into the generated schematic from the O6 constraints.
+- [ ] **R3** Package→footprint mapping for generated symbols (confidence + gaps), emitted as project-local metadata.
+- [ ] **R4** Web/API evidence dashboard for the OpenMV KiCad source package: surface pin tables, generated symbols, subsystem constraints, gaps, and `kicad-cli` validation in the companion dashboard. (= T29f)
+
+### P1 — The "vibe" front-end (the missing heart of the vision)
+- [ ] **R5** Interactive requirement→planning loop (= T30): MCP tool that intakes an NL spec, asks back for missing specs/dimensions/interfaces, and produces a structured `DesignIntent` + architecture/subsystem plan before any emission.
+- [ ] **R6** Reference-design discovery via skills: given target chips, use `datasheets`/`digikey` skills to locate dev-board datasheets/reference designs as starting evidence (generalizes OpenMV O0–O1).
+
+### P2 — Generalize beyond OpenMV to an arbitrary spec
+- [ ] **R7** Multi-chip subsystem composition: planned subsystems + selected parts → composed IR → emit; prove on the running example (STM32N6 + nRF9151 + 8GB flash + USB-C PD/charging + 18650 battery/control).
+- [ ] **R8** Generalize symbol/footprint generation for any flagship-new part from a verified datasheet pinout (generalizes O3–O4 beyond STM32N657).
+
+### P3 — Round-trip & finish
+- [ ] **R9** A-plugin (= T31): in-KiCad Action Plugin for round-trip (open project context, present evidence/candidates, apply user-approved patches via KiCad-native APIs). Runs inside the user's KiCad.
+- [ ] **R10** Footprint/PCB emit + placement constraints; evaluate `freerouting`; export + deterministic validation + explicit approval gate.
+
+### ⏸ Parked (revisit only when triggered)
+- **A2 represented contracts** (storage-share / project-tree / folder-open / save-back / cache-conflict / analysis status / evidence manifest / plugin handshake, T14a–T14o): keep as deterministic contracts; make real only when a real client folder handle or in-KiCad plugin exists.
+- **Reverse-path geometry (B)**: Gerber pad/flash spatial fusion + placement↔IPC origin co-registration. Secondary to forward-design now; remains an optional reverse-engineering capability.
+- **Persistence (Postgres), multi-user/billing**: out of near-term scope.
+- **Full auto place-and-route to a finished layout**: not a near-term target (industry-unsolved); human + freerouting finish.
+
+---
+
+## Historical Task Ledger
 
 - [x] T1 Define source-ingestion taxonomy and evidence schemas
 - [x] T2 Define ComponentKnowledge, DesignIntent, and BoardDesign IR schemas

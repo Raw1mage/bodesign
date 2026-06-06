@@ -1,10 +1,14 @@
 {
-  "state": "planned",
+  "state": "implementing",
   "slug": "product_pcb_ai_viewer",
-  "title": "AI-assisted Gerber PCB layout web viewer",
-  "updatedAt": "2026-06-05",
+  "title": "AI-assisted PCB design copilot (reverse reconstruction + forward KiCad generation)",
+  "updatedAt": "2026-06-06",
   "gates": {
     "approvalRequiredBeforeImplementation": true,
-    "reason": "New full-stack product scaffold and AI-assisted design modification workflow"
-  }
+    "approvalGranted": true,
+    "reason": "Scaffold and AI-assisted design workflow approved; now in active implementation. North star pivoted to forward vibe-design into KiCad, grounded in reference designs."
+  },
+  "relatedPlans": [
+    "product_openmv_datasheet_kicad_source"
+  ]
 }
