@@ -475,7 +475,7 @@ def _landing_html(uds_path: str | None = None, tcp_port: int | None = None, lang
         links = " · ".join(f'<a href="{b}/skills/{esc(fn)}">{esc(lb)}</a> <span style="color:var(--muted)">({sz})</span>'
                            for fn, lb, sz in per)
         bundle_link = (f'<a href="{b}/skills/{esc(bundle[0])}" style="color:var(--accent);font-weight:700">⬇ {L("skills_dl_bundle")}</a> '
-                       f'<span style="color:var(--muted)">({bundle[2]})</span>' if bundle else "")
+                       f'<span style="color:var(--muted)">({bundle[2]})</span> · <a href="{b}/skills/MANIFEST.md">MANIFEST</a>' if bundle else "")
         dl_html = f'<p style="margin-top:10px"><b>{L("skills_dl")}:</b> {bundle_link}</p><p style="font-size:.9rem">{links}</p>'
     workflow = "".join(
         f'<div class="step"><div class="sh">{esc(zh_h if lang == "zh" else eh)}</div>'
@@ -662,8 +662,10 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
             target.relative_to(root)
         except (ValueError, OSError):
             return JSONResponse({"error": "path_escape"}, status_code=403)
-        if not target.is_file() or not target.name.endswith(".tar.gz"):
+        if not target.is_file() or not (target.name.endswith(".tar.gz") or target.name == "MANIFEST.md"):
             return JSONResponse({"error": "not_found"}, status_code=404)
+        if target.name == "MANIFEST.md":
+            return Response(target.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
         return FileResponse(str(target), media_type="application/gzip", filename=target.name)
 
     async def landing(request: Request) -> Response:
