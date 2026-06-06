@@ -1,6 +1,37 @@
 # Tasks: AI PCB Design Copilot
 
-> **Reorganized 2026-06-06.** This roadmap is the authoritative forward plan. The detailed `T*`/`O*` task ledger below is preserved as the historical record. North star: **natural-language spec → AI clarifying dialogue → reference-design-grounded subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → human + freerouting finish in native KiCad.** AI never synthesizes pin-level netlists from scratch and never emits send-to-fab outputs without deterministic validation + explicit approval.
+> **Reorganized 2026-06-06.** This roadmap is the authoritative forward plan. The detailed `T*`/`O*` task ledger below is preserved as the historical record.
+
+## Architecture (consolidated 2026-06-06)
+
+- **Core = KiCad's circuit-design capability**, across the **full lifecycle**: schematic → layout → simulation/verification. Principle: **whatever KiCad can do, wrap it in.**
+- **Surface = a docxmcp-style file/folder processor** — **no web UI** (retired). Ingest a whole client project folder (like 01.ROCKBOX), operate via MCP tools, emit files back into the client-owned folder.
+- **Interaction = prompt-driven.** The user communicates in natural language; the MCP lands files. The user reviews with native apps.
+- **Output format rule:** any non-readable engineering file (`.kicad_sch`, Gerber, drill, `.DSN`) ships with a **readable companion** (pdf/png/svg/xlsx). md/csv/html/docx/pdf/xlsx/png/pptx are all acceptable readable formats.
+- **North star (driving product):** TheSmartAI Edge AI device (see `product_edge_ai_device`), V1 OpenMV-derived.
+
+### KiCad capabilities available on this host (KiCad 9.0.9)
+- Schematic: S-expr emit + `kicad-cli sch erc / export netlist|bom|pdf|svg`. ✅ used
+- PCB/layout: **`pcbnew` Python API** (place/edit/DRC/plot) + `kicad-cli pcb drc / export gerber|drill|pos|step|pdf|svg|ipc2581|ipcd356`. ✅ available, not yet wired
+- Simulation: ngspice (not installed — add when reached) via the `spice` skill.
+- Autorouting: freerouting (not installed — add when reached).
+
+### Lifecycle MCP tool surface (have → build)
+| Stage | KiCad capability to wrap | Status |
+|---|---|---|
+| Ingest project folder | read `.kicad_pro/.kicad_sch/.kicad_pcb`, BOM, Gerber, IPC (docxmcp-style decompose) | partial (reverse parsers exist; folder-ingest tool to build) |
+| Requirements → plan | `plan_design_intent` (R5) | ✅ |
+| Evidence/reference sourcing | `build_design_evidence_manifest` (R6) | ✅ |
+| Symbol generation | `emit_kicad_symbol_library_from_pin_table` | ✅ |
+| Schematic emit + validate | `emit_kicad_schematic` + `kicad-cli erc/netlist` | ✅ |
+| Footprint mapping | `build_footprint_map` (R3) | ✅ |
+| BOM | from schematic/netlist | partial |
+| **Layout** | `pcbnew` place + `kicad-cli pcb drc` | **build** |
+| **Fab outputs** | `kicad-cli pcb export gerber/drill/pos/step/ipc2581` (+ readable pdf/png companion) | **build** |
+| **Simulation/verify** | ngspice via `spice` skill; `kicad-cli pcb drc`, `sch erc` | **build** |
+| Gap/readiness report | `collect_source_gap_report` (R1) + readiness guide | ✅ |
+
+Prior north-star line (kept for history): *natural-language spec → clarifying dialogue → reference-design-grounded subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → finish in native KiCad.* AI never emits send-to-fab outputs without deterministic validation + explicit approval.
 
 ## Reorganized Roadmap
 
