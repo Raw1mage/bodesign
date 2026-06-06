@@ -1,3 +1,3 @@
-from .contracts import BoardDesign, BoardLayer, BoardObject, ComponentInstance, Net
+from .contracts import BoardDesign, BoardLayer, BoardObject, ComponentInstance, GeometryPrimitive, Net
 
-__all__ = ["BoardDesign", "BoardLayer", "BoardObject", "ComponentInstance", "Net"]
+__all__ = ["BoardDesign", "BoardLayer", "BoardObject", "ComponentInstance", "GeometryPrimitive", "Net"]

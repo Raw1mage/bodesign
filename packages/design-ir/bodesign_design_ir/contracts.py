@@ -38,6 +38,26 @@ class BoardObject:
 
 
 @dataclass(slots=True)
+class GeometryPrimitive:
+    """A spatially-located board feature fused from manufacturing evidence.
+
+    Coordinates are kept in the source evidence frame (IPC/drill mil-scale for
+    Rockbox) rather than re-projected, so downstream consumers can decide on a
+    canonical unit once a board-origin transform is resolved.
+    """
+
+    id: str
+    primitive_type: str
+    x: float
+    y: float
+    net: str | None = None
+    refdes: str | None = None
+    pin: str | None = None
+    attributes: dict[str, object] = field(default_factory=dict)
+    evidence_refs: list[EvidenceRef] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class BoardDesign:
     id: str
     version: str

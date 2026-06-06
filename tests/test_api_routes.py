@@ -127,6 +127,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("IPC pin/net evidence", html)
         self.assertIn("Component-Net fusion preview", html)
         self.assertIn("Component-Net fusion evidence", html)
+        self.assertIn("Drill↔via spatial fusion", html)
         self.assertIn("coverage:", html)
         self.assertIn("cross-probe/U401", html)
         self.assertIn("Probe", html)
@@ -248,6 +249,14 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertNotIn("svg", geometry)
         self.assertGreater(geometry["gerber"]["draw_count"], 1000)
         self.assertEqual(789, geometry["drill"]["hit_count"])
+        spatial = geometry["spatial_fusion"]
+        self.assertEqual("spatial-fusion", spatial["status"])
+        self.assertEqual(817, spatial["ipc_via_count"])
+        self.assertEqual(783, spatial["matched_via_hits"])
+        self.assertEqual(6, spatial["unmatched_holes"])
+        self.assertGreater(spatial["match_ratio"], 0.99)
+        self.assertGreater(spatial["geometry_primitive_count"], 0)
+        self.assertNotIn("geometry_primitives", spatial)
 
     def test_project_storage_share_manifest_is_client_owned_and_scoped(self):
         install_fastapi_stub()

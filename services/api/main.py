@@ -34,7 +34,7 @@ try:
     from bodesign_eda_bridge import build_kicad_native_extension_contract, plan_kicad_bridge
     from bodesign_gerber_core import focus_svg_viewbox, parse_drill_file, parse_gerber_file, render_gerber_raster_with_pygerber, render_gerber_with_pygerber, render_geometry_svg, validate_gerber_export_placeholder
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
-    from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
+    from bodesign_reverse_core import build_rockbox_input_manifest, fuse_drill_and_ipc, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
     from bodesign_storage_core import build_cache_conflict_status, build_default_storage_share_manifest, build_folder_open_request, build_kicad_analysis_evidence_manifest, build_kicad_analysis_status, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, build_save_back_proposals, build_source_chunk_materialization, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
@@ -56,6 +56,7 @@ except ImportError:
     ProjectSummary = None
     detect_input_artifact = None
     build_rockbox_input_manifest = None
+    fuse_drill_and_ipc = None
     reconstruct_rockbox_placeholder = None
     plan_gerber_export = None
     produce_design_report = None
@@ -235,6 +236,11 @@ def _render_project_workspace(project_id: str) -> str:
     fusion_markup = "".join(_component_fusion_row(component) for component in fusion_components[:80])
     if not fusion_markup:
         fusion_markup = '<tr><td colspan="5">No component↔net fusion evidence yet.</td></tr>'
+    spatial_fusion = geometry.get("spatial_fusion") if isinstance(geometry.get("spatial_fusion"), dict) else {}
+    spatial_via_net_markup = "".join(
+        f'<tr><td><code>{escape(str(entry.get("net", "?")))}</code></td><td>{escape(str(entry.get("vias", 0)))}</td></tr>'
+        for entry in (spatial_fusion.get("top_via_nets") or [])[:12]
+    ) or '<tr><td colspan="2">No drill↔via spatial evidence yet.</td></tr>'
     kicad_foundation = get_project_kicad_foundation(project_id)
     folder_open_request = get_project_folder_open_request(project_id)
     save_back_proposals = get_project_save_back_proposals(project_id)
@@ -407,6 +413,7 @@ def _render_project_workspace(project_id: str) -> str:
                     <div class="card"><h3>Gerber source</h3><p><code>""" + escape(str(gerber_geometry.get("filename", "none"))) + """</code></p><p>draws: <b>""" + escape(str(gerber_geometry.get("draw_count", 0))) + """</b> · flashes: <b>""" + escape(str(gerber_geometry.get("flash_count", 0))) + """</b></p></div>
                     <div class="card"><h3>Drill source</h3><p><code>""" + escape(str(drill_geometry.get("filename", "none"))) + """</code></p><p>hits: <b>""" + escape(str(drill_geometry.get("hit_count", 0))) + """</b> · tools: <b>""" + escape(str(drill_geometry.get("tool_count", 0))) + """</b></p></div>
                     <div class="card"><h3>Component-Net fusion preview</h3><p>coverage: <b>""" + escape(str(fusion_summary.get("coverage_ratio", 0.0))) + """</b></p><p>mapped components: <b>""" + escape(str(fusion_summary.get("mapped_components", 0))) + """</b> / """ + escape(str(fusion_summary.get("total_components", 0))) + """</p></div>
+                    <div class="card"><h3>Drill↔via spatial fusion</h3><p>matched: <b>""" + escape(str(spatial_fusion.get("matched_via_hits", 0))) + """</b> / """ + escape(str(spatial_fusion.get("drill_hit_count", 0))) + """ (ratio <b>""" + escape(str(spatial_fusion.get("match_ratio", 0.0))) + """</b>)</p><p>net-bearing vias: <b>""" + escape(str(spatial_fusion.get("ipc_via_count", 0))) + """</b> over <b>""" + escape(str(spatial_fusion.get("distinct_via_nets", 0))) + """</b> nets · unmatched holes: """ + escape(str(spatial_fusion.get("unmatched_holes", 0))) + """</p></div>
                   </div>
                   <div class="viewer-toolbar" aria-label="Board view controls">
                       <button class="control-button" type="button" data-overlay-toggle="components">Toggle placement overlay</button>
@@ -447,6 +454,9 @@ def _render_project_workspace(project_id: str) -> str:
                     """ + kicad_analysis_evidence_markup + """
                     <h3>Component-Net fusion evidence</h3>
                   <div class="scroll"><table><thead><tr><th>Refdes</th><th>Part/value</th><th>Pins</th><th>Nets</th><th>Sample nets</th></tr></thead><tbody>""" + fusion_markup + """</tbody></table></div>
+                    <h3>Drill↔via spatial fusion (IPC/drill frame)</h3>
+                    <p class="muted">Every plated drill hit is matched to its IPC via by nearest-neighbour in a shared coordinate frame, so drill holes gain net identity. Allegro placement (cds2f) coordinates use a different origin and are not spatially co-registered yet, so placement↔pad fusion is intentionally excluded rather than approximated.</p>
+                  <div class="scroll"><table><thead><tr><th>Via net</th><th>Vias</th></tr></thead><tbody>""" + spatial_via_net_markup + """</tbody></table></div>
                   <h3>BoardDesign IR</h3>
                   <pre>""" + ir_json + """</pre>
                 </article>
@@ -1356,6 +1366,7 @@ def _project_geometry(project_id: str) -> dict[str, object]:
         board_design.get("components", []) if isinstance(board_design.get("components"), list) else [],
         board_design.get("nets", []) if isinstance(board_design.get("nets"), list) else [],
     )
+    spatial_fusion = _spatial_fusion_summary(project_id, records)
     raster_renderer = _render_gerber_raster_artifact(project_id, gerber_record) if gerber_record is not None else None
     image_data_uri = _read_rendered_png_data_uri(raster_renderer)
     return {
@@ -1363,9 +1374,28 @@ def _project_geometry(project_id: str) -> dict[str, object]:
         "gerber": gerber_dict,
         "drill": drill_dict,
         "fusion_summary": fusion_summary,
+        "spatial_fusion": spatial_fusion,
         "raster_renderer": raster_renderer,
         "image_data_uri": image_data_uri,
     }
+
+
+def _spatial_fusion_summary(project_id: str, records: list[dict[str, object]]) -> dict[str, object] | None:
+    if fuse_drill_and_ipc is None:
+        return None
+    ipc_files = [str(record["path"]) for record in records if record.get("artifact_type") == "ipc356"]
+    drill_files = [str(record["path"]) for record in records if record.get("artifact_type") == "drill"]
+    if not ipc_files or not drill_files:
+        return None
+    summary = asdict(fuse_drill_and_ipc(project_id, ipc_files, drill_files))
+    # Geometry primitives are a bounded sample for the IR; keep only their count in the
+    # API envelope so the geometry response stays compact for the Board View dashboard.
+    summary["geometry_primitive_count"] = len(summary.pop("geometry_primitives", []))
+    summary["evidence_refs"] = [
+        {key: value for key, value in ref.items() if key in {"source_id", "target_path", "confidence"}}
+        for ref in summary.get("evidence_refs", [])
+    ]
+    return summary
 
 
 def _render_gerber_raster_artifact(project_id: str, artifact: dict[str, object] | None) -> dict[str, object] | None:
