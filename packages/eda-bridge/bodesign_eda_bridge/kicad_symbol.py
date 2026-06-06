@@ -56,6 +56,84 @@ def emit_kicad_symbol_library_from_pin_table(
     )
 
 
+def emit_kicad_symbol(
+    symbol_name: str,
+    pins: list,
+    output_path: str | Path,
+    *,
+    footprint_filter: str = "",
+    datasheet: str = "",
+    evidence: str = "bodesign generated; raw_pdf_text_committed=false",
+    description: str = "",
+) -> KiCadSymbolEmitResult:
+    """Generic part symbol generator (G6): any pin list → a valid `.kicad_sym`.
+
+    `pins` is a list of `KiCadSymbolPin` or simple dicts `{number, name, type}`
+    (type ∈ I/O/A/S/-; power/NC inferred from the name). Use this for any part
+    whose pinout was harvested from a datasheet (orchestrate the `datasheets`
+    skill), beyond the ST-specific `emit_kicad_symbol_library_from_pin_table`.
+    """
+    norm: list[KiCadSymbolPin] = []
+    for p in pins:
+        if isinstance(p, KiCadSymbolPin):
+            norm.append(p)
+        else:
+            name = str(p.get("name", ""))
+            norm.append(KiCadSymbolPin(number=str(p.get("number", "")), name=name,
+                                       kind=_kicad_pin_kind(name, str(p.get("type", "")))))
+    if not norm:
+        raise ValueError("no pins provided")
+    library = _generic_symbol_library(symbol_name, norm, footprint_filter, datasheet, evidence,
+                                      description or f"{symbol_name} project-local generated symbol")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(library, encoding="utf-8")
+    return KiCadSymbolEmitResult(
+        symbol_name=symbol_name, library_path=str(destination), pin_count=len(norm),
+        source_artifact="(generic pin list)", evidence_property=evidence,
+    )
+
+
+def _generic_symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], footprint_filter: str,
+                            datasheet: str, evidence: str, description: str) -> str:
+    ordered = sorted(pins, key=_pin_sort_key)
+    height = max(40.0, len(ordered) * 1.27 / 2 + 20.0)
+    top = round(height / 2, 2)
+    bottom = -top
+    middle = len(ordered) // 2
+    pin_blocks = []
+    for index, pin in enumerate(ordered):
+        left = index < middle
+        side_index = index if left else index - middle
+        x = -38.1 if left else 38.1
+        y = round(top - 10.16 - side_index * 1.27, 2)
+        rotation = 0 if left else 180
+        pin_blocks.append(_pin_block(pin, x, y, rotation))
+    return (
+        "(kicad_symbol_lib\n"
+        f"\t(version {SYMBOL_LIB_VERSION})\n"
+        "\t(generator \"bodesign\")\n"
+        "\t(generator_version \"1.0\")\n"
+        f"\t(symbol \"{_escape(symbol_name)}\"\n"
+        "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
+        f"{_property('Reference', 'U', -30.48, top + 3.81, visible=True)}\n"
+        f"{_property('Value', symbol_name, 7.62, top + 3.81, visible=True)}\n"
+        f"{_property('Footprint', '', -30.48, bottom - 3.81, visible=False)}\n"
+        f"{_property('Datasheet', datasheet, 0, 0, visible=False)}\n"
+        f"{_property('Description', description, 0, 0, visible=False)}\n"
+        f"{_property('BodesignEvidence', evidence, 0, 0, visible=False)}\n"
+        f"{_property('ki_fp_filters', footprint_filter, 0, 0, visible=False)}\n"
+        f"\t\t(symbol \"{_escape(symbol_name)}_0_1\"\n"
+        "\t\t\t(rectangle\n"
+        f"\t\t\t\t(start -33.02 {bottom})\n\t\t\t\t(end 33.02 {top})\n"
+        "\t\t\t\t(stroke (width 0.254) (type default))\n\t\t\t\t(fill (type background))\n"
+        "\t\t\t)\n\t\t)\n"
+        f"\t\t(symbol \"{_escape(symbol_name)}_1_1\"\n"
+        + "\n".join(pin_blocks)
+        + "\n\t\t)\n\t)\n)\n"
+    )
+
+
 def _pin_from_row(row: dict[str, object]) -> KiCadSymbolPin:
     evidence = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
     return KiCadSymbolPin(

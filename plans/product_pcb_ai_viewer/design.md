@@ -32,7 +32,7 @@ The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` 
 - `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py` — N11 schematic emit + `kicad-cli` validation (multi-source `load_symbol`).
 - `packages/eda-bridge/bodesign_eda_bridge/composer.py` — N10 generalized subsystem composer (G3).
 - `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py` — N13 pin/GPIO allocation table (G5).
-- `packages/eda-bridge/bodesign_eda_bridge/kicad_symbol.py` — N8 symbol generation.
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_symbol.py` — N8 symbol generation (`emit_kicad_symbol` generic + ST pin-table variant) (G6).
 - `packages/eda-bridge/bodesign_eda_bridge/footprint_map.py` — N9 footprint mapping (R3).
 - `packages/workflow-core/bodesign_workflow_core/requirement_planning.py` — N4 requirements→plan (R5).
 - `packages/workflow-core/bodesign_workflow_core/evidence_sourcing.py` — N6 evidence sourcing (R6).

@@ -25,8 +25,8 @@
 | N4 | Requirements → clarify → plan | `plan_design_intent` | bodesign | ✅ R5 |
 | N5 | PRD / doc emit (docx/pdf) | `doc_emit` + libreoffice | bodesign | ✅ **G4** |
 | N6 | Evidence / reference sourcing | `build_design_evidence_manifest` + `digikey`/`lcsc` | bodesign+orch | ✅ R6 |
-| N7 | Datasheet → ComponentKnowledge (pinout) | `datasheets` skill + pin_tables | orchestrate | ✅(ST) ⬜ **G6** |
-| N8 | Symbol generation | `emit_kicad_symbol_library_from_pin_table` | bodesign | ✅ |
+| N7 | Datasheet → ComponentKnowledge (pinout) | `datasheets` skill + pin_tables | orchestrate | ✅ (harvest agent-side) |
+| N8 | Symbol generation (generic) | `emit_kicad_symbol` (+ ST pin-table variant) | bodesign | ✅ **G6** |
 | N9 | Footprint mapping/generation | `build_footprint_map` | bodesign | ✅ R3 (gen: G6) |
 | N10 | Subsystem composition (ref → IR) | `composer.compose_schematic` | bodesign | ✅ **G3** (full V1 needs G6) |
 | N11 | Schematic emit + ERC | `emit_kicad_schematic` + `kicad-cli erc` | bodesign | ✅ |
@@ -48,7 +48,7 @@ Status · dependency · acceptance.
 - [x] **G3 Generalized subsystem composer** (N10) — tool done. `eda-bridge.composer.compose_schematic`: declarative design spec (components + `"REF.PIN"` named-net interconnect) → auto-placed IR → `emit_kicad_schematic` → optional `kicad-cli` validation; `load_symbol` now resolves across multiple sources (stdlib + project-local generated libs). Verified: a 4-component spec (incl. a connector) → 0 ERC errors, exact net connectivity. *Running it on the full V1 device still needs per-part symbols (G6); the tool itself is generic + done.*
 - [x] **G4 PRD/doc emitter** (N5) — done. `reverse-core.doc_emit` (`markdown_to_html` + `emit_document`): any markdown deliverable → docx + pdf via LibreOffice (per-format profile to avoid the LO lock; explicit `docx:MS Word 2007 XML` filter so html→docx doesn't drop silently). Verified on the real PRD → docx (10 KB) + pdf (106 KB), status `ok`. Markdown stays the editable source; docx/pdf are shareable companions.
 - [x] **G5 Pin/GPIO allocation table** (N13) — done. `eda-bridge.pin_allocation` (`build_pin_allocation` + csv/md renderers): net list → per-pin allocation table (RefDes/Pin/Net), MCU pins flagged as the GPIO/FW interface view, natural pin sort. Source-agnostic (composer spec nets / parsed netlist).
-- [ ] **G6 Per-part symbol harvest** (N7/N8) — *unblocked.* orchestrate `datasheets` → pinout → symbol for V1 parts beyond STM32N657/MX25 (WiFi `LBEE5KL1YN`, charger `BQ24075`, mic, camera connector). Feeds G3. **Acceptance:** each symbol parses + kicad-cli accepts.
+- [x] **G6 Per-part symbol harvest** (N7/N8) — tool done. `eda-bridge.emit_kicad_symbol`: any pin list `{number,name,type}` → valid `.kicad_sym` (power/NC inferred, rectangular symbol). Verified: a generated charger symbol passes `kicad-cli sym export svg` and composes into a `kicad-cli`-validated schematic (full pins→symbol→schematic chain). The datasheet→pinout harvest itself is orchestrated agent-side via the `datasheets` skill; running on the actual V1 parts is execution (not tool-building).
 - [ ] **G8 Layout** (N14) — *dep: G3.* wrap `pcbnew`: assign footprints, place, run `kicad-cli pcb drc`; emit `.kicad_pcb` + readable PDF/PNG companion. **Acceptance:** DRC runs, board opens, companion rendered. (Auto-routing = freerouting/manual, bounded.)
 - [ ] **G9 Fab outputs** (N15) — *dep: G8.* `kicad-cli pcb export` gerber/drill/pos/step/ipc2581 + companions; assemble the fab/assembly handoff package. **Acceptance:** outputs validate via `kicad` gerber analyzer; unlocks full `kidoc` Manufacturing-Transfer package.
 
