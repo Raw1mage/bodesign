@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_kicad_happy_cache_mapping, build_project_tree_browse_contract, classify_project_folder_taxonomy
+from bodesign_storage_core import build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -81,6 +81,26 @@ class StorageCoreTests(unittest.TestCase):
         self.assertEqual("hidden-system-summary", tree.hidden_workspace.visibility)
         self.assertIn("analysis", tree.hidden_workspace.categories)
         self.assertTrue(any("Save-back" in blocker for blocker in tree.blockers))
+
+    def test_builds_client_owned_project_registry_without_filesystem_access(self):
+        registry = build_project_registry(["openmv", "rockbox"], {"openmv": "OpenMV reference", "rockbox": "Rockbox reference board"})
+
+        self.assertEqual("project-registry-fixture-ready", registry.status)
+        self.assertEqual("client", registry.durable_owner)
+        self.assertEqual("read-only-fixture-backed", registry.access_mode)
+        self.assertEqual(["openmv", "rockbox"], [record.project_id for record in registry.records])
+        rockbox = next(record for record in registry.records if record.project_id == "rockbox")
+        self.assertEqual("Rockbox reference board", rockbox.display_name)
+        self.assertEqual("fixture-not-granted", rockbox.folder_handle_status)
+        self.assertEqual("client-owned-local-folder", rockbox.storage_model)
+        self.assertEqual("/bodesign/projects/rockbox", rockbox.links.dashboard)
+        self.assertEqual("/bodesign/api/projects/rockbox/storage-share", rockbox.links.storage_share)
+        self.assertEqual("/bodesign/api/projects/rockbox/project-tree", rockbox.links.project_tree)
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-foundation", rockbox.links.kicad_foundation)
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-native-extension", rockbox.links.kicad_native_extension)
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-plugin-handshake", rockbox.links.kicad_plugin_handshake)
+        self.assertTrue(any("not granted" in blocker for blocker in rockbox.blockers))
+        self.assertTrue(any("not a server-owned durable file store" in warning for warning in registry.warnings))
 
 
 if __name__ == "__main__":

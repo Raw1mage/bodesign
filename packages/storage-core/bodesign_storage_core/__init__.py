@@ -1,4 +1,4 @@
-from .contracts import HiddenWorkspaceSummary, KiCadHappyArtifactPath, KiCadHappyCacheMapping, ProjectFolderTaxonomy, ProjectPathClassification, ProjectTreeBrowseContract, ProjectTreeNode, StorageFolderRole, StorageShareManifest, StorageShareScope, build_default_storage_share_manifest, build_kicad_happy_cache_mapping, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
+from .contracts import HiddenWorkspaceSummary, KiCadHappyArtifactPath, KiCadHappyCacheMapping, ProjectFolderTaxonomy, ProjectPathClassification, ProjectRecord, ProjectRegistry, ProjectRegistryLinks, ProjectTreeBrowseContract, ProjectTreeNode, StorageFolderRole, StorageShareManifest, StorageShareScope, build_default_storage_share_manifest, build_kicad_happy_cache_mapping, build_project_record, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
 
 __all__ = [
     "HiddenWorkspaceSummary",
@@ -6,6 +6,9 @@ __all__ = [
     "KiCadHappyCacheMapping",
     "ProjectFolderTaxonomy",
     "ProjectPathClassification",
+    "ProjectRecord",
+    "ProjectRegistry",
+    "ProjectRegistryLinks",
     "ProjectTreeBrowseContract",
     "ProjectTreeNode",
     "StorageFolderRole",
@@ -13,6 +16,8 @@ __all__ = [
     "StorageShareScope",
     "build_default_storage_share_manifest",
     "build_kicad_happy_cache_mapping",
+    "build_project_record",
+    "build_project_registry",
     "build_project_tree_browse_contract",
     "classify_project_folder_taxonomy",
     "validate_storage_share_manifest",

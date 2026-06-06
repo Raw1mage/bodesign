@@ -143,17 +143,39 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("No mutation capability is exposed", html)
         self.assertIn("Real client folder browsing is not wired yet", html)
         self.assertIn("scoped-client-storage-share", html)
+        self.assertIn("Client-owned project registry", html)
+        self.assertIn("project-registry-fixture-ready", html)
+        self.assertIn("Project registry records are fixture-backed metadata", html)
+        self.assertIn("fixture-not-granted", html)
+        self.assertIn("not server-owned durable file storage", html)
 
     def test_project_api_lists_imported_rockbox_project(self):
         install_fastapi_stub()
         sys.modules.pop("services.api.main", None)
 
         api_main = importlib.import_module("services.api.main")
-        projects = api_main.list_projects()
+        registry = api_main.list_projects()
+        projects = registry["records"]
 
+        self.assertEqual("project-registry-fixture-ready", registry["status"])
+        self.assertEqual("client", registry["durable_owner"])
+        self.assertEqual("read-only-fixture-backed", registry["access_mode"])
+        self.assertEqual(1, registry["project_count"])
         self.assertEqual("rockbox", projects[0]["id"])
+        self.assertEqual("rockbox", projects[0]["project_id"])
+        self.assertEqual("Rockbox reference board", projects[0]["display_name"])
         self.assertEqual("imported-fixture", projects[0]["status"])
+        self.assertEqual("fixture-not-granted", projects[0]["folder_handle_status"])
+        self.assertEqual("client", projects[0]["durable_owner"])
+        self.assertEqual("client-owned-local-folder", projects[0]["storage_model"])
         self.assertIn("viewer_url", projects[0])
+        self.assertEqual("/bodesign/api/projects/rockbox/storage-share", projects[0]["links"]["storage_share"])
+        self.assertEqual("/bodesign/api/projects/rockbox/project-tree", projects[0]["links"]["project_tree"])
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-foundation", projects[0]["links"]["kicad_foundation"])
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-native-extension", projects[0]["links"]["kicad_native_extension"])
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-plugin-handshake", projects[0]["links"]["kicad_plugin_handshake"])
+        self.assertTrue(any("not granted" in blocker for blocker in projects[0]["blockers"]))
+        self.assertTrue(any("not a server-owned durable file store" in warning for warning in registry["warnings"]))
 
     def test_project_artifact_api_and_viewer_expose_rockbox_files(self):
         install_fastapi_stub()

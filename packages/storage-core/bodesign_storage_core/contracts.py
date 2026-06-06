@@ -105,6 +105,40 @@ class ProjectTreeBrowseContract:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class ProjectRegistryLinks:
+    dashboard: str
+    storage_share: str
+    project_tree: str
+    kicad_foundation: str
+    kicad_native_extension: str
+    kicad_plugin_handshake: str
+
+
+@dataclass(slots=True)
+class ProjectRecord:
+    project_id: str
+    display_name: str
+    durable_owner: str
+    folder_handle_status: str
+    access_mode: str
+    storage_model: str
+    project_root: str
+    links: ProjectRegistryLinks
+    blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ProjectRegistry:
+    status: str
+    durable_owner: str
+    access_mode: str
+    records: list[ProjectRecord] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -274,6 +308,52 @@ def build_project_tree_browse_contract(project_id: str, paths: list[str], manife
             "Project content remains client-owned; bodesign only presents a scoped evidence tree.",
             "Hidden .bodesign internals are summarized, not exposed as root-level user folders.",
         ],
+    )
+
+
+def build_project_registry(project_ids: list[str], display_names: dict[str, str] | None = None) -> ProjectRegistry:
+    names = display_names or {}
+    records = [build_project_record(project_id, names.get(project_id)) for project_id in sorted(project_ids)]
+    return ProjectRegistry(
+        status="project-registry-fixture-ready",
+        durable_owner="client",
+        access_mode="read-only-fixture-backed",
+        records=records,
+        blockers=[
+            "Real client folder handles are not granted yet; registry records are fixture-backed metadata.",
+            "Save-back/edit operations require scoped client approval and conflict checks.",
+        ],
+        warnings=[
+            "The registry is not a server-owned durable file store.",
+            "Project source files remain under client control.",
+        ],
+    )
+
+
+def build_project_record(project_id: str, display_name: str | None = None) -> ProjectRecord:
+    manifest = build_default_storage_share_manifest(project_id)
+    base_path = f"/bodesign/api/projects/{project_id}"
+    return ProjectRecord(
+        project_id=project_id,
+        display_name=display_name or project_id,
+        durable_owner=manifest.durable_owner,
+        folder_handle_status="fixture-not-granted",
+        access_mode="read-only-fixture-backed",
+        storage_model=manifest.storage_model,
+        project_root=manifest.project_root,
+        links=ProjectRegistryLinks(
+            dashboard=f"/bodesign/projects/{project_id}",
+            storage_share=f"{base_path}/storage-share",
+            project_tree=f"{base_path}/project-tree",
+            kicad_foundation=f"{base_path}/kicad-foundation",
+            kicad_native_extension=f"{base_path}/kicad-native-extension",
+            kicad_plugin_handshake=f"{base_path}/kicad-plugin-handshake",
+        ),
+        blockers=[
+            "Client folder handle is not granted; project is fixture-backed metadata only.",
+            "MCP-side mutation is blocked until approved save-back semantics exist.",
+        ],
+        warnings=["Project record is an index/evidence pointer, not durable server-owned content."],
     )
 
 

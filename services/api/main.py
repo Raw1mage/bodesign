@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_default_storage_share_manifest, build_kicad_happy_cache_mapping, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_default_storage_share_manifest, build_kicad_happy_cache_mapping, build_project_registry, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -61,6 +61,7 @@ except ImportError:
     produce_design_report = None
     build_default_storage_share_manifest = None
     build_kicad_happy_cache_mapping = None
+    build_project_registry = None
     build_project_tree_browse_contract = None
     classify_project_folder_taxonomy = None
     validate_storage_share_manifest = None
@@ -180,7 +181,8 @@ def bodesign_artifact_viewer(project_id: str, artifact_id: str) -> str:
 
 
 def _render_project_workspace(project_id: str) -> str:
-    projects = _list_visible_projects()
+    registry = _project_registry()
+    projects = registry.get("records") if isinstance(registry.get("records"), list) else []
     project_markup = "".join(_project_card(project) for project in projects)
     board_design = _project_board_design(project_id)
     confidence = board_design["confidence_summary"]
@@ -334,7 +336,8 @@ def _render_project_workspace(project_id: str) -> str:
               <div class="panels">
                 <article class="panel" id="overview">
                   <h2>Project Overview</h2>
-                  <p class="muted">Open or import client-owned KiCad projects. bodesign is a companion dashboard; native KiCad owns editing, canvas, libraries, DRC, and ERC.</p>
+                   <p class="muted">Open or import client-owned KiCad projects. bodesign is a companion dashboard; native KiCad owns editing, canvas, libraries, DRC, and ERC. Project registry records are fixture-backed metadata, not server-owned durable file storage.</p>
+                    <div class="grid"><div class="card"><h3>Client-owned project registry</h3><p><code>""" + escape(str(registry.get("status", "unknown"))) + """</code></p><p>access: <code>""" + escape(str(registry.get("access_mode", "unknown"))) + """</code></p><p>durable owner: <code>""" + escape(str(registry.get("durable_owner", "client"))) + """</code></p></div></div>
                    <div class="grid">""" + project_markup + """
                      <div class="card">
                         <h3>Connect native KiCad project</h3>
@@ -476,8 +479,8 @@ def _render_project_workspace(project_id: str) -> str:
 
 @app.get("/api/projects")
 @app.get("/bodesign/api/projects")
-def list_projects() -> list[dict[str, object]]:
-    return _list_visible_projects()
+def list_projects() -> dict[str, object]:
+    return _project_registry()
 
 
 @app.get("/api/projects/{project_id}/artifacts")
@@ -1007,6 +1010,37 @@ def _list_visible_projects() -> list[dict[str, object]]:
     projects = [_builtin_rockbox_project()]
     projects.extend(project for project_id, project in PROJECTS.items() if project_id != BUILTIN_PROJECT_ID)
     return projects
+
+
+def _project_registry() -> dict[str, object]:
+    projects = _list_visible_projects()
+    if build_project_registry is None:
+        return {
+            "status": "storage-core package import failed",
+            "durable_owner": "client",
+            "access_mode": "read-only-fixture-backed",
+            "records": projects,
+            "blockers": ["Project registry contract could not be built."],
+            "warnings": ["Project records remain client-owned metadata."],
+        }
+    display_names = {str(project.get("id", "")): str(project.get("name", "")) for project in projects}
+    registry = asdict(build_project_registry([str(project.get("id", "")) for project in projects if project.get("id")], display_names))
+    legacy_index = {str(project.get("id", "")): project for project in projects}
+    for record in registry.get("records", []):
+        if not isinstance(record, dict):
+            continue
+        legacy = legacy_index.get(str(record.get("project_id", "")), {})
+        record["id"] = record.get("project_id")
+        record["name"] = record.get("display_name")
+        record["status"] = legacy.get("status", record.get("folder_handle_status", "fixture-not-granted"))
+        record["source"] = legacy.get("source", record.get("project_root", "client-owned-folder"))
+        record["artifact_count"] = legacy.get("artifact_count", 0)
+        record["components"] = legacy.get("components", 0)
+        record["nets"] = legacy.get("nets", 0)
+        links = record.get("links") if isinstance(record.get("links"), dict) else {}
+        record["viewer_url"] = links.get("dashboard", f"/bodesign/projects/{record.get('project_id', '')}")
+    registry["project_count"] = len(registry.get("records", []))
+    return registry
 
 
 def _builtin_rockbox_project() -> dict[str, object]:
@@ -1683,10 +1717,16 @@ def _project_card(project: dict[str, object]) -> str:
     nets = escape(str(project.get("nets", "—")))
     source = escape(str(project.get("source", "manual project")))
     viewer_url = escape(str(project.get("viewer_url", "/bodesign/")))
+    durable_owner = escape(str(project.get("durable_owner", "client")))
+    folder_handle_status = escape(str(project.get("folder_handle_status", "fixture-not-granted")))
+    access_mode = escape(str(project.get("access_mode", "read-only-fixture-backed")))
     return f"""
       <div class="card project-card">
         <h3>{name} <span class="pill">{status}</span></h3>
         <div class="metric"><span>project id</span><code>{project_id}</code></div>
+        <div class="metric"><span>durable owner</span><code>{durable_owner}</code></div>
+        <div class="metric"><span>folder handle</span><code>{folder_handle_status}</code></div>
+        <div class="metric"><span>access</span><code>{access_mode}</code></div>
         <div class="metric"><span>artifacts</span><code>{artifact_count}</code></div>
         <div class="metric"><span>components</span><code>{components}</code></div>
         <div class="metric"><span>nets</span><code>{nets}</code></div>
