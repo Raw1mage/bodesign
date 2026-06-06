@@ -75,9 +75,35 @@ from the running service at `/skills/` (bundle + per-skill); install under your 
 
 ## Layout
 
-- `services/mcp/` — the MCP server (`server.py`), token file store, requirements, the skill-pack assets.
-- `packages/` — the generic capability libraries (ingest, compose, layout, fab, BOM, verify, …).
-- `specs/product/pcb_ai_viewer/` — the design spec (proposal / design / tasks / IDEF0 / GRAFCET).
+```text
+bodesign/
+├── services/mcp/                 MCP server — the product's only outward surface
+│   ├── server.py                 tool dispatch, token path resolution, dual UDS+TCP binds, self-documenting pages
+│   ├── token_store.py            docxmcp-style token file store + TTL/GC
+│   ├── requirements.txt
+│   └── assets/skills/            EDA skill suite (13 tarballs + bundle + MANIFEST.md)
+├── packages/                     generic capability libraries (no product-specific code)
+│   ├── shared/                   shared contracts + data_root() (program↔working-data isolation boundary)
+│   ├── design-ir/                DesignIntent and other intermediate representations (IR)
+│   ├── component-kb/             reusable component knowledge (datasheet harvest)
+│   ├── doc-core/                 pin-table / document generation
+│   ├── source-core/              source / evidence contracts
+│   ├── reverse-core/             project ingest, companion render, doc emit, board reconstruct
+│   ├── gerber-core/              Gerber / drill parsing + preview
+│   ├── eda-bridge/               KiCad bridge: symbol / schematic / layout / fab / BOM / SPICE / EMC
+│   ├── workflow-core/            requirement planning, evidence sourcing, readiness compass, cross-check
+│   ├── storage-core/             client-owned project registry
+│   └── kicad-plugin/             in-KiCad Action Plugin contract (roadmap)
+├── specs/                        spec / knowledge base (plan-builder)
+│   ├── architecture.md           cross-cutting architecture index
+│   └── product/pcb_ai_viewer/    living design spec + IDEF0/GRAFCET SVGs + Chinese README
+├── tests/                        test suite (green on a clean clone; data-dependent tests skip)
+├── Dockerfile · docker-compose.yml · mcpctl.sh   container packaging + ops
+├── mcp.json                      MCP registration manifest
+└── README.md · README.en.md      this document (zh-Hant / English)
+```
+
+> bodesign ships **no working data**; client project trees enter only at runtime via the token store, or are read from an external `data_root()` (`BODESIGN_DATA_DIR`).
 
 ## Reliability boundary
 

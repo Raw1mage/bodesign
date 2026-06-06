@@ -72,9 +72,35 @@ bodesign 負責生成；分析／文件／模擬／採購／製造則編排成�
 
 ## 目錄結構
 
-- `services/mcp/` — MCP server（`server.py`）、token 檔案儲存、requirements、skill 套件資產。
-- `packages/` — 通用能力函式庫（匯入、組成、佈局、製造、BOM、驗證……）。
-- `specs/product/pcb_ai_viewer/` — 設計規格（proposal／design／tasks／IDEF0／GRAFCET）。
+```text
+bodesign/
+├── services/mcp/                 MCP server —— 產品的唯一對外介面
+│   ├── server.py                 工具分派、token 路徑解析、UDS+TCP 雙綁定、自我說明網頁
+│   ├── token_store.py            docxmcp 式 token 檔案儲存 ＋ TTL/GC
+│   ├── requirements.txt
+│   └── assets/skills/            EDA skill 套件（13 個 tarball ＋整包 bundle ＋ MANIFEST.md）
+├── packages/                     通用能力函式庫（無產品專屬碼）
+│   ├── shared/                   共用契約 ＋ data_root()（程式↔工作資料隔離邊界）
+│   ├── design-ir/                DesignIntent 等中介表示（IR）
+│   ├── component-kb/             可重用零件知識（datasheet 萃取）
+│   ├── doc-core/                 pin-table／文件產生工具
+│   ├── source-core/              來源／證據契約
+│   ├── reverse-core/             專案匯入、伴隨檔渲染、文件輸出、board 重建
+│   ├── gerber-core/              Gerber／鑽孔解析 ＋ 預覽
+│   ├── eda-bridge/               KiCad 橋接：符號／原理圖／佈局／製造／BOM／SPICE／EMC
+│   ├── workflow-core/            需求規劃、證據蒐集、就緒度羅盤、對照組交叉檢核
+│   ├── storage-core/             客戶自有專案登錄
+│   └── kicad-plugin/             in-KiCad Action Plugin 契約（roadmap）
+├── specs/                        規格／知識庫（plan-builder）
+│   ├── architecture.md           跨領域架構索引
+│   └── product/pcb_ai_viewer/    已上線（living）設計規格 ＋ IDEF0/GRAFCET SVG ＋ 中文 README
+├── tests/                        測試（乾淨 clone 全綠；資料相依測試自動跳過）
+├── Dockerfile · docker-compose.yml · mcpctl.sh   容器封裝 ＋ 操作
+├── mcp.json                      MCP 註冊資訊
+└── README.md · README.en.md      本文件（繁中／英）
+```
+
+> bodesign **不內含任何工作資料**；客戶專案樹只在執行期經 token 儲存進入，或由外部 `data_root()`（`BODESIGN_DATA_DIR`）讀取。
 
 ## 可靠度邊界
 
