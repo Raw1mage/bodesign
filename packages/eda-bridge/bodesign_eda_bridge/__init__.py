@@ -8,6 +8,7 @@ from .kicad_emit import (
     load_symbol,
     validate_kicad_schematic,
 )
+from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol_library_from_pin_table
 
 __all__ = [
     "EmitComponent",
@@ -15,10 +16,13 @@ __all__ = [
     "KiCadBridgePlan",
     "KiCadNativeCapability",
     "KiCadNativeExtensionContract",
+    "KiCadSymbolEmitResult",
+    "KiCadSymbolPin",
     "KiCadValidationResult",
     "SchematicEmitResult",
     "build_kicad_native_extension_contract",
     "emit_kicad_schematic",
+    "emit_kicad_symbol_library_from_pin_table",
     "load_symbol",
     "plan_kicad_bridge",
     "validate_kicad_schematic",
