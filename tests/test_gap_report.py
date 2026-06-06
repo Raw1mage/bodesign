@@ -6,8 +6,9 @@ import unittest
 from pathlib import Path
 
 from bodesign_workflow_core import collect_source_gap_report, render_gap_report_markdown
+from bodesign_shared import data_root
 
-OPENMV_PLAN = Path("/home/pkcs12/projects/bodesign/plans/product_openmv_datasheet_kicad_source")
+OPENMV_PLAN = data_root() / "products" / "openmv"
 HAS_OPENMV = OPENMV_PLAN.exists() and any(OPENMV_PLAN.glob("*.json"))
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 

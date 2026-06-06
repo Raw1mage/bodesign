@@ -2,13 +2,17 @@ from pathlib import Path
 import unittest
 
 from bodesign_reverse_core import fuse_drill_and_ipc, reconstruct_rockbox_placeholder
+from bodesign_shared import data_root
 
-FIXTURE_DIR = Path("/home/pkcs12/projects/bodesign/fixtures/private/rockbox/gerber")
+FIXTURE_DIR = data_root() / "fixtures" / "rockbox" / "gerber"
+_HAS = (FIXTURE_DIR / "ROCKBOX_V2.ipc").exists()
+_NEED = "rockbox fixtures absent (set BODESIGN_DATA_DIR)"
 
 
 class RockboxReconstructionTests(unittest.TestCase):
+    @unittest.skipUnless(_HAS, _NEED)
     def test_fixture_reconstruction_extracts_components_and_ipc_nets(self):
-        fixture_dir = Path("/home/pkcs12/projects/bodesign/fixtures/private/rockbox/gerber")
+        fixture_dir = data_root() / "fixtures" / "rockbox" / "gerber"
         artifact_paths = [str(path) for path in fixture_dir.iterdir()]
 
         board_design = reconstruct_rockbox_placeholder("rockbox", artifact_paths)
@@ -24,6 +28,7 @@ class RockboxReconstructionTests(unittest.TestCase):
         self.assertIn("MDBT53-P1M", {component.part_number for component in board_design.components})
         self.assertIn("1V8_EN", {net.name for net in board_design.nets})
 
+    @unittest.skipUnless(_HAS, _NEED)
     def test_drill_via_spatial_fusion_matches_ipc_vias_in_shared_frame(self):
         ipc_files = [str(FIXTURE_DIR / "ROCKBOX_V2.ipc")]
         drill_files = [str(FIXTURE_DIR / "ROCKBOX_V2-1-6.drl")]

@@ -8,10 +8,10 @@ from bodesign_workflow_core import (
     reference_nets_from_component_knowledge,
     render_crosscheck_markdown,
 )
+from bodesign_shared import data_root
 
-REPO = Path("/home/pkcs12/projects/bodesign")
-GEN_SCH = REPO / "plans/product_openmv_datasheet_kicad_source/generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"
-FLASH_KNOW = REPO / "plans/product_openmv_datasheet_kicad_source/mx25um25645g-component-knowledge.json"
+GEN_SCH = data_root() / "products/openmv/generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"
+FLASH_KNOW = data_root() / "products/openmv/mx25um25645g-component-knowledge.json"
 
 
 class ReferenceCrosscheckTests(unittest.TestCase):

@@ -10,7 +10,7 @@ class ComponentKnowledgeTests(unittest.TestCase):
         result = ingest_datasheet_knowledge(
             "rockbox",
             "MDBT53-P1M",
-            ["fixtures/private/rockbox/datasheets/MDBT53-P1M.pdf"],
+            ["datasheets/MDBT53-P1M.pdf"],
             "module",
         )
 

@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 
 from bodesign_reverse_core import render_companion
+from bodesign_shared import data_root
 
-REPO = Path("/home/pkcs12/projects/bodesign")
-GEN_SCH = REPO / "plans/product_openmv_datasheet_kicad_source/generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"
-ROCKBOX_ART = REPO / "fixtures/private/rockbox/gerber/L1_top.art"
+GEN_SCH = data_root() / "products/openmv/generated/openmv_n6_subsystem/openmv_n6_subsystem.kicad_sch"
+ROCKBOX_ART = data_root() / "fixtures/rockbox/gerber/L1_top.art"
 HAS_KICAD_CLI = shutil.which("kicad-cli") is not None
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 

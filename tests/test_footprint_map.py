@@ -3,10 +3,11 @@ import unittest
 from pathlib import Path
 
 from bodesign_eda_bridge import PackageQuery, build_footprint_map, match_footprints, openmv_package_queries
+from bodesign_shared import data_root
 
 FOOTPRINT_DIR = Path(os.environ.get("KICAD_FOOTPRINT_DIR", "/usr/share/kicad/footprints"))
 HAS_BGA = (FOOTPRINT_DIR / "Package_BGA.pretty").exists()
-OPENMV_PLAN = Path("/home/pkcs12/projects/bodesign/plans/product_openmv_datasheet_kicad_source")
+OPENMV_PLAN = data_root() / "products" / "openmv"
 HAS_OPENMV = OPENMV_PLAN.exists()
 
 

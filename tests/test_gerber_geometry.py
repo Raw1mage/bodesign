@@ -7,11 +7,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "packages" / "gerber-core"))
 
 from bodesign_gerber_core import focus_svg_viewbox, normalize_allegro_gerber_source, parse_drill_file, parse_gerber_file, render_gerber_with_pygerber, render_geometry_svg
+from bodesign_shared import data_root
+
+GERBER = data_root() / "fixtures" / "rockbox" / "gerber"
+HAS_GERBER = (GERBER / "L1_top.art").exists()
+_NEED = "gerber fixtures absent (set BODESIGN_DATA_DIR)"
 
 
 class GerberGeometryTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_GERBER, _NEED)
     def test_rockbox_top_layer_parses_draws_flashes_and_apertures(self):
-        gerber_path = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber" / "L1_top.art"
+        gerber_path = GERBER / "L1_top.art"
 
         summary = parse_gerber_file(gerber_path, sample_limit=50)
 
@@ -23,8 +29,9 @@ class GerberGeometryTests(unittest.TestCase):
         self.assertGreater(len(summary.sample_draws), 0)
         self.assertGreater(len(summary.sample_flashes), 0)
 
+    @unittest.skipUnless(HAS_GERBER, _NEED)
     def test_rockbox_drill_parses_tools_and_hits(self):
-        drill_path = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber" / "ROCKBOX_V2-1-6.drl"
+        drill_path = GERBER / "ROCKBOX_V2-1-6.drl"
 
         summary = parse_drill_file(drill_path, sample_limit=50)
 
@@ -35,9 +42,10 @@ class GerberGeometryTests(unittest.TestCase):
         self.assertEqual("NON_PLATED", summary.tools[-1].plating)
         self.assertGreater(len(summary.sample_hits), 0)
 
+    @unittest.skipUnless(HAS_GERBER, _NEED)
     def test_svg_preview_uses_real_geometry(self):
-        gerber_path = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber" / "L1_top.art"
-        drill_path = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber" / "ROCKBOX_V2-1-6.drl"
+        gerber_path = GERBER / "L1_top.art"
+        drill_path = GERBER / "ROCKBOX_V2-1-6.drl"
 
         svg = render_geometry_svg(parse_gerber_file(gerber_path, sample_limit=20), parse_drill_file(drill_path, sample_limit=20))
 
@@ -54,8 +62,9 @@ class GerberGeometryTests(unittest.TestCase):
         self.assertNotIn("IR0", normalized)
         self.assertEqual(["IP", "IR", "MI", "OFA", "SF"], removed_codes)
 
+    @unittest.skipUnless(HAS_GERBER, _NEED)
     def test_pygerber_adapter_renders_normalized_rockbox_layer_when_available(self):
-        gerber_path = REPO_ROOT / "fixtures" / "private" / "rockbox" / "gerber" / "L1_top.art"
+        gerber_path = GERBER / "L1_top.art"
         output_dir = REPO_ROOT / ".artifacts" / "tests" / "pygerber"
 
         result = render_gerber_with_pygerber(gerber_path, output_dir)

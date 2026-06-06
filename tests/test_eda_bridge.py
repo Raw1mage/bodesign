@@ -3,11 +3,14 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from bodesign_eda_bridge import build_kicad_native_extension_contract, emit_kicad_symbol_library_from_pin_table, emit_openmv_n6_subsystem_schematic, plan_kicad_bridge
+from bodesign_shared import data_root
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PIN_TABLE = REPO_ROOT / "plans/product_openmv_datasheet_kicad_source/stm32n657-vfbga223-pin-table.json"
-OPENMV_PLAN = REPO_ROOT / "plans/product_openmv_datasheet_kicad_source"
+PIN_TABLE = data_root() / "products/openmv/stm32n657-vfbga223-pin-table.json"
+OPENMV_PLAN = data_root() / "products/openmv"
+_HAS_OPENMV = PIN_TABLE.exists() and OPENMV_PLAN.exists()
+_NEED = "OpenMV plan artifacts absent (set BODESIGN_DATA_DIR)"
 
 
 class EdaBridgeTests(unittest.TestCase):
@@ -31,6 +34,7 @@ class EdaBridgeTests(unittest.TestCase):
         self.assertIn("browser-native schematic editor", contract.blocked_browser_features)
         self.assertIn("browser-native PCB layout editor", contract.blocked_browser_features)
 
+    @unittest.skipUnless(_HAS_OPENMV, _NEED)
     def test_emit_project_local_openmv_symbol_from_verified_pin_table(self):
         with TemporaryDirectory() as work:
             output = Path(work) / "libraries/symbols/openmv_generated.kicad_sym"
@@ -51,6 +55,7 @@ class EdaBridgeTests(unittest.TestCase):
             self.assertIn('(property "BodesignEvidence"', symbol)
             self.assertIn('raw_pdf_text_committed=false', symbol)
 
+    @unittest.skipUnless(_HAS_OPENMV, _NEED)
     def test_emit_project_local_openmv_subsystem_schematic(self):
         with TemporaryDirectory() as work:
             result = emit_openmv_n6_subsystem_schematic(OPENMV_PLAN, Path(work) / "generated/openmv_n6_subsystem")
