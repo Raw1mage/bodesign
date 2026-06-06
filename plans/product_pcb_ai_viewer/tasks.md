@@ -37,6 +37,19 @@
 - **`kidoc` verified** to ingest the same project, auto-run schematic analysis, render the schematic SVG, and generate power-tree/EMC diagrams; **full HDD/doc-package assembly currently needs PCB data** (schematic-only hit an edge case) — so the doc-package node is unlocked once layout exists (or with a schematic-only path).
 - Chain confirmed: **`kicad` analyze (`--analysis-dir analysis/`) → `kidoc` consumes it** to render + document.
 
+## Gaps to fill (bodesign-unique build queue)
+
+Everything else is **orchestrated** via skills (`kicad`/`kidoc`/`emc`/`spice`/`datasheets`/`bom`/`jlcpcb`). bodesign builds only the forward-generation/surface gaps below. Ordered by leverage (unblocked first):
+
+- [x] **G1 Companion rendering (N3)** — `reverse-core.companion_render` (`render_companion` + `render_all_companions`): `.kicad_sch`/`.kicad_pcb` → pdf via `kicad-cli`, Gerber → png via pygerber, others (OrCAD/3D/vector) reported unsupported. Verified: bodesign's generated schematic → 308 KB PDF, Rockbox `L1_top.art` → 165 KB PNG, `.DSN` → unsupported. Completes the ingest→readable surface + the format policy.
+- [ ] **G2 Package readiness index (N28/N29)** — scan a product folder + the POC checklist → per-C0\* status (present / missing / who produces / next action) as a readable index. The "guide me to the deliverable" layer. *Unblocked (builds on ingest).*
+- [ ] **G3 Generalized subsystem composer (N10→N11)** — spec + harvested reference evidence → IR → schematic (kicad-cli-validated). Core generation; full V1 needs per-part symbols (G6). *Partly blocked on G6.*
+- [ ] **G4 PRD/doc emitter (N5)** — structured PRD/report → docx/pdf companion (orchestrate libreoffice). *Unblocked.*
+- [ ] **G5 Pin/GPIO allocation table (N14)** — the C03↔C05 (FW) interface doc, from net/pin evidence. *Unblocked.*
+- [ ] **G6 Per-part symbol harvest (N7/N8 generalize)** — datasheet pinout → symbol for V1 parts beyond STM32N657/MX25 (orchestrate `datasheets`). Feeds G3. *Unblocked.*
+
+The R1–R10 roadmap below is largely absorbed into this gap queue + the orchestrated skills; kept for history.
+
 Prior north-star line (kept for history): *natural-language spec → clarifying dialogue → reference-design-grounded subsystem planning → real-part selection → emit a KiCad-openable schematic/netlist + constraints → finish in native KiCad.* AI never emits send-to-fab outputs without deterministic validation + explicit approval.
 
 ## Reorganized Roadmap

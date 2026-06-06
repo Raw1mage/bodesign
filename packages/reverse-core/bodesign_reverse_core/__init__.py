@@ -6,10 +6,12 @@ from .fusion import (
     parse_drill_hits,
     parse_ipc_features,
 )
+from .companion_render import CompanionResult, render_all_companions, render_companion
 from .project_ingest import IngestedFile, ProjectFolderIndex, ingest_project_folder, render_index_markdown
 from .rockbox import RockboxInputManifest, build_rockbox_input_manifest, reconstruct_rockbox_placeholder
 
 __all__ = [
+    "CompanionResult",
     "DrillViaMatch",
     "IngestedFile",
     "IpcFeature",
@@ -19,6 +21,8 @@ __all__ = [
     "build_rockbox_input_manifest",
     "fuse_drill_and_ipc",
     "ingest_project_folder",
+    "render_all_companions",
+    "render_companion",
     "parse_drill_hits",
     "parse_ipc_features",
     "reconstruct_rockbox_placeholder",
