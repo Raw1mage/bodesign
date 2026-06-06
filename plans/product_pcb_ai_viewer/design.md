@@ -42,6 +42,15 @@ The full-lifecycle node→tool→owner→status map (N1–N19) is in `tasks.md` 
 - `packages/workflow-core/bodesign_workflow_core/reference_crosscheck.py` — N19 reference cross-check / trust (G7).
 - `packages/workflow-core/bodesign_workflow_core/gap_report.py` — N18 gap report (R1).
 
+## Deployment — MCP server (mirrors docxmcp)
+
+bodesign is delivered as an **MCP server**, packaged like `docxmcp`:
+- **DD-9** Primary delivery = an MCP server exposing the bodesign tools; the FastAPI web app (`services/api`) is legacy/optional (the surface is MCP + files, not a UI). Built on the `mcp` Python SDK (`mcp.server.Server`) + starlette/uvicorn — the docxmcp stack.
+- **DD-10** Transport = MCP Streamable HTTP. **Local: UDS** (`uvicorn --uds <sock>`, the docxmcp default); **external: TCP** `--host/--port`. Also `stdio` for direct IDE/agent use.
+- **DD-11** File transfer = token-based upload/download over the same endpoint (clients submit whole project folders / datasheets; tool results reference produced files by token), mirroring docxmcp's `/files` + `stage_dir`.
+- **DD-12** Packaged as a **per-user Docker container** (`Dockerfile` + `docker-compose.yml`): image bundles KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + the `mcp` SDK; `./.run/<sock>` bind for the UDS rendezvous + named volumes for cache/sessions; socket healthcheck. Image is heavy (~GB) because KiCad/LibreOffice are required by the tools — accepted for portability.
+- **DD-13** Operated by **`mcpctl.sh`** (start / stop / reload / status / log), docker-compose-backed (the FastAPI `webctl.sh` is superseded).
+
 ## Pending design (build queue, see tasks.md §4)
 
-G3 subsystem composer (dep G6 per-part symbol harvest), G4 PRD/doc emitter, G5 pin/GPIO allocation, G8 layout (`pcbnew` + DRC), G9 fab outputs (`kicad-cli pcb export`). Orchestration wiring: `spice`/`emc`, `kidoc` doc packages (unlocked by G8), `datasheets` extraction.
+G6/G3 execution on the V1 device; G10 MCP server packaging (server + mcpctl.sh + Docker + mcp.json). Orchestration wiring: `spice`/`emc`, `kidoc` doc packages (unlocked by G8), `datasheets` extraction.

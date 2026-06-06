@@ -52,7 +52,17 @@ Status · dependency · acceptance.
 - [x] **G8 Layout** (N14) — tool done. `eda-bridge.layout.emit_layout`: load footprints from the KiCad libs via `pcbnew`, auto-place on a grid inside an Edge.Cuts outline, save `.kicad_pcb`, run `kicad-cli pcb drc`, render an SVG companion. Verified: 4 footprints (incl. USB-C receptacle) placed, board saved, DRC 0 violations, SVG rendered; unresolved footprints flagged. Starting layout for the engineer to route (auto-routing = freerouting/manual, bounded).
 - [x] **G9 Fab outputs** (N15) — tool done. `eda-bridge.fab.emit_fab_outputs`: `kicad-cli pcb export` gerbers/drill/pos/step/ipc2581 + a PDF companion from a `.kicad_pcb`. Verified on a generated board → gerbers (25 files), drill, pos CSV, STEP, PDF — status `ok`. Unlocks the full `kidoc` Manufacturing-Transfer package.
 
-**Build queue complete (G1–G9).** All bodesign-unique workflow tools are built + tested; the forward pipeline (ingest → plan → source → symbol → compose → schematic → pin-table → layout → fab) plus surface/state/trust/doc layers are in place. Remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, step-by-step, scored against the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
+**Capability tools complete (G1–G9).** All bodesign-unique workflow tools are built + tested; the forward pipeline (ingest → plan → source → symbol → compose → schematic → pin-table → layout → fab) plus surface/state/trust/doc layers are in place.
+
+### Deployment gap (G10) — package as an MCP server (mirrors docxmcp; see design.md §Deployment, DD-9..DD-13)
+- [ ] **G10a MCP server** — `mcp.server.Server` + starlette/uvicorn; transports `stdio` / `http` (TCP) / **`http`-over-UDS**; tool registry exposing the bodesign capabilities (ingest, requirement-plan, evidence-sourcing, symbol, compose, schematic+validate, pin-allocation, layout, fab, companion-render, doc-emit, readiness, reference-crosscheck, gap-report) + token-based file upload/download. *Needs `pip install mcp`.*
+- [ ] **G10b `mcpctl.sh`** — start / stop / reload / status / log (docker-compose-backed).
+- [ ] **G10c Dockerfile** — python + KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + pygerber + `mcp`.
+- [ ] **G10d docker-compose.yml** — per-user container, `./.run/<sock>` UDS bind + named volumes (cache/sessions) + socket healthcheck.
+- [ ] **G10e `mcp.json`** — registration manifest (transport `streamable-http`, `unix://…/bodesign.sock:/mcp/`).
+- **Acceptance:** `mcpctl.sh start` brings the container up; an MCP client lists + calls a bodesign tool over the UDS; a tool producing a file (e.g. a rendered schematic PDF) is downloadable by token over the UDS.
+
+The other remaining work is **execution + optimization** (run TheSmartAI V1 through the pipeline, scored vs the OpenMV control group) and orchestration wiring (spice/emc/kidoc/datasheets at their nodes).
 
 Orchestration wiring (not bodesign gaps, but workflow steps): **N16** install+wire `spice`/`emc`; **N17** `kidoc` doc packages (unlocked by G8); **N2/N7** `datasheets` extraction.
 
