@@ -20,7 +20,9 @@ ensure_run_dir() {
 case "${1:-}" in
   start)
     ensure_run_dir
-    "${COMPOSE[@]}" up -d --build
+    echo "building image (streamed to $RUN_DIR/build.log)..."
+    "${COMPOSE[@]}" build --progress=plain 2>&1 | tee "$RUN_DIR/build.log"
+    "${COMPOSE[@]}" up -d
     echo "bodesign MCP starting; socket -> $SOCK"
     ;;
   stop)
@@ -29,7 +31,8 @@ case "${1:-}" in
     ;;
   reload|restart|refresh)
     ensure_run_dir
-    "${COMPOSE[@]}" up -d --build --force-recreate
+    "${COMPOSE[@]}" build --progress=plain 2>&1 | tee "$RUN_DIR/build.log"
+    "${COMPOSE[@]}" up -d --force-recreate
     echo "bodesign MCP reloaded; socket -> $SOCK"
     ;;
   status)
