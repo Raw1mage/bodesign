@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_kicad_plugin import BODESIGN_PLUGIN_METADATA, PCBNEW_AVAILABLE, SidecarConfig, build_approved_patch_request, build_request_analysis_call, discover_project_context, open_dashboard_url
+from bodesign_kicad_plugin import BODESIGN_PLUGIN_METADATA, PCBNEW_AVAILABLE, SidecarConfig, build_approved_patch_request, build_plugin_handshake_request, build_request_analysis_call, discover_project_context, open_dashboard_url
 
 
 class KiCadPluginTests(unittest.TestCase):
@@ -15,6 +15,7 @@ class KiCadPluginTests(unittest.TestCase):
         self.assertEqual("http://127.0.0.1:8765/bodesign/projects/rockbox", config.dashboard_url)
         self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-foundation", config.foundation_api_url)
         self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-native-extension", config.native_extension_api_url)
+        self.assertEqual("http://127.0.0.1:8765/bodesign/api/projects/rockbox/kicad-plugin-handshake", config.handshake_api_url)
 
     def test_discovers_project_context_from_kicad_paths(self):
         project_context = discover_project_context("/work/demo/eda/demo.kicad_pro")
@@ -34,6 +35,20 @@ class KiCadPluginTests(unittest.TestCase):
         self.assertIn("/workflow/reference-board", call["endpoint"])
         self.assertFalse(call["payload"]["approved_for_execution"])
         self.assertEqual("represented-not-executed", call["status"])
+
+    def test_plugin_handshake_request_is_represented_not_sent(self):
+        config = SidecarConfig("demo")
+        context = discover_project_context("/work/demo/eda/demo.kicad_pcb")
+        request = build_plugin_handshake_request(config, context)
+
+        self.assertEqual("represented-not-sent", request.status)
+        self.assertIn("/kicad-plugin-handshake", request.endpoint)
+        self.assertEqual("demo", request.payload["project_id"])
+        self.assertEqual("pcb", request.payload["source_type"])
+        self.assertFalse(request.payload["approved_for_execution"])
+        self.assertFalse(request.payload["approved_for_file_mutation"])
+        self.assertIn("represent-approved-patch", request.payload["plugin_capabilities"])
+        self.assertTrue(any("does not run KiCad" in warning for warning in request.warnings))
 
     def test_approved_patch_guard_blocks_unapproved_patch(self):
         config = SidecarConfig("demo")

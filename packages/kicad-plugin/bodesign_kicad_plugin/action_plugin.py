@@ -3,7 +3,7 @@ try:
 except ImportError:
     pcbnew = None
 
-from .sidecar import SidecarConfig, discover_project_context, open_dashboard_url
+from .sidecar import SidecarConfig, build_plugin_handshake_request, discover_project_context, open_dashboard_url
 
 PCBNEW_AVAILABLE = pcbnew is not None
 
@@ -42,4 +42,5 @@ class BodesignActionPlugin(KiCadActionPluginBase):
         board_path = str(board.GetFileName()) if board else "unknown.kicad_pcb"
         context = discover_project_context(board_path)
         config = SidecarConfig(context.project_id)
-        return {"status": "dashboard-ready", "dashboard_url": open_dashboard_url(config), "project_context": context}
+        handshake = build_plugin_handshake_request(config, context)
+        return {"status": "dashboard-ready", "dashboard_url": open_dashboard_url(config), "handshake_endpoint": handshake.endpoint, "project_context": context}

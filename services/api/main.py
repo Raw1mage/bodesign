@@ -89,6 +89,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/storage-share", "purpose": "Return client-owned project folder storage-share manifest."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-plugin-handshake", "purpose": "Return KiCad plugin sidecar handshake status without running native tools."},
     {"method": "POST", "path": "/bodesign/api/artifacts/detect", "purpose": "Detect artifact types before ingestion."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/board-design", "purpose": "Return a BoardDesign IR summary."},
     {"method": "POST", "path": "/bodesign/api/projects/{project_id}/rockbox/reconstruct", "purpose": "Reconstruct Rockbox into BoardDesign IR summary."},
@@ -578,6 +579,50 @@ def get_project_kicad_native_extension(project_id: str) -> dict[str, object]:
             "warnings": ["KiCad native extension contract could not be built."],
         }
     return {**asdict(build_kicad_native_extension_contract(project_id)), "status": "contract-ready"}
+
+
+@app.get("/api/projects/{project_id}/kicad-plugin-handshake")
+@app.get("/bodesign/api/projects/{project_id}/kicad-plugin-handshake")
+def get_project_kicad_plugin_handshake(project_id: str) -> dict[str, object]:
+    base_path = f"/bodesign/api/projects/{project_id}"
+    native_extension = get_project_kicad_native_extension(project_id)
+    foundation = get_project_kicad_foundation(project_id)
+    approved_capabilities = [
+        "open-dashboard",
+        "read-foundation-status",
+        "read-native-extension-contract",
+        "request-analysis-plan",
+        "represent-approved-patch",
+    ]
+    return {
+        "project_id": project_id,
+        "status": "sidecar-handshake-ready",
+        "sidecar_available": True,
+        "integration_model": "kicad-action-plugin-plus-bodesign-mcp-sidecar",
+        "urls": {
+            "dashboard": f"/bodesign/projects/{project_id}",
+            "foundation": f"{base_path}/kicad-foundation",
+            "native_extension": f"{base_path}/kicad-native-extension",
+            "request_analysis": f"{base_path}/workflow/reference-board",
+            "generated_candidate": f"{base_path}/candidates/generated-design",
+        },
+        "approved_capabilities": approved_capabilities,
+        "blocked_capabilities": [
+            "run-drc-erc-from-sidecar",
+            "mutate-kicad-files-without-user-approval",
+            "browser-native-schematic-editor",
+            "browser-native-pcb-layout-editor",
+        ],
+        "approval_policy": {
+            "approved_for_execution": False,
+            "approved_for_file_mutation": False,
+            "patch_application": "approved-patch-only-through-native-kicad-or-client-save-back",
+        },
+        "native_extension_status": native_extension.get("status", "unknown"),
+        "foundation_status": foundation.get("status", "unknown"),
+        "blockers": foundation.get("blockers", []),
+        "warnings": ["Handshake is informational and does not run KiCad, DRC, ERC, or write project files."],
+    }
 
 
 @app.get("/api/projects/{project_id}/cross-probe/{probe_id}")

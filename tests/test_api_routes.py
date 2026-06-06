@@ -27,6 +27,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/storage-share", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/kicad-plugin-handshake", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/cross-probe/{probe_id}", routes)
         self.assertIn("/bodesign/api/artifacts/detect", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/knowledge/queue", routes)
@@ -270,6 +271,28 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertTrue(any(capability["capability_id"] == "apply-approved-patch" and capability["owner"] == "kicad-plugin" for capability in extension["capabilities"]))
         self.assertIn("browser-native schematic editor", extension["blocked_browser_features"])
         self.assertIn("browser-native PCB layout editor", extension["blocked_browser_features"])
+
+    def test_project_kicad_plugin_handshake_is_fail_safe(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        handshake = api_main.get_project_kicad_plugin_handshake("rockbox")
+
+        self.assertEqual("sidecar-handshake-ready", handshake["status"])
+        self.assertTrue(handshake["sidecar_available"])
+        self.assertEqual("kicad-action-plugin-plus-bodesign-mcp-sidecar", handshake["integration_model"])
+        self.assertEqual("/bodesign/projects/rockbox", handshake["urls"]["dashboard"])
+        self.assertEqual("/bodesign/api/projects/rockbox/kicad-foundation", handshake["urls"]["foundation"])
+        self.assertIn("request-analysis-plan", handshake["approved_capabilities"])
+        self.assertIn("represent-approved-patch", handshake["approved_capabilities"])
+        self.assertIn("mutate-kicad-files-without-user-approval", handshake["blocked_capabilities"])
+        self.assertFalse(handshake["approval_policy"]["approved_for_execution"])
+        self.assertFalse(handshake["approval_policy"]["approved_for_file_mutation"])
+        self.assertIn("approved-patch-only", handshake["approval_policy"]["patch_application"])
+        self.assertEqual("contract-ready", handshake["native_extension_status"])
+        self.assertEqual("foundation-fixture-ready", handshake["foundation_status"])
+        self.assertTrue(any("does not run KiCad" in warning for warning in handshake["warnings"]))
 
     def test_project_cross_probe_links_components_nets_and_artifacts(self):
         install_fastapi_stub()

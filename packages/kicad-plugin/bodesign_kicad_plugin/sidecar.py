@@ -24,6 +24,10 @@ class SidecarConfig:
         return f"{self.base_url.rstrip('/')}/api/projects/{self.project_id}/kicad-native-extension"
 
     @property
+    def handshake_api_url(self) -> str:
+        return f"{self.base_url.rstrip('/')}/api/projects/{self.project_id}/kicad-plugin-handshake"
+
+    @property
     def request_analysis_api_url(self) -> str:
         return f"{self.base_url.rstrip('/')}/api/projects/{self.project_id}/workflow/reference-board"
 
@@ -45,6 +49,15 @@ class ApprovedPatchRequest:
     approved_by_user: bool
     endpoint: str
     status: str = "represented-not-applied"
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class PluginHandshakeRequest:
+    project_id: str
+    endpoint: str
+    payload: dict[str, object]
+    status: str = "represented-not-sent"
     warnings: list[str] = field(default_factory=list)
 
 
@@ -87,6 +100,24 @@ def build_request_analysis_call(config: SidecarConfig, context: KiCadProjectCont
         "status": "represented-not-executed",
         "warnings": ["This scaffold builds the request only; it does not run KiCad, DRC, ERC, or write files."],
     }
+
+
+def build_plugin_handshake_request(config: SidecarConfig, context: KiCadProjectContext) -> PluginHandshakeRequest:
+    return PluginHandshakeRequest(
+        project_id=config.project_id,
+        endpoint=config.handshake_api_url,
+        payload={
+            "project_id": config.project_id,
+            "project_source": config.project_source,
+            "kicad_project_path": context.project_path,
+            "kicad_project_root": context.project_root,
+            "source_type": context.source_type,
+            "plugin_capabilities": ["open-dashboard", "request-analysis", "represent-approved-patch"],
+            "approved_for_execution": False,
+            "approved_for_file_mutation": False,
+        },
+        warnings=["Handshake is represented only; it does not run KiCad, DRC, ERC, or mutate project files."],
+    )
 
 
 def build_approved_patch_request(config: SidecarConfig, candidate_id: str, approved_by_user: bool) -> ApprovedPatchRequest:
