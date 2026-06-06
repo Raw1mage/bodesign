@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_storage_core import build_kicad_happy_cache_mapping, classify_project_folder_taxonomy
+from bodesign_storage_core import build_kicad_happy_cache_mapping, build_project_tree_browse_contract, classify_project_folder_taxonomy
 
 
 class StorageCoreTests(unittest.TestCase):
@@ -54,6 +54,33 @@ class StorageCoreTests(unittest.TestCase):
         self.assertFalse(mapping.track_in_git)
         self.assertTrue(all(artifact.path.startswith("analysis/") for artifact in mapping.artifact_paths))
         self.assertIn("opt-in", " ".join(mapping.warnings))
+
+    def test_builds_read_only_project_tree_from_manifest_paths(self):
+        tree = build_project_tree_browse_contract(
+            "openmv",
+            [
+                "docs/nrf52840.pdf",
+                "eda/openmv/openmv.kicad_pro",
+                "eda/openmv/openmv.kicad_sch",
+                "libraries/symbols/openmv.kicad_sym",
+                "outputs/gerbers/openmv-F_Cu.gbr",
+                "reports/design-review.md",
+                ".bodesign/analysis/kicad-happy/manifest.json",
+            ],
+        )
+
+        self.assertEqual("client", tree.durable_owner)
+        self.assertEqual("read-only-fixture-backed", tree.access_mode)
+        self.assertEqual({"docs", "inputs", "eda", "libraries", "outputs", "reports"}, {node.role for node in tree.folder_nodes})
+        eda_node = next(node for node in tree.folder_nodes if node.role == "eda")
+        self.assertEqual("human-facing-folder", eda_node.kind)
+        self.assertEqual("human-facing", eda_node.visibility)
+        self.assertIn("eda/openmv/openmv.kicad_pro", eda_node.sample_paths)
+        self.assertIsNotNone(tree.hidden_workspace)
+        self.assertEqual(".bodesign", tree.hidden_workspace.path)
+        self.assertEqual("hidden-system-summary", tree.hidden_workspace.visibility)
+        self.assertIn("analysis", tree.hidden_workspace.categories)
+        self.assertTrue(any("Save-back" in blocker for blocker in tree.blockers))
 
 
 if __name__ == "__main__":

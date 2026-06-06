@@ -36,7 +36,7 @@ try:
     from bodesign_shared import JobSummary, ProjectSummary, detect_input_artifact
     from bodesign_reverse_core import build_rockbox_input_manifest, reconstruct_rockbox_placeholder
     from bodesign_source_core import plan_gerber_export, produce_design_report
-    from bodesign_storage_core import build_default_storage_share_manifest, build_kicad_happy_cache_mapping, classify_project_folder_taxonomy, validate_storage_share_manifest
+    from bodesign_storage_core import build_default_storage_share_manifest, build_kicad_happy_cache_mapping, build_project_tree_browse_contract, classify_project_folder_taxonomy, validate_storage_share_manifest
     from bodesign_workflow_core import build_generated_design_candidate_workspace, plan_reference_board_workflow
 except ImportError:
     ingest_datasheet_knowledge = None
@@ -61,6 +61,7 @@ except ImportError:
     produce_design_report = None
     build_default_storage_share_manifest = None
     build_kicad_happy_cache_mapping = None
+    build_project_tree_browse_contract = None
     classify_project_folder_taxonomy = None
     validate_storage_share_manifest = None
     build_generated_design_candidate_workspace = None
@@ -87,6 +88,7 @@ BODESIGN_WEB_ROUTES = [
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", "purpose": "Return artifact metadata and preview."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/geometry", "purpose": "Return parsed Gerber/drill geometry summary for the board view."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/storage-share", "purpose": "Return client-owned project folder storage-share manifest."},
+    {"method": "GET", "path": "/bodesign/api/projects/{project_id}/project-tree", "purpose": "Return read-only client-owned folder tree evidence summary."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-foundation", "purpose": "Return KiCad-native companion foundation status and blockers."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-native-extension", "purpose": "Return KiCad Action Plugin / sidecar extension contract."},
     {"method": "GET", "path": "/bodesign/api/projects/{project_id}/kicad-plugin-handshake", "purpose": "Return KiCad plugin sidecar handshake status without running native tools."},
@@ -216,6 +218,7 @@ def _render_project_workspace(project_id: str) -> str:
     if not fusion_markup:
         fusion_markup = '<tr><td colspan="5">No component↔net fusion evidence yet.</td></tr>'
     kicad_foundation = get_project_kicad_foundation(project_id)
+    project_tree = get_project_tree(project_id)
     kicad_native_extension = get_project_kicad_native_extension(project_id)
     kicad_source_markup = _kicad_source_markup(kicad_foundation)
     kicad_taxonomy_markup = _kicad_taxonomy_markup(kicad_foundation)
@@ -345,9 +348,11 @@ def _render_project_workspace(project_id: str) -> str:
                        <p>save-back: <code>""" + escape(str(kicad_foundation.get("safe_save_back", {}).get("mode", "unknown"))) + """</code></p>
                      </div>
                    </div>
-                    <h3>KiCad source detection</h3>
-                    <div class="grid">""" + kicad_source_markup + """</div>
-                    <h3>Native KiCad extension boundary</h3>
+                     <h3>KiCad source detection</h3>
+                     <div class="grid">""" + kicad_source_markup + """</div>
+                     <h3>Client-owned project tree</h3>
+                     """ + _project_tree_markup(project_tree) + """
+                     <h3>Native KiCad extension boundary</h3>
                     """ + kicad_native_markup + """
                     <h3>Foundation blockers</h3>
                     <ul>""" + kicad_blocker_markup + """</ul>
@@ -518,6 +523,29 @@ def get_project_storage_share(project_id: str) -> dict[str, object]:
         "validation_errors": validate_storage_share_manifest(manifest),
         "folder_taxonomy": asdict(taxonomy) if taxonomy is not None else {"warnings": ["Storage folder taxonomy classifier is unavailable."]},
         "kicad_happy_cache": asdict(kicad_happy_cache) if kicad_happy_cache is not None else {"warnings": ["KiCad Happy cache mapping is unavailable."]},
+    }
+
+
+@app.get("/api/projects/{project_id}/project-tree")
+@app.get("/bodesign/api/projects/{project_id}/project-tree")
+def get_project_tree(project_id: str) -> dict[str, object]:
+    if build_default_storage_share_manifest is None or build_project_tree_browse_contract is None:
+        return {
+            "project_id": project_id,
+            "status": "storage-core package import failed",
+            "durable_owner": "client",
+            "access_mode": "read-only-fixture-backed",
+            "folder_nodes": [],
+            "hidden_workspace": {"path": ".bodesign", "visibility": "hidden-system-summary", "source_count": 0},
+            "blockers": ["Project tree contract could not be built."],
+        }
+    manifest = build_default_storage_share_manifest(project_id)
+    tree = build_project_tree_browse_contract(project_id, _project_taxonomy_paths(project_id), manifest)
+    return {
+        **asdict(tree),
+        "status": "project-tree-fixture-ready",
+        "mutation_capabilities": [],
+        "read_scope": "storage-share-manifest-derived",
     }
 
 
@@ -1374,6 +1402,35 @@ def _kicad_taxonomy_markup(foundation: dict[str, object]) -> str:
         items = "".join(f"<li><code>{escape(str(path))}</code></li>" for path in paths[:8]) or '<li class="muted">No paths classified yet.</li>'
         cards.append(f'<div class="card"><h3>{escape(role)}</h3><ul>{items}</ul></div>')
     return "".join(cards)
+
+
+def _project_tree_markup(project_tree: dict[str, object]) -> str:
+    nodes = project_tree.get("folder_nodes") if isinstance(project_tree.get("folder_nodes"), list) else []
+    rows = "".join(
+        "<tr>"
+        f"<td><code>{escape(str(node.get('role', 'unknown')))}</code></td>"
+        f"<td><code>{escape(str(node.get('path', '')))}</code></td>"
+        f"<td>{escape(str(node.get('kind', '')))}</td>"
+        f"<td>{escape(str(node.get('visibility', '')))}</td>"
+        f"<td>{escape(str(node.get('source_count', 0)))}</td>"
+        f"<td>{escape(', '.join(str(path) for path in node.get('sample_paths', [])[:4]))}</td>"
+        "</tr>"
+        for node in nodes
+        if isinstance(node, dict)
+    )
+    if not rows:
+        rows = '<tr><td colspan="6">No client-owned folder tree is available.</td></tr>'
+    hidden = project_tree.get("hidden_workspace") if isinstance(project_tree.get("hidden_workspace"), dict) else {}
+    blockers = project_tree.get("blockers") if isinstance(project_tree.get("blockers"), list) else []
+    blocker_items = "".join(f"<li>{escape(str(blocker))}</li>" for blocker in blockers)
+    return (
+        '<div class="grid">'
+        f'<div class="card"><h3>Browse mode</h3><p><code>{escape(str(project_tree.get("access_mode", "unknown")))}</code></p><p>durable owner: <code>{escape(str(project_tree.get("durable_owner", "client")))}</code></p><p class="muted">Read-only project tree derived from the storage-share manifest. No mutation capability is exposed.</p></div>'
+        f'<div class="card"><h3>Hidden evidence workspace</h3><p><code>{escape(str(hidden.get("path", ".bodesign")))}</code></p><p>sources: <b>{escape(str(hidden.get("source_count", 0)))}</b></p><p>{escape(str(hidden.get("cache_policy", "mcp-cache-disposable-not-authoritative")))}</p></div>'
+        '</div>'
+        f'<div class="scroll"><table><thead><tr><th>Role</th><th>Path</th><th>Kind</th><th>Visibility</th><th>Sources</th><th>Samples</th></tr></thead><tbody>{rows}</tbody></table></div>'
+        f'<div class="card"><h3>Folder browse blockers</h3><ul>{blocker_items}</ul></div>'
+    )
 
 
 def _kicad_analysis_markup(foundation: dict[str, object]) -> str:

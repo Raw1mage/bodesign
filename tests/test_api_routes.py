@@ -25,6 +25,7 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/bodesign/api/projects/{project_id}/artifacts/{artifact_id}", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/geometry", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/storage-share", routes)
+        self.assertIn("/bodesign/api/projects/{project_id}/project-tree", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-foundation", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-native-extension", routes)
         self.assertIn("/bodesign/api/projects/{project_id}/kicad-plugin-handshake", routes)
@@ -136,6 +137,10 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn(".bodesign/analysis/kicad-happy", html)
         self.assertIn("track_in_git", html)
         self.assertIn("Detected manufacturing outputs", html)
+        self.assertIn("Client-owned project tree", html)
+        self.assertIn("read-only-fixture-backed", html)
+        self.assertIn("Hidden evidence workspace", html)
+        self.assertIn("No mutation capability is exposed", html)
         self.assertIn("Real client folder browsing is not wired yet", html)
         self.assertIn("scoped-client-storage-share", html)
 
@@ -225,6 +230,28 @@ class ApiRouteRegistrationTests(unittest.TestCase):
         self.assertIn("manifest", {artifact["category"] for artifact in kicad_happy_cache["artifact_paths"]})
         self.assertIn("drc", {artifact["category"] for artifact in kicad_happy_cache["artifact_paths"]})
         self.assertIn("thermal", {artifact["category"] for artifact in kicad_happy_cache["artifact_paths"]})
+
+    def test_project_tree_api_is_read_only_and_client_owned(self):
+        install_fastapi_stub()
+        sys.modules.pop("services.api.main", None)
+
+        api_main = importlib.import_module("services.api.main")
+        tree = api_main.get_project_tree("rockbox")
+
+        self.assertEqual("project-tree-fixture-ready", tree["status"])
+        self.assertEqual("client", tree["durable_owner"])
+        self.assertEqual("read-only-fixture-backed", tree["access_mode"])
+        self.assertEqual([], tree["mutation_capabilities"])
+        self.assertEqual("storage-share-manifest-derived", tree["read_scope"])
+        roles = {node["role"] for node in tree["folder_nodes"]}
+        self.assertEqual({"docs", "inputs", "eda", "libraries", "outputs", "reports"}, roles)
+        eda_node = next(node for node in tree["folder_nodes"] if node["role"] == "eda")
+        self.assertEqual("human-facing-folder", eda_node["kind"])
+        self.assertIn("eda/rockbox/rockbox.kicad_pro", eda_node["sample_paths"])
+        self.assertEqual(".bodesign", tree["hidden_workspace"]["path"])
+        self.assertEqual("hidden-system-summary", tree["hidden_workspace"]["visibility"])
+        self.assertTrue(any("arbitrary server filesystem" in blocker for blocker in tree["blockers"]))
+        self.assertTrue(any("client-owned" in warning for warning in tree["warnings"]))
 
     def test_project_kicad_foundation_summarizes_storage_taxonomy_and_gates(self):
         install_fastapi_stub()

@@ -72,6 +72,39 @@ class KiCadHappyCacheMapping:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class ProjectTreeNode:
+    role: str
+    path: str
+    kind: str
+    visibility: str
+    source_count: int
+    sample_paths: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class HiddenWorkspaceSummary:
+    path: str
+    visibility: str
+    source_count: int
+    cache_policy: str
+    categories: list[str] = field(default_factory=list)
+    sample_paths: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ProjectTreeBrowseContract:
+    project_id: str
+    durable_owner: str
+    access_mode: str
+    storage_model: str
+    project_root: str
+    folder_nodes: list[ProjectTreeNode] = field(default_factory=list)
+    hidden_workspace: HiddenWorkspaceSummary | None = None
+    blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 def build_default_storage_share_manifest(project_id: str, project_root: str | None = None) -> StorageShareManifest:
     root = project_root or f"client://projects/{project_id}"
     hidden_workspace = ".bodesign"
@@ -198,6 +231,49 @@ def build_kicad_happy_cache_mapping(hidden_workspace: str = ".bodesign", visible
         cache_policy="mcp-cache-disposable-not-authoritative",
         artifact_paths=artifact_paths,
         warnings=warnings,
+    )
+
+
+def build_project_tree_browse_contract(project_id: str, paths: list[str], manifest: StorageShareManifest | None = None) -> ProjectTreeBrowseContract:
+    storage_manifest = manifest or build_default_storage_share_manifest(project_id)
+    taxonomy = classify_project_folder_taxonomy(paths, storage_manifest.hidden_workspace)
+    folder_nodes = [
+        ProjectTreeNode(
+            role=folder.role,
+            path=folder.path,
+            kind="human-facing-folder",
+            visibility=folder.visibility,
+            source_count=len(taxonomy.roles.get(folder.role, [])),
+            sample_paths=taxonomy.roles.get(folder.role, [])[:8],
+        )
+        for folder in storage_manifest.human_facing_folders
+    ]
+    hidden_categories = sorted({path.split("/", 3)[1] if "/" in path else storage_manifest.hidden_workspace for path in taxonomy.hidden_paths})
+    hidden_summary = HiddenWorkspaceSummary(
+        path=storage_manifest.hidden_workspace,
+        visibility="hidden-system-summary",
+        source_count=len(taxonomy.hidden_paths),
+        cache_policy=storage_manifest.cache_policy,
+        categories=hidden_categories,
+        sample_paths=taxonomy.hidden_paths[:8],
+    )
+    return ProjectTreeBrowseContract(
+        project_id=project_id,
+        durable_owner=storage_manifest.durable_owner,
+        access_mode="read-only-fixture-backed",
+        storage_model=storage_manifest.storage_model,
+        project_root=storage_manifest.project_root,
+        folder_nodes=folder_nodes,
+        hidden_workspace=hidden_summary,
+        blockers=[
+            "Real client folder handles are not wired yet; this tree is derived from manifest and fixture evidence.",
+            "Save-back/edit operations are blocked until scoped client approval and conflict checks exist.",
+            "The sidecar must not browse arbitrary server filesystem paths outside declared storage-share scope.",
+        ],
+        warnings=[
+            "Project content remains client-owned; bodesign only presents a scoped evidence tree.",
+            "Hidden .bodesign internals are summarized, not exposed as root-level user folders.",
+        ],
     )
 
 
