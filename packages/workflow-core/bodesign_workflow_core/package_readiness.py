@@ -126,6 +126,24 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
         for prefix, label in EXTERNAL_SECTIONS.items() if section.lower().startswith(prefix)
     })
 
+    # Feed C00 field-level PRD readiness into the prd deliverable instead of treating
+    # the PRD as merely present/missing: when a C00 answer-state exists, the prd status
+    # reflects how complete the PRD actually is (100% answered -> present, else partial),
+    # and its next action becomes the C00 next-best question.
+    prd_state = Path(folder) / "C00-PRD" / "answer_state.json"
+    if prd_state.exists():
+        try:
+            from .c00_prd_template import assess_c00_prd_readiness
+            c00 = assess_c00_prd_readiness(folder)
+        except Exception:
+            c00 = None
+        if c00 is not None:
+            for d in readiness.deliverables:
+                if d.key == "prd":
+                    d.status = "present" if c00.readiness_pct >= 100 else "partial"
+                    d.next_action = "" if d.status == "present" else (
+                        c00.next_question or f"Complete the C00 PRD ({c00.readiness_pct}% answered).")
+
     required = [d for d in readiness.deliverables if d.required]
     present_required = [d for d in required if d.status == "present"]
     readiness.readiness_pct = round(100 * len(present_required) / max(len(required), 1))

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bodesign_workflow_core import assess_package_readiness, render_readiness_markdown
+from bodesign_workflow_core import assess_package_readiness, render_readiness_markdown, scaffold_c00_prd_package
 
 THESMARTAI = Path("/home/pkcs12/projects/documents/gdrive/@利善美/03.研發資料/03.TheSmartAI")
 HAS_THESMARTAI = THESMARTAI.exists()
@@ -40,6 +40,16 @@ class PackageReadinessTests(unittest.TestCase):
         self.assertIn("ID", r.external_sections)
         self.assertIn("schematic", r.next_step.lower())
         self.assertIn("Package readiness", render_readiness_markdown(r))
+
+    def test_prd_reflects_c00_field_readiness_not_just_presence(self):
+        # A scaffolded-but-unanswered C00 PRD exists as a file, but is only PARTIAL
+        # (field-level readiness), not "present" — package_readiness reads C00 readiness.
+        scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
+        r = assess_package_readiness(self.work, "POC")
+        status = self._status(r)
+        self.assertEqual("partial", status["prd"])  # not "present" despite the file existing
+        prd = next(d for d in r.deliverables if d.key == "prd")
+        self.assertTrue(prd.next_action)  # surfaces the next C00 question/instruction
 
     def test_schematic_present_when_kicad_sch_exists(self):
         (self.work / "C03-電路設計").mkdir()

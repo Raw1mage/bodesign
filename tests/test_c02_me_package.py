@@ -219,6 +219,14 @@ class C02MePackageTests(unittest.TestCase):
         self.assertFalse((self.work / "C02-ME" / "Enclosure.step").exists())  # non-destructive, no fake STEP
         self.assertFalse(result.to_dict()["me_approved"])
 
+    @unittest.skipUnless(shutil.which("openscad"), "OpenSCAD CLI not installed")
+    def test_export_stl_real_when_openscad_present(self):  # C02-T7
+        emit_c02_enclosure_package(self.work, constraints=_STEP_CONSTRAINTS)
+        generate_c02_openscad(self.work, wall_thickness_mm=2.0, clearance_mm=1.0, lid_clearance_mm=0.4)
+        result = export_c02_stl(self.work)
+        self.assertEqual("stl_exported", result.status)
+        self.assertTrue((self.work / "C02-ME" / "Enclosure.stl").exists())
+
     def test_export_step_no_dims_stays_unavailable(self):
         # C02 never guesses dimensions: without explicit dims, no STEP even with a kernel.
         result = export_c02_step(self.work, constraints=_STEP_CONSTRAINTS)
