@@ -504,8 +504,34 @@ _ME_GROUP_TOOLS = {
     "bodesign_c02_export_skp",
     "bodesign_c02_export_step",
 }
+# Electronics engineering (C03/C04/C06): tools whose handlers need KiCad
+# (kicad-cli/pcbnew) or ngspice. Pure-python EE-adjacent tools (pin_allocation,
+# ingest, crosscheck, the cNN readiness/constraint emitters) stay in core, as does
+# emit_doc (LibreOffice → moves to the docs worker in E-5).
+_EE_GROUP_TOOLS = {
+    "bodesign_emit_symbol",
+    "bodesign_compose_schematic",
+    "bodesign_emit_layout",
+    "bodesign_emit_fab",
+    "bodesign_simulate",
+    "bodesign_analyze_emc",
+    "bodesign_analyze_thermal",
+    "bodesign_export_bom",
+    "bodesign_export_netlist",
+    "bodesign_render_companion",
+}
+
+
+def _group_of(name: str) -> str:
+    if name in _ME_GROUP_TOOLS:
+        return "me"
+    if name in _EE_GROUP_TOOLS:
+        return "ee"
+    return "core"
+
+
 for _t in TOOLS:
-    _t["group"] = "me" if _t["name"] in _ME_GROUP_TOOLS else "core"
+    _t["group"] = _group_of(_t["name"])
 
 # Tool groups this process executes locally. Set from --tools; default monolith.
 SERVED_GROUPS: set[str] = {"all"}

@@ -405,9 +405,29 @@ class McpServerTests(unittest.TestCase):
         for t in ("bodesign_c02_export_step", "bodesign_c02_export_stl",
                   "bodesign_c02_generate_openscad", "bodesign_c02_export_skp"):
             self.assertEqual(groups[t], "me")
-        # Pure-python / core tools stay core.
-        for t in ("bodesign_agent_registry", "bodesign_c02_readiness", "bodesign_c00_orchestration_tick"):
+        # Electronics-engineering tools (KiCad/ngspice) belong to the ee worker group.
+        for t in ("bodesign_compose_schematic", "bodesign_emit_layout", "bodesign_simulate",
+                  "bodesign_analyze_emc", "bodesign_export_bom", "bodesign_render_companion"):
+            self.assertEqual(groups[t], "ee")
+        # Pure-python / core tools stay core (incl. EE-adjacent pure python + LibreOffice emit_doc).
+        for t in ("bodesign_agent_registry", "bodesign_c02_readiness", "bodesign_c00_orchestration_tick",
+                  "bodesign_pin_allocation", "bodesign_reference_crosscheck", "bodesign_ingest_project",
+                  "bodesign_emit_doc"):
             self.assertEqual(groups[t], "core")
+
+    def test_ee_tool_routes_to_ee_worker(self):
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"core"}
+            with patch.dict(os.environ, {"BODESIGN_EE_WORKER_URL": "http://bodesign-ee:8077"}):
+                decision, target = self.server._route_tool("bodesign_compose_schematic")
+                self.assertEqual((decision, target), ("forward", "http://bodesign-ee:8077"))
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("BODESIGN_EE_WORKER_URL", None)
+                decision, target = self.server._route_tool("bodesign_compose_schematic")
+                self.assertEqual((decision, target), ("unavailable", "ee"))
+        finally:
+            self.server.SERVED_GROUPS = saved
 
     def test_monolith_runs_everything_local(self):
         saved = self.server.SERVED_GROUPS

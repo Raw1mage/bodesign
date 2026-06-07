@@ -75,8 +75,12 @@ mounted via the MCP-of-MCPs route (②) as upstream MCP servers.
   heaviest dep, and the build123d backend was just built. Add the `--tools me`
   selector, a `me` service in compose mounting the session volume, and core routing
   for `bodesign_c02_*`. Worker absent → `c02_export_*` report unavailable.
-- **Phase 2 — extract `bodesign-ee`** (the big KiCad cluster): C03/C04/C06 tools.
-- **Phase 3 — optional `bodesign-docs`**; mount `docxmcp`/`drawmiat` via MCP-of-MCPs.
+- **Phase 2 — DONE: `bodesign-ee`** (the KiCad/ngspice cluster): EE tools tagged `ee`,
+  lean `Dockerfile.ee`, compose routes me+ee away from core. The core *process* stops
+  executing EE work (failure-isolated); a lean `Dockerfile.core` (so the core *image*
+  drops KiCad/LibreOffice too) follows Phase 3 once emit_doc's LibreOffice moves out.
+- **Phase 3 — optional `bodesign-docs`** (LibreOffice/kidoc — moves emit_doc out of
+  core) + mount `docxmcp`/`drawmiat` via MCP-of-MCPs; then a lean `Dockerfile.core`.
 
 ## Non-goals
 

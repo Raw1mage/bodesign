@@ -1,0 +1,45 @@
+# bodesign-ee — electronics-engineering worker (C03/C04/C06). Batch E Phase 2.
+#
+# The KiCad/ngspice toolbox only: schematic → layout → simulate/EMC/thermal →
+# fab/BOM/netlist. NO LibreOffice, NO OpenSCAD, NO build123d. Runs the same bodesign
+# server with `--tools ee`; the core forwards the EE tools here and both share the
+# session volume.
+#
+# Build: docker build -f Dockerfile.ee -t bodesign-ee:latest .
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONIOENCODING=utf-8 \
+    PYTHONUTF8=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# KiCad 9 (kicad-cli + pcbnew + symbol/footprint libs) + ngspice for SPICE.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        software-properties-common gnupg ca-certificates curl \
+        python3 python3-venv python3-pip ngspice \
+ && add-apt-repository -y ppa:kicad/kicad-9.0-releases \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends kicad kicad-symbols kicad-footprints \
+ && rm -rf /var/lib/apt/lists/*
+
+# venv with system site-packages so the apt-installed pcbnew module is importable.
+RUN python3 -m venv --system-site-packages /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+COPY services/mcp/requirements.txt /app/services/mcp/requirements.txt
+RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt \
+ && kicad-cli version
+
+COPY packages /app/packages
+COPY services /app/services
+
+ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/component-knowledge:/app/packages/component-kb:/app/packages/doc-core:/app/packages/source-core:/app/packages/reverse-core:/app/packages/gerber-core:/app/packages/eda-bridge:/app/packages/workflow-core:/app/packages/storage-core:/app/packages/kicad-plugin:/app/services/mcp:/app" \
+    KICAD_SYMBOL_DIR=/usr/share/kicad/symbols \
+    KICAD_FOOTPRINT_DIR=/usr/share/kicad/footprints \
+    BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions
+
+ENTRYPOINT ["python", "/app/services/mcp/server.py"]
+# Serve only the electronics-engineering tool group on the internal compose network.
+CMD ["--transport", "http", "--port", "8077", "--tools", "ee"]
