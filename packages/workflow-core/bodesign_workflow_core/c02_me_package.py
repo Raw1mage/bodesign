@@ -352,21 +352,130 @@ def export_c02_skp(
     )
 
 
+def _build123d_available() -> bool:
+    """True when the build123d/OCP CAD kernel can be imported. Patchable in tests."""
+    try:
+        import build123d  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _build_enclosure_part(
+    constraints: dict[str, Any],
+    wall_thickness_mm: float,
+    clearance_mm: float,
+    lid_clearance_mm: float,
+):
+    """Build a real enclosure solid from the SAME constraints the OpenSCAD path uses.
+
+    Mirrors `_render_openscad_source` geometry: an open-top shell with a wall-thick
+    floor plus solid mounting bosses (with pilot holes) at the given mounting holes.
+    Raises ValueError on missing/invalid board outline — C02 never guesses dimensions.
+    """
+    from build123d import Align, Box, BuildPart, Cylinder, Locations, Mode
+
+    board = constraints.get("board_outline")
+    if not isinstance(board, dict):
+        raise ValueError("board_outline must be an object with width_mm and height_mm.")
+    board_width = _number(board, "width_mm", "width")
+    board_height = _number(board, "height_mm", "height")
+    max_component_height = _max_component_height(constraints.get("component_heights"))
+    wall = _positive_float(wall_thickness_mm, "wall_thickness_mm")
+    clearance = _positive_float(clearance_mm, "clearance_mm")
+    lid_clearance = _positive_float(lid_clearance_mm, "lid_clearance_mm", allow_zero=True)
+
+    inner_width = board_width + clearance * 2
+    inner_height = board_height + clearance * 2
+    case_width = inner_width + wall * 2
+    case_height = inner_height + wall * 2
+    case_depth = max_component_height + clearance + lid_clearance + wall * 2
+    standoff_h = max(3.0, min(max_component_height or 4.0, case_depth - wall * 2))
+
+    corner = (Align.MIN, Align.MIN, Align.MIN)
+    with BuildPart() as part:
+        Box(case_width, case_height, case_depth, align=corner)
+        with Locations((wall, wall, wall)):  # hollow: open top + wall-thick floor
+            Box(inner_width, inner_height, case_depth + 1, align=corner, mode=Mode.SUBTRACT)
+        holes = constraints.get("mounting_holes")
+        if isinstance(holes, list) and standoff_h > 0:
+            for hole in holes:
+                if not isinstance(hole, dict):
+                    continue
+                hx, hy = _maybe_number(hole, "x_mm"), _maybe_number(hole, "y_mm")
+                if hx is None or hy is None:
+                    continue
+                dia = _maybe_number(hole, "diameter_mm") or 2.5
+                cx, cy = wall + clearance + hx, wall + clearance + hy
+                with Locations((cx, cy, wall)):
+                    Cylinder((dia + 3) / 2, standoff_h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+                with Locations((cx, cy, wall)):
+                    Cylinder(dia / 2, standoff_h + 1, align=(Align.CENTER, Align.CENTER, Align.MIN), mode=Mode.SUBTRACT)
+    return part.part
+
+
 def export_c02_step(
     out_dir: str | Path,
+    constraints: dict[str, Any] | None = None,
+    wall_thickness_mm: float | None = None,
+    clearance_mm: float | None = None,
+    lid_clearance_mm: float | None = None,
 ) -> C02StepExportResult:
-    """Report STEP export unavailability unless an explicit CAD toolchain exists."""
+    """Export a real STEP via build123d when the kernel and explicit dimensions exist.
+
+    Toolchain-gated, same shape as the STL/SKP exporters: with the build123d/OCP
+    kernel present AND explicit wall/clearance/lid_clearance, write a real
+    `Enclosure.step`; otherwise report `step_export_unavailable` and write the handoff
+    note — never a fabricated STEP. C02 never guesses dimensions, so omitting the
+    dimension params also yields `step_export_unavailable`.
+    """
     root = Path(out_dir)
+    data = constraints if constraints is not None else _load_constraints(root)
     source = root / C02_OUTPUTS["openscad"]
     stl = root / C02_OUTPUTS["stl"]
     handoff = root / C02_OUTPUTS["step_handoff"]
     handoff.parent.mkdir(parents=True, exist_ok=True)
+    dims_given = None not in (wall_thickness_mm, clearance_mm, lid_clearance_mm)
+
+    if _build123d_available() and dims_given:
+        try:
+            part = _build_enclosure_part(data, wall_thickness_mm, clearance_mm, lid_clearance_mm)
+            from build123d import export_step as _export_step
+            step_path = root / C02_OUTPUTS["step"]
+            _export_step(part, str(step_path))
+        except Exception as error:  # bad constraints / kernel failure — no fake STEP
+            handoff.write_text(_render_step_handoff_status(source.exists(), stl.exists()), encoding="utf-8")
+            return C02StepExportResult(
+                folder=str(root), step_path=None, status="step_export_blocked",
+                message=f"STEP geometry could not be built from the given constraints: {error}",
+                handoff_path=str(C02_OUTPUTS["step_handoff"]),
+                source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
+                stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
+            )
+        if not step_path.exists() or step_path.stat().st_size == 0:
+            handoff.write_text(_render_step_handoff_status(source.exists(), stl.exists()), encoding="utf-8")
+            return C02StepExportResult(
+                folder=str(root), step_path=None, status="step_export_failed",
+                message="build123d export_step produced no STEP file.",
+                handoff_path=str(C02_OUTPUTS["step_handoff"]),
+                source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
+                stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
+            )
+        handoff.write_text(_render_step_exported_handoff(), encoding="utf-8")
+        return C02StepExportResult(
+            folder=str(root), step_path=str(C02_OUTPUTS["step"]), status="step_exported",
+            message="Generated a real STEP via build123d/OCP from explicit constraints. Draft for ME/vendor handoff — marked draft_unapproved, not ME approval.",
+            handoff_path=str(C02_OUTPUTS["step_handoff"]),
+            source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
+            stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
+        )
+
     handoff.write_text(_render_step_handoff_status(source.exists(), stl.exists()), encoding="utf-8")
     return C02StepExportResult(
         folder=str(root),
         step_path=None,
         status="step_export_unavailable",
-        message="STEP draft export requires a configured CAD kernel/toolchain such as FreeCAD or CadQuery; no fake STEP was created.",
+        message="STEP draft export requires a configured CAD kernel (build123d/OCP, FreeCAD, or CadQuery) and explicit wall/clearance/lid_clearance; no fake STEP was created.",
         handoff_path=str(C02_OUTPUTS["step_handoff"]),
         source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
         stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
@@ -795,6 +904,27 @@ def _render_step_handoff_status(source_exists: bool, stl_exists: bool) -> str:
         "",
     ])
 
+
+
+def _render_step_exported_handoff() -> str:
+    return "\n".join([
+        "# STEP Draft Handoff",
+        "",
+        "## Native STEP Status",
+        "- `step_exported`: true",
+        "- Toolchain: build123d / OCP (OpenCASCADE) CAD kernel.",
+        "- Output: `C02-ME/Enclosure.step` — a real ISO-10303 STEP solid built from explicit constraints.",
+        "- Marked `draft_unapproved`: this is a prototype handoff model, NOT ME/vendor approval.",
+        "",
+        "## For the ME / vendor",
+        "- Open `Enclosure.step` in FreeCAD/SolidWorks/Fusion as a starting point.",
+        "- Verify and own: wall/tolerance/draft/undercut, fit, strength, waterproofing, thermal, and DFM.",
+        "",
+        "## Limits",
+        "- Not DFM, tolerance, strength, waterproofing, thermal, or production approval.",
+        "- bodesign generated the geometry from constraints; it does not certify manufacturability.",
+        "",
+    ])
 
 
 def _item(key: str, data: dict[str, Any], owner: str, missing_message: str, blocks: list[str]) -> C02ConstraintItem:

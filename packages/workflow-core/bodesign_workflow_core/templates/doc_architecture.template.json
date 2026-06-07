@@ -415,7 +415,7 @@
         "elicit": "partial",
         "generate": "partial",
         "verify": "partial",
-        "note": "Runtime LANDED: bodesign_c02_emit_enclosure_package, bodesign_c02_generate_openscad, bodesign_c02_export_stl / _skp / _step (toolchain-gated, explicit *_unavailable when absent), bodesign_c02_readiness (constraint readiness, does NOT claim printable/STL until real export). C02 stays constraint-first: pre-check before C04, check loop after C04, final draft only after C03/C04 constraints suffice. Still pending: C02-T7/V5 real STL export validation requires OpenSCAD in the MCP container (Docker image adds it; end-to-end run + version metadata not yet done); cross-section consistency vs C01/C03/C04."
+        "note": "Runtime LANDED: bodesign_c02_emit_enclosure_package, bodesign_c02_generate_openscad, bodesign_c02_export_stl / _skp / _step (toolchain-gated, explicit *_unavailable when absent), bodesign_c02_readiness (constraint readiness, does NOT claim printable/STL until real export). C02 stays constraint-first: pre-check before C04, check loop after C04, final draft only after C03/C04 constraints suffice. STEP backend LANDED (C02-T6b): export_c02_step builds a real Enclosure.step via the build123d/OCP kernel from the same constraints as the OpenSCAD path when the kernel + explicit dims are present, else stays step_export_unavailable (no dims/no kernel → no fake STEP); output is draft_unapproved, never me_approved. build123d is dev-installed only — NOT yet in requirements/Docker, so runtime stays gated until the heavy OCP/vtk dep is approved. Still pending: C02-T7/V5 real STL export needs OpenSCAD in the container; cross-section consistency vs C01/C03/C04."
       },
       "skill": [
         "c02-mechanical-enclosure-consultant — TODO",

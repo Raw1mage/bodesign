@@ -30,7 +30,19 @@ deployment stays compliant.
   these skills explicitly refuse to invent missing data, matching bodesign's
   no-fallback rule).
 
-## C02 — Mechanical / CAD (PoC PROVEN — integration recommended, not yet shipped)
+## C02 — Mechanical / CAD (A+B LANDED — build123d STEP backend; Docker dep deferred)
+
+> **Update:** the recommended A+B integration is now implemented. `export_c02_step`
+> builds a real `Enclosure.step` via build123d/OCP from the same constraints as the
+> OpenSCAD path (`_build_enclosure_part`), toolchain-gated: kernel + explicit dims →
+> real STEP (`step_exported`, `draft_unapproved`); no kernel / no dims →
+> `step_export_unavailable`, never a fake STEP. Tests cover both paths (T7 skip-guarded
+> on clones without the kernel; V5 patches the kernel absent). **build123d is
+> dev-installed only — NOT in `services/mcp/requirements.txt` or the Docker image yet**
+> (the ~400 MB OCP/vtk dependency is a separate operational decision), so production
+> runtime stays honestly gated until approved. Original evaluation retained below.
+
+
 
 - **Source:** `earthtojake/text-to-cad` — https://github.com/earthtojake/text-to-cad
   (its CAD backend is **build123d** on OpenCASCADE/OCP).

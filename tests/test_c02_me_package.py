@@ -11,6 +11,19 @@ from bodesign_workflow_core import assess_c02_constraint_readiness, emit_c02_enc
 
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 
+try:
+    import build123d as _b123d  # noqa: F401
+    _HAS_BUILD123D = True
+except Exception:
+    _HAS_BUILD123D = False
+
+_STEP_CONSTRAINTS = {
+    "board_outline": {"width_mm": 80, "height_mm": 50},
+    "component_heights": [{"ref": "J1", "height_mm": 8}],
+    "mounting_holes": [{"x_mm": 5, "y_mm": 5, "diameter_mm": 2.5},
+                       {"x_mm": 70, "y_mm": 40, "diameter_mm": 2.5}],
+}
+
 
 class C02MePackageTests(unittest.TestCase):
     def setUp(self):
@@ -178,6 +191,39 @@ class C02MePackageTests(unittest.TestCase):
         self.assertIn("FreeCAD", handoff)
         self.assertIn("CadQuery", handoff)
         self.assertFalse(result.to_dict()["me_approved"])
+
+    @unittest.skipUnless(_HAS_BUILD123D, "build123d/OCP kernel not installed")
+    def test_export_step_real_via_build123d_when_dims_given(self):  # C02-T7
+        result = export_c02_step(self.work, constraints=_STEP_CONSTRAINTS,
+                                 wall_thickness_mm=2.0, clearance_mm=1.0, lid_clearance_mm=0.4)
+        self.assertEqual("step_exported", result.status)
+        step = self.work / "C02-ME" / "Enclosure.step"
+        self.assertTrue(step.exists())
+        head = step.read_text(encoding="utf-8", errors="replace")[:40]
+        self.assertTrue(head.startswith("ISO-10303-21"))
+        self.assertGreater(step.stat().st_size, 1000)
+        d = result.to_dict()
+        self.assertTrue(d["vendor_handoff_ready"])
+        self.assertTrue(d["draft_unapproved"])
+        self.assertFalse(d["me_approved"])  # real geometry is still NOT ME approval
+        handoff = (self.work / "C02-ME" / "STEP_Draft_Handoff.md").read_text(encoding="utf-8")
+        self.assertIn("build123d", handoff)
+
+    def test_export_step_unavailable_when_kernel_absent(self):  # C02-V5
+        # Force the no-kernel path regardless of whether build123d is installed.
+        with patch("bodesign_workflow_core.c02_me_package._build123d_available", return_value=False):
+            result = export_c02_step(self.work, constraints=_STEP_CONSTRAINTS,
+                                     wall_thickness_mm=2.0, clearance_mm=1.0, lid_clearance_mm=0.4)
+        self.assertEqual("step_export_unavailable", result.status)
+        self.assertIsNone(result.step_path)
+        self.assertFalse((self.work / "C02-ME" / "Enclosure.step").exists())  # non-destructive, no fake STEP
+        self.assertFalse(result.to_dict()["me_approved"])
+
+    def test_export_step_no_dims_stays_unavailable(self):
+        # C02 never guesses dimensions: without explicit dims, no STEP even with a kernel.
+        result = export_c02_step(self.work, constraints=_STEP_CONSTRAINTS)
+        self.assertEqual("step_export_unavailable", result.status)
+        self.assertFalse((self.work / "C02-ME" / "Enclosure.step").exists())
 
 
 if __name__ == "__main__":
