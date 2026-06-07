@@ -28,7 +28,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ee
-    command: ["--transport", "http", "--port", "8077", "--tools", "ee"]
+    # --host 0.0.0.0 so the core reaches it over the compose network (default
+    # 127.0.0.1 binds container-loopback only → core forwarding would fail).
+    command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8077", "--tools", "ee"]
     volumes:
       - "bodesign-sessions:/var/cache/bodesign/sessions"
     environment:
@@ -48,7 +50,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.me
-    command: ["--transport", "http", "--port", "8077", "--tools", "me"]
+    # --host 0.0.0.0 so the core reaches it over the compose network (default
+    # 127.0.0.1 binds container-loopback only → core forwarding would fail).
+    command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8077", "--tools", "me"]
     volumes:
       # Same session tree as the core so constraints/Enclosure.step are shared.
       - "bodesign-sessions:/var/cache/bodesign/sessions"
