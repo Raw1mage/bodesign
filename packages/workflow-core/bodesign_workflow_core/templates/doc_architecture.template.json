@@ -324,7 +324,10 @@
           "C05"
         ]
       },
-      "ai_supplement": "The real PRD content lives in tables; AI fills depth per section via the question bank + plan-builder structure where the source is thin."
+      "ai_supplement": "The real PRD content lives in tables; AI fills depth per section via the question bank + plan-builder structure where the source is thin.",
+      "backend": {
+        "kind": "native"
+      }
     },
     {
       "code": "C01",
@@ -376,7 +379,10 @@
         "CMF",
         "Display UI/UX"
       ],
-      "ai_supplement": "bodesign generates machine-editable first-pass visual sources and constraints from C00; human ID owns final visual design, CMF approval, and production ID sign-off."
+      "ai_supplement": "bodesign generates machine-editable first-pass visual sources and constraints from C00; human ID owns final visual design, CMF approval, and production ID sign-off.",
+      "backend": {
+        "kind": "native"
+      }
     },
     {
       "code": "C02",
@@ -428,7 +434,11 @@
         "Introduction of Assembly"
       ],
       "execution_loop_role": "ME vendor/deliverable layer. In execution, C02-pre can constrain C04 layout before CAD, C02-check validates C04 geometry, and C02-final emits enclosure draft after C03/C04 constraints are sufficient.",
-      "ai_supplement": "bodesign may generate unapproved parametric enclosure sources and STL/SKP/STEP drafts only from explicit C03/C04 constraints. Final STEP, assembly, tolerance, DFM, and manufacturing sign-off remain ME/vendor-owned."
+      "ai_supplement": "bodesign may generate unapproved parametric enclosure sources and STL/SKP/STEP drafts only from explicit C03/C04 constraints. Final STEP, assembly, tolerance, DFM, and manufacturing sign-off remain ME/vendor-owned.",
+      "backend": {
+        "kind": "worker",
+        "group": "me"
+      }
     },
     {
       "code": "C03",
@@ -486,7 +496,11 @@
         "GPIOs table (.xlsx)"
       ],
       "execution_loop_role": "EE vendor/deliverable layer. In execution, C03 may lead real component/interface constraints before C02/C04 converge, but the document code remains C03.",
-      "ai_supplement": "Full AI-EDA lifecycle generates these and feeds mechanical/layout constraints for C02/C04 iteration."
+      "ai_supplement": "Full AI-EDA lifecycle generates these and feeds mechanical/layout constraints for C02/C04 iteration.",
+      "backend": {
+        "kind": "worker",
+        "group": "ee"
+      }
     },
     {
       "code": "C04",
@@ -529,7 +543,11 @@
         "Gerber File (EVT)",
         "Stackup (6L 1.2T .xlsx)"
       ],
-      "ai_supplement": "bodesign produces stackup/constraints/footprint-map; Board+Gerber by the layout engineer."
+      "ai_supplement": "bodesign produces stackup/constraints/footprint-map; Board+Gerber by the layout engineer.",
+      "backend": {
+        "kind": "worker",
+        "group": "ee"
+      }
     },
     {
       "code": "C05",
@@ -584,7 +602,10 @@
           ]
         }
       ],
-      "ai_supplement": "FW requirements is thin (brief+objectives+tables); AI's software-architect/plan-builder skill supplies the SW-dev architecture depth (modules/interfaces/state-machine/tasks), extending PRD §7. bodesign owns the spec; source code is team-owned."
+      "ai_supplement": "FW requirements is thin (brief+objectives+tables); AI's software-architect/plan-builder skill supplies the SW-dev architecture depth (modules/interfaces/state-machine/tasks), extending PRD §7. bodesign owns the spec; source code is team-owned.",
+      "backend": {
+        "kind": "native"
+      }
     },
     {
       "code": "C06",
@@ -623,7 +644,11 @@
         "設計驗證 (design verification)",
         "開機驗證 (boot / bring-up verification)"
       ],
-      "ai_supplement": "bodesign drafts the verification/test plan + bring-up checklist from PRD + subsystems; actual EVT/DVT outsourced."
+      "ai_supplement": "bodesign drafts the verification/test plan + bring-up checklist from PRD + subsystems; actual EVT/DVT outsourced.",
+      "backend": {
+        "kind": "worker",
+        "group": "ee"
+      }
     }
   ],
   "gap_summary": {

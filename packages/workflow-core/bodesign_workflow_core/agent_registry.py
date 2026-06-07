@@ -98,6 +98,10 @@ class AgentRole:
     forbidden_actions: list[str]
     human_gate: str
     return_to_c00_when: list[str]
+    # Declarative dispatch backend (F-5): {kind: native|worker|external_mcp, ...}.
+    # native/worker → the spine creates a work packet; external_mcp → the spine
+    # invokes a per-MCP adapter. This is data, not a hardcoded per-layer branch.
+    backend: dict[str, Any] = None  # type: ignore[assignment]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,6 +117,7 @@ class AgentRole:
             "forbidden_actions": list(self.forbidden_actions),
             "human_gate": self.human_gate,
             "return_to_c00_when": list(self.return_to_c00_when),
+            "backend": dict(self.backend or {"kind": "native"}),
         }
 
 
@@ -185,6 +190,9 @@ def load_agent_registry(path: str | Path | None = None) -> AgentRegistry:
         if not key or not title:
             raise AgentRegistryError(f"Layer {code} missing `key`/`title` in architecture template")
         is_owner = code == "C00"
+        backend = section.get("backend") or {"kind": "native"}
+        if not isinstance(backend, dict) or backend.get("kind") not in {"native", "worker", "external_mcp"}:
+            raise AgentRegistryError(f"Layer {code} has invalid backend {backend!r} (kind must be native|worker|external_mcp)")
         roles.append(
             AgentRole(
                 code=code,
@@ -199,6 +207,7 @@ def load_agent_registry(path: str | Path | None = None) -> AgentRegistry:
                 forbidden_actions=list(_C00_FORBIDDEN if is_owner else _DOWNSTREAM_FORBIDDEN),
                 human_gate=_HUMAN_GATE[code],
                 return_to_c00_when=[] if is_owner else list(_DOWNSTREAM_RETURN_TRIGGERS),
+                backend=dict(backend),
             )
         )
 

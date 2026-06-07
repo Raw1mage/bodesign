@@ -20,10 +20,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from typing import Callable
+
 from .agent_registry import DOWNSTREAM_CODES, load_agent_registry
 from .c00_prd_template import assess_c00_prd_readiness
+from .mcp_adapters import AdapterError, build_external_call
 from .mode_contracts import enter_c01_mode
-from .orchestration import dispatch_work_packet, list_blockers, list_work_packets
+from .orchestration import dispatch_work_packet, list_blockers, list_work_packets, return_blocker
 
 _C00_ANSWER_STATE_REL = Path("C00-PRD") / "answer_state.json"
 
@@ -188,7 +191,43 @@ def c00_orchestration_status(folder: str | Path) -> Board:
     )
 
 
-def c00_orchestration_tick(folder: str | Path, *, auto_dispatch: bool = True) -> NextAction:
+def _dispatch_external_mcp(root, code, role, packet, mcp_caller) -> NextAction:
+    """Dispatch a layer whose backend is an external MCP server (F-5). Calls the
+    declared adapter → mcp_caller; records the result, or a blocker when the external
+    MCP is unreachable/unconfigured (never fabricates the layer's output)."""
+    backend = role.backend or {}
+    server = backend.get("server", "?")
+    base_ev = {"packet_id": packet["packet_id"], "backend": "external_mcp", "server": server}
+    if mcp_caller is None:
+        return NextAction(kind="dispatch", owner="downstream_agent", layer=code, dispatched_packet=packet,
+                          message=f"Dispatched {code}; backend is external MCP '{server}', but no MCP caller is wired in this context.",
+                          evidence={**base_ev, "mcp_caller": "unwired"})
+    try:
+        call = build_external_call(backend.get("adapter", ""), packet, root)
+    except AdapterError as error:
+        blk = return_blocker(root, packet["packet_id"], severity="blocked",
+                             summary=f"{code} external MCP backend has no usable adapter.",
+                             question_for_user=f"Register an adapter for the '{server}' MCP backend of {code}.",
+                             recommended_owner="downstream_agent", proposed_state="blocked")
+        return NextAction(kind="dispatch", owner="downstream_agent", layer=code, dispatched_packet=packet,
+                          message=f"Dispatched {code} but its external MCP adapter is missing ({error}); recorded a blocker.",
+                          evidence={**base_ev, "blocker_id": blk.blocker_id})
+    result = mcp_caller(call["server"], call["tool"], call["arguments"]) or {}
+    if not result.get("ok") and (result.get("worker_unavailable") or result.get("worker_starting")):
+        blk = return_blocker(root, packet["packet_id"], severity="external-needed",
+                             summary=f"{code} external MCP '{call['server']}' is {result.get('status', 'unreachable')}.",
+                             question_for_user=f"Bring up / configure the '{call['server']}' MCP server, then re-dispatch {code}.",
+                             recommended_owner="external_expert", proposed_state="external-needed")
+        return NextAction(kind="dispatch", owner="external", layer=code, dispatched_packet=packet,
+                          message=f"Dispatched {code} to external MCP '{call['server']}' but it is {result.get('status')}; recorded a blocker.",
+                          evidence={**base_ev, "tool": call["tool"], "external_status": result.get("status"), "blocker_id": blk.blocker_id})
+    return NextAction(kind="dispatch", owner="downstream_agent", layer=code, dispatched_packet=packet,
+                      message=f"Dispatched {code} to external MCP '{call['server']}' (tool {call['tool']}); result recorded.",
+                      evidence={**base_ev, "tool": call["tool"], "external_ok": bool(result.get("ok"))})
+
+
+def c00_orchestration_tick(folder: str | Path, *, auto_dispatch: bool = True,
+                           mcp_caller: Callable[..., dict] | None = None) -> NextAction:
     """Return the single highest-value next step; may dispatch a ready layer.
 
     Priority: resolve_blocker → ask_c00 (to unblock a gate) → dispatch a ready,
@@ -238,24 +277,28 @@ def c00_orchestration_tick(folder: str | Path, *, auto_dispatch: bool = True) ->
     if ready_undispatched:
         code = ready_undispatched[0]
         role = load_agent_registry().get(code)
+        backend_kind = (role.backend or {}).get("kind", "native")
         if not auto_dispatch:
             return NextAction(
                 kind="dispatch", owner="downstream_agent", layer=code,
-                message=f"{code} ({role.target_role}) is ready to dispatch (gate satisfied). Recommendation only — auto_dispatch is off.",
-                evidence={"gate_status": "ready", "dry_run": True},
+                message=f"{code} ({role.target_role}) is ready to dispatch (gate satisfied, backend={backend_kind}). Recommendation only — auto_dispatch is off.",
+                evidence={"gate_status": "ready", "backend": backend_kind, "dry_run": True},
             )
-        if code == "C01":
-            entry = enter_c01_mode(root)
-            packet = entry.packet
+        # C01 has a dedicated mode contract; otherwise create the work packet for traceability.
+        if code == "C01" and backend_kind != "external_mcp":
+            packet = enter_c01_mode(root).packet
         else:
             packet = dispatch_work_packet(
                 root, code, _objective_for(code, role.target_role),
                 sections=list(gates.get(code, {}).get("source_sections", [])),
             ).to_dict()
+        # One declarative branch on the backend kind (no per-layer hardcoding).
+        if backend_kind == "external_mcp":
+            return _dispatch_external_mcp(root, code, role, packet, mcp_caller)
         return NextAction(
             kind="dispatch", owner="downstream_agent", layer=code,
             message=f"Dispatched {code} ({role.target_role}); its gate is satisfied. It will draft deliverables and return any blockers to C00.",
-            evidence={"packet_id": packet.get("packet_id")}, dispatched_packet=packet,
+            evidence={"packet_id": packet.get("packet_id"), "backend": backend_kind}, dispatched_packet=packet,
         )
 
     # 4. All layers dispatched and no open blockers → the loop's job is done.

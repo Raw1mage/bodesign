@@ -271,7 +271,9 @@ def _h_c00_orchestration_status(a: dict) -> Any:
 
 def _h_c00_orchestration_tick(a: dict) -> Any:
     from bodesign_workflow_core import c00_orchestration_tick
-    return c00_orchestration_tick(a["folder"], auto_dispatch=a.get("auto_dispatch", True)).to_dict()
+    from mcp_delegate import call_external_mcp_tool
+    return c00_orchestration_tick(a["folder"], auto_dispatch=a.get("auto_dispatch", True),
+                                  mcp_caller=call_external_mcp_tool).to_dict()
 
 
 def _h_c04_emit_layout_package(a: dict) -> Any:
