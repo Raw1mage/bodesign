@@ -85,20 +85,20 @@
 - [ ] Downstream gate tests for C02/C03/C04/C05 constraints.
 - [ ] No-fallback tests: no arbitrary style, placement, CMF, or UI decision may pass as approved.
 
-## Cross-Cutting Gaps (THE SPINE — highest-leverage remaining work)
+## Cross-Cutting Gaps — SPINE (LANDED in Batch B 2026-06-07)
 
-These tie the 15 already-built Cxx tools into a driven workflow. Per the implementation-spec's own
-"First Implementation Order", this backbone is the real dependency; it was deferred while per-layer
-emitters were built bottom-up. This is the recommended next batch (option B) after re-baseline.
+These tie the 15 Cxx tools into a driven workflow. Runtime in `packages/workflow-core`:
+`agent_registry.py`, `orchestration.py`, `mode_contracts.py`; MCP tools in `services/mcp/server.py`.
 
-- [ ] Agent registry: define C00/C01/C02/C03/C04/C05/C06 roles, prompts, inputs, outputs, authority boundaries, and human gates.
-- [~] Work packet schema: C00 dispatch → downstream agent output → blocker backflow to C00. — `work_packet.v1`/`blocker_return.v1` DRAFTED in `c00_downstream_contract.md`; **not wired to any runtime tool**.
-- [ ] Human approval model: distinguish AI draft, human-approved, external-confirmed, and accepted-risk across all layers. (Per-layer answer-states exist; no unified model.)
-- [ ] Folder/package state model: decide where answer state, draft carriers, readiness reports, and handoff packets live in the client-owned project folder.
-- [ ] Runtime UX: user stays in C00; downstream agents work in background and return questions to C00.
+- [x] Agent registry: `agent_registry.load_agent_registry` derives C00–C06 roles, target_role, owning team, skills, human gates, and allowed/forbidden actions from the document architecture. C00 is the contract owner; C01–C06 are downstream workers. MCP `bodesign_agent_registry`.
+- [x] Work packet schema wired: `orchestration.py` implements `bodesign.c00.work_packet.v1` + `bodesign.c00.blocker_return.v1` as persisted state with `dispatch_work_packet` / `return_blocker` / `ingest_blocker` and fail-fast validation. MCP `bodesign_dispatch_work_packet` / `_return_blocker` / `_ingest_blocker` / `_list_work_packets` / `_list_blockers`.
+- [x] Folder/package state model: `<folder>/_orchestration/{work_packets,blockers}/*.json` + append-only `log.jsonl`; deterministic count-based IDs.
+- [x] C00→C01 mode contract (C01-I3): `mode_contracts.enter_c01_mode` + MCP `bodesign_enter_c01_mode`.
+- [~] Human approval model: blocker `recommended_owner`/`proposed_state` + ingest `decided_by` give a per-decision owner model; a unified cross-layer approval state is still not consolidated. → Batch C / later.
+- [ ] Runtime UX: user stays in C00; downstream agents work in background and return questions to C00. (Primitives exist; the driving loop/agent prompts are not yet assembled.)
 
 ## Re-baseline Debts (introduced/exposed by 2026-06-07 reconciliation)
 
-- [ ] **RB-1** Plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema). `.state.json` was force-set to `implementing` via `mode:sync` because forward gates validate the canonical set. Decision needed: conform to the canonical schema, or formally document the deviation in design.md.
-- [ ] **RB-2** Runtime (`c00_prd_template.py`) loads its source-of-truth templates from `plans/feature_doc-package-scaffold/` — a draft zone. Breaks on graduation/archive. Move runtime-depended templates under `packages/` (or a runtime config dir) and keep plans/ as the editable source.
-- [ ] **RB-3** = C01-I1 above: C01 runtime never loads `c01_id.template.json`/rubric.
+- [ ] **RB-1** (OPEN) Plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema). `.state.json` was force-set to `implementing` via `mode:sync` because forward gates validate the canonical set. Decision needed: conform to the canonical schema, or formally document the deviation in design.md.
+- [x] **RB-2** (DONE, Batch B) Runtime-depended templates moved to `packages/workflow-core/bodesign_workflow_core/templates/` (`c00_prd.template.json`, `c00_prd.rubric.json`, `doc_architecture.template.json`); loaders updated; `plans/.../TEMPLATES.md` records the move. C01 templates relocate when C01-I1 lands.
+- [ ] **RB-3** (OPEN) = C01-I1 above: C01 runtime never loads `c01_id.template.json`/rubric.

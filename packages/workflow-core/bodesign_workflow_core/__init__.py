@@ -1,4 +1,28 @@
 from .contracts import CandidateDiffItem, GeneratedDesignCandidateWorkspace, ReferenceBoardWorkflowPlan, WorkflowStage, build_generated_design_candidate_workspace, plan_reference_board_workflow
+from .agent_registry import (
+    AgentRegistry,
+    AgentRegistryError,
+    AgentRole,
+    load_agent_registry,
+)
+from .orchestration import (
+    BlockerReturn,
+    IngestResult,
+    OrchestrationError,
+    WorkPacket,
+    dispatch_work_packet,
+    get_blocker,
+    get_work_packet,
+    ingest_blocker,
+    list_blockers,
+    list_work_packets,
+    return_blocker,
+)
+from .mode_contracts import (
+    C01ModeEntry,
+    enter_c01_mode,
+    layer_relevant_prd_sections,
+)
 from .gap_report import (
     EvidenceArtifactSummary,
     GapItem,
@@ -81,6 +105,11 @@ from .reference_crosscheck import (
 )
 
 __all__ = [
+    "AgentRegistry",
+    "AgentRegistryError",
+    "AgentRole",
+    "BlockerReturn",
+    "C01ModeEntry",
     "CandidateDiffItem",
     "C00EmitResult",
     "C00PrdRubric",
@@ -142,6 +171,19 @@ __all__ = [
     "export_c03_mechanical_constraints",
     "generate_c01_concept_image",
     "generate_c02_openscad",
+    "IngestResult",
+    "OrchestrationError",
+    "WorkPacket",
+    "dispatch_work_packet",
+    "enter_c01_mode",
+    "get_blocker",
+    "get_work_packet",
+    "ingest_blocker",
+    "layer_relevant_prd_sections",
+    "list_blockers",
+    "list_work_packets",
+    "return_blocker",
+    "load_agent_registry",
     "load_c00_prd_rubric",
     "load_c00_prd_template",
     "plan_design_intent",

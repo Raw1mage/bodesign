@@ -12,17 +12,18 @@ declared prerequisites; the orchestration **spine** the implementation-spec call
 Symptoms: C01-I1 (template loader) and C01-I3 (mode contract) sit undone *beneath* their already-`[x]` dependents.
 
 **Chosen next-batch ordering (A→B→C):**
-1. **A — DONE THIS PASS:** reconcile status docs, sync lifecycle, amend proposal scope, record debts.
-2. **B — NEXT:** build the orchestration spine — agent registry + wire `work_packet.v1`/`blocker_return.v1`
-   (drafted in `c00_downstream_contract.md`) into runtime + folder/state model + C00→C01 mode contract (C01-I3).
-   Turns 15 disconnected tools into a driven workflow. See `c00_c01_gap-audit.md → Cross-Cutting Gaps`.
-3. **C — AFTER:** widen coverage so all 7 layers have minimal runtime — C04 layout constraint doc,
+1. **A — DONE:** reconcile status docs, sync lifecycle, amend proposal scope, record debts.
+2. **B — DONE (this pass):** orchestration spine LANDED — `agent_registry.py` (C00–C06 derived from the
+   document architecture), `orchestration.py` (`work_packet.v1`/`blocker_return.v1` persisted under
+   `<folder>/_orchestration/` + dispatch/return/ingest, fail-fast), 7 new MCP tools, and the C00→C01
+   mode contract `mode_contracts.enter_c01_mode` (C01-I3). RB-2 folded in. +29 tests (173 total green).
+3. **C — NEXT:** widen coverage so all 7 layers have minimal runtime — C04 layout constraint doc,
    C05 FW SW-spec sub-package scaffold (plan-builder-like), C06 test-plan assembler.
 
-**Re-baseline debts (do not lose):**
-- **RB-1** custom artifact set ≠ plan-builder canonical (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates bypassed — conform or document deviation.
-- **RB-2** runtime loads templates from `plans/` (draft zone) — move runtime-depended templates under `packages/`.
-- **RB-3** = C01-I1: C01 runtime never loads `c01_id.template.json`/rubric (emitters hardcode structure).
+**Re-baseline debts:**
+- **RB-1** (OPEN) custom artifact set ≠ plan-builder canonical (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates bypassed — conform or document deviation.
+- **RB-2** (DONE, Batch B) runtime templates moved to `packages/workflow-core/.../templates/`; see `TEMPLATES.md`. C01 templates move when C01-I1 lands.
+- **RB-3** (OPEN) = C01-I1: C01 runtime never loads `c01_id.template.json`/rubric (emitters hardcode structure).
 
 ## Goal
 
@@ -87,7 +88,7 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 
 - [ ] **C01-I1 Template loader** — load and validate `c01_id.template.json` / `c01_id.rubric.json` in `packages/workflow-core`. ⚠️ **RB-3: genuinely undone but built around** — I4–I8 emitters/readiness below are `[x]` yet hardcode structure instead of loading this template. Out-of-order debt.
 - [x] **C01-I2 Skill package** — create `c01-industrial-design-requirements` with role prompt, question strategy, CMF framework, UI/status script, exposed-interface checklist, downstream constraint map, risk map, and `known_gaps` section.
-- [ ] **C01-I3 Mode contract** — define how C00 enters C01 mode, what C01 may ask the user, and how blockers return to C00 without mutating the PRD contract. ⚠️ **Out-of-order: N1–N5 interaction tools are `[x]` but this contract that should govern them is undone. Part of next batch B (spine).**
+- [x] **C01-I3 Mode contract** — `mode_contracts.enter_c01_mode` (Batch B): C00 dispatches a C01 work packet scoped to the PRD sections whose `handoff_targets` include C01 (derived from the template), emits the Rockbox C01 package, and returns the next C01 preference question. C01 asks preference questions directly; product-level decisions return to C00 via `return_blocker`; C01 never mutates the PRD. MCP tool `bodesign_enter_c01_mode`.
 - [x] **C01-I4 Visual extractor** — extract C00 §1/§2/§5/§6/§7 content into normalized visual/interface requirements.
 - [x] **C01-I5 Scaffold function/tool** — create the C01-ID package using Rockbox deliverable names: `Ai file/`, `CMF/`, `Display UIUX/`, plus support artifacts.
 - [x] **C01-I6 Rockbox-like script emitters** — generate `Design_Direction.md`, `CMF_Direction.md`, `UIUX_Requirements.md`, `Interface_Constraints.json`, and `Handoff_to_ID_Designer.md` with explicit draft/decision/owner markers.

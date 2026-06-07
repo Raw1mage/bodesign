@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_C00_ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "plans" / "feature_doc-package-scaffold"
+# RB-2: runtime-depended templates are owned by the package (a draft `plans/`
+# zone must not be a runtime dependency — it breaks on graduation/archive).
+DEFAULT_C00_ARTIFACT_DIR = Path(__file__).resolve().parent / "templates"
 DEFAULT_C00_TEMPLATE_PATH = DEFAULT_C00_ARTIFACT_DIR / "c00_prd.template.json"
 DEFAULT_C00_RUBRIC_PATH = DEFAULT_C00_ARTIFACT_DIR / "c00_prd.rubric.json"
 

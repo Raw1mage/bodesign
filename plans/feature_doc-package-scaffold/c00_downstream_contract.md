@@ -78,4 +78,13 @@ Purpose: define how C00 sends scoped work to C01-C06 specialist agents and how b
 
 ## Runtime Boundary
 
-This contract is a schema source for future dispatch. The current MVP stores the contract in the plan package only; it does not yet implement autonomous dispatch or blocker ingestion tools.
+**WIRED (Batch B, 2026-06-07).** This schema is now implemented in
+`packages/workflow-core/bodesign_workflow_core/orchestration.py`:
+`dispatch_work_packet` / `return_blocker` / `ingest_blocker` persist `work_packet.v1`
+and `blocker_return.v1` under `<project>/_orchestration/`, with authority inherited
+from `agent_registry.py`. MCP surface: `bodesign_dispatch_work_packet`,
+`bodesign_list_work_packets`, `bodesign_return_blocker`, `bodesign_list_blockers`,
+`bodesign_ingest_blocker`, plus the C00→C01 binding `bodesign_enter_c01_mode`.
+
+Still future work: an autonomous C00-driven loop that selects and dispatches packets
+and surfaces returned blockers as the next user question without manual tool calls.

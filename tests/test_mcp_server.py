@@ -332,6 +332,56 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("error", r)
         self.assertIn("unknown tool", r["error"])
 
+    def test_run_tool_agent_registry(self):
+        r = self.server.run_tool("bodesign_agent_registry", {})
+        self.assertTrue(r["ok"])
+        self.assertEqual([role["code"] for role in r["result"]["roles"]],
+                         ["C00", "C01", "C02", "C03", "C04", "C05", "C06"])
+
+    def test_run_tool_orchestration_roundtrip(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-orch-", dir=PRIVATE_BASE))
+        try:
+            d = self.server.run_tool("bodesign_dispatch_work_packet", {
+                "folder": str(work), "target_layer": "C01",
+                "objective": "Produce first-pass ID direction from PRD visual fields.",
+                "sections": ["s05_id_me_requirements"]})
+            self.assertTrue(d["ok"])
+            packet_id = d["result"]["packet_id"]
+            self.assertEqual(d["result"]["target_role"], "industrial_design")
+
+            b = self.server.run_tool("bodesign_return_blocker", {
+                "folder": str(work), "packet_id": packet_id, "severity": "decision",
+                "summary": "Need primary face decision.",
+                "question_for_user": "Which face is primary?",
+                "affected_c00_fields": ["s05_id_me_requirements.primary_face"]})
+            self.assertTrue(b["ok"])
+            blocker_id = b["result"]["blocker_id"]
+
+            open_blk = self.server.run_tool("bodesign_list_blockers", {"folder": str(work), "unresolved_only": True})
+            self.assertEqual(len(open_blk["result"]["blockers"]), 1)
+
+            g = self.server.run_tool("bodesign_ingest_blocker", {
+                "folder": str(work), "blocker_id": blocker_id, "resolved_state": "answered",
+                "decision": "Top face is primary."})
+            self.assertTrue(g["ok"])
+            self.assertTrue(g["result"]["resolved"])
+
+            closed = self.server.run_tool("bodesign_list_blockers", {"folder": str(work), "unresolved_only": True})
+            self.assertEqual(closed["result"]["blockers"], [])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_dispatch_to_c00_fails(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-orch2-", dir=PRIVATE_BASE))
+        try:
+            r = self.server.run_tool("bodesign_dispatch_work_packet",
+                                     {"folder": str(work), "target_layer": "C00", "objective": "x"})
+            self.assertFalse(r["ok"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def test_handler_error_is_captured(self):
         # missing required "folder" -> KeyError captured as data, not raised
         r = self.server.run_tool("bodesign_ingest_project", {})

@@ -626,15 +626,15 @@
       "C02 (package/openscad/export/readiness)"
     ],
     "key_gaps": [
-      "SPINE: no orchestration backbone wires the 15 Cxx tools end-to-end — agent registry, C00 work_packet.v1/blocker_return.v1 (drafted in c00_downstream_contract.md, NOT wired to runtime), human-approval model, folder/state model, and runtime UX remain unbuilt. 15 tools, no conductor.",
+      "SPINE: LANDED (Batch B). agent_registry.py (C00–C06 derived from this template) + orchestration.py (work_packet.v1/blocker_return.v1 persisted under <folder>/_orchestration/, dispatch/return/ingest) + mode_contracts.enter_c01_mode (C00→C01) + 7 MCP tools. Remaining spine work: unified cross-layer human-approval state and the C00-driven background-agent UX loop.",
       "C00 PRD: docx/pdf render via kidoc 'prd' doc_type + a real PRD completeness/consistency verifier vs C03.",
-      "C01: c01_id.template.json/rubric not yet loaded at runtime (emitters hardcode structure — RB-3); mode contract (C01-I3); cross-section consistency + downstream-gate tests.",
+      "C01: c01_id.template.json/rubric not yet loaded at runtime (emitters hardcode structure — RB-3); cross-section consistency + downstream-gate tests. (C01-I3 mode contract: DONE in Batch B.)",
       "C02: real STL export validation (C02-T7/V5) pending OpenSCAD-in-container end-to-end run.",
       "C04 Layout / C06 verify: C04 constraint-doc emitter and C06 test-plan/bring-up assembler over verify verdicts — not started.",
       "C05 FW: plan-builder-like SW-dev spec sub-package (functional spec from PRD + pin map from C03) — not started; bodesign owns the spec, not the code.",
       "Generic: a per-section 'verify existing content' capability (only C03 has real content verification today).",
       "RB-1: this plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates were bypassed. Conform or document the deviation.",
-      "RB-2: runtime loads its source-of-truth templates from plans/ (a draft zone) — fragile under graduation/archive; templates that runtime depends on should move under packages/."
+      "RB-2: DONE (Batch B) — runtime-depended templates moved to packages/workflow-core/bodesign_workflow_core/templates/; loaders updated. C01 templates move when C01-I1 lands."
     ]
   },
   "orchestration": "bodesign's MCP is a thin orchestrator across a very large professional span; each C0* layer references a specialized external skill (see each section's `skill`) to do its work. bodesign owns the scaffold, the cross-layer contract, and the readiness compass — not every domain's expertise.",

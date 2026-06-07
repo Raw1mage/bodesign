@@ -197,6 +197,55 @@ def _h_c03_export_mech_constraints(a: dict) -> Any:
     return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
 
 
+# ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
+def _h_agent_registry(a: dict) -> Any:
+    from bodesign_workflow_core import load_agent_registry
+    return load_agent_registry().to_dict()
+
+
+def _h_dispatch_work_packet(a: dict) -> Any:
+    from bodesign_workflow_core import dispatch_work_packet
+    return dispatch_work_packet(
+        a["folder"], a["target_layer"], a["objective"],
+        sections=a.get("sections"), fields=a.get("fields"), generated_docs=a.get("generated_docs"),
+        inputs=a.get("inputs"), expected_outputs=a.get("expected_outputs"),
+    ).to_dict()
+
+
+def _h_list_work_packets(a: dict) -> Any:
+    from bodesign_workflow_core import list_work_packets
+    return {"work_packets": [w.to_dict() for w in list_work_packets(a["folder"])]}
+
+
+def _h_return_blocker(a: dict) -> Any:
+    from bodesign_workflow_core import return_blocker
+    return return_blocker(
+        a["folder"], a["packet_id"],
+        severity=a["severity"], summary=a["summary"], question_for_user=a["question_for_user"],
+        affected_c00_fields=a.get("affected_c00_fields"), affected_downstream_layers=a.get("affected_downstream_layers"),
+        options=a.get("options"), recommended_owner=a.get("recommended_owner", "user"),
+        proposed_state=a.get("proposed_state", "blocked"), evidence=a.get("evidence"),
+    ).to_dict()
+
+
+def _h_list_blockers(a: dict) -> Any:
+    from bodesign_workflow_core import list_blockers
+    return {"blockers": [b.to_dict() for b in list_blockers(a["folder"], unresolved_only=a.get("unresolved_only", False))]}
+
+
+def _h_ingest_blocker(a: dict) -> Any:
+    from bodesign_workflow_core import ingest_blocker
+    return ingest_blocker(
+        a["folder"], a["blocker_id"],
+        resolved_state=a["resolved_state"], decision=a["decision"], decided_by=a.get("decided_by", "user"),
+    ).to_dict()
+
+
+def _h_enter_c01_mode(a: dict) -> Any:
+    from bodesign_workflow_core import enter_c01_mode
+    return enter_c01_mode(a["folder"], c00=a.get("c00"), answers=a.get("answers"), objective=a.get("objective")).to_dict()
+
+
 def _h_crosscheck(a: dict) -> Any:
     from bodesign_workflow_core import crosscheck_nets
     return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
@@ -339,6 +388,39 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"generated_nets": {"type": "array", "items": _STR},
                 "reference_nets": {"type": "array", "items": _STR}, "label": _STR, "provenance": {"type": "object"}},
                 "required": ["generated_nets", "reference_nets"]}},
+
+    # ── Orchestration spine ──────────────────────────────────────────
+    {"name": "bodesign_agent_registry", "handler": _h_agent_registry,
+     "description": "Return the C00–C06 agent registry (derived from the document architecture): each layer's role, target_role, owning team, skills, human approval gate, and allowed/forbidden actions. C00 is the requirement-contract owner; C01–C06 are downstream workers.",
+     "schema": {"type": "object", "properties": {}}},
+    {"name": "bodesign_dispatch_work_packet", "handler": _h_dispatch_work_packet,
+     "description": "C00 dispatches a scoped work packet (bodesign.c00.work_packet.v1) to a downstream layer (C01–C06). The packet inherits the target layer's authority from the registry; it cannot target C00 itself. Persists under <folder>/_orchestration/work_packets/.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "target_layer": _STR, "objective": _STR,
+                "sections": {"type": "array", "items": _STR}, "fields": {"type": "array", "items": _STR},
+                "generated_docs": {"type": "array", "items": _STR}, "inputs": {"type": "object"},
+                "expected_outputs": {"type": "array", "items": _STR}},
+                "required": ["folder", "target_layer", "objective"]}},
+    {"name": "bodesign_list_work_packets", "handler": _h_list_work_packets,
+     "description": "List all C00 work packets dispatched in a project folder, with their target layer and status (ready/partial/blocked).",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_return_blocker", "handler": _h_return_blocker,
+     "description": "A downstream layer returns a blocker (bodesign.c00.blocker_return.v1) against its work packet to C00. The source layer is taken from the packet; this marks the packet blocked. severity ∈ {decision, external-needed, blocked, accepted-risk-request}.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "packet_id": _STR, "severity": _STR,
+                "summary": _STR, "question_for_user": _STR, "affected_c00_fields": {"type": "array", "items": _STR},
+                "affected_downstream_layers": {"type": "array", "items": _STR}, "options": {"type": "array"},
+                "recommended_owner": _STR, "proposed_state": _STR, "evidence": {"type": "object"}},
+                "required": ["folder", "packet_id", "severity", "summary", "question_for_user"]}},
+    {"name": "bodesign_list_blockers", "handler": _h_list_blockers,
+     "description": "List blockers returned to C00 in a project folder; set unresolved_only=true for the open ones C00 still owes the user a decision on.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "unresolved_only": {"type": "boolean"}}, "required": ["folder"]}},
+    {"name": "bodesign_ingest_blocker", "handler": _h_ingest_blocker,
+     "description": "C00 records the human/owner resolution of a blocker and closes it. Does NOT silently mutate the PRD — it records the decision and the C00 field-state to apply via the C00 update/emit step. Requires a non-empty decision (no auto-resolution).",
+     "schema": {"type": "object", "properties": {"folder": _STR, "blocker_id": _STR, "resolved_state": _STR,
+                "decision": _STR, "decided_by": _STR}, "required": ["folder", "blocker_id", "resolved_state", "decision"]}},
+    {"name": "bodesign_enter_c01_mode", "handler": _h_enter_c01_mode,
+     "description": "C00 → C01 mode contract (C01-I3): dispatch a C01 work packet scoped to the PRD sections that hand off to C01, emit the Rockbox-like C01 package, and return the next C01 preference question. C01 may ask preference questions directly; product-level decisions return to C00 as blockers. C01 does not mutate the PRD or claim ID approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "c00": {}, "answers": {"type": "object"}, "objective": _STR},
+                "required": ["folder"]}},
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
