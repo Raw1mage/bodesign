@@ -75,6 +75,58 @@ class McpServerTests(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_run_tool_c00_readiness_reports_blockers(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-ready-", dir=PRIVATE_BASE))
+        try:
+            scaffold = self.server.run_tool("bodesign_c00_scaffold_prd", {"out_dir": str(work)})
+            self.assertTrue(scaffold["ok"])
+
+            readiness = self.server.run_tool("bodesign_c00_readiness", {"folder": str(work)})
+
+            self.assertTrue(readiness["ok"])
+            self.assertEqual("blocked", readiness["result"]["status"])
+            self.assertEqual(0, readiness["result"]["readiness_pct"])
+            self.assertTrue(readiness["result"]["next_question"])
+            self.assertFalse(readiness["result"]["prd_emitted"])
+            self.assertFalse(readiness["result"]["human_approved"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c00_readiness_missing_state_is_data_error(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-missing-", dir=PRIVATE_BASE))
+        try:
+            result = self.server.run_tool("bodesign_c00_readiness", {"folder": str(work)})
+
+            self.assertFalse(result["ok"])
+            self.assertIn("answer_state.json", result["error"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c00_emit_prd_generates_markdown_without_approval(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-emit-", dir=PRIVATE_BASE))
+        try:
+            scaffold = self.server.run_tool("bodesign_c00_scaffold_prd", {"out_dir": str(work)})
+            self.assertTrue(scaffold["ok"])
+
+            result = self.server.run_tool("bodesign_c00_emit_prd", {"folder": str(work)})
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("prd_markdown_emitted", result["result"]["status"])
+            self.assertTrue(result["result"]["prd_emitted"])
+            self.assertFalse(result["result"]["human_approved"])
+            self.assertIn("C00-PRD/Project_Requirements.generated.md", result["result"]["files"])
+            self.assertIn("C00-PRD/C00_Handoff_Report.md", result["result"]["files"])
+            self.assertTrue((work / "C00-PRD" / "Project_Requirements.generated.md").exists())
+            self.assertTrue((work / "C00-PRD" / "C00_Handoff_Report.md").exists())
+            generated = (work / "C00-PRD" / "Project_Requirements.generated.md").read_text(encoding="utf-8")
+            self.assertIn("{missing}", generated)
+            self.assertIn("Human approved: false", generated)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def test_run_tool_c01_generate_concept_image_requires_key(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-img-", dir=PRIVATE_BASE))

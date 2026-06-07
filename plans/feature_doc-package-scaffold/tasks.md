@@ -36,12 +36,12 @@ Make C00/C07 a consultant-led PRD layer: AI guides the user through product, bus
 
 - [x] **C00-I1 Template loader** — load and validate `c00_prd.template.json` / `c00_prd.rubric.json` in `packages/workflow-core`.
 - [x] **C00-I2 Scaffold function/tool** — create blank C00 PRD source files and answer-state records inside a token/project folder.
-- [ ] **C00-I3 Readiness function/tool** — compute field/section/gate/handoff readiness and return one highest-value next question.
-- [ ] **C00-I4 Emit function/tool** — render Markdown-first PRD and handoff report while preserving assumptions/open issues.
-- [ ] **C00-I5 Requirement planning binding** — replace duplicated C00 hard-coded fields with template-derived fields without breaking existing API shape.
-- [ ] **C00-I6 Tests** — add unit fixtures for template completeness, scoring, next-question selection, RF conditional gating, and no-fallback behavior.
-- [ ] **C00-I7 Agent prompt packaging** — decide where `c00_consultant.system-prompt.md` lives at runtime and how it is loaded.
-- [ ] **C00-I8 Downstream dispatch contract** — define C00 work-packet and blocker-return schemas for C01-C06 agents.
+- [x] **C00-I3 Readiness function/tool** — compute field/section/gate/handoff readiness and return one highest-value next question.
+- [x] **C00-I4 Emit function/tool** — render Markdown-first PRD and handoff report while preserving assumptions/open issues.
+- [x] **C00-I5 Requirement planning binding** — replace duplicated C00 hard-coded fields with template-derived fields without breaking existing API shape.
+- [x] **C00-I6 Tests** — add unit fixtures for template completeness, scoring, next-question selection, RF conditional gating, and no-fallback behavior.
+- [x] **C00-I7 Agent prompt packaging** — decide where `c00_consultant.system-prompt.md` lives at runtime and how it is loaded.
+- [x] **C00-I8 Downstream dispatch contract** — define C00 work-packet and blocker-return schemas for C01-C06 agents.
 
 ## C01 Visual Source Plan
 

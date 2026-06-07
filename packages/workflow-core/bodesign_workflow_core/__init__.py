@@ -28,10 +28,14 @@ from .package_readiness import (
     render_readiness_markdown,
 )
 from .c00_prd_template import (
+    C00EmitResult,
     C00PrdRubric,
     C00PrdTemplate,
+    C00ReadinessResult,
     C00ScaffoldResult,
     C00TemplateError,
+    assess_c00_prd_readiness,
+    emit_c00_prd_markdown,
     load_c00_prd_rubric,
     load_c00_prd_template,
     scaffold_c00_prd_package,
@@ -74,8 +78,10 @@ from .reference_crosscheck import (
 
 __all__ = [
     "CandidateDiffItem",
+    "C00EmitResult",
     "C00PrdRubric",
     "C00PrdTemplate",
+    "C00ReadinessResult",
     "C00ScaffoldResult",
     "C00TemplateError",
     "C01ConceptImageResult",
@@ -95,10 +101,12 @@ __all__ = [
     "DesignIntentPlan",
     "PackageReadiness",
     "ReferenceCheck",
+    "assess_c00_prd_readiness",
     "assess_package_readiness",
     "assess_c01_package_readiness",
     "assess_c02_constraint_readiness",
     "crosscheck_nets",
+    "emit_c00_prd_markdown",
     "extract_schematic_net_labels",
     "reference_nets_from_component_knowledge",
     "render_crosscheck_markdown",

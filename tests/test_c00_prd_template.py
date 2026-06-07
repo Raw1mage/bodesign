@@ -5,7 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bodesign_workflow_core import C00TemplateError, load_c00_prd_rubric, load_c00_prd_template, scaffold_c00_prd_package
+from bodesign_workflow_core import C00TemplateError, assess_c00_prd_readiness, emit_c00_prd_markdown, load_c00_prd_rubric, load_c00_prd_template, scaffold_c00_prd_package
+from bodesign_workflow_core.requirement_planning import C00_REQUIREMENT_FIELD_BINDINGS, RequirementFieldBinding, validate_requirement_bindings
 
 
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
@@ -39,6 +40,26 @@ class C00PrdTemplateTests(unittest.TestCase):
         self.assertIn("accepted-risk", data["scoring_policy"]["complete_states"])
         self.assertIn("business_contract", rubric.to_dict()["document_gates"])
         self.assertIn("C03", rubric.to_dict()["downstream_targets"])
+
+    def test_requirement_planning_fields_are_bound_to_c00_template(self):
+        template = load_c00_prd_template()
+
+        validate_requirement_bindings(template.data)
+
+        binding_by_key = {binding.key: binding for binding in C00_REQUIREMENT_FIELD_BINDINGS}
+        self.assertEqual({"compute", "comms", "memory", "power_input", "charging", "battery", "dimensions", "certification", "volume"}, set(binding_by_key))
+        self.assertEqual(("s06_electrical_requirements", "compute"), (binding_by_key["compute"].section_id, binding_by_key["compute"].field))
+        self.assertEqual(("s05_id_me_requirements", "dimensions"), (binding_by_key["dimensions"].section_id, binding_by_key["dimensions"].field))
+        self.assertTrue(binding_by_key["volume"].binding_note)
+
+    def test_requirement_binding_missing_field_fails_fast(self):
+        template = load_c00_prd_template()
+        bad_binding = (RequirementFieldBinding("bad", "s06_electrical_requirements", "missing_field", "Bad", ("bad",), "Bad?"),)
+
+        with self.assertRaises(ValueError) as context:
+            validate_requirement_bindings(template.data, bad_binding)
+
+        self.assertIn("missing C00 field", str(context.exception))
 
     def test_missing_template_fails_fast(self):
         with self.assertRaises(C00TemplateError):
@@ -98,6 +119,74 @@ class C00PrdTemplateTests(unittest.TestCase):
         rf_sections = state["documents"]["RF_Requirements.md"]["sections"]
         self.assertTrue(rf_sections)
         self.assertTrue(all(section["state"] == "missing" for section in rf_sections))
+
+    def test_readiness_scaffold_only_is_blocked_with_next_question(self):
+        scaffold_c00_prd_package(self.work)
+
+        readiness = assess_c00_prd_readiness(self.work)
+
+        self.assertEqual("blocked", readiness.status)
+        self.assertEqual(0, readiness.readiness_pct)
+        self.assertGreater(readiness.field_counts["blocking"], 0)
+        self.assertTrue(readiness.next_question)
+        self.assertFalse(readiness.to_dict()["prd_emitted"])
+        self.assertFalse(readiness.to_dict()["human_approved"])
+
+    def test_readiness_counts_answered_and_accepted_risk_as_complete(self):
+        scaffold_c00_prd_package(self.work)
+        state_path = self.work / "C00-PRD" / "answer_state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        fields = state["documents"]["Project_Requirements.md"]["sections"][0]["fields"]
+        first_key = next(iter(fields))
+        fields[first_key]["state"] = "answered"
+        fields[first_key]["value"] = "Founder-led edge AI product"
+        second_key = next(key for key in fields if key != first_key)
+        fields[second_key]["state"] = "accepted-risk"
+        fields[second_key]["value"] = "Proceed without customer validation for POC"
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        readiness = assess_c00_prd_readiness(self.work)
+
+        self.assertEqual(2, readiness.field_counts["complete"])
+        self.assertGreater(readiness.readiness_pct, 0)
+        self.assertEqual("blocked", readiness.status)
+
+    def test_readiness_missing_answer_state_fails_fast(self):
+        with self.assertRaises(C00TemplateError):
+            assess_c00_prd_readiness(self.work)
+
+    def test_emit_markdown_preserves_field_states_and_handoff(self):
+        scaffold_c00_prd_package(self.work, project_name="C00 POC", include_rf=True)
+        state_path = self.work / "C00-PRD" / "answer_state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        fields = state["documents"]["Project_Requirements.md"]["sections"][0]["fields"]
+        first_key = next(iter(fields))
+        fields[first_key]["state"] = "answered"
+        fields[first_key]["value"] = "Founder-led edge AI device"
+        fields[first_key]["source"] = "user-interview"
+        second_key = next(key for key in fields if key != first_key)
+        fields[second_key]["state"] = "external-needed"
+        fields[second_key]["value"] = "Needs customer validation"
+        fields[second_key]["owner"] = "external"
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        result = emit_c00_prd_markdown(self.work)
+
+        self.assertEqual("prd_markdown_emitted", result.status)
+        self.assertTrue(result.to_dict()["prd_emitted"])
+        self.assertFalse(result.to_dict()["human_approved"])
+        self.assertIn("C00-PRD/Project_Requirements.generated.md", result.files)
+        self.assertIn("C00-PRD/RF_Requirements.generated.md", result.files)
+        self.assertIn("C00-PRD/C00_Handoff_Report.md", result.files)
+        project = (self.work / "C00-PRD" / "Project_Requirements.generated.md").read_text(encoding="utf-8")
+        self.assertIn("Founder-led edge AI device", project)
+        self.assertIn("state: `answered`", project)
+        self.assertIn("source: `user-interview`", project)
+        self.assertIn("Needs customer validation _[external-needed]_", project)
+        self.assertIn("{missing}", project)
+        handoff = (self.work / "C00-PRD" / "C00_Handoff_Report.md").read_text(encoding="utf-8")
+        self.assertIn("Readiness:", handoff)
+        self.assertIn("Downstream Handoff Gates", handoff)
 
 
 if __name__ == "__main__":

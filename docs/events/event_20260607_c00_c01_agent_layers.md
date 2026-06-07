@@ -77,6 +77,11 @@
 - Implemented C02 STEP draft gate: added workflow-core `export_c02_step`, MCP `bodesign_c02_export_step`, `STEP_Draft_Handoff.md`, and direct/MCP tests. Because FreeCAD/CadQuery/OCP are unavailable in this environment, the tool returns explicit `step_export_unavailable` and does not fabricate `Enclosure.step`.
 - Implemented C00 template loader: added workflow-core `load_c00_prd_template` / `load_c00_prd_rubric`, fail-fast shape validation for the committed PRD template and readiness rubric, and tests covering committed artifacts plus missing/invalid artifact errors. No C00 scaffold/readiness/emitter tool was added in this slice.
 - Implemented C00 scaffold: added workflow-core `scaffold_c00_prd_package`, MCP `bodesign_c00_scaffold_prd`, blank `C00-PRD/Project_Requirements.md`, optional `RF_Requirements.md`, and `answer_state.json` with all template fields initialized as `missing`. This slice does not compute readiness, emit final PRD prose, or mark human approval.
+- Implemented C00 readiness: added workflow-core `assess_c00_prd_readiness`, MCP `bodesign_c00_readiness`, section/field/document/downstream gate scoring from `answer_state.json` plus one next consultant question. This computes readiness only; it does not emit PRD prose or mark human approval.
+- Implemented C00 Markdown emitter: added workflow-core `emit_c00_prd_markdown`, MCP `bodesign_c00_emit_prd`, generated Project/RF requirement Markdown, and `C00_Handoff_Report.md`. The emitter renders only explicit `answer_state.json` values, preserves missing/drafted/external-needed/blocked/accepted-risk markers, and never marks human approval.
+- Implemented C00 requirement-planning binding: `plan_design_intent` now validates its preserved public requirement keys against explicit C00 template section/field bindings, while keeping the existing MCP/API response shape and failing fast on missing template fields.
+- Packaged the C00 consultant prompt as `plans/feature_doc-package-scaffold/skills/c00-product-development-consultant/SKILL.md`, making C00's input-SSOT plus roll-up-index behavior available as a skill source for later distributed skill installation.
+- Defined C00 downstream dispatch contracts in `c00_downstream_contract.md`: `bodesign.c00.work_packet.v1` and `bodesign.c00.blocker_return.v1` describe how C00 sends scoped tasks to C01-C06 and how downstream blockers return without mutating product direction.
 - Architecture Sync: Verified (No doc changes). `specs/architecture.md` already records MCP tool handlers, workflow-core, client-owned package outputs, fail-fast/no-final-output constraints, and external-fetch policy gates; this C01 add-on remains an optional MCP handler and does not change module boundaries.
 
 ## Remaining
@@ -84,7 +89,6 @@
 - Define C01 mode/session contract and blocker return format to C00.
 - Implement C01 answer state, preference question bank, `bodesign_c01_next_question`, and `bodesign_c01_update_answers`.
 - Upgrade C01 readiness from file-level checks to field-state and blocker-owner checks.
-- Package/install the C01 skill source into the distributed skill bundle once skill packaging policy is finalized.
 - Add C01 reference image intake and traceability so uploaded examples can become confirmed design-intent evidence for the Rockbox-like documents.
-- Implement C00 readiness and Markdown emitter after the scaffolded SSOT answer-state structure is stable.
+- Install/package C00/C01/C02 skill sources into the distributed skill bundle once skill packaging policy is finalized.
 - Complete Docker image build/recreate with OpenSCAD and validate real `Enclosure.stl` export inside the MCP container after Docker Desktop storage location is confirmed safe; C00 SSOT runtime work is the next non-Docker implementation path.

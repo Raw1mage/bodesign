@@ -13,29 +13,62 @@ need (datasheet / dev-board reference design), and the plan stays in
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 
-# Required requirement fields: (key, label, detection keywords, clarifying question).
-# Detection keywords are bilingual (EN + zh-TW/zh-CN) because specs arrive in Chinese.
-REQUIREMENT_FIELDS = [
-    ("compute", "Compute (MCU/SoC/NPU)", ("stm32", "mcu", "soc", "processor", "npu", "cortex", "fpga", "mpu", "晶片", "處理器", "处理器", "運算", "运算", "主控"),
-     "Which exact MCU/SoC part and package? (e.g. STM32N657 VFBGA223)"),
-    ("comms", "Connectivity", ("nordic", "nrf", "9151", "cellular", "lte", "nb-iot", "wifi", "wi-fi", "ble", "bluetooth", "ethernet", "lora", "zigbee", "通訊", "通信", "無線", "无线", "蜂巢", "網路", "网络"),
-     "Which connectivity standard(s) and exact module? (cellular / Wi-Fi / BLE / Ethernet)"),
-    ("memory", "Memory / storage", ("flash", "gb", "gbit", "mbit", "emmc", "nand", "nor", "psram", "sdram", "ddr", "sd card", "microsd", "記憶體", "内存", "儲存", "存储", "快閃"),
-     "Flash/RAM type, density, and interface? (e.g. 8 GB eMMC vs octal-SPI NOR)"),
-    ("power_input", "Power input", ("usb-c", "usb type-c", "type-c", "typec", "type c", "usb c", "dc jack", "barrel", "power input", "vbus", "pd", "供電", "供电", "電源", "电源", "輸入電"),
-     "Power input connector and voltage range? (USB-C PD profile? DC input?)"),
-    ("charging", "Charging", ("charge", "charging", "charger", "power delivery", "充電", "充电", "充放電"),
-     "Charging current and charger IC preference? cell chemistry to charge?"),
-    ("battery", "Battery", ("18650", "battery", "li-ion", "lithium", "lipo", "lifepo4", "cell", "coin cell", "電池", "电池", "鋰電", "锂电"),
-     "Battery: cell count/config, capacity, and protection/fuel-gauge needs?"),
-    ("dimensions", "Form factor / dimensions", ("mm", "dimension", "form factor", "board size", "outline", "footprint size", "enclosure", "尺寸", "外形", "板框", "大小"),
-     "Target board dimensions / form-factor or enclosure constraints?"),
-    ("certification", "Compliance targets", ("fcc", "ce mark", "ce ", "emc", "certif", "compliance", "rohs", "iec", "認證", "认证", "法規", "法规"),
-     "Any compliance targets (FCC / CE / EMC / safety)?"),
-    ("volume", "Build volume", ("prototype", "production", "quantity", "qty", "units", "volume", "mass production", "原型", "樣品", "样品", "量產", "量产", "數量", "数量"),
-     "Prototype or production volume? (affects part sourcing and DFM)"),
-]
+from .c00_prd_template import load_c00_prd_template
+
+@dataclass(frozen=True, slots=True)
+class RequirementFieldBinding:
+    key: str
+    section_id: str
+    field: str
+    label: str
+    keywords: tuple[str, ...]
+    question: str
+    binding_note: str = ""
+
+
+C00_REQUIREMENT_FIELD_BINDINGS: tuple[RequirementFieldBinding, ...] = (
+    RequirementFieldBinding("compute", "s06_electrical_requirements", "compute", "Compute (MCU/SoC/NPU)", ("stm32", "mcu", "soc", "processor", "npu", "cortex", "fpga", "mpu", "晶片", "處理器", "处理器", "運算", "运算", "主控"), "Which exact MCU/SoC part and package? (e.g. STM32N657 VFBGA223)"),
+    RequirementFieldBinding("comms", "s06_electrical_requirements", "connectivity", "Connectivity", ("nordic", "nrf", "9151", "cellular", "lte", "nb-iot", "wifi", "wi-fi", "ble", "bluetooth", "ethernet", "lora", "zigbee", "通訊", "通信", "無線", "无线", "蜂巢", "網路", "网络"), "Which connectivity standard(s) and exact module? (cellular / Wi-Fi / BLE / Ethernet)"),
+    RequirementFieldBinding("memory", "s06_electrical_requirements", "memory", "Memory / storage", ("flash", "gb", "gbit", "mbit", "emmc", "nand", "nor", "psram", "sdram", "ddr", "sd card", "microsd", "記憶體", "内存", "儲存", "存储", "快閃"), "Flash/RAM type, density, and interface? (e.g. 8 GB eMMC vs octal-SPI NOR)"),
+    RequirementFieldBinding("power_input", "s06_electrical_requirements", "power_input", "Power input", ("usb-c", "usb type-c", "type-c", "typec", "type c", "usb c", "dc jack", "barrel", "power input", "vbus", "pd", "供電", "供电", "電源", "电源", "輸入電"), "Power input connector and voltage range? (USB-C PD profile? DC input?)"),
+    RequirementFieldBinding("charging", "s06_electrical_requirements", "battery_or_charging", "Charging", ("charge", "charging", "charger", "power delivery", "充電", "充电", "充放電"), "Charging current and charger IC preference? cell chemistry to charge?"),
+    RequirementFieldBinding("battery", "s06_electrical_requirements", "battery_or_charging", "Battery", ("18650", "battery", "li-ion", "lithium", "lipo", "lifepo4", "cell", "coin cell", "電池", "电池", "鋰電", "锂电"), "Battery: cell count/config, capacity, and protection/fuel-gauge needs?"),
+    RequirementFieldBinding("dimensions", "s05_id_me_requirements", "dimensions", "Form factor / dimensions", ("mm", "dimension", "form factor", "board size", "outline", "footprint size", "enclosure", "尺寸", "外形", "板框", "大小"), "Target board dimensions / form-factor or enclosure constraints?"),
+    RequirementFieldBinding("certification", "s06_electrical_requirements", "compliance_targets", "Compliance targets", ("fcc", "ce mark", "ce ", "emc", "certif", "compliance", "rohs", "iec", "認證", "认证", "法規", "法规"), "Any compliance targets (FCC / CE / EMC / safety)?"),
+    RequirementFieldBinding("volume", "s10_project_management", "milestones", "Build volume", ("prototype", "production", "quantity", "qty", "units", "volume", "mass production", "原型", "樣品", "样品", "量產", "量产", "數量", "数量"), "Prototype or production volume? (affects part sourcing and DFM)", "C00 template has no dedicated production-volume field; volume currently gates milestone/phase planning."),
+)
+
+
+def validate_requirement_bindings(template_data: dict[str, Any], bindings: tuple[RequirementFieldBinding, ...] = C00_REQUIREMENT_FIELD_BINDINGS) -> None:
+    section_fields: dict[str, set[str]] = {}
+    for document in template_data.get("documents", []):
+        if not isinstance(document, dict):
+            continue
+        for section in document.get("sections", []):
+            if isinstance(section, dict) and isinstance(section.get("id"), str):
+                fields = section.get("required_fields")
+                if isinstance(fields, list):
+                    section_fields[section["id"]] = {field for field in fields if isinstance(field, str)}
+    for binding in bindings:
+        if binding.section_id not in section_fields:
+            raise ValueError(f"Requirement binding `{binding.key}` references missing C00 section `{binding.section_id}`")
+        if binding.field not in section_fields[binding.section_id]:
+            raise ValueError(f"Requirement binding `{binding.key}` references missing C00 field `{binding.section_id}.{binding.field}`")
+
+
+def c00_bound_requirement_fields() -> tuple[RequirementFieldBinding, ...]:
+    template = load_c00_prd_template()
+    validate_requirement_bindings(template.data)
+    return C00_REQUIREMENT_FIELD_BINDINGS
+
+
+def requirement_field_bindings_as_tuples() -> tuple[tuple[str, str, tuple[str, ...], str], ...]:
+    return tuple((binding.key, binding.label, binding.keywords, binding.question) for binding in c00_bound_requirement_fields())
+
+
+REQUIREMENT_FIELDS = requirement_field_bindings_as_tuples()
 
 # Functional interface keywords (EN + zh) -> interface subsystem label.
 INTERFACE_KEYWORDS = {

@@ -132,6 +132,16 @@ def _h_c00_scaffold_prd(a: dict) -> Any:
     return scaffold_c00_prd_package(a["out_dir"], a.get("project_name"), bool(a.get("include_rf", False))).to_dict()
 
 
+def _h_c00_readiness(a: dict) -> Any:
+    from bodesign_workflow_core import assess_c00_prd_readiness
+    return assess_c00_prd_readiness(a["folder"]).to_dict()
+
+
+def _h_c00_emit_prd(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c00_prd_markdown
+    return emit_c00_prd_markdown(a["folder"]).to_dict()
+
+
 def _h_c01_readiness(a: dict) -> Any:
     from bodesign_workflow_core import assess_c01_package_readiness
     return assess_c01_package_readiness(a["folder"]).to_dict()
@@ -272,6 +282,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c00_scaffold_prd", "handler": _h_c00_scaffold_prd,
      "description": "Scaffold a blank C00 PRD source package from the committed template: Project_Requirements.md, answer_state.json, and optional RF_Requirements.md. Initializes every required field as missing and does not compute readiness or emit final PRD prose.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "include_rf": {"type": "boolean"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c00_readiness", "handler": _h_c00_readiness,
+     "description": "Assess C00 PRD answer_state.json against the committed rubric. Computes field/section/gate readiness and next question; does not emit PRD prose or mark human approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c00_emit_prd", "handler": _h_c00_emit_prd,
+     "description": "Render Markdown-first C00 PRD outputs from answer_state.json: generated Project/RF requirements and C00_Handoff_Report. Preserves missing/drafted/external-needed/blocked/accepted-risk markers and never marks human approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
     {"name": "bodesign_c01_emit_package", "handler": _h_c01_emit,
      "description": "Emit a Rockbox-like C01 ID package: Ai file/Design_Direction.md, CMF/CMF_Direction.md, Display UIUX/UIUX_Requirements.md, Interface_Constraints.json, and ID handoff, with draft/decision markers.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},

@@ -1,8 +1,9 @@
 """C00 PRD template and rubric loading/scaffolding.
 
-This module loads and validates the committed C00 template artifacts and can
-scaffold blank PRD source files. It does not provide fallback templates,
-compute readiness, or render final PRD prose.
+This module loads and validates the committed C00 template artifacts,
+scaffolds blank PRD source files, computes answer-state readiness, and renders
+Markdown outputs from explicit answer_state values. It does not provide
+fallback templates, fill missing fields, or mark human approval.
 """
 
 from __future__ import annotations
@@ -75,6 +76,52 @@ class C00ScaffoldResult:
         }
 
 
+@dataclass(slots=True)
+class C00ReadinessResult:
+    folder: str
+    readiness_pct: int
+    status: str
+    next_question: str
+    field_counts: dict[str, int]
+    sections: list[dict[str, Any]]
+    document_gates: list[dict[str, Any]]
+    downstream_handoff_gates: list[dict[str, Any]]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "folder": self.folder,
+            "readiness_pct": self.readiness_pct,
+            "status": self.status,
+            "next_question": self.next_question,
+            "field_counts": self.field_counts,
+            "sections": self.sections,
+            "document_gates": self.document_gates,
+            "downstream_handoff_gates": self.downstream_handoff_gates,
+            "readiness_computed": True,
+            "prd_emitted": False,
+            "human_approved": False,
+        }
+
+
+@dataclass(slots=True)
+class C00EmitResult:
+    folder: str
+    files: list[str]
+    readiness: C00ReadinessResult
+    status: str = "prd_markdown_emitted"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "folder": self.folder,
+            "files": self.files,
+            "status": self.status,
+            "readiness": self.readiness.to_dict(),
+            "readiness_computed": True,
+            "prd_emitted": True,
+            "human_approved": False,
+        }
+
+
 def load_c00_prd_template(path: str | Path | None = None) -> C00PrdTemplate:
     template_path = Path(path) if path is not None else DEFAULT_C00_TEMPLATE_PATH
     data = _read_json_object(template_path)
@@ -125,6 +172,60 @@ def scaffold_c00_prd_package(
         project_section_count=len(template.project_sections),
         rf_section_count=len(template.rf_sections) if include_rf else 0,
     )
+
+
+def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
+    root = Path(folder)
+    state = _read_answer_state(root / "C00-PRD" / "answer_state.json")
+    rubric = load_c00_prd_rubric().data
+    scoring = rubric["scoring_policy"]
+    complete_states = set(scoring["complete_states"])
+    partial_states = set(scoring["partial_states"])
+    blocking_states = set(scoring["blocking_states"])
+
+    sections = _assess_sections(state, complete_states, partial_states, blocking_states)
+    section_by_id = {section["id"]: section for section in sections}
+    field_counts = _field_counts(sections)
+    completed_fields = field_counts.get("complete", 0)
+    total_fields = field_counts.get("total", 0)
+    readiness_pct = round(100 * completed_fields / total_fields) if total_fields else 0
+    next_question = _next_question(sections)
+    document_gates = _assess_document_gates(rubric["document_gates"], section_by_id)
+    downstream_gates = _assess_downstream_gates(rubric["downstream_handoff_gates"], section_by_id)
+    status = "ready" if total_fields and completed_fields == total_fields else "blocked"
+    if status != "ready" and field_counts.get("partial", 0) and not field_counts.get("blocking", 0):
+        status = "partial"
+    return C00ReadinessResult(
+        folder=str(root),
+        readiness_pct=readiness_pct,
+        status=status,
+        next_question=next_question,
+        field_counts=field_counts,
+        sections=sections,
+        document_gates=document_gates,
+        downstream_handoff_gates=downstream_gates,
+    )
+
+
+def emit_c00_prd_markdown(folder: str | Path) -> C00EmitResult:
+    root = Path(folder)
+    c00_dir = root / "C00-PRD"
+    state = _read_answer_state(c00_dir / "answer_state.json")
+    readiness = assess_c00_prd_readiness(root)
+    c00_dir.mkdir(parents=True, exist_ok=True)
+
+    written: list[str] = []
+    for source_filename, document in state["documents"].items():
+        target = _generated_filename(source_filename)
+        path = c00_dir / target
+        path.write_text(_render_generated_document(source_filename, document, state, readiness), encoding="utf-8")
+        written.append(str(Path("C00-PRD") / target))
+
+    handoff_path = c00_dir / "C00_Handoff_Report.md"
+    handoff_path.write_text(_render_handoff_report(readiness), encoding="utf-8")
+    written.append(str(Path("C00-PRD") / "C00_Handoff_Report.md"))
+
+    return C00EmitResult(folder=str(root), files=written, readiness=readiness)
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
@@ -267,6 +368,255 @@ def _build_answer_state(project_name: str | None, documents: list[tuple[str, lis
         "allowed_states": ["missing", "drafted", "answered", "external-needed", "blocked", "accepted-risk"],
         "documents": state_documents,
     }
+
+
+def _generated_filename(source_filename: str) -> str:
+    if not source_filename.endswith(".md"):
+        raise C00TemplateError(f"C00 document filename must end with .md: {source_filename}")
+    return source_filename.removesuffix(".md") + ".generated.md"
+
+
+def _render_generated_document(source_filename: str, document: dict[str, Any], state: dict[str, Any], readiness: C00ReadinessResult) -> str:
+    title = source_filename.removesuffix(".md").replace("_", " ")
+    lines = [
+        f"# {title}",
+        "",
+        "Status: generated-from-answer-state",
+        f"Project: {state.get('project_name') or '{missing}'}",
+        f"C00 readiness: {readiness.readiness_pct}% ({readiness.status})",
+        "Human approved: false",
+        "",
+        "This Markdown is generated from `C00-PRD/answer_state.json`. Missing, drafted, external-needed, blocked, and accepted-risk fields remain visible; no hidden defaults are applied.",
+        "",
+    ]
+    sections = document.get("sections") if isinstance(document, dict) else None
+    if not isinstance(sections, list):
+        raise C00TemplateError(f"C00 answer_state document {source_filename} sections must be a list")
+    for section in sections:
+        lines.extend(_render_generated_section(section))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_generated_section(section: dict[str, Any]) -> list[str]:
+    section_id = section.get("id", "")
+    lines = [
+        f"## {section.get('title', section_id)}",
+        "",
+        f"Section ID: `{section_id}`",
+        f"Section state: `{section.get('state', 'missing')}`",
+        "",
+        "### Fields",
+    ]
+    fields = section.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        raise C00TemplateError(f"C00 answer_state section {section_id or '<unknown>'} fields must be a non-empty object")
+    for name, field in fields.items():
+        lines.extend(_render_generated_field(name, field))
+    targets = section.get("handoff_targets") or []
+    if targets:
+        lines.extend(["", "### Handoff Targets"])
+        lines.extend([f"- {target}" for target in targets])
+    lines.append("")
+    return lines
+
+
+def _render_generated_field(name: str, field: Any) -> list[str]:
+    if not isinstance(field, dict):
+        raise C00TemplateError(f"C00 answer_state field {name} must be an object")
+    state = field.get("state") or "missing"
+    value = _field_value_markdown(field.get("value"), state)
+    owner = field.get("owner") or "user"
+    source = field.get("source") or "unspecified"
+    lines = [
+        f"- `{name}`: {value}",
+        f"  - state: `{state}`",
+        f"  - owner: `{owner}`",
+        f"  - source: `{source}`",
+    ]
+    targets = field.get("handoff_targets") or []
+    if targets:
+        lines.append(f"  - handoff_targets: {', '.join(str(target) for target in targets)}")
+    return lines
+
+
+def _field_value_markdown(value: Any, state: str) -> str:
+    if value is None or value == "":
+        return "{missing}"
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    else:
+        text = str(value)
+    if state in {"drafted", "external-needed", "blocked", "accepted-risk"}:
+        return f"{text} _[{state}]_"
+    return text
+
+
+def _render_handoff_report(readiness: C00ReadinessResult) -> str:
+    lines = [
+        "# C00 Handoff Report",
+        "",
+        f"Readiness: {readiness.readiness_pct}% ({readiness.status})",
+        f"Next question: {readiness.next_question}",
+        "Human approved: false",
+        "",
+        "## Field Counts",
+        "",
+    ]
+    for key, value in readiness.field_counts.items():
+        lines.append(f"- `{key}`: {value}")
+    lines.extend(["", "## Document Gates", ""])
+    for gate in readiness.document_gates:
+        blockers = gate.get("blocking_sections") or []
+        lines.append(f"- `{gate.get('gate', '')}`: {gate.get('status', '')}; blockers: {', '.join(blockers) if blockers else 'none'}")
+    lines.extend(["", "## Downstream Handoff Gates", ""])
+    for gate in readiness.downstream_handoff_gates:
+        blockers = gate.get("blocking_sections") or []
+        lines.append(f"- `{gate.get('target', '')}`: {gate.get('status', '')}; blockers: {', '.join(blockers) if blockers else 'none'}")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _read_answer_state(path: Path) -> dict[str, Any]:
+    data = _read_json_object(path)
+    if data.get("schema") != "bodesign.c00.answer_state.v1":
+        raise C00TemplateError(f"C00 answer_state.json has unsupported schema: {path}")
+    documents = data.get("documents")
+    if not isinstance(documents, dict) or not documents:
+        raise C00TemplateError(f"C00 answer_state.json documents must be a non-empty object: {path}")
+    return data
+
+
+def _assess_sections(
+    state: dict[str, Any],
+    complete_states: set[str],
+    partial_states: set[str],
+    blocking_states: set[str],
+) -> list[dict[str, Any]]:
+    assessed: list[dict[str, Any]] = []
+    for filename, document in state["documents"].items():
+        sections = document.get("sections") if isinstance(document, dict) else None
+        if not isinstance(sections, list):
+            raise C00TemplateError(f"C00 answer_state document {filename} sections must be a list")
+        for section in sections:
+            if not isinstance(section, dict):
+                raise C00TemplateError(f"C00 answer_state document {filename} section must be an object")
+            fields = section.get("fields")
+            if not isinstance(fields, dict) or not fields:
+                raise C00TemplateError(f"C00 answer_state section {section.get('id', '<unknown>')} fields must be a non-empty object")
+            field_items = [_assess_field(name, value, complete_states, partial_states, blocking_states) for name, value in fields.items()]
+            assessed.append({
+                "document": filename,
+                "id": section.get("id", ""),
+                "title": section.get("title", ""),
+                "status": _section_status(field_items),
+                "fields": field_items,
+                "consultant_prompts": section.get("consultant_prompts") or [],
+                "handoff_targets": section.get("handoff_targets") or [],
+            })
+    return assessed
+
+
+def _assess_field(
+    name: str,
+    value: Any,
+    complete_states: set[str],
+    partial_states: set[str],
+    blocking_states: set[str],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise C00TemplateError(f"C00 answer_state field {name} must be an object")
+    state = value.get("state")
+    if not isinstance(state, str) or not state:
+        raise C00TemplateError(f"C00 answer_state field {name} has invalid state")
+    if state in complete_states:
+        status = "complete"
+    elif state in partial_states:
+        status = "partial"
+    elif state in blocking_states:
+        status = "blocking"
+    else:
+        raise C00TemplateError(f"C00 answer_state field {name} has unknown state: {state}")
+    return {
+        "key": name,
+        "state": state,
+        "status": status,
+        "owner": value.get("owner"),
+        "source": value.get("source"),
+        "handoff_targets": value.get("handoff_targets") or [],
+    }
+
+
+def _section_status(fields: list[dict[str, Any]]) -> str:
+    statuses = {field["status"] for field in fields}
+    if statuses == {"complete"}:
+        return "ready"
+    if "blocking" in statuses:
+        return "blocked"
+    return "partial"
+
+
+def _field_counts(sections: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"total": 0, "complete": 0, "partial": 0, "blocking": 0}
+    for section in sections:
+        for field in section["fields"]:
+            counts["total"] += 1
+            counts[field["status"]] += 1
+    return counts
+
+
+def _next_question(sections: list[dict[str, Any]]) -> str:
+    for section in sections:
+        if section["status"] != "blocked":
+            continue
+        prompts = section.get("consultant_prompts") or []
+        if prompts:
+            return str(prompts[0])
+        for field in section["fields"]:
+            if field["status"] == "blocking":
+                return f"Please provide C00 field `{field['key']}` for section `{section['id']}`."
+    return "All C00 fields are complete enough for the current rubric."
+
+
+def _assess_document_gates(gates: list[dict[str, Any]], section_by_id: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    assessed = []
+    for gate in gates:
+        required = gate.get("required_sections") or []
+        statuses = [_status_for_section(section_by_id, section_id) for section_id in required]
+        assessed.append({
+            "gate": gate.get("gate", ""),
+            "status": _gate_status(statuses),
+            "required_sections": required,
+            "blocking_sections": [section_id for section_id, status in zip(required, statuses) if status in {"blocked", "missing"}],
+            "description": gate.get("description", ""),
+        })
+    return assessed
+
+
+def _assess_downstream_gates(gates: list[dict[str, Any]], section_by_id: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    assessed = []
+    for gate in gates:
+        required = gate.get("source_sections") or []
+        statuses = [_status_for_section(section_by_id, section_id) for section_id in required]
+        assessed.append({
+            "target": gate.get("target", ""),
+            "status": _gate_status(statuses),
+            "source_sections": required,
+            "blocking_sections": [section_id for section_id, status in zip(required, statuses) if status in {"blocked", "missing"}],
+            "ready_when": gate.get("ready_when") or [],
+        })
+    return assessed
+
+
+def _status_for_section(section_by_id: dict[str, dict[str, Any]], section_id: str) -> str:
+    section = section_by_id.get(section_id)
+    return section["status"] if section else "missing"
+
+
+def _gate_status(statuses: list[str]) -> str:
+    if statuses and all(status == "ready" for status in statuses):
+        return "ready"
+    if any(status in {"blocked", "missing"} for status in statuses):
+        return "blocked"
+    return "partial"
 
 
 def _sections_for(data: dict[str, Any], filename: str) -> list[dict[str, Any]]:
