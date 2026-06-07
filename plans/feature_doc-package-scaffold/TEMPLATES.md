@@ -10,9 +10,10 @@ Canonical (runtime SSOT) location — edit these:
 | `c00_prd.template.json` | `packages/workflow-core/bodesign_workflow_core/templates/` | `c00_prd_template.py` |
 | `c00_prd.rubric.json` | `packages/workflow-core/bodesign_workflow_core/templates/` | `c00_prd_template.py` |
 | `doc_architecture.template.json` | `packages/workflow-core/bodesign_workflow_core/templates/` | `agent_registry.py` (the C00–C06 registry SSOT) |
+| `c01_id.template.json` | `packages/workflow-core/bodesign_workflow_core/templates/` | `c01_id_template.py` (loader + emitter binding) |
+| `c01_id.rubric.json` | `packages/workflow-core/bodesign_workflow_core/templates/` | `c01_id_template.py` |
 
-Still in this plan zone (not yet runtime-coupled — move when **C01-I1** template loader lands):
-`c01_id.template.json`, `c01_id.rubric.json`.
+All runtime-depended templates now live in the package (RB-2 + RB-3 complete).
 
 The plan narrative docs (`proposal.md`, `design.md`, `tasks.md`, `implementation-spec.md`,
 `c00_c01_gap-audit.md`, `c00_downstream_contract.md`) stay here and reference the templates by name.

@@ -23,7 +23,7 @@ Symptoms: C01-I1 (template loader) and C01-I3 (mode contract) sit undone *beneat
 **Re-baseline debts:**
 - **RB-1** (OPEN) custom artifact set ≠ plan-builder canonical (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates bypassed — conform or document deviation.
 - **RB-2** (DONE, Batch B) runtime templates moved to `packages/workflow-core/.../templates/`; see `TEMPLATES.md`. C01 templates move when C01-I1 lands.
-- **RB-3** (OPEN) = C01-I1: C01 runtime never loads `c01_id.template.json`/rubric (emitters hardcode structure).
+- **RB-3** (DONE) = C01-I1: `c01_id_template.py` loads the template/rubric and binds the emitter to it (`validate_c01_outputs_binding`); C01 templates moved to `packages/.../templates/`.
 
 ## Goal
 
@@ -86,7 +86,7 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 
 ### Next Implementation Backlog
 
-- [ ] **C01-I1 Template loader** — load and validate `c01_id.template.json` / `c01_id.rubric.json` in `packages/workflow-core`. ⚠️ **RB-3: genuinely undone but built around** — I4–I8 emitters/readiness below are `[x]` yet hardcode structure instead of loading this template. Out-of-order debt.
+- [x] **C01-I1 Template loader** — `c01_id_template.py`: `load_c01_id_template` / `load_c01_id_rubric` (fail-fast) + `validate_c01_outputs_binding`, which asserts the emitter's `C01_OUTPUTS` Rockbox carriers match the template's `target_package.outputs` (drift fails fast). Resolves RB-3: C01 is now template-bound like C00.
 - [x] **C01-I2 Skill package** — create `c01-industrial-design-requirements` with role prompt, question strategy, CMF framework, UI/status script, exposed-interface checklist, downstream constraint map, risk map, and `known_gaps` section.
 - [x] **C01-I3 Mode contract** — `mode_contracts.enter_c01_mode` (Batch B): C00 dispatches a C01 work packet scoped to the PRD sections whose `handoff_targets` include C01 (derived from the template), emits the Rockbox C01 package, and returns the next C01 preference question. C01 asks preference questions directly; product-level decisions return to C00 via `return_blocker`; C01 never mutates the PRD. MCP tool `bodesign_enter_c01_mode`.
 - [x] **C01-I4 Visual extractor** — extract C00 §1/§2/§5/§6/§7 content into normalized visual/interface requirements.

@@ -63,7 +63,7 @@
 
 ### MCP / Runtime Tools
 
-- [ ] Template loader for `c01_id.template.json` and `c01_id.rubric.json`. — **GENUINELY UNDONE (RB-3 / C01-I1)**: C01 emitters hardcode structure and never load these files; built out of order under their own dependents.
+- [x] Template loader for `c01_id.template.json` and `c01_id.rubric.json`. — RB-3 RESOLVED: `c01_id_template.py` loads both (fail-fast) and `validate_c01_outputs_binding` ties the emitter's carriers to the template; templates moved into the package.
 - [x] C00→C01 visual/interface extractor.
 - [x] C01 scaffold function/tool that creates Rockbox canonical slots: `Ai file/`, `CMF/`, `Display UIUX/`.
 - [x] C01 source emitters for AI draft carriers under the canonical slots.
@@ -101,4 +101,4 @@ These tie the 15 Cxx tools into a driven workflow. Runtime in `packages/workflow
 
 - [ ] **RB-1** (OPEN) Plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema). `.state.json` was force-set to `implementing` via `mode:sync` because forward gates validate the canonical set. Decision needed: conform to the canonical schema, or formally document the deviation in design.md.
 - [x] **RB-2** (DONE, Batch B) Runtime-depended templates moved to `packages/workflow-core/bodesign_workflow_core/templates/` (`c00_prd.template.json`, `c00_prd.rubric.json`, `doc_architecture.template.json`); loaders updated; `plans/.../TEMPLATES.md` records the move. C01 templates relocate when C01-I1 lands.
-- [ ] **RB-3** (OPEN) = C01-I1 above: C01 runtime never loads `c01_id.template.json`/rubric.
+- [x] **RB-3** (DONE) = C01-I1 above: `c01_id_template.py` loads the template/rubric and binds the emitter via `validate_c01_outputs_binding`; templates relocated into the package.

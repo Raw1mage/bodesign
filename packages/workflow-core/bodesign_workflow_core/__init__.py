@@ -64,6 +64,14 @@ from .c00_prd_template import (
     load_c00_prd_template,
     scaffold_c00_prd_package,
 )
+from .c01_id_template import (
+    C01IdRubric,
+    C01IdTemplate,
+    C01TemplateError,
+    load_c01_id_rubric,
+    load_c01_id_template,
+    validate_c01_outputs_binding,
+)
 from .c01_id_package import (
     C01AnswerUpdateResult,
     C01ConceptImageResult,
@@ -119,10 +127,13 @@ __all__ = [
     "C00TemplateError",
     "C01AnswerUpdateResult",
     "C01ConceptImageResult",
+    "C01IdRubric",
+    "C01IdTemplate",
     "C01NextQuestionResult",
     "C01PackageArtifact",
     "C01PackageReadiness",
     "C01PackageResult",
+    "C01TemplateError",
     "C02ConstraintItem",
     "C02ConstraintReadiness",
     "C02OpenScadResult",
@@ -186,6 +197,9 @@ __all__ = [
     "load_agent_registry",
     "load_c00_prd_rubric",
     "load_c00_prd_template",
+    "load_c01_id_rubric",
+    "load_c01_id_template",
+    "validate_c01_outputs_binding",
     "plan_design_intent",
     "plan_reference_board_workflow",
     "render_gap_report_markdown",
