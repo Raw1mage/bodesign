@@ -30,9 +30,11 @@ from .package_readiness import (
 from .c00_prd_template import (
     C00PrdRubric,
     C00PrdTemplate,
+    C00ScaffoldResult,
     C00TemplateError,
     load_c00_prd_rubric,
     load_c00_prd_template,
+    scaffold_c00_prd_package,
 )
 from .c01_id_package import (
     C01ConceptImageResult,
@@ -74,6 +76,7 @@ __all__ = [
     "CandidateDiffItem",
     "C00PrdRubric",
     "C00PrdTemplate",
+    "C00ScaffoldResult",
     "C00TemplateError",
     "C01ConceptImageResult",
     "C01PackageArtifact",
@@ -128,5 +131,6 @@ __all__ = [
     "plan_design_intent",
     "plan_reference_board_workflow",
     "render_gap_report_markdown",
+    "scaffold_c00_prd_package",
     "scan_corpus_for_part",
 ]

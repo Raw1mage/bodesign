@@ -76,6 +76,7 @@
 - Updated MCP container packaging for C02 STL export by adding `openscad` to the Dockerfile toolchain. Docker Compose is available, but repeated `docker compose build` attempts were interrupted in this session before completion; therefore C02-T7 real STL container validation remains open.
 - Implemented C02 STEP draft gate: added workflow-core `export_c02_step`, MCP `bodesign_c02_export_step`, `STEP_Draft_Handoff.md`, and direct/MCP tests. Because FreeCAD/CadQuery/OCP are unavailable in this environment, the tool returns explicit `step_export_unavailable` and does not fabricate `Enclosure.step`.
 - Implemented C00 template loader: added workflow-core `load_c00_prd_template` / `load_c00_prd_rubric`, fail-fast shape validation for the committed PRD template and readiness rubric, and tests covering committed artifacts plus missing/invalid artifact errors. No C00 scaffold/readiness/emitter tool was added in this slice.
+- Implemented C00 scaffold: added workflow-core `scaffold_c00_prd_package`, MCP `bodesign_c00_scaffold_prd`, blank `C00-PRD/Project_Requirements.md`, optional `RF_Requirements.md`, and `answer_state.json` with all template fields initialized as `missing`. This slice does not compute readiness, emit final PRD prose, or mark human approval.
 - Architecture Sync: Verified (No doc changes). `specs/architecture.md` already records MCP tool handlers, workflow-core, client-owned package outputs, fail-fast/no-final-output constraints, and external-fetch policy gates; this C01 add-on remains an optional MCP handler and does not change module boundaries.
 
 ## Remaining
@@ -85,5 +86,5 @@
 - Upgrade C01 readiness from file-level checks to field-state and blocker-owner checks.
 - Package/install the C01 skill source into the distributed skill bundle once skill packaging policy is finalized.
 - Add C01 reference image intake and traceability so uploaded examples can become confirmed design-intent evidence for the Rockbox-like documents.
-- Implement C00 scaffold, readiness, and Markdown emitter after the loader-backed SSOT structure is stable.
+- Implement C00 readiness and Markdown emitter after the scaffolded SSOT answer-state structure is stable.
 - Complete Docker image build/recreate with OpenSCAD and validate real `Enclosure.stl` export inside the MCP container after Docker Desktop storage location is confirmed safe; C00 SSOT runtime work is the next non-Docker implementation path.

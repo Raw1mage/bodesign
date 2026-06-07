@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import shutil
 import tempfile
@@ -47,6 +48,30 @@ class McpServerTests(unittest.TestCase):
             readiness = self.server.run_tool("bodesign_c01_readiness", {"folder": str(work)})
             self.assertTrue(readiness["ok"])
             self.assertEqual(100, readiness["result"]["readiness_pct"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c00_scaffold_prd(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-", dir=PRIVATE_BASE))
+        try:
+            result = self.server.run_tool("bodesign_c00_scaffold_prd", {
+                "out_dir": str(work),
+                "project_name": "MCP C00 POC",
+                "include_rf": True,
+            })
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("scaffold_created", result["result"]["status"])
+            self.assertFalse(result["result"]["readiness_computed"])
+            self.assertFalse(result["result"]["prd_emitted"])
+            self.assertFalse(result["result"]["human_approved"])
+            self.assertTrue((work / "C00-PRD" / "Project_Requirements.md").exists())
+            self.assertTrue((work / "C00-PRD" / "RF_Requirements.md").exists())
+            state = json.loads((work / "C00-PRD" / "answer_state.json").read_text(encoding="utf-8"))
+            self.assertIn("Project_Requirements.md", state["documents"])
+            self.assertIn("RF_Requirements.md", state["documents"])
+            self.assertEqual("missing", state["documents"]["Project_Requirements.md"]["sections"][0]["state"])
         finally:
             shutil.rmtree(work, ignore_errors=True)
 

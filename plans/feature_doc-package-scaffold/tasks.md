@@ -35,7 +35,7 @@ Make C00/C07 a consultant-led PRD layer: AI guides the user through product, bus
 ## Next Implementation Backlog
 
 - [x] **C00-I1 Template loader** — load and validate `c00_prd.template.json` / `c00_prd.rubric.json` in `packages/workflow-core`.
-- [ ] **C00-I2 Scaffold function/tool** — create blank C00 PRD source files and answer-state records inside a token/project folder.
+- [x] **C00-I2 Scaffold function/tool** — create blank C00 PRD source files and answer-state records inside a token/project folder.
 - [ ] **C00-I3 Readiness function/tool** — compute field/section/gate/handoff readiness and return one highest-value next question.
 - [ ] **C00-I4 Emit function/tool** — render Markdown-first PRD and handoff report while preserving assumptions/open issues.
 - [ ] **C00-I5 Requirement planning binding** — replace duplicated C00 hard-coded fields with template-derived fields without breaking existing API shape.

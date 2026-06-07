@@ -127,6 +127,11 @@ def _h_c01_emit(a: dict) -> Any:
     return emit_c01_rockbox_package(a["out_dir"], a.get("c00"), a.get("answers")).to_dict()
 
 
+def _h_c00_scaffold_prd(a: dict) -> Any:
+    from bodesign_workflow_core import scaffold_c00_prd_package
+    return scaffold_c00_prd_package(a["out_dir"], a.get("project_name"), bool(a.get("include_rf", False))).to_dict()
+
+
 def _h_c01_readiness(a: dict) -> Any:
     from bodesign_workflow_core import assess_c01_package_readiness
     return assess_c01_package_readiness(a["folder"]).to_dict()
@@ -264,6 +269,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_package_readiness", "handler": _h_readiness,
      "description": "Assess a product folder against the POC deliverable checklist; per-deliverable status + next step (the compass).",
      "schema": {"type": "object", "properties": {"folder": _STR, "milestone": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c00_scaffold_prd", "handler": _h_c00_scaffold_prd,
+     "description": "Scaffold a blank C00 PRD source package from the committed template: Project_Requirements.md, answer_state.json, and optional RF_Requirements.md. Initializes every required field as missing and does not compute readiness or emit final PRD prose.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "include_rf": {"type": "boolean"}}, "required": ["out_dir"]}},
     {"name": "bodesign_c01_emit_package", "handler": _h_c01_emit,
      "description": "Emit a Rockbox-like C01 ID package: Ai file/Design_Direction.md, CMF/CMF_Direction.md, Display UIUX/UIUX_Requirements.md, Interface_Constraints.json, and ID handoff, with draft/decision markers.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
