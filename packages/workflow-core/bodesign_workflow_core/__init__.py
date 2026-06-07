@@ -30,13 +30,6 @@ from .c00_orchestration import (
     c00_orchestration_status,
     c00_orchestration_tick,
 )
-from .mcp_adapters import (
-    AdapterError,
-    build_external_call,
-    list_adapters,
-    register_adapter,
-    resolve_adapter,
-)
 from .c04_layout_constraints import (
     C04LayoutReadiness,
     C04LayoutResult,
@@ -152,7 +145,6 @@ from .reference_crosscheck import (
 __all__ = [
     "AgentRegistry",
     "AgentRegistryError",
-    "AdapterError",
     "AgentRole",
     "BlockerReturn",
     "Board",
@@ -237,12 +229,8 @@ __all__ = [
     "IngestResult",
     "OrchestrationError",
     "WorkPacket",
-    "build_external_call",
     "c00_orchestration_status",
     "c00_orchestration_tick",
-    "list_adapters",
-    "register_adapter",
-    "resolve_adapter",
     "dispatch_work_packet",
     "enter_c01_mode",
     "get_blocker",

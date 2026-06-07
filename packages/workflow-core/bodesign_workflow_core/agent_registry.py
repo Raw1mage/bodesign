@@ -98,9 +98,10 @@ class AgentRole:
     forbidden_actions: list[str]
     human_gate: str
     return_to_c00_when: list[str]
-    # Declarative dispatch backend (F-5): {kind: native|worker|external_mcp, ...}.
-    # native/worker → the spine creates a work packet; external_mcp → the spine
-    # invokes a per-MCP adapter. This is data, not a hardcoded per-layer branch.
+    # Declarative execution backend metadata: {kind: native|worker[, group]}. Records
+    # where a layer's tools run (in-core vs a bodesign worker). The spine dispatches
+    # work packets uniformly and does NOT branch on this; external MCP collaboration
+    # (a client's optional docxmcp/drawmiat) is handled by the agent, not the spine.
     backend: dict[str, Any] = None  # type: ignore[assignment]
 
     def to_dict(self) -> dict[str, Any]:
@@ -191,8 +192,8 @@ def load_agent_registry(path: str | Path | None = None) -> AgentRegistry:
             raise AgentRegistryError(f"Layer {code} missing `key`/`title` in architecture template")
         is_owner = code == "C00"
         backend = section.get("backend") or {"kind": "native"}
-        if not isinstance(backend, dict) or backend.get("kind") not in {"native", "worker", "external_mcp"}:
-            raise AgentRegistryError(f"Layer {code} has invalid backend {backend!r} (kind must be native|worker|external_mcp)")
+        if not isinstance(backend, dict) or backend.get("kind") not in {"native", "worker"}:
+            raise AgentRegistryError(f"Layer {code} has invalid backend {backend!r} (kind must be native|worker)")
         roles.append(
             AgentRole(
                 code=code,

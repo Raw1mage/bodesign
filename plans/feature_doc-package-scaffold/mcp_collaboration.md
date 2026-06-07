@@ -2,7 +2,33 @@
 
 Status: planned (design before code). Researched 2026-06-08; see sources at bottom.
 
-## Decision
+## Overriding principle (2026-06-08): bodesign is self-contained; external MCPs are the CLIENT's, optional
+
+bodesign is delivered to *any* client and is "independently operable, host-agnostic".
+A different client will NOT have the user's private docxmcp/drawmiat — those are the
+**client's** servers, never bodesign's dependency. Therefore:
+
+- **bodesign's core capability is self-contained** — above all, it emits **markdown**
+  (the source of truth), which every client gets regardless of environment.
+- **Rendering / external pro-tools are OPTIONAL enhancements with graceful fallback**:
+  docx/pdf via local LibreOffice when present (else `skipped-no-soffice`, markdown
+  still available); a client's own docxmcp is driven **by the agent**, not by bodesign.
+- bodesign does **not** wrap, adapt, or depend on any specific external MCP's API. The
+  know-how for using docxmcp/drawmiat lives in the agent / a skill, not in bodesign.
+
+Consequences (this supersedes the earlier F-4/F-5 direction):
+- **F-4 (emit_doc→docxmcp adapter): WON'T DO.** It would couple bodesign to the user's
+  private docxmcp; other clients lack it. bodesign stays markdown-first + optional local render.
+- **F-5 (spine dispatch to external MCP): REVERTED.** The spine dispatches work packets
+  uniformly and does not know about backends; how a layer executes (native / bodesign
+  worker / a client's external MCP) is decided BELOW the spine. The `backend` field
+  survives only as native/worker **metadata**. (Removed `mcp_adapters.py`, the
+  `external_mcp` dispatch branch, and the `mcp_caller` wiring.)
+- **Kept:** the generic `bodesign_mcp_call` passthrough (F-1/F-2) as an OPTIONAL
+  convenience — it assumes no specific server (the server is a parameter) and is unused
+  when a client configures no external MCP. No coupling.
+
+## Decision (original research — see principle above for the final position)
 
 MCP has **no native server-to-server** mechanism — aggregation is a community
 proxy/gateway pattern ("present as a server to the client, act as a client to the
@@ -99,7 +125,13 @@ are layered on top later, once each external API mapping is verified.
 - No new dependency (uses the existing `mcp` SDK client).
 - The single external endpoint and "independently operable" design are unchanged.
 
-## F-5 design (detailed): declarative backend binding + spine dispatch
+## F-5 design (detailed) — SUPERSEDED / REVERTED (kept for the record)
+
+> Implemented then reverted on 2026-06-08 per the "self-contained" principle above:
+> the spine must not know about external MCPs (a client may not have any), and this
+> overlapped with the agent-driven passthrough. The `backend` field is kept as
+> native/worker metadata only; the external_mcp dispatch + adapters were removed.
+> The design below is retained only as a record of the considered approach.
 
 **Goal:** let the C00 autonomous loop dispatch a C0x layer to whatever backend serves
 it — a bodesign worker OR an external MCP server — **without scattered hardcoded
