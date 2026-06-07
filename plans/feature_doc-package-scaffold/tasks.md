@@ -132,7 +132,7 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C02-T4 Readiness checker** — report constraint readiness before CAD generation, including blockers for board outline, heights, openings, thermal/RF, battery, and environment targets.
 - [x] **C02-T5 SketchUp import fallback** — emit `SketchUp_Import_Guide.md` and explicit `skp_export_unavailable` status when native SKP cannot be generated; native `bodesign_c02_export_skp` remains optional and toolchain-gated.
 - [x] **C02-T6 STEP draft export** — implement `bodesign_c02_export_step` as a toolchain-gated handoff path: it writes `STEP_Draft_Handoff.md` and returns explicit `step_export_unavailable` when FreeCAD/CadQuery/OCP is unavailable, without fabricating `Enclosure.step`.
-- [x] **C02-T6b Real STEP backend (build123d/OCP)** — `export_c02_step` now builds a real `Enclosure.step` via the build123d/OCP kernel from the SAME constraints as the OpenSCAD path (`_build_enclosure_part`: open-top shell + wall floor + mounting bosses) when the kernel is present AND explicit wall/clearance/lid_clearance are given; otherwise keeps `step_export_unavailable` (no kernel) and never guesses dimensions (no dims → unavailable). Output marked `draft_unapproved`, never `me_approved`. Tests: kernel-present → real ISO-10303 STEP (skip-guarded), kernel-absent (patched) → unavailable + non-destructive, no-dims → unavailable. **build123d is dev-installed only; deliberately NOT yet in requirements/Docker — runtime stays gated until the heavy OCP/vtk dependency is approved.**
+- [x] **C02-T6b Real STEP backend (build123d/OCP)** — `export_c02_step` now builds a real `Enclosure.step` via the build123d/OCP kernel from the SAME constraints as the OpenSCAD path (`_build_enclosure_part`: open-top shell + wall floor + mounting bosses) when the kernel is present AND explicit wall/clearance/lid_clearance are given; otherwise keeps `step_export_unavailable` (no kernel) and never guesses dimensions (no dims → unavailable). Output marked `draft_unapproved`, never `me_approved`. Tests: kernel-present → real ISO-10303 STEP (skip-guarded), kernel-absent (patched) → unavailable + non-destructive, no-dims → unavailable. **build123d is dev-installed only; deliberately NOT in the monolith image. Decision (Batch E): it lands in the responsibility-grouped `bodesign-me` worker container, not the core image — see `toolchain_workers.md`. Runtime stays gated until that worker exists.**
 - [ ] **C02-T7 Real STL toolchain validation** — when OpenSCAD is installed/configured, run an end-to-end sample that produces a real `Enclosure.stl` and records toolchain/version metadata; until then, keep `export_unavailable` explicit.
 - [x] **C02-V1 Readiness validation** — add tests for no guessed dimensions, CAD-source blockers, missing constraint ownership, and no printable/CAD export claim at readiness stage.
 - [x] **C02-V2 Package validation** — test package emitter files, owner-tagged pending constraints, vendor handoff wording, and no production ME approval.
@@ -166,6 +166,25 @@ open Runtime-UX gap). Deterministic selector; auto-dispatch only, never auto-ans
 
 - C00 can drive the whole C00→C06 chain by repeated `tick` without manual tool choice.
 - Human stays in control: every PRD answer, blocker resolution, and approval still requires the user; the loop only selects and (safely) dispatches.
+
+## Batch E — Toolchain worker containers (responsibility-grouped)
+
+Design: `toolchain_workers.md`. One external MCP (`bodesign-core`) + a few worker
+containers grouped by C0x responsibility (`ee`, `me`, optional `docs`); heavy deps
+isolated per worker; absent worker → tool `*_unavailable` (gate generalized). Grouped
+by function/responsibility, NOT by weight. Already-MCP toolchains (docxmcp/drawmiat)
+mounted via MCP-of-MCPs. Incremental, non-breaking; monolith keeps working.
+
+- [ ] **E-1 Tool→group routing** — add a `group` (core|ee|me|docs) to each tool in the registry; a `--tools <group>` selector so one image can run as any worker; core forwards `tools/call` to the owning worker (else in-process). Absent worker → that tool's `*_unavailable`.
+- [ ] **E-2 Shared session volume model** — mount `bodesign-sessions` into every worker so all see the same token doc_dir; wire-payloads stay small (args+token), bulk stays files.
+- [ ] **E-3 Phase 1: `bodesign-me` worker (reference)** — compose `me` service + route `bodesign_c02_*`; build123d/OCP/OpenSCAD live only in this image; verify real STEP on the shared volume and `*_unavailable` when stopped.
+- [ ] **E-4 Phase 2: `bodesign-ee` worker** — KiCad/ngspice/pygerber/emc/datasheets/bom; route C03/C04/C06 tools.
+- [ ] **E-5 Phase 3: optional `bodesign-docs`** + mount docxmcp/drawmiat via MCP-of-MCPs.
+- [ ] **E-6 Tests/validation** — core-only returns `*_unavailable` for worker tools (no fabrication); with `me` up, c02 STEP real; one heavy dep per image (no KiCad/OCP duplication); single external endpoint throughout.
+
+### Acceptance (Batch E)
+
+- Clients see ONE MCP endpoint; worker topology is invisible. A heavy dependency lives in exactly one worker. Stopping a worker degrades only its tools (to `*_unavailable`), never the server.
 
 ## Open Gap Audit
 
