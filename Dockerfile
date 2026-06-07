@@ -4,6 +4,7 @@
 #   - KiCad 9 (kicad-cli + the pcbnew Python module + symbol/footprint libs)
 #   - LibreOffice (soffice) for docx/pdf companions
 #   - pygerber for Gerber raster companions
+#   - OpenSCAD for C02 prototype enclosure STL export
 #   - the mcp SDK + starlette/uvicorn for the MCP Streamable-HTTP transport
 #
 # The image is intentionally heavy (~GB) because circuit design needs real EDA
@@ -27,7 +28,7 @@ RUN apt-get update \
         libreoffice-core libreoffice-writer libreoffice-calc \
  && add-apt-repository -y ppa:kicad/kicad-9.0-releases \
  && apt-get update \
- && apt-get install -y --no-install-recommends kicad kicad-symbols kicad-footprints \
+ && apt-get install -y --no-install-recommends kicad kicad-symbols kicad-footprints openscad \
  && rm -rf /var/lib/apt/lists/*
 
 # venv with system site-packages so the apt-installed pcbnew module is importable

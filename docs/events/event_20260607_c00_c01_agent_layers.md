@@ -73,6 +73,7 @@
 - Updated post-commit plan sequence: implement SketchUp import fallback / explicit native SKP unavailable status first; validate real STL only after OpenSCAD is installed or configured; then add C03 mechanical-relevant constraint export; resume C00 SSOT/PRD runtime after C02 prototype boundaries are stable.
 - Implemented C02 SketchUp fallback MVP: added explicit `bodesign_c02_export_skp` unavailable status, refreshed `SketchUp_Import_Guide.md`, and direct/MCP tests proving no native `Enclosure.skp` is fabricated without a configured SketchUp-capable toolchain.
 - Implemented C03 mechanical-relevant constraint export: added workflow-core `export_c03_mechanical_constraints`, MCP `bodesign_c03_export_mechanical_constraints`, and direct/MCP tests. The export maps explicit C03 component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes for C02/C04 while refusing to infer board outline, mounting holes, placement coordinates, or mechanical approval.
+- Updated MCP container packaging for C02 STL export by adding `openscad` to the Dockerfile toolchain. Docker Compose is available, but repeated `docker compose build` attempts were interrupted in this session before completion; therefore C02-T7 real STL container validation remains open.
 - Architecture Sync: Verified (No doc changes). `specs/architecture.md` already records MCP tool handlers, workflow-core, client-owned package outputs, fail-fast/no-final-output constraints, and external-fetch policy gates; this C01 add-on remains an optional MCP handler and does not change module boundaries.
 
 ## Remaining
@@ -82,4 +83,4 @@
 - Upgrade C01 readiness from file-level checks to field-state and blocker-owner checks.
 - Package/install the C01 skill source into the distributed skill bundle once skill packaging policy is finalized.
 - Add C01 reference image intake and traceability so uploaded examples can become confirmed design-intent evidence for the Rockbox-like documents.
-- Validate real STL export after OpenSCAD is installed or configured, then proceed to optional STEP/native SKP toolchain gates and C00 SSOT runtime work.
+- Complete Docker image build/recreate with OpenSCAD, validate real `Enclosure.stl` export inside the MCP container, then proceed to optional STEP/native SKP toolchain gates and C00 SSOT runtime work.
