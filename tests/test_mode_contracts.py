@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -53,6 +54,27 @@ class ModeContractTests(unittest.TestCase):
         )
         self.assertEqual(blk.source_layer, "C01")
         self.assertEqual(blk.proposed_state, "blocked")
+
+    def test_enter_c01_mode_autoloads_c00_corpus_from_state(self):
+        # Regression for the aiguard sand-table break: the autonomous loop calls
+        # enter_c01_mode WITHOUT passing c00; it must auto-load C00's answered content
+        # so C01 detects the real exposed components instead of emitting an empty package.
+        from bodesign_workflow_core import scaffold_c00_prd_package
+        scaffold_c00_prd_package(self.work, project_name="aiguard", include_rf=False)
+        sp = self.work / "C00-PRD" / "answer_state.json"
+        st = json.loads(sp.read_text())
+        # Drop a realistic spec value (with component keywords) into the first field.
+        doc = next(iter(st["documents"].values()))
+        f = next(iter(doc["sections"][0]["fields"].values()))
+        f["state"] = "answered"
+        f["value"] = "OV5640 camera via DCMI, Wi-Fi/BLE antenna, USB-C, status LED, setup button"
+        sp.write_text(json.dumps(st))
+
+        entry = enter_c01_mode(self.work)  # NO c00 passed — must auto-load from state
+        constraints = json.loads((self.work / "C01-ID" / "Interface_Constraints.json").read_text())
+        names = {c["name"] for c in constraints["exposed_components"]}
+        self.assertNotIn("missing — exposed component list not confirmed", names)
+        self.assertTrue({"camera", "usb-c", "led", "antenna"} & names)
 
     def test_entry_to_dict_states_the_boundary(self):
         entry = enter_c01_mode(self.work, c00={"product": "x"})

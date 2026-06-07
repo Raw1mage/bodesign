@@ -18,6 +18,7 @@ C01-I3 (C00 → C01 industrial-design mode):
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,45 @@ from typing import Any
 from .c00_prd_template import load_c00_prd_template
 from .c01_id_package import C01_OUTPUTS, c01_next_question, emit_c01_rockbox_package
 from .orchestration import WorkPacket, dispatch_work_packet
+
+_C00_ANSWER_STATE_REL = Path("C00-PRD") / "answer_state.json"
+# C00 sections whose content feeds the C01 corpus → the chunk keys _source_text reads.
+_C00_SECTION_TO_C01_CHUNK = {
+    "s02_project_overall": "project_overall",
+    "s05_id_me_requirements": "id_me_requirements",
+    "s06_electrical_requirements": "electrical_requirements",
+    "s07_software_requirements": "software_requirements",
+}
+
+
+def _c00_corpus_from_state(root: Path) -> dict[str, Any] | None:
+    """Build a C01 corpus from the persisted C00 answer-state, so the autonomous loop
+    feeds C00's real content to C01 (fixes the sand-table C00→C01 break) instead of
+    emitting an empty C01 package. Returns None when no answered C00 content exists."""
+    path = root / _C00_ANSWER_STATE_REL
+    if not path.exists():
+        return None
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    by_section: dict[str, list[str]] = {}
+    all_values: list[str] = []
+    for doc in (state.get("documents") or {}).values():
+        for section in doc.get("sections", []):
+            sid = section.get("id", "")
+            for field in (section.get("fields") or {}).values():
+                if field.get("state") in {"answered", "drafted", "accepted-risk"} and field.get("value"):
+                    value = str(field["value"])
+                    all_values.append(value)
+                    by_section.setdefault(sid, []).append(value)
+    if not all_values:
+        return None
+    corpus = {"summary": "\n".join(all_values)}
+    for sid, chunk in _C00_SECTION_TO_C01_CHUNK.items():
+        if by_section.get(sid):
+            corpus[chunk] = "\n".join(by_section[sid])
+    return corpus
 
 # Rockbox canonical C01 deliverable slots (the packet's expected outputs),
 # derived from the C01 emitter so the contract never drifts from what is written.
@@ -88,6 +128,10 @@ def enter_c01_mode(
     """
     root = Path(folder)
     sections = layer_relevant_prd_sections("C01")
+    # When C00 content isn't passed explicitly, auto-load it from the persisted PRD
+    # answer-state so the autonomous loop hands C00's real content to C01.
+    if c00 is None:
+        c00 = _c00_corpus_from_state(root)
     packet: WorkPacket = dispatch_work_packet(
         root, "C01", objective or _C01_DEFAULT_OBJECTIVE,
         sections=sections, expected_outputs=_C01_EXPECTED_OUTPUTS,
