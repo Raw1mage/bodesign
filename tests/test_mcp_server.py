@@ -382,6 +382,23 @@ class McpServerTests(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_run_tool_c00_orchestration(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-loop-", dir=PRIVATE_BASE))
+        try:
+            # Empty -> the loop tells you to scaffold C00 first.
+            tick = self.server.run_tool("bodesign_c00_orchestration_tick", {"folder": str(work)})
+            self.assertTrue(tick["ok"])
+            self.assertEqual(tick["result"]["kind"], "scaffold_c00")
+            # Status board is read-only and well-formed.
+            self.server.run_tool("bodesign_c00_scaffold_prd", {"out_dir": str(work), "project_name": "X"})
+            board = self.server.run_tool("bodesign_c00_orchestration_status", {"folder": str(work)})
+            self.assertTrue(board["ok"])
+            self.assertEqual([l["code"] for l in board["result"]["layers"]],
+                             ["C01", "C02", "C03", "C04", "C05", "C06"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def test_handler_error_is_captured(self):
         # missing required "folder" -> KeyError captured as data, not raised
         r = self.server.run_tool("bodesign_ingest_project", {})

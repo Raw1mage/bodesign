@@ -97,7 +97,7 @@ These tie the 15 Cxx tools into a driven workflow. Runtime in `packages/workflow
 - [x] Folder/package state model: `<folder>/_orchestration/{work_packets,blockers}/*.json` + append-only `log.jsonl`; deterministic count-based IDs.
 - [x] C00→C01 mode contract (C01-I3): `mode_contracts.enter_c01_mode` + MCP `bodesign_enter_c01_mode`.
 - [~] Human approval model: blocker `recommended_owner`/`proposed_state` + ingest `decided_by` give a per-decision owner model; a unified cross-layer approval state is still not consolidated. → Batch C / later.
-- [~] Runtime UX: user stays in C00; downstream agents work in background and return questions to C00. **DESIGNED (Batch D — `c00_orchestration_loop.md`)**: a deterministic C00 conductor (`c00_orchestration_tick` / `_status`) that selects the next step over the spine primitives and auto-dispatches ready layers without ever auto-answering. Implementation pending.
+- [x] Runtime UX: user stays in C00; downstream agents work in background and return questions to C00. **LANDED (Batch D)**: `c00_orchestration.py` — `c00_orchestration_tick` (deterministic conductor: resolve_blocker → ask_c00 → dispatch → done → ask_c00 → waiting; auto-dispatches ready layers, never auto-answers) + `c00_orchestration_status` (read-only board). MCP `bodesign_c00_orchestration_tick` / `_status`. 10 tests. The spine now has a conductor.
 
 ## Re-baseline Debts (introduced/exposed by 2026-06-07 reconciliation)
 

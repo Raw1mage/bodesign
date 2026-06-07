@@ -155,11 +155,11 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 Design: `c00_orchestration_loop.md` (the conductor over the Batch B spine — the last
 open Runtime-UX gap). Deterministic selector; auto-dispatch only, never auto-answer.
 
-- [ ] **D-1 Selector core** — `c00_orchestration.py`: `c00_orchestration_tick(folder)` returning one `NextAction` per the 6-step priority (resolve_blocker → ask_c00(unblock) → dispatch → ask_c00(advance) → waiting → done) over `assess_c00_prd_readiness` + `list_work_packets` + `list_blockers` + `load_agent_registry`. Fail-fast, deterministic.
-- [ ] **D-2 Board status** — `c00_orchestration_status(folder)` returning the read-only per-layer board (gate status, dispatched?, packet status, open blockers) + C00 overall status. Mutates nothing.
-- [ ] **D-3 Dispatch binding** — tick step 3 dispatches a ready layer once; use `enter_c01_mode` for C01 and `dispatch_work_packet` for C02–C06; idempotent (never re-dispatch a layer that already has a packet). Support `auto_dispatch=False` dry-run (recommend without dispatching).
-- [ ] **D-4 MCP tools** — `bodesign_c00_orchestration_status` (read-only) and `bodesign_c00_orchestration_tick` (advance one step; returns next action + any new packet).
-- [ ] **D-5 Tests** — fresh-scaffold asks C00 first and never dispatches a blocked-gate layer; ready gate → dispatch exactly once, no re-dispatch; unresolved blocker preempts everything; all-ready+all-dispatched+no-blockers → `done`; no tick writes a PRD answer / resolves a blocker / sets approval; same state → same action.
+- [x] **D-1 Selector core** — `c00_orchestration.py`: `c00_orchestration_tick(folder)` returns one `NextAction` per the priority (resolve_blocker → ask_c00(unblock) → dispatch → done-when-all-dispatched → ask_c00(advance) → waiting) over `assess_c00_prd_readiness` + `list_work_packets` + `list_blockers` + `load_agent_registry`. Fail-fast, deterministic. Handles combined gate targets (`C01/C02`) and the ungated C04 via an upstream-dependency rule (`C04` after C01+C03).
+- [x] **D-2 Board status** — `c00_orchestration_status(folder)` returns the read-only per-layer board (gate status, dispatched?, packet status, open blockers) + C00 overall status. Mutates nothing.
+- [x] **D-3 Dispatch binding** — tick dispatches a dispatchable layer once; `enter_c01_mode` for C01, `dispatch_work_packet` for C02–C06; idempotent. `auto_dispatch=False` dry-run recommends without dispatching.
+- [x] **D-4 MCP tools** — `bodesign_c00_orchestration_status` (read-only) and `bodesign_c00_orchestration_tick` (advance one step; returns next action + any new packet).
+- [x] **D-5 Tests** — 9 tests: scaffold-first, never dispatch a blocked-gate layer, dispatch each layer once (C01→C06, C04 after C01+C03), no re-dispatch, blocker preempts, all-dispatched → `done`, no tick writes PRD/blocker/approval, determinism, dry-run. +1 MCP server test. (203 total green.)
 
 ### Acceptance (Batch D)
 

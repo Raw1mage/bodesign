@@ -246,6 +246,16 @@ def _h_enter_c01_mode(a: dict) -> Any:
     return enter_c01_mode(a["folder"], c00=a.get("c00"), answers=a.get("answers"), objective=a.get("objective")).to_dict()
 
 
+def _h_c00_orchestration_status(a: dict) -> Any:
+    from bodesign_workflow_core import c00_orchestration_status
+    return c00_orchestration_status(a["folder"]).to_dict()
+
+
+def _h_c00_orchestration_tick(a: dict) -> Any:
+    from bodesign_workflow_core import c00_orchestration_tick
+    return c00_orchestration_tick(a["folder"], auto_dispatch=a.get("auto_dispatch", True)).to_dict()
+
+
 def _h_c04_emit_layout_package(a: dict) -> Any:
     from bodesign_workflow_core import emit_c04_layout_package
     return emit_c04_layout_package(a["out_dir"], a.get("c01"), a.get("c03")).to_dict()
@@ -469,6 +479,12 @@ TOOLS: list[dict] = [
      "description": "C00 → C01 mode contract (C01-I3): dispatch a C01 work packet scoped to the PRD sections that hand off to C01, emit the Rockbox-like C01 package, and return the next C01 preference question. C01 may ask preference questions directly; product-level decisions return to C00 as blockers. C01 does not mutate the PRD or claim ID approval.",
      "schema": {"type": "object", "properties": {"folder": _STR, "c00": {}, "answers": {"type": "object"}, "objective": _STR},
                 "required": ["folder"]}},
+    {"name": "bodesign_c00_orchestration_status", "handler": _h_c00_orchestration_status,
+     "description": "Read-only orchestration board: per-layer (C01–C06) gate status (ready/partial/blocked), whether it has been dispatched + packet status, open blockers, plus the C00 PRD overall status and next question. Mutates nothing.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c00_orchestration_tick", "handler": _h_c00_orchestration_tick,
+     "description": "Advance the C00-driven loop one step: returns the single highest-value next action (scaffold_c00 / resolve_blocker / ask_c00 / dispatch / waiting / done) over the spine. May auto-dispatch a ready, undispatched layer (set auto_dispatch=false for a recommendation-only dry run). Never auto-answers a PRD field, resolves a blocker, or marks approval — those return to the user.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "auto_dispatch": {"type": "boolean"}}, "required": ["folder"]}},
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
