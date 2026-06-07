@@ -365,10 +365,12 @@
         "note": "Runtime LANDED: bodesign_c01_emit_package (Rockbox slots Ai file/CMF/Display UIUX + Interface_Constraints.json + Handoff_to_ID_Designer.md), bodesign_c01_next_question / bodesign_c01_update_answers (answer-state interaction), bodesign_c01_readiness (field-level), optional bodesign_c01_generate_concept_image, C01-I1 template loader + emitter binding (c01_id_template.py / validate_c01_outputs_binding), and C01-I3 C00→C01 mode contract (enter_c01_mode). Still pending: cross-section consistency check + downstream-gate tests; constraint hardening (N6); reference-image intake (N7/N8)."
       },
       "skill": [
-        "canvas-design / visual-source generation",
+        "c01-industrial-design-requirements (self-built — the C01 authority: CMF framework, form/DFM-for-ID, moodboard/concept prompts, archetype library)",
+        "canvas-design / frontend-design (screen/graphic UI only — NOT industrial design; supporting use)",
         "kidoc (handoff docs)",
         "external ID designer (final design authority)"
       ],
+      "skill_note": "Community search found no real industrial-design/CMF skill (all 'design' skills are graphic/UI) — see EXTERNAL_SKILLS.md. C01 method authority is the self-built c01-industrial-design-requirements skill, strengthened with a CMF decision framework + DFM-for-ID + moodboard/concept-prompt framework.",
       "real_artifacts": [
         "Ai file (Illustrator)",
         "CMF",

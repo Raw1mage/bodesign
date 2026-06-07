@@ -112,7 +112,7 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 
 ### C01 Concept Image Support
 
-- [ ] **C01-A1 Skill prompt generation** — let the C01 skill produce concept, moodboard, and UI concept prompts directly from accumulated C00/C01 visual requirements when the user asks for a visual reference.
+- [x] **C01-A1 Skill prompt generation** — the strengthened `c01-industrial-design-requirements` skill now carries a Moodboard & Concept-Prompt framework (archetype + CMF route + brand tone → reference-only prompts, copyright-safe) feeding `bodesign_c01_generate_concept_image`.
 - [ ] **C01-A2 Prompt artifacts** — optionally persist `Concept_Image_Prompts.md`, `Moodboard_Prompts.md`, and `UI_Concept_Prompts.md` for ID handoff.
 - [x] **C01-A3 Image generation tool** — add `bodesign_c01_generate_concept_image` behind explicit Google AI Studio provider/API key config; fail fast when unavailable and never fallback silently.
 - [x] **C01-A4 Reference metadata** — write `Concept_Reference.md` with image path, prompt, provider/model, timestamp, and reference-only limitation statement.
