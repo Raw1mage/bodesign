@@ -1,0 +1,18 @@
+# bodesign dev overlay — bind-mount the source so CODE changes need only a fast
+# container restart (seconds), NOT an image rebuild. The image still provides the
+# toolchain (KiCad/LibreOffice/OpenSCAD) + installed deps; the mounts shadow the
+# COPYed code with the live working tree.
+#
+#   BODESIGN_DEV=1 ./mcpctl.sh start      # once: build image + up with source mounted
+#   # ...edit packages/ or services/...
+#   BODESIGN_DEV=1 ./mcpctl.sh restart    # seconds, reloads the new code (no rebuild)
+#
+# Rebuild the image only when DEPENDENCIES change (requirements.txt / Dockerfile):
+#   BODESIGN_DEV=1 ./mcpctl.sh rebuild
+#
+# read-only mounts; PYTHONDONTWRITEBYTECODE=1 in the image means no .pyc writes back.
+services:
+  bodesign:
+    volumes:
+      - "./packages:/app/packages:ro"
+      - "./services:/app/services:ro"

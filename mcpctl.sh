@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # mcpctl.sh — control the bodesign MCP server container (G10b).
-#   start | stop | reload | status | log
+#   start | restart | rebuild | stop | status | log
 # docker-compose-backed, per-user (project bodesign-${USER}).
+#
+# Dev loop (no image rebuild for code changes): set BODESIGN_DEV=1 to bind-mount the
+# source (docker-compose.dev.yml); then `restart` reloads code in seconds.
+#   BODESIGN_DEV=1 ./mcpctl.sh start      # build once + up with source mounted
+#   BODESIGN_DEV=1 ./mcpctl.sh restart    # after a code edit — seconds, no rebuild
+#   ./mcpctl.sh rebuild                    # only when deps (requirements/Dockerfile) change
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +15,10 @@ RUN_DIR="$ROOT_DIR/.run"
 SOCK="$RUN_DIR/bodesign.sock"
 PROJECT="bodesign-${USER:-$(id -un)}"
 COMPOSE=(docker compose -p "$PROJECT" -f "$ROOT_DIR/docker-compose.yml")
+# BODESIGN_DEV=1 → bind-mount the live source so restart picks up code with no rebuild.
+if [ "${BODESIGN_DEV:-}" = "1" ]; then
+  COMPOSE+=(-f "$ROOT_DIR/docker-compose.dev.yml")
+fi
 CONTAINER="${PROJECT}-bodesign-1"
 
 ensure_run_dir() {
@@ -29,11 +39,22 @@ case "${1:-}" in
     "${COMPOSE[@]}" down
     rm -f "$SOCK"
     ;;
-  reload|restart|refresh)
+  restart)
+    # Fast: recreate the container (re-runs server.py) WITHOUT rebuilding the image.
+    # With BODESIGN_DEV=1 the bind-mounted source means this reloads code edits in seconds.
+    ensure_run_dir
+    "${COMPOSE[@]}" up -d --force-recreate
+    if [ "${BODESIGN_DEV:-}" = "1" ]; then
+      echo "bodesign MCP restarted (dev: live source, no rebuild); socket -> $SOCK"
+    else
+      echo "bodesign MCP restarted (baked image — use 'rebuild' to pick up code changes); socket -> $SOCK"
+    fi
+    ;;
+  rebuild|reload|refresh)
     ensure_run_dir
     "${COMPOSE[@]}" build --progress=plain 2>&1 | tee "$RUN_DIR/build.log"
     "${COMPOSE[@]}" up -d --force-recreate
-    echo "bodesign MCP reloaded; socket -> $SOCK"
+    echo "bodesign MCP rebuilt + reloaded; socket -> $SOCK"
     ;;
   status)
     health="$(docker inspect "$CONTAINER" --format '{{.State.Health.Status}}' 2>/dev/null || echo missing)"
@@ -49,7 +70,8 @@ case "${1:-}" in
     "${COMPOSE[@]}" logs --tail "${1:-100}" -f bodesign
     ;;
   *)
-    echo "usage: mcpctl.sh {start|stop|reload|status|log}" >&2
+    echo "usage: mcpctl.sh {start|restart|rebuild|stop|status|log}" >&2
+    echo "  dev loop: BODESIGN_DEV=1 ./mcpctl.sh start  then  BODESIGN_DEV=1 ./mcpctl.sh restart" >&2
     exit 2
     ;;
 esac
