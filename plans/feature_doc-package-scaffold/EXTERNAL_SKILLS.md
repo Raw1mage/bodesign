@@ -30,16 +30,33 @@ deployment stays compliant.
   these skills explicitly refuse to invent missing data, matching bodesign's
   no-fallback rule).
 
-## C02 — Mechanical / CAD (CANDIDATE — PoC pending)
+## C02 — Mechanical / CAD (PoC PROVEN — integration recommended, not yet shipped)
 
 - **Source:** `earthtojake/text-to-cad` — https://github.com/earthtojake/text-to-cad
-- **License:** MIT (commercial OK).
-- **Why:** real text/image → CAD with **build123d/OCP backend, STEP primary
-  output** (enclosures/brackets/standard parts) — could fill C02's STEP-export
-  gap (`bodesign_c02_export_step` currently returns `step_export_unavailable`).
-- **Status:** evaluate via PoC against the existing OpenSCAD path before adopting.
-  DFM coverage is limited (SendCutSend format check only), so the C02 DFM
-  consultant remains self-built.
+  (its CAD backend is **build123d** on OpenCASCADE/OCP).
+- **License:** MIT (text-to-cad); build123d is Apache-2.0 — both commercial-OK.
+- **Why:** real text/image → CAD with **STEP primary output** — fills C02's STEP
+  gap (`bodesign_c02_export_step` returns `step_export_unavailable` today).
+- **PoC result (2026-06-07):** `poc/c02_build123d_step_poc.py` built a parametric
+  enclosure shell (outer box, hollowed cavity, 4 mounting standoffs with holes)
+  from the **same constraint inputs C02 already holds** (board outline, wall,
+  clearance, internal height) and exported a **valid 61 KB `ISO-10303-21` STEP in
+  ~0.1 s** via `build123d 0.10.0` / `cadquery-ocp 7.8`. Verified the header +
+  size; no fake output. So build123d→STEP is feasible and fast.
+- **Recommended integration (follow-up slice, needs your go):**
+  1. Add a `build123d` backend to `export_c02_step`: when build123d imports AND a
+     constraint/geometry spec exists, generate a real `Enclosure.step`; otherwise
+     keep the existing fail-fast `step_export_unavailable` (same gate shape — no
+     contract change). This finally closes C02-T6 when the kernel is present.
+  2. A parallel `generate_c02_build123d` (constraint→geometry) mirroring
+     `generate_c02_openscad`. OpenSCAD path stays for STL/printing; build123d adds
+     STEP for vendor/ME handoff. **Coexist, don't replace.**
+  3. **Operational cost to weigh:** build123d pulls cadquery-ocp + vtk (~heavy,
+     hundreds of MB). It is installed in the dev venv for the PoC but is **NOT yet
+     in `services/mcp/requirements.txt` or the Docker image** — runtime stays
+     honestly gated until you approve adding the dependency.
+- **DFM caveat:** text-to-cad's DFM is only a SendCutSend format check, so the C02
+  DFM/manufacturing consultant remains self-built (`c02-mechanical-enclosure-consultant`).
 
 ## C01 — Industrial Design / CMF (NO EXTERNAL SOLUTION — self-build)
 
