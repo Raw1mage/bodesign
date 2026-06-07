@@ -163,6 +163,22 @@ def _h_c01_generate_concept_image(a: dict) -> Any:
     return generate_c01_concept_image(a["out_dir"], a["prompt"], a.get("model")).to_dict()
 
 
+def _h_c01_emit_concept_prompts(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c01_concept_prompts
+    return emit_c01_concept_prompts(a["out_dir"], a.get("c00"), a.get("answers")).to_dict()
+
+
+def _h_c01_add_reference_image(a: dict) -> Any:
+    from bodesign_workflow_core import c01_add_reference_image
+    return c01_add_reference_image(a["folder"], a["source_image"], a["cue_type"], a["observed_cue"],
+                                   a.get("target_artifact", "Ai file"), a.get("notes", "")).to_dict()
+
+
+def _h_c01_confirm_reference_cue(a: dict) -> Any:
+    from bodesign_workflow_core import c01_confirm_reference_cue
+    return c01_confirm_reference_cue(a["folder"], a["cue_id"], a["confirmation"], a.get("note", "")).to_dict()
+
+
 def _h_c02_readiness(a: dict) -> Any:
     from bodesign_workflow_core import assess_c02_constraint_readiness
     return assess_c02_constraint_readiness(a.get("constraints"), a.get("folder")).to_dict()
@@ -401,6 +417,18 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c01_update_answers", "handler": _h_c01_update_answers,
      "description": "Update C01-ID/answer_state.json with user/design preferences, then regenerate the Rockbox-like C01 package and return the next question. Does not mark ID approval or create final .ai/Figma/CAD artifacts.",
      "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "c00": {}}, "required": ["folder", "answers"]}},
+    {"name": "bodesign_c01_emit_concept_prompts", "handler": _h_c01_emit_concept_prompts,
+     "description": "Persist reference-only C01 concept/moodboard/UI prompt artifacts (Concept_Image_Prompts.md, Moodboard_Prompts.md, UI_Concept_Prompts.md) derived from accumulated C00/C01 intent. Generalized design language; not final art and not a copy of any product/brand.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c01_add_reference_image", "handler": _h_c01_add_reference_image,
+     "description": "Record a reference-image cue (form/cmf/ui/component/mood) into C01-ID/reference_cues.json: source image path, observed cue (generalized — what to borrow/avoid), target artifact, notes. The cue stays `reference-derived` until the user confirms it; never auto-promoted to an approved preference, never a copy of the source.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "source_image": _STR, "cue_type": _STR,
+                "observed_cue": _STR, "target_artifact": _STR, "notes": _STR},
+                "required": ["folder", "source_image", "cue_type", "observed_cue"]}},
+    {"name": "bodesign_c01_confirm_reference_cue", "handler": _h_c01_confirm_reference_cue,
+     "description": "Explicitly confirm or reject a C01 reference cue by cue_id. Only the user may move a cue out of `reference-derived`; confirmed cues remain generalized design intent (copyright-safe).",
+     "schema": {"type": "object", "properties": {"folder": _STR, "cue_id": _STR, "confirmation": _STR, "note": _STR},
+                "required": ["folder", "cue_id", "confirmation"]}},
     {"name": "bodesign_c01_generate_concept_image", "handler": _h_c01_generate_concept_image,
      "description": "Optional C01 add-on: generate a reference-only concept image via Google AI Studio from a C01 concept prompt. Credential source is server-side only: BODESIGN_GOOGLE_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY env first, then active API account from opencode accounts.json (default family gemini-cli). Does not affect C01 readiness.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "prompt": _STR, "model": _STR}, "required": ["out_dir", "prompt"]}},

@@ -28,6 +28,17 @@ C01_OUTPUTS = {
 
 C01_ANSWER_STATE_REL_PATH = Path("C01-ID") / "answer_state.json"
 C01_ANSWER_STATES = {"missing", "answered", "drafted", "no-preference", "external-needed", "blocked", "accepted-risk"}
+
+# A2: optional concept/moodboard/UI prompt artifacts for ID handoff.
+C01_PROMPT_OUTPUTS = {
+    "concept": Path("C01-ID") / "Ai file" / "Concept_Image_Prompts.md",
+    "moodboard": Path("C01-ID") / "Ai file" / "Moodboard_Prompts.md",
+    "ui": Path("C01-ID") / "Display UIUX" / "UI_Concept_Prompts.md",
+}
+# N7/N8: reference-image cue intake + traceability.
+C01_REFERENCE_CUES_REL_PATH = Path("C01-ID") / "reference_cues.json"
+C01_CUE_TYPES = {"form", "cmf", "ui", "component", "mood"}
+C01_CUE_CONFIRMATIONS = {"reference-derived", "confirmed", "rejected"}
 C01_INTERACTION_FIELDS = (
     {
         "key": "form_archetype",
@@ -246,6 +257,155 @@ def emit_c01_rockbox_package(
         path.write_text(content, encoding="utf-8")
         written.append(str(rel_path))
     return C01PackageResult(str(root), written, assess_c01_package_readiness(root))
+
+
+# ── A2: concept / moodboard / UI prompt artifacts ──────────────────────
+
+
+@dataclass(slots=True)
+class C01PromptArtifactsResult:
+    folder: str
+    files: list[str]
+
+    def to_dict(self) -> dict[str, object]:
+        return {"folder": self.folder, "files": list(self.files),
+                "reference_only": True,
+                "note": "Reference-only prompts for ID handoff/communication; not final art, "
+                        "and not a copy of any specific product or brand."}
+
+
+def emit_c01_concept_prompts(
+    out_dir: str | Path,
+    c00: dict[str, Any] | str | None = None,
+    answers: dict[str, Any] | None = None,
+) -> C01PromptArtifactsResult:
+    """Persist concept/moodboard/UI prompt artifacts derived from accumulated C01 intent.
+
+    Reference-only and copyright-safe: prompts describe generalized design language
+    (archetype + CMF route + brand tone), never a named product/brand to copy."""
+    root = Path(out_dir)
+    model = _build_model(c00, answers or {})
+    comp_names = ", ".join(c["name"] for c in model["components"]) or "exposed components TBD"
+    base = (f"{model['form_archetype']}, for {model['usage_posture']}, primary face: "
+            f"{model['primary_face']}, visible: {comp_names}")
+    files: list[str] = []
+    for key, content in (
+        ("concept", "\n".join([
+            "# C01 Concept Image Prompts (reference-only)",
+            "",
+            "> Generalized design language, not a copy of any product/brand. Feed `bodesign_c01_generate_concept_image`.",
+            "",
+            f"- **Concept:** {base}, {model['cmf_direction']}, neutral studio render, 3/4 view.",
+            f"- **Front view:** {base}, straight-on, {model['visual_tone']}.",
+        ]) + "\n"),
+        ("moodboard", "\n".join([
+            "# C01 Moodboard Prompts (reference-only)",
+            "",
+            f"- Tone: {model['visual_tone']}; CMF: {model['cmf_direction']}; environment: {model['environment']}.",
+            f"- Archetype influence: {model['form_archetype']} (generalized, not brand-specific).",
+        ]) + "\n"),
+        ("ui", "\n".join([
+            "# C01 UI Concept Prompts (reference-only)",
+            "",
+            f"- Display/status model: {model['display_uiux']}.",
+            "- Show key states/screens generically; align vocabulary with C05 firmware states.",
+        ]) + "\n"),
+    ):
+        rel = C01_PROMPT_OUTPUTS[key]
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        files.append(str(rel))
+    return C01PromptArtifactsResult(str(root), files)
+
+
+# ── N7/N8: reference-image cue intake + traceability ───────────────────
+
+
+@dataclass(slots=True)
+class C01ReferenceCuesResult:
+    folder: str
+    path: str
+    cues: list[dict[str, Any]]
+
+    def to_dict(self) -> dict[str, object]:
+        return {"folder": self.folder, "path": self.path, "cues": list(self.cues),
+                "unconfirmed_count": sum(1 for c in self.cues if c.get("user_confirmation") == "reference-derived"),
+                "note": "Cues stay `reference-derived` until the user confirms; confirmed cues are "
+                        "generalized design intent, never a copy of the source."}
+
+
+def _read_reference_cues(root: Path) -> dict[str, Any]:
+    path = root / C01_REFERENCE_CUES_REL_PATH
+    if not path.exists():
+        return {"schema": "bodesign.c01.reference_cues.v1", "cues": []}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != "bodesign.c01.reference_cues.v1":
+        raise ValueError(f"Unsupported C01 reference_cues schema: {path}")
+    if not isinstance(data.get("cues"), list):
+        raise ValueError(f"C01 reference_cues.cues must be a list: {path}")
+    return data
+
+
+def _write_reference_cues(root: Path, data: dict[str, Any]) -> None:
+    path = root / C01_REFERENCE_CUES_REL_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def c01_add_reference_image(
+    folder: str | Path,
+    source_image: str,
+    cue_type: str,
+    observed_cue: str,
+    target_artifact: str = "Ai file",
+    notes: str = "",
+) -> C01ReferenceCuesResult:
+    """Record a reference-image cue (N7). The cue stays `reference-derived` until the
+    user confirms it; it is never auto-promoted to an approved preference. Persists
+    source path, cue summary, confirmation status, and target artifact (N8)."""
+    if not source_image or not source_image.strip():
+        raise ValueError("source_image path is required")
+    if cue_type not in C01_CUE_TYPES:
+        raise ValueError(f"invalid cue_type {cue_type!r} (allowed: {sorted(C01_CUE_TYPES)})")
+    if not observed_cue or not observed_cue.strip():
+        raise ValueError("observed_cue (what to borrow/avoid, generalized) is required")
+    root = Path(folder)
+    data = _read_reference_cues(root)
+    cue = {
+        "cue_id": f"C01-CUE-{len(data['cues']) + 1:04d}",
+        "source_image": source_image.strip(),
+        "cue_type": cue_type,
+        "observed_cue": observed_cue.strip(),
+        "user_confirmation": "reference-derived",
+        "target_artifact": target_artifact,
+        "notes": notes.strip(),
+    }
+    data["cues"].append(cue)
+    _write_reference_cues(root, data)
+    return C01ReferenceCuesResult(str(root), str(C01_REFERENCE_CUES_REL_PATH), data["cues"])
+
+
+def c01_confirm_reference_cue(
+    folder: str | Path,
+    cue_id: str,
+    confirmation: str,
+    note: str = "",
+) -> C01ReferenceCuesResult:
+    """Explicitly confirm or reject a reference cue (N8). Only the user may move a cue
+    out of `reference-derived`; copyright note: confirmed cues remain generalized intent."""
+    if confirmation not in {"confirmed", "rejected"}:
+        raise ValueError("confirmation must be 'confirmed' or 'rejected'")
+    root = Path(folder)
+    data = _read_reference_cues(root)
+    for cue in data["cues"]:
+        if cue.get("cue_id") == cue_id:
+            cue["user_confirmation"] = confirmation
+            if note.strip():
+                cue["notes"] = (cue.get("notes", "") + f" | {note.strip()}").strip(" |")
+            _write_reference_cues(root, data)
+            return C01ReferenceCuesResult(str(root), str(C01_REFERENCE_CUES_REL_PATH), data["cues"])
+    raise ValueError(f"unknown cue_id: {cue_id}")
 
 
 def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
@@ -560,22 +720,46 @@ def _source_text(c00: dict[str, Any] | str | None) -> str:
     return ""
 
 
-def _component_list(value: Any, corpus: str) -> list[dict[str, str]]:
+# N6: per-exposed-component downstream targets + risk notes, so every constraint
+# carries owner + status + downstream targets + risk (not just a name). Keyed by the
+# normalized component type; an unknown type still gets owner/status + a generic risk.
+_COMPONENT_CONSTRAINT_MAP = {
+    "camera":     (["C02", "C04"],       "FOV can be obstructed by enclosure geometry; opening + clearance needed."),
+    "microphone": (["C02", "C04"],       "Acoustic path can be blocked or noisy; needs a port and seal strategy."),
+    "speaker":    (["C02", "C04"],       "Audio/buzzer output can be muffled; needs an acoustic opening/cavity."),
+    "display":    (["C02", "C04", "C05"], "Viewing angle, window/bezel, and placement affect usability; align UI with C05."),
+    "led":        (["C02", "C04", "C05"], "Status light can be invisible to the user; needs a light pipe / visible face."),
+    "button":     (["C02", "C04"],       "Placement, size, travel, and tactile feedback are unresolved; needs ME review."),
+    "usb-c":      (["C02", "C03", "C04"], "Connector insertion and cable clearance can be insufficient; edge opening needed."),
+    "antenna":    (["C03", "C04"],       "Metal/finish or poor placement can block RF; keepout + non-metal window required."),
+    "vent":       (["C02", "C04"],       "Thermal openings can conflict with waterproofing; needs thermal/ingress tradeoff."),
+    "mounting":   (["C02", "C04"],       "Mounting bosses/strength and service access are unresolved; needs ME review."),
+}
+
+
+def _component_list(value: Any, corpus: str) -> list[dict[str, Any]]:
     if isinstance(value, list) and value:
         names = [str(v) for v in value]
     else:
         names = [name for name, keywords in EXPOSED_COMPONENT_KEYWORDS.items() if any(k in corpus for k in keywords)]
     if not names:
         names = ["missing — exposed component list not confirmed"]
-    return [
-        {
+    out: list[dict[str, Any]] = []
+    for name in names:
+        missing = name.startswith("missing")
+        targets, risk = _COMPONENT_CONSTRAINT_MAP.get(
+            name.lower(),
+            (["C02", "C04"], "Exposed component treatment unconfirmed; placement/visibility need ID + ME review."),
+        )
+        out.append({
             "name": name,
             "placement_preference": "draft/missing — C01 must ask user or ID designer",
-            "decision_status": "drafted" if not name.startswith("missing") else "missing",
+            "decision_status": "missing" if missing else "drafted",
             "owner": "C00 user + ID designer",
-        }
-        for name in names
-    ]
+            "downstream_targets": [] if missing else list(targets),
+            "risk_notes": "exposed component list not confirmed — cannot assess risk yet" if missing else risk,
+        })
+    return out
 
 
 def _render_design_direction(m: dict[str, Any]) -> str:

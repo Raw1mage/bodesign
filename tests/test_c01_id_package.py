@@ -241,6 +241,59 @@ class C01IdPackageTests(unittest.TestCase):
         self.assertIn("key=account-json-key", captured["url"])
         self.assertTrue((self.work / result.image_path).exists())
 
+    # ── N6: constraint hardening ────────────────────────────────────
+    def test_exposed_components_carry_owner_status_downstream_risk(self):
+        emit_c01_rockbox_package(self.work, c00="A wearable with antenna, USB-C, LED, and a button.")
+        constraints = json.loads((self.work / "C01-ID" / "Interface_Constraints.json").read_text())
+        comps = constraints["exposed_components"]
+        self.assertTrue(comps)
+        for c in comps:
+            for field in ("name", "decision_status", "owner", "downstream_targets", "risk_notes"):
+                self.assertIn(field, c)
+        antenna = next((c for c in comps if c["name"] == "antenna"), None)
+        if antenna:
+            self.assertIn("C03", antenna["downstream_targets"])
+            self.assertIn("RF", antenna["risk_notes"])
+
+    # ── A2: prompt artifacts ────────────────────────────────────────
+    def test_emit_concept_prompts_reference_only(self):
+        from bodesign_workflow_core import emit_c01_concept_prompts
+        res = emit_c01_concept_prompts(self.work, c00="A handheld with a screen.")
+        for rel in ("C01-ID/Ai file/Concept_Image_Prompts.md",
+                    "C01-ID/Ai file/Moodboard_Prompts.md",
+                    "C01-ID/Display UIUX/UI_Concept_Prompts.md"):
+            self.assertIn(rel, res.files)
+        self.assertTrue(res.to_dict()["reference_only"])
+        self.assertIn("reference-only", (self.work / "C01-ID" / "Ai file" / "Concept_Image_Prompts.md").read_text())
+
+    # ── N7/N8: reference image intake + traceability ────────────────
+    def test_reference_cue_stays_reference_derived_until_confirmed(self):
+        from bodesign_workflow_core import c01_add_reference_image, c01_confirm_reference_cue
+        r = c01_add_reference_image(self.work, "refs/watch.jpg", "form",
+                                    "soft rounded corners, matte finish", target_artifact="Ai file")
+        cue = r.cues[0]
+        self.assertEqual(cue["cue_id"], "C01-CUE-0001")
+        self.assertEqual(cue["user_confirmation"], "reference-derived")  # not auto-approved
+        self.assertEqual(cue["source_image"], "refs/watch.jpg")
+        self.assertEqual(r.to_dict()["unconfirmed_count"], 1)
+        data = json.loads((self.work / "C01-ID" / "reference_cues.json").read_text())
+        self.assertEqual(data["schema"], "bodesign.c01.reference_cues.v1")
+        r2 = c01_confirm_reference_cue(self.work, "C01-CUE-0001", "confirmed", note="borrow corner radius only")
+        self.assertEqual(r2.cues[0]["user_confirmation"], "confirmed")
+        self.assertEqual(r2.to_dict()["unconfirmed_count"], 0)
+
+    def test_reference_cue_validation_fails_fast(self):
+        from bodesign_workflow_core import c01_add_reference_image, c01_confirm_reference_cue
+        with self.assertRaises(ValueError):
+            c01_add_reference_image(self.work, "x.jpg", "bogus-type", "cue")
+        with self.assertRaises(ValueError):
+            c01_add_reference_image(self.work, "", "form", "cue")
+        c01_add_reference_image(self.work, "x.jpg", "form", "cue")
+        with self.assertRaises(ValueError):
+            c01_confirm_reference_cue(self.work, "C01-CUE-9999", "confirmed")
+        with self.assertRaises(ValueError):
+            c01_confirm_reference_cue(self.work, "C01-CUE-0001", "maybe")
+
 
 if __name__ == "__main__":
     unittest.main()
