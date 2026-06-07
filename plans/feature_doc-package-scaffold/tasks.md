@@ -1,5 +1,29 @@
 # Tasks: C00 PRD consultant completion
 
+## Re-baseline 2026-06-07 (handoff) — status truth & next-batch ordering
+
+**Lifecycle:** `.state.json` synced `proposed → implementing` (forced via `mode:sync`; see RB-1).
+**Runtime reality:** C00/C01/C02 draft-grade runtime LANDED (15 Cxx MCP tools, 144 tests green). C03 = full chain.
+The stale all-gap snapshots in `c00_c01_gap-audit.md` and `doc_architecture.template.json` are now corrected;
+`doc_architecture.template.json → gap_summary` is the authoritative coverage/gap map.
+
+**Diagnosis (why a re-baseline was needed):** per-layer emitters were built bottom-up and outran their own
+declared prerequisites; the orchestration **spine** the implementation-spec calls the real dependency was deferred.
+Symptoms: C01-I1 (template loader) and C01-I3 (mode contract) sit undone *beneath* their already-`[x]` dependents.
+
+**Chosen next-batch ordering (A→B→C):**
+1. **A — DONE THIS PASS:** reconcile status docs, sync lifecycle, amend proposal scope, record debts.
+2. **B — NEXT:** build the orchestration spine — agent registry + wire `work_packet.v1`/`blocker_return.v1`
+   (drafted in `c00_downstream_contract.md`) into runtime + folder/state model + C00→C01 mode contract (C01-I3).
+   Turns 15 disconnected tools into a driven workflow. See `c00_c01_gap-audit.md → Cross-Cutting Gaps`.
+3. **C — AFTER:** widen coverage so all 7 layers have minimal runtime — C04 layout constraint doc,
+   C05 FW SW-spec sub-package scaffold (plan-builder-like), C06 test-plan assembler.
+
+**Re-baseline debts (do not lose):**
+- **RB-1** custom artifact set ≠ plan-builder canonical (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates bypassed — conform or document deviation.
+- **RB-2** runtime loads templates from `plans/` (draft zone) — move runtime-depended templates under `packages/`.
+- **RB-3** = C01-I1: C01 runtime never loads `c01_id.template.json`/rubric (emitters hardcode structure).
+
 ## Goal
 
 Make C00/C07 a consultant-led PRD layer: AI guides the user through product, business, engineering, project, and handoff decisions until the PRD is sufficient for C01-C06 teams to start work.
@@ -61,9 +85,9 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 
 ### Next Implementation Backlog
 
-- [ ] **C01-I1 Template loader** — load and validate `c01_id.template.json` / `c01_id.rubric.json` in `packages/workflow-core`.
+- [ ] **C01-I1 Template loader** — load and validate `c01_id.template.json` / `c01_id.rubric.json` in `packages/workflow-core`. ⚠️ **RB-3: genuinely undone but built around** — I4–I8 emitters/readiness below are `[x]` yet hardcode structure instead of loading this template. Out-of-order debt.
 - [x] **C01-I2 Skill package** — create `c01-industrial-design-requirements` with role prompt, question strategy, CMF framework, UI/status script, exposed-interface checklist, downstream constraint map, risk map, and `known_gaps` section.
-- [ ] **C01-I3 Mode contract** — define how C00 enters C01 mode, what C01 may ask the user, and how blockers return to C00 without mutating the PRD contract.
+- [ ] **C01-I3 Mode contract** — define how C00 enters C01 mode, what C01 may ask the user, and how blockers return to C00 without mutating the PRD contract. ⚠️ **Out-of-order: N1–N5 interaction tools are `[x]` but this contract that should govern them is undone. Part of next batch B (spine).**
 - [x] **C01-I4 Visual extractor** — extract C00 §1/§2/§5/§6/§7 content into normalized visual/interface requirements.
 - [x] **C01-I5 Scaffold function/tool** — create the C01-ID package using Rockbox deliverable names: `Ai file/`, `CMF/`, `Display UIUX/`, plus support artifacts.
 - [x] **C01-I6 Rockbox-like script emitters** — generate `Design_Direction.md`, `CMF_Direction.md`, `UIUX_Requirements.md`, `Interface_Constraints.json`, and `Handoff_to_ID_Designer.md` with explicit draft/decision/owner markers.

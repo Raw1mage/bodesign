@@ -51,7 +51,7 @@
         "elicit": "full",
         "generate": "partial",
         "verify": "partial",
-        "note": "C00 now has a dedicated PRD consultant template + readiness rubric in plan artifacts. Runtime emitter/verifier implementation remains pending."
+        "note": "Runtime LANDED: bodesign_c00_scaffold_prd / bodesign_c00_readiness / bodesign_c00_emit_prd implemented in workflow-core (c00_prd_template.py) over c00_prd.template.json + c00_prd.rubric.json, with answer-state field readiness and a next-best question. Still pending: docx/pdf render via kidoc, and a real PRD completeness/consistency verifier vs C03 design intent (verify stays partial). DEBT RB-2: loader reads its template from plans/ (a draft zone) — fragile under graduation/archive."
       },
       "question_bank": [
         {
@@ -351,9 +351,9 @@
       "coverage": {
         "fill": "full",
         "elicit": "partial",
-        "generate": "gap",
-        "verify": "gap",
-        "note": "Plan artifacts now define Rockbox-style C01 target package (Ai file/CMF/Display UIUX) and tool/skill boundary. Runtime extractor/emitter/readiness implementation remains pending."
+        "generate": "partial",
+        "verify": "partial",
+        "note": "Runtime LANDED: bodesign_c01_emit_package (Rockbox slots Ai file/CMF/Display UIUX + Interface_Constraints.json + Handoff_to_ID_Designer.md), bodesign_c01_next_question / bodesign_c01_update_answers (answer-state interaction), bodesign_c01_readiness (field-level), and optional bodesign_c01_generate_concept_image. Still pending: DEBT RB-3 c01_id.template.json/rubric are NOT yet loaded at runtime (C01 emitters hardcode structure — C01-I1 genuinely undone, built out of order under its dependents); C01-I3 mode contract; cross-section consistency check + downstream-gate tests; constraint hardening (N6); reference-image intake (N7/N8)."
       },
       "skill": [
         "canvas-design / visual-source generation",
@@ -402,9 +402,9 @@
       "coverage": {
         "fill": "full",
         "elicit": "partial",
-        "generate": "gap",
-        "verify": "gap",
-        "note": "Rockbox code restored: C02 is ME by deliverable/vendor boundary. C02 is still constraint-first and participates in loop execution: pre-check before C04, check loop after C04, final enclosure draft only after C03/C04 constraints are sufficient. Runtime CAD source/STL/SKP emitter/readiness remain TODO."
+        "generate": "partial",
+        "verify": "partial",
+        "note": "Runtime LANDED: bodesign_c02_emit_enclosure_package, bodesign_c02_generate_openscad, bodesign_c02_export_stl / _skp / _step (toolchain-gated, explicit *_unavailable when absent), bodesign_c02_readiness (constraint readiness, does NOT claim printable/STL until real export). C02 stays constraint-first: pre-check before C04, check loop after C04, final draft only after C03/C04 constraints suffice. Still pending: C02-T7/V5 real STL export validation requires OpenSCAD in the MCP container (Docker image adds it; end-to-end run + version metadata not yet done); cross-section consistency vs C01/C03/C04."
       },
       "skill": [
         "c02-mechanical-enclosure-consultant — TODO",
@@ -616,15 +616,25 @@
     }
   ],
   "gap_summary": {
+    "as_of": "2026-06-07 re-baseline (handoff). C00/C01/C02 runtime now LANDED as draft-grade scaffold/emit/readiness; reflect reality, not the original all-gap snapshot.",
     "full_chain": [
       "C03"
     ],
+    "draft_chain": [
+      "C00 (scaffold/readiness/emit)",
+      "C01 (emit/interaction/readiness)",
+      "C02 (package/openscad/export/readiness)"
+    ],
     "key_gaps": [
-      "C00 PRD: structured PRD document emitter (kidoc 'prd' doc_type) + PRD completeness/consistency verifier.",
-      "C06: a test-plan/bring-up document assembler over the verify verdicts.",
-      "C01/C02: an interface-constraints document emitter + cross-section consistency check.",
+      "SPINE: no orchestration backbone wires the 15 Cxx tools end-to-end — agent registry, C00 work_packet.v1/blocker_return.v1 (drafted in c00_downstream_contract.md, NOT wired to runtime), human-approval model, folder/state model, and runtime UX remain unbuilt. 15 tools, no conductor.",
+      "C00 PRD: docx/pdf render via kidoc 'prd' doc_type + a real PRD completeness/consistency verifier vs C03.",
+      "C01: c01_id.template.json/rubric not yet loaded at runtime (emitters hardcode structure — RB-3); mode contract (C01-I3); cross-section consistency + downstream-gate tests.",
+      "C02: real STL export validation (C02-T7/V5) pending OpenSCAD-in-container end-to-end run.",
+      "C04 Layout / C06 verify: C04 constraint-doc emitter and C06 test-plan/bring-up assembler over verify verdicts — not started.",
+      "C05 FW: plan-builder-like SW-dev spec sub-package (functional spec from PRD + pin map from C03) — not started; bodesign owns the spec, not the code.",
       "Generic: a per-section 'verify existing content' capability (only C03 has real content verification today).",
-      "C05 FW: stand up a plan-builder-like SW-dev spec sub-package (functional spec from PRD + pin map from C03); bodesign owns the spec, not the code."
+      "RB-1: this plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates were bypassed. Conform or document the deviation.",
+      "RB-2: runtime loads its source-of-truth templates from plans/ (a draft zone) — fragile under graduation/archive; templates that runtime depends on should move under packages/."
     ]
   },
   "orchestration": "bodesign's MCP is a thin orchestrator across a very large professional span; each C0* layer references a specialized external skill (see each section's `skill`) to do its work. bodesign owns the scaffold, the cross-layer contract, and the readiness compass — not every domain's expertise.",

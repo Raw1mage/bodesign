@@ -1,42 +1,47 @@
 # C00/C01 Gap Audit
 
+> **RE-BASELINED 2026-06-07 (handoff).** This audit predated the runtime commits and was stale.
+> The authoritative coverage/gap map is now `doc_architecture.template.json → gap_summary`.
+> Boxes below are flipped to `[x]` only where code + passing tests exist (144 green).
+
 ## Current Status
 
-- **C00 function model**: planned. It has PRD template, readiness rubric, implementation spec, and now a consultant-agent system prompt.
-- **C01 function model**: planned. It has Rockbox canonical target outputs, readiness rubric, workflow spec, and C00-derived visual source boundary.
-- **Runtime status**: not implemented. Current artifacts are plan/spec/template files only.
+- **C00 function model**: runtime LANDED (draft-grade). Template+rubric loaded by `c00_prd_template.py`; `bodesign_c00_scaffold_prd` / `_readiness` / `_emit_prd` live with answer-state field readiness, next-best question, downstream-gate assessment, and a Markdown handoff *report*. Consultant prompt packaged as a skill. `requirement_planning` fields bound+validated against the template.
+- **C01 function model**: runtime LANDED (draft-grade). `bodesign_c01_emit_package` / `_next_question` / `_update_answers` / `_readiness` (+ optional concept-image) live over Rockbox canonical slots. NOTE: emitters hardcode structure — `c01_id.template.json`/rubric are NOT yet loaded at runtime (C01-I1 genuinely undone).
+- **C02 function model**: runtime LANDED (draft-grade). package/openscad/export(stl·skp·step, toolchain-gated)/readiness live. Real STL export validation pending OpenSCAD-in-container.
+- **The remaining gap is NOT per-layer tools — it is the SPINE that connects them** (Cross-Cutting Gaps below): a drafted `work_packet.v1`/`blocker_return.v1` (in `c00_downstream_contract.md`) exists but is **not wired to runtime**. 15 tools, no conductor.
 
 ## C00 Remaining Gaps
 
 ### Prompt / Agent Packaging
 
 - [x] Draft C00 consultant system prompt.
-- [ ] Decide where C00 prompt lives at runtime: agent profile, skill, MCP workflow config, or template-driven prompt registry.
-- [ ] Define how C00 dispatches C01-C06 work packets without letting downstream agents mutate the PRD contract directly.
+- [x] Decide where C00 prompt lives at runtime: packaged as a skill source (`skills/c00-product-development-consultant/SKILL.md`).
+- [~] Define how C00 dispatches C01-C06 work packets without letting downstream agents mutate the PRD contract directly. — SCHEMA DRAFTED in `c00_downstream_contract.md` (`work_packet.v1`/`blocker_return.v1`); NOT wired to runtime. → Cross-Cutting.
 
 ### MCP / Runtime Tools
 
-- [ ] Template loader for `c00_prd.template.json` and `c00_prd.rubric.json`.
-- [ ] C00 scaffold function/tool for `Project Requirements` and conditional `RF Requirements`.
-- [ ] C00 answer-state file format.
-- [ ] C00 readiness function/tool with one next-best question.
-- [ ] C00 PRD emitter that preserves missing/drafted/external-needed/accepted-risk fields.
-- [ ] C00 handoff packet generator for C01-C06.
+- [x] Template loader for `c00_prd.template.json` and `c00_prd.rubric.json`.
+- [x] C00 scaffold function/tool for `Project Requirements` and conditional `RF Requirements`.
+- [x] C00 answer-state file format.
+- [x] C00 readiness function/tool with one next-best question.
+- [x] C00 PRD emitter that preserves missing/drafted/external-needed/accepted-risk fields.
+- [~] C00 handoff packet generator for C01-C06. — Markdown handoff *report* exists in `_emit_prd`; a structured `work_packet.v1` *emitter* does not. → Cross-Cutting.
 
 ### Integration
 
-- [ ] Replace or bind `requirement_planning.REQUIREMENT_FIELDS` to the C00 template instead of hard-coded fields.
+- [x] Bind `requirement_planning` fields to the C00 template (validated against section/field bindings; fail-fast on missing field). Full hard-coded-field *removal* not required — API shape preserved.
 - [ ] Feed C00 readiness into `package_readiness` instead of treating PRD as merely present/missing.
-- [ ] Add C00 dispatch contract for downstream agents: input scope, output packet, blocker return format.
+- [~] Add C00 dispatch contract for downstream agents: input scope, output packet, blocker return format. — drafted in doc, not wired.
 - [ ] Add event/history state so C00 can resume an interview without losing decisions.
 
 ### Verification
 
-- [ ] Template completeness tests for all 12 PRD sections and RF appendix.
-- [ ] Readiness scoring tests for missing/drafted/answered/external-needed/blocked/accepted-risk.
-- [ ] Next-best-question selection tests.
-- [ ] Downstream gate tests for C01/C02/C03/C04/C05/C06.
-- [ ] No-fallback tests: incomplete business/product/compliance decisions must not silently pass.
+- [x] Template completeness tests for all 12 PRD sections and RF appendix.
+- [x] Readiness scoring tests for missing/drafted/answered/external-needed/blocked/accepted-risk.
+- [x] Next-best-question selection tests.
+- [~] Downstream gate tests for C01/C02/C03/C04/C05/C06. — `_assess_downstream_gates` exists + readiness tests cover it; explicit per-downstream-layer gate assertions still thin.
+- [x] No-fallback tests: incomplete business/product/compliance decisions must not silently pass (missing answer_state fails fast).
 
 ## C01 Remaining Gaps
 
@@ -58,7 +63,7 @@
 
 ### MCP / Runtime Tools
 
-- [ ] Template loader for `c01_id.template.json` and `c01_id.rubric.json`.
+- [ ] Template loader for `c01_id.template.json` and `c01_id.rubric.json`. — **GENUINELY UNDONE (RB-3 / C01-I1)**: C01 emitters hardcode structure and never load these files; built out of order under their own dependents.
 - [x] C00→C01 visual/interface extractor.
 - [x] C01 scaffold function/tool that creates Rockbox canonical slots: `Ai file/`, `CMF/`, `Display UIUX/`.
 - [x] C01 source emitters for AI draft carriers under the canonical slots.
@@ -80,10 +85,20 @@
 - [ ] Downstream gate tests for C02/C03/C04/C05 constraints.
 - [ ] No-fallback tests: no arbitrary style, placement, CMF, or UI decision may pass as approved.
 
-## Cross-Cutting Gaps
+## Cross-Cutting Gaps (THE SPINE — highest-leverage remaining work)
+
+These tie the 15 already-built Cxx tools into a driven workflow. Per the implementation-spec's own
+"First Implementation Order", this backbone is the real dependency; it was deferred while per-layer
+emitters were built bottom-up. This is the recommended next batch (option B) after re-baseline.
 
 - [ ] Agent registry: define C00/C01/C02/C03/C04/C05/C06 roles, prompts, inputs, outputs, authority boundaries, and human gates.
-- [ ] Work packet schema: C00 dispatch → downstream agent output → blocker backflow to C00.
-- [ ] Human approval model: distinguish AI draft, human-approved, external-confirmed, and accepted-risk across all layers.
+- [~] Work packet schema: C00 dispatch → downstream agent output → blocker backflow to C00. — `work_packet.v1`/`blocker_return.v1` DRAFTED in `c00_downstream_contract.md`; **not wired to any runtime tool**.
+- [ ] Human approval model: distinguish AI draft, human-approved, external-confirmed, and accepted-risk across all layers. (Per-layer answer-states exist; no unified model.)
 - [ ] Folder/package state model: decide where answer state, draft carriers, readiness reports, and handoff packets live in the client-owned project folder.
 - [ ] Runtime UX: user stays in C00; downstream agents work in background and return questions to C00.
+
+## Re-baseline Debts (introduced/exposed by 2026-06-07 reconciliation)
+
+- [ ] **RB-1** Plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema). `.state.json` was force-set to `implementing` via `mode:sync` because forward gates validate the canonical set. Decision needed: conform to the canonical schema, or formally document the deviation in design.md.
+- [ ] **RB-2** Runtime (`c00_prd_template.py`) loads its source-of-truth templates from `plans/feature_doc-package-scaffold/` — a draft zone. Breaks on graduation/archive. Move runtime-depended templates under `packages/` (or a runtime config dir) and keep plans/ as the editable source.
+- [ ] **RB-3** = C01-I1 above: C01 runtime never loads `c01_id.template.json`/rubric.

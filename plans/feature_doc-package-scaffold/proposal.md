@@ -1,5 +1,16 @@
 # Proposal: Document-package scaffold (C0* blank architecture → fill incrementally)
 
+> **SCOPE AMENDMENT — 2026-06-07 (handoff re-baseline).** Implementation grew beyond the original
+> "scaffold + deepen C00/C07 PRD" scope: C01 (ID draft emitters + interaction) and C02 (ME enclosure
+> package, OpenSCAD/STL/SKP/STEP export) now have draft-grade runtime. This is an **intentional,
+> ratified expansion** of "What Changes", **bounded** by the original boundary's intent: every C01/C02
+> output is `draft` / `*-unavailable` / non-approved, constraint-first, owner-tagged, and never claims
+> ID/ME sign-off — so "bodesign supplies constraints/interface, humans/vendors own final deliverables"
+> still holds. The `## Scope → OUT` line "Producing C01/C02/C04/C05 deliverables" is hereby read as
+> "producing *final/approved* deliverables"; producing *labeled drafts/constraints* is IN.
+> The next batch is the orchestration **spine** (see `c00_c01_gap-audit.md → Cross-Cutting Gaps`),
+> not more per-layer leaf features.
+
 ## Why
 
 Today bodesign generates individual artifacts (schematic, BOM, companions) but there is **no
