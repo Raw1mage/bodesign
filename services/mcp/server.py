@@ -522,11 +522,20 @@ _EE_GROUP_TOOLS = {
 }
 
 
+# Deliverable rendering: LibreOffice (docx/pdf). Isolated so the core image can drop
+# the ~GB LibreOffice install. render_companion stays `ee` (it needs kicad-cli).
+_DOCS_GROUP_TOOLS = {
+    "bodesign_emit_doc",
+}
+
+
 def _group_of(name: str) -> str:
     if name in _ME_GROUP_TOOLS:
         return "me"
     if name in _EE_GROUP_TOOLS:
         return "ee"
+    if name in _DOCS_GROUP_TOOLS:
+        return "docs"
     return "core"
 
 

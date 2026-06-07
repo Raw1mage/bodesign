@@ -8,15 +8,40 @@
 # worker. Both mount the same bodesign-sessions volume (the shared project tree).
 services:
   bodesign:
-    # Core front: serve only the core group locally; forward me + ee to their workers.
+    # Lean core front: build from Dockerfile.core (no KiCad/LibreOffice/OpenSCAD/OCP).
+    # Serve only the core group locally; forward me + ee + docs to their workers.
+    build:
+      dockerfile: Dockerfile.core
     command: ["--transport", "http", "--uds", "/run/bodesign/bodesign.sock",
               "--host", "0.0.0.0", "--port", "8077", "--tools", "core"]
     environment:
       BODESIGN_ME_WORKER_URL: "http://bodesign-me:8077"
       BODESIGN_EE_WORKER_URL: "http://bodesign-ee:8077"
+      BODESIGN_DOCS_WORKER_URL: "http://bodesign-docs:8077"
     depends_on:
       - bodesign-me
       - bodesign-ee
+      - bodesign-docs
+
+  bodesign-docs:
+    image: bodesign-docs:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    command: ["--transport", "http", "--port", "8077", "--tools", "docs"]
+    volumes:
+      - "bodesign-sessions:/var/cache/bodesign/sessions"
+    environment:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+      BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8077/healthz').status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
 
   bodesign-ee:
     image: bodesign-ee:latest

@@ -1,0 +1,36 @@
+# bodesign-core — lean front + light-skill brain. Batch E Phase 3.
+#
+# The single externally-facing MCP. Carries ONLY light deps (mcp/starlette/uvicorn,
+# pygerber for gerber rasters) + the bodesign packages + pm-skills/plan-builder/self-
+# built skills (markdown). NO KiCad, NO LibreOffice, NO OpenSCAD, NO build123d — those
+# live in the me/ee/docs workers; the core forwards their tool groups. A core tool
+# whose worker is absent reports worker_unavailable (never fabricates).
+#
+# Build: docker build -f Dockerfile.core -t bodesign-core:latest .
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONIOENCODING=utf-8 \
+    PYTHONUTF8=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+COPY services/mcp/requirements.txt /app/services/mcp/requirements.txt
+RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt
+
+COPY packages /app/packages
+COPY services /app/services
+
+ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/component-knowledge:/app/packages/component-kb:/app/packages/doc-core:/app/packages/source-core:/app/packages/reverse-core:/app/packages/gerber-core:/app/packages/eda-bridge:/app/packages/workflow-core:/app/packages/storage-core:/app/packages/kicad-plugin:/app/services/mcp:/app" \
+    BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions
+
+ENTRYPOINT ["python", "/app/services/mcp/server.py"]
+CMD ["--transport", "stdio"]

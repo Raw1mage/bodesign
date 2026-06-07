@@ -79,8 +79,14 @@ mounted via the MCP-of-MCPs route (②) as upstream MCP servers.
   lean `Dockerfile.ee`, compose routes me+ee away from core. The core *process* stops
   executing EE work (failure-isolated); a lean `Dockerfile.core` (so the core *image*
   drops KiCad/LibreOffice too) follows Phase 3 once emit_doc's LibreOffice moves out.
-- **Phase 3 — optional `bodesign-docs`** (LibreOffice/kidoc — moves emit_doc out of
-  core) + mount `docxmcp`/`drawmiat` via MCP-of-MCPs; then a lean `Dockerfile.core`.
+- **Phase 3 — DONE: `bodesign-docs`** (LibreOffice — `emit_doc` tagged `docs`, lean
+  `Dockerfile.docs`) **+ lean `Dockerfile.core`** (no KiCad/LibreOffice/OpenSCAD/OCP).
+  The compose overlay now builds the core from `Dockerfile.core` and forwards
+  me+ee+docs, so **every heavy dependency lives only in its worker** and the core
+  image is finally slim. `docxmcp`/`drawmiat` are already independent MCP servers a
+  client connects to directly; true MCP-of-MCPs *aggregation* (bodesign re-exposing
+  their tools under one endpoint) remains an optional future enhancement — not needed
+  for them to be used alongside bodesign today.
 
 ## Non-goals
 
