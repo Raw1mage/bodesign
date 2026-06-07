@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from bodesign_workflow_core import assess_c02_constraint_readiness, emit_c02_enclosure_package, export_c02_skp, export_c02_stl, generate_c02_openscad
+from bodesign_workflow_core import assess_c02_constraint_readiness, emit_c02_enclosure_package, export_c02_skp, export_c02_step, export_c02_stl, generate_c02_openscad
 
 
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
@@ -158,6 +158,25 @@ class C02MePackageTests(unittest.TestCase):
         guide = (self.work / "C02-ME" / "SketchUp_Import_Guide.md").read_text(encoding="utf-8")
         self.assertIn("No `C02-ME/Enclosure.skp` file was generated", guide)
         self.assertIn("C02-ME/Enclosure.scad", guide)
+        self.assertFalse(result.to_dict()["me_approved"])
+
+    def test_export_step_reports_unavailable_and_writes_handoff(self):
+        emit_c02_enclosure_package(self.work, constraints={
+            "board_outline": {"width_mm": 80, "height_mm": 50},
+            "component_heights": [{"ref": "J1", "height_mm": 8}],
+        })
+        generate_c02_openscad(self.work, wall_thickness_mm=2.0, clearance_mm=1.0, lid_clearance_mm=0.4)
+
+        result = export_c02_step(self.work)
+
+        self.assertEqual("step_export_unavailable", result.status)
+        self.assertIsNone(result.step_path)
+        self.assertEqual("C02-ME/Enclosure.scad", result.source_path)
+        self.assertFalse((self.work / "C02-ME" / "Enclosure.step").exists())
+        handoff = (self.work / "C02-ME" / "STEP_Draft_Handoff.md").read_text(encoding="utf-8")
+        self.assertIn("No `C02-ME/Enclosure.step` file was generated", handoff)
+        self.assertIn("FreeCAD", handoff)
+        self.assertIn("CadQuery", handoff)
         self.assertFalse(result.to_dict()["me_approved"])
 
 

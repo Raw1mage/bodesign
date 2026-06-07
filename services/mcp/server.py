@@ -162,6 +162,11 @@ def _h_c02_export_skp(a: dict) -> Any:
     return export_c02_skp(a["out_dir"]).to_dict()
 
 
+def _h_c02_export_step(a: dict) -> Any:
+    from bodesign_workflow_core import export_c02_step
+    return export_c02_step(a["out_dir"]).to_dict()
+
+
 def _h_c03_export_mech_constraints(a: dict) -> Any:
     from bodesign_workflow_core import export_c03_mechanical_constraints
     return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
@@ -282,6 +287,9 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"out_dir": _STR, "openscad_bin": _STR}, "required": ["out_dir"]}},
     {"name": "bodesign_c02_export_skp", "handler": _h_c02_export_skp,
      "description": "Report native SketchUp SKP export as unavailable unless an explicit SketchUp-capable toolchain is later configured; updates SketchUp_Import_Guide.md and never fabricates Enclosure.skp.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR}, "required": ["out_dir"]}},
+    {"name": "bodesign_c02_export_step", "handler": _h_c02_export_step,
+     "description": "Report STEP draft export as unavailable unless an explicit CAD kernel/toolchain such as FreeCAD or CadQuery is configured; updates STEP_Draft_Handoff.md and never fabricates Enclosure.step.",
      "schema": {"type": "object", "properties": {"out_dir": _STR}, "required": ["out_dir"]}},
     {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
      "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",

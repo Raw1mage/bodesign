@@ -34,7 +34,7 @@ Make C00/C07 a consultant-led PRD layer: AI guides the user through product, bus
 
 ## Next Implementation Backlog
 
-- [ ] **C00-I1 Template loader** — load and validate `c00_prd.template.json` / `c00_prd.rubric.json` in `packages/workflow-core`.
+- [x] **C00-I1 Template loader** — load and validate `c00_prd.template.json` / `c00_prd.rubric.json` in `packages/workflow-core`.
 - [ ] **C00-I2 Scaffold function/tool** — create blank C00 PRD source files and answer-state records inside a token/project folder.
 - [ ] **C00-I3 Readiness function/tool** — compute field/section/gate/handoff readiness and return one highest-value next question.
 - [ ] **C00-I4 Emit function/tool** — render Markdown-first PRD and handoff report while preserving assumptions/open issues.
@@ -102,19 +102,19 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C02-T3 STL export** — implement `bodesign_c02_export_stl` with local OpenSCAD/CAD tool detection, real `Enclosure.stl` output when available, and explicit `export_unavailable` when not.
 - [x] **C02-T4 Readiness checker** — report constraint readiness before CAD generation, including blockers for board outline, heights, openings, thermal/RF, battery, and environment targets.
 - [x] **C02-T5 SketchUp import fallback** — emit `SketchUp_Import_Guide.md` and explicit `skp_export_unavailable` status when native SKP cannot be generated; native `bodesign_c02_export_skp` remains optional and toolchain-gated.
-- [ ] **C02-T6 STEP draft export** — optionally implement `bodesign_c02_export_step` only when a capable CAD toolchain exists, marking output as `draft_unapproved`.
+- [x] **C02-T6 STEP draft export** — implement `bodesign_c02_export_step` as a toolchain-gated handoff path: it writes `STEP_Draft_Handoff.md` and returns explicit `step_export_unavailable` when FreeCAD/CadQuery/OCP is unavailable, without fabricating `Enclosure.step`.
 - [ ] **C02-T7 Real STL toolchain validation** — when OpenSCAD is installed/configured, run an end-to-end sample that produces a real `Enclosure.stl` and records toolchain/version metadata; until then, keep `export_unavailable` explicit.
 - [x] **C02-V1 Readiness validation** — add tests for no guessed dimensions, CAD-source blockers, missing constraint ownership, and no printable/CAD export claim at readiness stage.
 - [x] **C02-V2 Package validation** — test package emitter files, owner-tagged pending constraints, vendor handoff wording, and no production ME approval.
 - [x] **C02-V3 Source/STL validation** — test OpenSCAD generation, explicit dimension requirements, STL export unavailable behavior, and no fake STL output.
-- [ ] **C02-V4 Optional handoff validation** — test SketchUp fallback, optional native SKP gating, and optional STEP gating.
+- [x] **C02-V4 Optional handoff validation** — test SketchUp fallback, optional native SKP gating, and optional STEP gating.
 - [ ] **C02-V5 Toolchain validation** — test real STL export only in an environment with OpenSCAD available; otherwise assert the unavailable path remains explicit and non-destructive.
 
 ### Post-Commit Execution Queue
 
-1. **C02-T7 / C02-V5** — validate real STL export after OpenSCAD is installed or configured on the MCP host.
-2. **C02-T6 / C02-V4** — add optional STEP draft export only if a capable toolchain exists; keep native SKP as toolchain-gated.
-3. **C00-I1–I4** — implement the C00 SSOT/PRD runtime scaffold, readiness, and emitter after the C02 prototype path is stable.
+1. **C02-T7 / C02-V5** — validate real STL export after OpenSCAD is installed or configured on the MCP host/container.
+2. **C00-I1–I4** — implement the C00 SSOT/PRD runtime scaffold, readiness, and emitter after the C02 prototype gates are explicit.
+3. **C01-N1–N5** — add field-state interaction support after the C00 SSOT model exists.
 
 ## C03 Circuit Engineering Lead
 

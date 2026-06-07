@@ -36,6 +36,8 @@ C02_OUTPUTS = {
     "sketchup_guide": Path("C02-ME") / "SketchUp_Import_Guide.md",
     "openscad": Path("C02-ME") / "Enclosure.scad",
     "stl": Path("C02-ME") / "Enclosure.stl",
+    "step": Path("C02-ME") / "Enclosure.step",
+    "step_handoff": Path("C02-ME") / "STEP_Draft_Handoff.md",
 }
 
 
@@ -170,6 +172,35 @@ class C02SkpExportResult:
             "viewable_draft_ready": bool(self.stl_path),
             "printable_draft_ready": bool(self.stl_path),
             "vendor_handoff_ready": False,
+            "me_approved": False,
+        }
+
+
+@dataclass(slots=True)
+class C02StepExportResult:
+    folder: str
+    step_path: str | None
+    status: str
+    message: str
+    handoff_path: str
+    source_path: str | None = None
+    stl_path: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        exported = self.status == "step_exported"
+        return {
+            "folder": self.folder,
+            "step_path": self.step_path,
+            "status": self.status,
+            "message": self.message,
+            "handoff_path": self.handoff_path,
+            "source_path": self.source_path,
+            "stl_path": self.stl_path,
+            "source_ready": bool(self.source_path),
+            "viewable_draft_ready": bool(self.stl_path) or exported,
+            "printable_draft_ready": bool(self.stl_path),
+            "vendor_handoff_ready": exported,
+            "draft_unapproved": exported,
             "me_approved": False,
         }
 
@@ -316,6 +347,27 @@ def export_c02_skp(
         status="skp_export_unavailable",
         message="Native SKP export requires an explicit SketchUp-capable toolchain; use the import guide with the available STL/source artifact instead.",
         guide_path=str(C02_OUTPUTS["sketchup_guide"]),
+        source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
+        stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
+    )
+
+
+def export_c02_step(
+    out_dir: str | Path,
+) -> C02StepExportResult:
+    """Report STEP export unavailability unless an explicit CAD toolchain exists."""
+    root = Path(out_dir)
+    source = root / C02_OUTPUTS["openscad"]
+    stl = root / C02_OUTPUTS["stl"]
+    handoff = root / C02_OUTPUTS["step_handoff"]
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text(_render_step_handoff_status(source.exists(), stl.exists()), encoding="utf-8")
+    return C02StepExportResult(
+        folder=str(root),
+        step_path=None,
+        status="step_export_unavailable",
+        message="STEP draft export requires a configured CAD kernel/toolchain such as FreeCAD or CadQuery; no fake STEP was created.",
+        handoff_path=str(C02_OUTPUTS["step_handoff"]),
         source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
         stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
     )
@@ -718,6 +770,28 @@ def _render_sketchup_fallback_status(source_exists: bool, stl_exists: bool) -> s
         "## Limits",
         "- SKP import/re-save is a review workflow, not ME approval.",
         "- Do not treat this guide as proof that native SKP export succeeded.",
+        "",
+    ])
+
+
+def _render_step_handoff_status(source_exists: bool, stl_exists: bool) -> str:
+    artifact = "C02-ME/Enclosure.stl" if stl_exists else "C02-ME/Enclosure.scad" if source_exists else "no 3D artifact yet"
+    return "\n".join([
+        "# STEP Draft Handoff",
+        "",
+        "## Native STEP Status",
+        "- `step_export_unavailable`: true",
+        "- Reason: no explicit FreeCAD, CadQuery, OCP, or equivalent CAD-kernel exporter is configured.",
+        "- No `C02-ME/Enclosure.step` file was generated.",
+        "",
+        "## Available Source Artifact",
+        f"- Current artifact: `{artifact}`",
+        "- A vendor or ME engineer may use the source/STL as a reference to rebuild or refine a proper STEP model.",
+        "- Any future STEP output must be marked `draft_unapproved` until reviewed by ME/vendor.",
+        "",
+        "## Limits",
+        "- This handoff is not DFM, tolerance, strength, waterproofing, thermal, or production approval.",
+        "- Do not treat this note as proof that STEP export succeeded.",
         "",
     ])
 

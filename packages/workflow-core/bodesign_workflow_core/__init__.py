@@ -27,6 +27,13 @@ from .package_readiness import (
     assess_package_readiness,
     render_readiness_markdown,
 )
+from .c00_prd_template import (
+    C00PrdRubric,
+    C00PrdTemplate,
+    C00TemplateError,
+    load_c00_prd_rubric,
+    load_c00_prd_template,
+)
 from .c01_id_package import (
     C01ConceptImageResult,
     C01PackageArtifact,
@@ -42,10 +49,12 @@ from .c02_me_package import (
     C02OpenScadResult,
     C02PackageResult,
     C02SkpExportResult,
+    C02StepExportResult,
     C02StlExportResult,
     assess_c02_constraint_readiness,
     emit_c02_enclosure_package,
     export_c02_skp,
+    export_c02_step,
     export_c02_stl,
     generate_c02_openscad,
 )
@@ -63,6 +72,9 @@ from .reference_crosscheck import (
 
 __all__ = [
     "CandidateDiffItem",
+    "C00PrdRubric",
+    "C00PrdTemplate",
+    "C00TemplateError",
     "C01ConceptImageResult",
     "C01PackageArtifact",
     "C01PackageReadiness",
@@ -72,6 +84,7 @@ __all__ = [
     "C02OpenScadResult",
     "C02PackageResult",
     "C02SkpExportResult",
+    "C02StepExportResult",
     "C02StlExportResult",
     "C03MechanicalConstraintResult",
     "ClarifyingQuestion",
@@ -105,10 +118,13 @@ __all__ = [
     "emit_c01_rockbox_package",
     "emit_c02_enclosure_package",
     "export_c02_skp",
+    "export_c02_step",
     "export_c02_stl",
     "export_c03_mechanical_constraints",
     "generate_c01_concept_image",
     "generate_c02_openscad",
+    "load_c00_prd_rubric",
+    "load_c00_prd_template",
     "plan_design_intent",
     "plan_reference_board_workflow",
     "render_gap_report_markdown",

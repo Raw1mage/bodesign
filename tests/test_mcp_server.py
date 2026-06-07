@@ -165,6 +165,33 @@ class McpServerTests(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_run_tool_c02_export_step_reports_unavailable(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-step-", dir=PRIVATE_BASE))
+        try:
+            source = self.server.run_tool("bodesign_c02_generate_openscad", {
+                "out_dir": str(work),
+                "constraints": {
+                    "board_outline": {"width_mm": 80, "height_mm": 50},
+                    "component_heights": [{"ref": "J1", "height_mm": 8}],
+                },
+                "wall_thickness_mm": 2.0,
+                "clearance_mm": 1.0,
+                "lid_clearance_mm": 0.4,
+            })
+            self.assertTrue(source["ok"])
+
+            result = self.server.run_tool("bodesign_c02_export_step", {"out_dir": str(work)})
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("step_export_unavailable", result["result"]["status"])
+            self.assertIsNone(result["result"]["step_path"])
+            self.assertFalse((work / "C02-ME" / "Enclosure.step").exists())
+            self.assertTrue((work / "C02-ME" / "STEP_Draft_Handoff.md").exists())
+            self.assertFalse(result["result"]["me_approved"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def test_run_tool_c03_export_mechanical_constraints(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c03-", dir=PRIVATE_BASE))
