@@ -507,7 +507,7 @@
         "elicit": "partial",
         "generate": "partial",
         "verify": "partial",
-        "note": "Constraints + placement draft + DRC; full Board/Gerber by the layout engineer (by design)."
+        "note": "Constraints + placement draft + DRC; full Board/Gerber by the layout engineer (by design). Batch C: bodesign_c04_emit_layout_package assembles Layout_Constraints.json + Placement_Constraints.md from C01 interface + C03 mechanical constraints (board outline/mounting/placement/stackup stay layout-owned, never fabricated); bodesign_c04_readiness reports present groups vs layout-owned pending without claiming board/Gerber/approval."
       },
       "skill": [
         "kicad (analyze_gerbers)",

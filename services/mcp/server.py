@@ -246,6 +246,16 @@ def _h_enter_c01_mode(a: dict) -> Any:
     return enter_c01_mode(a["folder"], c00=a.get("c00"), answers=a.get("answers"), objective=a.get("objective")).to_dict()
 
 
+def _h_c04_emit_layout_package(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c04_layout_package
+    return emit_c04_layout_package(a["out_dir"], a.get("c01"), a.get("c03")).to_dict()
+
+
+def _h_c04_readiness(a: dict) -> Any:
+    from bodesign_workflow_core import assess_c04_layout_readiness
+    return assess_c04_layout_readiness(a["folder"]).to_dict()
+
+
 def _h_crosscheck(a: dict) -> Any:
     from bodesign_workflow_core import crosscheck_nets
     return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
@@ -383,6 +393,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
      "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
+     "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c04_readiness", "handler": _h_c04_readiness,
+     "description": "Report C04 layout-constraint readiness: which upstream constraint groups are present and what remains layout-owned (board outline, mounting, placement, stackup). Never claims board/Gerber/layout approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
     {"name": "bodesign_reference_crosscheck", "handler": _h_crosscheck,
      "description": "Cross-check a generated net set vs a reference product's nets (control group): matched/missing/extra + coverage.",
      "schema": {"type": "object", "properties": {"generated_nets": {"type": "array", "items": _STR},

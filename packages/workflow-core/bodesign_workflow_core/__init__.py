@@ -23,6 +23,12 @@ from .mode_contracts import (
     enter_c01_mode,
     layer_relevant_prd_sections,
 )
+from .c04_layout_constraints import (
+    C04LayoutReadiness,
+    C04LayoutResult,
+    assess_c04_layout_readiness,
+    emit_c04_layout_package,
+)
 from .gap_report import (
     EvidenceArtifactSummary,
     GapItem,
@@ -134,6 +140,8 @@ __all__ = [
     "C01PackageReadiness",
     "C01PackageResult",
     "C01TemplateError",
+    "C04LayoutReadiness",
+    "C04LayoutResult",
     "C02ConstraintItem",
     "C02ConstraintReadiness",
     "C02OpenScadResult",
@@ -194,6 +202,8 @@ __all__ = [
     "list_blockers",
     "list_work_packets",
     "return_blocker",
+    "assess_c04_layout_readiness",
+    "emit_c04_layout_package",
     "load_agent_registry",
     "load_c00_prd_rubric",
     "load_c00_prd_template",
