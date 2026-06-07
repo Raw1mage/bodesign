@@ -1,5 +1,27 @@
 # Design: C00 PRD expert-consultant layer
 
+## Artifact-set deviation from plan-builder (resolves RB-1)
+
+This package deliberately uses a **custom artifact set** — `proposal.md`, `design.md`,
+`tasks.md`, `implementation-spec.md`, the per-layer template/rubric JSON, and the
+concern docs (`toolchain_workers.md`, `c00_downstream_contract.md`, etc.) — rather
+than plan-builder's canonical `spec.md` + `idef0.json` + `grafcet.json` +
+`sequence.json` + `data-schema.json`. Reasons:
+
+- The work is a **multi-layer (C00–C07) program**, not a single feature; one
+  `idef0`/`grafcet`/`sequence` pair cannot represent seven layers + a worker
+  topology without being misleadingly reductive.
+- The product's **own** IDEF0/GRAFCET already live, accurate, in
+  `specs/product/pcb_ai_viewer/` (the graduated spec). Authoring a second, plan-zone
+  set just to satisfy a lifecycle gate would duplicate and drift from those.
+- Fabricating canonical diagrams solely to pass `plan_advance` validation would
+  violate this project's core rule — **demonstrate, don't claim; no fabrication.**
+
+Consequence: `.state.json` was advanced `proposed → implementing` via `mode:sync`
+(forward gates bypassed) on 2026-06-07. This is the **documented, accepted deviation**
+that closes RB-1. If/when this package graduates into `specs/`, the canonical
+artifacts are authored then from the now-real runtime (not invented up-front).
+
 ## Product Intent
 
 C00/C07 is not a document generator. It is the front-door expert consultant that turns an incomplete product idea into a PRD contract that C01-C06 teams can use. The MCP stores state, scaffolds files, renders outputs, and computes readiness. The AI workflow skill provides expert questioning, synthesis, risk interpretation, and cross-layer teaching. Humans own business choices, approval, and professional sign-off.

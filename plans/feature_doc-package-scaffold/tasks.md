@@ -106,14 +106,14 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C01-N3 Next question tool** — add `bodesign_c01_next_question` to diagnose the highest-value missing preference.
 - [x] **C01-N4 Update answers tool** — add `bodesign_c01_update_answers` to merge user answers, regenerate the package, and recompute readiness.
 - [x] **C01-N5 Field-level readiness** — upgrade `bodesign_c01_readiness` from file existence checks to field-state and downstream blocker checks.
-- [ ] **C01-N6 Constraint hardening** — require each exposed component constraint to include owner, status, downstream targets, and risk notes.
-- [ ] **C01-N7 Reference image intake** — accept user-uploaded/reference images, extract form/CMF/UI cues, ask what should be borrowed or avoided, and keep cues `reference-derived` until user confirmation.
-- [ ] **C01-N8 Reference traceability** — persist source image paths, cue summaries, confirmation status, and target artifact mapping in C01 handoff output.
+- [x] **C01-N6 Constraint hardening** — each exposed-component constraint now carries owner + decision_status + downstream_targets + risk_notes (keyed by component type via `_COMPONENT_CONSTRAINT_MAP`).
+- [x] **C01-N7 Reference image intake** — `c01_add_reference_image` records form/CMF/UI/component/mood cues (source path + generalized observed cue + target artifact) kept `reference-derived` until `c01_confirm_reference_cue`; MCP `bodesign_c01_add_reference_image` / `_confirm_reference_cue`.
+- [x] **C01-N8 Reference traceability** — `C01-ID/reference_cues.json` (schema v1) persists source image, cue summary, confirmation status, and target artifact per cue.
 
 ### C01 Concept Image Support
 
 - [x] **C01-A1 Skill prompt generation** — the strengthened `c01-industrial-design-requirements` skill now carries a Moodboard & Concept-Prompt framework (archetype + CMF route + brand tone → reference-only prompts, copyright-safe) feeding `bodesign_c01_generate_concept_image`.
-- [ ] **C01-A2 Prompt artifacts** — optionally persist `Concept_Image_Prompts.md`, `Moodboard_Prompts.md`, and `UI_Concept_Prompts.md` for ID handoff.
+- [x] **C01-A2 Prompt artifacts** — `emit_c01_concept_prompts` persists reference-only `Concept_Image_Prompts.md` / `Moodboard_Prompts.md` / `UI_Concept_Prompts.md` from accumulated intent; MCP `bodesign_c01_emit_concept_prompts`.
 - [x] **C01-A3 Image generation tool** — add `bodesign_c01_generate_concept_image` behind explicit Google AI Studio provider/API key config; fail fast when unavailable and never fallback silently.
 - [x] **C01-A4 Reference metadata** — write `Concept_Reference.md` with image path, prompt, provider/model, timestamp, and reference-only limitation statement.
 - [x] **C01-A5 Add-on tests** — verify generated images do not affect C01 MVP readiness and missing API credentials produce explicit errors.

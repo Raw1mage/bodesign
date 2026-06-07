@@ -19,7 +19,7 @@
 
 - [x] Draft C00 consultant system prompt.
 - [x] Decide where C00 prompt lives at runtime: packaged as a skill source (`skills/c00-product-development-consultant/SKILL.md`).
-- [~] Define how C00 dispatches C01-C06 work packets without letting downstream agents mutate the PRD contract directly. — SCHEMA DRAFTED in `c00_downstream_contract.md` (`work_packet.v1`/`blocker_return.v1`); NOT wired to runtime. → Cross-Cutting.
+- [x] Define how C00 dispatches C01-C06 work packets without letting downstream agents mutate the PRD contract directly. — WIRED (Batch B): `orchestration.dispatch_work_packet` (`work_packet.v1`) + `return_blocker`/`ingest_blocker`; downstream layers inherit allowed/forbidden actions from the registry and return blockers to C00.
 
 ### MCP / Runtime Tools
 
@@ -28,13 +28,13 @@
 - [x] C00 answer-state file format.
 - [x] C00 readiness function/tool with one next-best question.
 - [x] C00 PRD emitter that preserves missing/drafted/external-needed/accepted-risk fields.
-- [~] C00 handoff packet generator for C01-C06. — Markdown handoff *report* exists in `_emit_prd`; a structured `work_packet.v1` *emitter* does not. → Cross-Cutting.
+- [x] C00 handoff packet generator for C01-C06. — `dispatch_work_packet` emits structured `work_packet.v1` (Batch B), in addition to the Markdown handoff report in `_emit_prd`.
 
 ### Integration
 
 - [x] Bind `requirement_planning` fields to the C00 template (validated against section/field bindings; fail-fast on missing field). Full hard-coded-field *removal* not required — API shape preserved.
-- [ ] Feed C00 readiness into `package_readiness` instead of treating PRD as merely present/missing.
-- [~] Add C00 dispatch contract for downstream agents: input scope, output packet, blocker return format. — drafted in doc, not wired.
+- [x] Feed C00 readiness into `package_readiness` — when a C00 answer-state exists, the prd deliverable reflects field-level readiness (100% → present, else partial) with the next C00 question as its action.
+- [x] Add C00 dispatch contract for downstream agents: input scope, output packet, blocker return format. — WIRED (Batch B): work_packet.v1 + blocker_return.v1 in `orchestration.py`; the C00 autonomous loop (Batch D) drives it.
 - [ ] Add event/history state so C00 can resume an interview without losing decisions.
 
 ### Verification
@@ -59,9 +59,9 @@
 ### Prompt / Agent Packaging
 
 - [x] Draft C01 ID agent system prompt.
-- [ ] Define C01 as a downstream worker agent that consumes C00 work packets, not as a user-facing requirement interviewer.
-- [ ] Define C01 blocker return format to C00.
-- [ ] Add C01 mode/session contract: how C00 enters C01 mode, how C01 asks user-facing follow-ups, and how unresolved decisions return to C00.
+- [x] Define C01 as a downstream worker agent that consumes C00 work packets, not as a user-facing requirement interviewer. — `mode_contracts.enter_c01_mode` dispatches a C01 work packet from the PRD handoff sections; C01 produces drafts + asks only C01 preference questions.
+- [x] Define C01 blocker return format to C00. — `blocker_return.v1` via `return_blocker` (severity/owner/proposed_state, affected C00 fields).
+- [x] Add C01 mode/session contract (C01-I3): how C00 enters C01 mode, how C01 asks user-facing follow-ups, and how unresolved decisions return to C00. — `enter_c01_mode` + `return_blocker`; C01 never mutates the PRD.
 
 ### MCP / Runtime Tools
 
@@ -101,6 +101,6 @@ These tie the 15 Cxx tools into a driven workflow. Runtime in `packages/workflow
 
 ## Re-baseline Debts (introduced/exposed by 2026-06-07 reconciliation)
 
-- [ ] **RB-1** (OPEN) Plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema). `.state.json` was force-set to `implementing` via `mode:sync` because forward gates validate the canonical set. Decision needed: conform to the canonical schema, or formally document the deviation in design.md.
+- [x] **RB-1** (RESOLVED by documentation) The custom-artifact-set deviation is now formally documented in `design.md` ("Artifact-set deviation from plan-builder"): the program is multi-layer (one idef0/grafcet can't represent C00–C07 + worker topology), the product's real IDEF0/GRAFCET already live in `specs/product/pcb_ai_viewer/`, and fabricating canonical diagrams just to pass `plan_advance` would violate no-fabrication. Canonical artifacts are authored at graduation, from real runtime.
 - [x] **RB-2** (DONE, Batch B) Runtime-depended templates moved to `packages/workflow-core/bodesign_workflow_core/templates/` (`c00_prd.template.json`, `c00_prd.rubric.json`, `doc_architecture.template.json`); loaders updated; `plans/.../TEMPLATES.md` records the move. C01 templates relocate when C01-I1 lands.
 - [x] **RB-3** (DONE) = C01-I1 above: `c01_id_template.py` loads the template/rubric and binds the emitter via `validate_c01_outputs_binding`; templates relocated into the package.
