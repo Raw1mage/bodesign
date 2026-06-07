@@ -230,6 +230,123 @@ def emit_c00_prd_markdown(folder: str | Path) -> C00EmitResult:
     return C00EmitResult(folder=str(root), files=written, readiness=readiness)
 
 
+@dataclass(slots=True)
+class C00UpdateResult:
+    folder: str
+    answer_state_path: str
+    updated: list[str]
+    not_found: list[str]
+    ambiguous: list[str]
+    readiness: C00ReadinessResult
+    emitted_files: list[str]
+    status: str = "answers-updated"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "folder": self.folder,
+            "answer_state_path": self.answer_state_path,
+            "updated": list(self.updated),
+            "not_found": list(self.not_found),
+            "ambiguous": list(self.ambiguous),
+            "emitted_files": list(self.emitted_files),
+            "status": self.status,
+            "readiness": self.readiness.to_dict(),
+            "human_approved": False,
+        }
+
+
+_C00_SECTION_STATE_PRIORITY = ("blocked", "external-needed", "missing", "drafted")
+
+
+def _section_state_from_fields(fields: dict[str, Any]) -> str:
+    states = {f.get("state", "missing") for f in fields.values()}
+    if not states:
+        return "missing"
+    if states <= {"answered", "accepted-risk"}:
+        return "answered"
+    for s in _C00_SECTION_STATE_PRIORITY:
+        if s in states:
+            return s
+    return "drafted"
+
+
+def _normalize_c00_answer(raw: Any, allowed: set[str]) -> tuple[Any, str]:
+    """A raw answer is either a value (→ answered) or {value, state}. State must be
+    in the rubric's allowed set; never silently coerces an unknown state."""
+    if isinstance(raw, dict):
+        state = raw.get("state", "answered")
+        if state not in allowed:
+            raise C00TemplateError(f"invalid answer state {state!r} (allowed: {sorted(allowed)})")
+        return raw.get("value"), state
+    return raw, "answered"
+
+
+def _write_answer_state(root: Path, state: dict[str, Any]) -> None:
+    (root / "C00-PRD" / "answer_state.json").write_text(
+        json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def c00_update_answers(
+    folder: str | Path,
+    answers: dict[str, Any],
+    *,
+    regenerate: bool = True,
+) -> C00UpdateResult:
+    """Record user/consultant answers into the C00 PRD answer-state, recompute
+    readiness, and (by default) regenerate the PRD Markdown.
+
+    `answers` maps a field key to a value, or to `{value, state}` (state ∈ the
+    rubric's allowed set). Keys may be `field` or the qualified `section_id.field`;
+    an unqualified key that exists in multiple sections is reported as ambiguous
+    (not guessed). Unknown keys are reported in `not_found`. Fails fast if C00 has
+    not been scaffolded. Never marks human approval."""
+    root = Path(folder)
+    state = _read_answer_state(root / "C00-PRD" / "answer_state.json")  # fail-fast if absent
+    if not isinstance(answers, dict) or not answers:
+        raise C00TemplateError("answers must be a non-empty object for C00 update")
+    allowed = set(state.get("allowed_states") or
+                  ["missing", "drafted", "answered", "external-needed", "blocked", "accepted-risk"])
+
+    index: dict[str, list[tuple[dict[str, Any], str]]] = {}
+    for document in state["documents"].values():
+        for section in document["sections"]:
+            for field_key in section["fields"]:
+                index.setdefault(field_key, []).append((section, field_key))
+                index[f"{section['id']}.{field_key}"] = [(section, field_key)]
+
+    updated: list[str] = []
+    not_found: list[str] = []
+    ambiguous: list[str] = []
+    for raw_key, raw_val in answers.items():
+        matches = index.get(raw_key)
+        if not matches:
+            not_found.append(raw_key)
+            continue
+        if len(matches) > 1:
+            ambiguous.append(raw_key)
+            continue
+        section, field_key = matches[0]
+        value, field_state = _normalize_c00_answer(raw_val, allowed)
+        field = section["fields"][field_key]
+        field["state"] = field_state
+        field["value"] = value
+        field["source"] = "user"
+        updated.append(raw_key)
+
+    for document in state["documents"].values():
+        for section in document["sections"]:
+            section["state"] = _section_state_from_fields(section["fields"])
+    state["status"] = "answers-updated"
+    _write_answer_state(root, state)
+
+    readiness = assess_c00_prd_readiness(root)
+    emitted: list[str] = []
+    if regenerate:
+        emitted = emit_c00_prd_markdown(root).files
+    return C00UpdateResult(str(root), str(Path("C00-PRD") / "answer_state.json"),
+                           updated, not_found, ambiguous, readiness, emitted)
+
+
 def _read_json_object(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise C00TemplateError(f"C00 artifact not found: {path}")

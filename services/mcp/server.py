@@ -143,6 +143,11 @@ def _h_c00_emit_prd(a: dict) -> Any:
     return emit_c00_prd_markdown(a["folder"]).to_dict()
 
 
+def _h_c00_update_answers(a: dict) -> Any:
+    from bodesign_workflow_core import c00_update_answers
+    return c00_update_answers(a["folder"], a["answers"], regenerate=a.get("regenerate", True)).to_dict()
+
+
 def _h_c01_readiness(a: dict) -> Any:
     from bodesign_workflow_core import assess_c01_package_readiness
     return assess_c01_package_readiness(a["folder"]).to_dict()
@@ -414,6 +419,10 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c00_emit_prd", "handler": _h_c00_emit_prd,
      "description": "Render Markdown-first C00 PRD outputs from answer_state.json: generated Project/RF requirements and C00_Handoff_Report. Preserves missing/drafted/external-needed/blocked/accepted-risk markers and never marks human approval.",
      "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c00_update_answers", "handler": _h_c00_update_answers,
+     "description": "Record user/consultant answers into the C00 PRD answer-state, recompute readiness, and regenerate the PRD Markdown. `answers` maps a field key (or qualified `section_id.field`) to a value, or to {value, state} where state ∈ missing/drafted/answered/external-needed/blocked/accepted-risk. Unknown keys → not_found; an unqualified key in multiple sections → ambiguous (not guessed). Never marks human approval. This is how C00 field answers get recorded (the consultant's intake), without hand-editing answer_state.json.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "regenerate": {"type": "boolean"}},
+                "required": ["folder", "answers"]}},
     {"name": "bodesign_c01_emit_package", "handler": _h_c01_emit,
      "description": "Emit a Rockbox-like C01 ID package: Ai file/Design_Direction.md, CMF/CMF_Direction.md, Display UIUX/UIUX_Requirements.md, Interface_Constraints.json, and ID handoff, with draft/decision markers.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
