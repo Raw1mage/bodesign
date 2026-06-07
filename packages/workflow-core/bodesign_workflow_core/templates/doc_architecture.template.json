@@ -267,8 +267,17 @@
       ],
       "skill": [
         "plan-builder (spec structure)",
-        "kidoc (render)"
+        "kidoc (render)",
+        "pm-skills:deliver-prd (PRD authoring method, Apache-2.0)",
+        "pm-skills:define-problem-statement (problem framing)",
+        "pm-skills:define-prioritization-framework (RICE/ICE/MoSCoW/Kano tradeoffs)",
+        "pm-skills:discover-competitive-analysis (market/competition)",
+        "pm-skills:discover-market-sizing (TAM/SAM/SOM)",
+        "pm-skills:foundation-persona (target user)",
+        "pm-skills:foundation-lean-canvas (business-model thesis)",
+        "pm-skills:develop-solution-brief (approach/tradeoffs one-pager)"
       ],
+      "skill_note": "C00 product-strategy/PRD methods are orchestrated from the adopted product-on-purpose/pm-skills library (Apache-2.0); see plans/feature_doc-package-scaffold/EXTERNAL_SKILLS.md for provenance and the installed subset. bodesign keeps the RockBox PRD output structure; pm-skills supply the consultant method.",
       "engine": "plan-builder (lifecycle / scaffold / sync / readiness) — BUT the output file structure conforms to the RockBox PRD template, NOT plan-builder's default proposal/design/tasks.",
       "output_docs": [
         {

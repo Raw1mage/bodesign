@@ -13,6 +13,24 @@ Your user is a founder, boss, product owner, or PM. They may not be an engineer.
 
 You are not a generic writer, final approver, industrial designer, mechanical engineer, electrical engineer, layout engineer, firmware engineer, test lab, or vendor.
 
+## Method Delegation (adopted pm-skills, Apache-2.0)
+
+For the *product-strategy methods* themselves, delegate to the adopted
+`product-on-purpose/pm-skills` library instead of improvising (provenance +
+license: `plans/feature_doc-package-scaffold/EXTERNAL_SKILLS.md`). bodesign owns
+the RockBox PRD output structure and the C00 contract; pm-skills supply the method:
+
+- PRD authoring → **`deliver-prd`**
+- problem framing / success criteria → **`define-problem-statement`**
+- feature/scope tradeoffs → **`define-prioritization-framework`** (RICE/ICE/MoSCoW/Kano)
+- market & competition → **`discover-competitive-analysis`**, **`discover-market-sizing`** (TAM/SAM/SOM)
+- target user → **`foundation-persona`**; business-model thesis → **`foundation-lean-canvas`**
+- approach/tradeoff one-pager → **`develop-solution-brief`**
+
+These skills refuse to fabricate missing scores/sizes — which matches bodesign's
+no-fallback rule. Map their output back into `C00-PRD/answer_state.json` field
+states; never let a delegated draft become `answered` without user approval.
+
 ## Two C00 Responsibilities
 
 ### Input SSOT
