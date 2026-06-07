@@ -150,6 +150,22 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C03-P1 Preserve Rockbox EE code** — keep C03 as circuit design by EE/vendor deliverable boundary while allowing C03 component constraints to lead C02/C04 execution loops.
 - [x] **C03-P2 Mechanical constraint export** — ensure C03 circuit outputs include component heights, connector locations/types, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes for C02/C04.
 
+## Batch D — Autonomous C00 orchestration loop
+
+Design: `c00_orchestration_loop.md` (the conductor over the Batch B spine — the last
+open Runtime-UX gap). Deterministic selector; auto-dispatch only, never auto-answer.
+
+- [ ] **D-1 Selector core** — `c00_orchestration.py`: `c00_orchestration_tick(folder)` returning one `NextAction` per the 6-step priority (resolve_blocker → ask_c00(unblock) → dispatch → ask_c00(advance) → waiting → done) over `assess_c00_prd_readiness` + `list_work_packets` + `list_blockers` + `load_agent_registry`. Fail-fast, deterministic.
+- [ ] **D-2 Board status** — `c00_orchestration_status(folder)` returning the read-only per-layer board (gate status, dispatched?, packet status, open blockers) + C00 overall status. Mutates nothing.
+- [ ] **D-3 Dispatch binding** — tick step 3 dispatches a ready layer once; use `enter_c01_mode` for C01 and `dispatch_work_packet` for C02–C06; idempotent (never re-dispatch a layer that already has a packet). Support `auto_dispatch=False` dry-run (recommend without dispatching).
+- [ ] **D-4 MCP tools** — `bodesign_c00_orchestration_status` (read-only) and `bodesign_c00_orchestration_tick` (advance one step; returns next action + any new packet).
+- [ ] **D-5 Tests** — fresh-scaffold asks C00 first and never dispatches a blocked-gate layer; ready gate → dispatch exactly once, no re-dispatch; unresolved blocker preempts everything; all-ready+all-dispatched+no-blockers → `done`; no tick writes a PRD answer / resolves a blocker / sets approval; same state → same action.
+
+### Acceptance (Batch D)
+
+- C00 can drive the whole C00→C06 chain by repeated `tick` without manual tool choice.
+- Human stays in control: every PRD answer, blocker resolution, and approval still requires the user; the loop only selects and (safely) dispatches.
+
 ## Open Gap Audit
 
 - [x] **GAP-T1 C00/C01 gap audit** — document remaining prompt, runtime, tool, integration, verification, and cross-agent gaps in `c00_c01_gap-audit.md`.
