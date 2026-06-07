@@ -21,9 +21,17 @@ shell or gateway is required.
 - **Verify** in four layers: ERC/DRC · reference cross-check (control group) · SPICE · EMC/thermal.
 - **Track readiness** and emit shareable docs (docx/pdf) + readable companions for every engineering file.
 
-Architecture overview: [IDEF0 functional decomposition](specs/product/pcb_ai_viewer/idef0.svg) ·
-[GRAFCET runtime](specs/product/pcb_ai_viewer/grafcet.svg) · full spec in
-[`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md).
+## Architecture diagrams
+
+Full spec in [`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md).
+
+**IDEF0 functional decomposition (A0)**
+
+![IDEF0 functional decomposition](specs/product/pcb_ai_viewer/idef0.svg)
+
+**GRAFCET runtime (generation loop)**
+
+![GRAFCET runtime](specs/product/pcb_ai_viewer/grafcet.svg)
 
 ## Run
 

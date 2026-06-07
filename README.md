@@ -19,9 +19,17 @@ _語言：**繁體中文** · [English](./README.en.md)_
 - **驗證**四層：ERC/DRC · 對照組交叉檢核 · SPICE · EMC/熱分析。
 - **追蹤就緒度**，並為每個工程檔產出可讀伴隨檔（docx/pdf）與分享文件。
 
-架構總覽：[IDEF0 功能分解](specs/product/pcb_ai_viewer/idef0.svg) ·
-[GRAFCET 執行流程](specs/product/pcb_ai_viewer/grafcet.svg) · 完整規格見
-[`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md)。
+## 架構圖
+
+完整規格見 [`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md)。
+
+**IDEF0 功能分解（A0）**
+
+![IDEF0 功能分解](specs/product/pcb_ai_viewer/idef0.svg)
+
+**GRAFCET 執行流程（生成迴圈）**
+
+![GRAFCET 執行流程](specs/product/pcb_ai_viewer/grafcet.svg)
 
 ## 執行
 
