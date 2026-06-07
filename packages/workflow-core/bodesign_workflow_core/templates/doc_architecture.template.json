@@ -548,9 +548,9 @@
       "coverage": {
         "fill": "partial",
         "elicit": "partial",
-        "generate": "gap",
-        "verify": "gap",
-        "note": "Upgraded: C05 is a software-development architecture spec (plan-builder-like), an extension of the PRD's functional description. bodesign maintains the spec, NOT the firmware code. Only the pin-map bridge exists today."
+        "generate": "partial",
+        "verify": "partial",
+        "note": "C05 is a software-development architecture spec (plan-builder-like), an extension of the PRD's functional description. bodesign maintains the spec, NOT the firmware code. Batch C: bodesign_c05_scaffold_fw_spec writes Functional_Spec / Module_Architecture / State_Machine / Task_Breakdown + Pin_Map_Bridge.json from PRD §7 intent + the C03 pin map (absent inputs stay skeleton, never fabricated); bodesign_c05_readiness scores spec sections + pin-bridge and never claims firmware code."
       },
       "skill": [
         "plan-builder",

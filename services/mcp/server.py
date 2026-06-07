@@ -256,6 +256,16 @@ def _h_c04_readiness(a: dict) -> Any:
     return assess_c04_layout_readiness(a["folder"]).to_dict()
 
 
+def _h_c05_scaffold_fw_spec(a: dict) -> Any:
+    from bodesign_workflow_core import scaffold_c05_fw_spec
+    return scaffold_c05_fw_spec(a["out_dir"], a.get("software"), a.get("pin_map")).to_dict()
+
+
+def _h_c05_readiness(a: dict) -> Any:
+    from bodesign_workflow_core import assess_c05_fw_readiness
+    return assess_c05_fw_readiness(a["folder"]).to_dict()
+
+
 def _h_crosscheck(a: dict) -> Any:
     from bodesign_workflow_core import crosscheck_nets
     return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
@@ -398,6 +408,12 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},
     {"name": "bodesign_c04_readiness", "handler": _h_c04_readiness,
      "description": "Report C04 layout-constraint readiness: which upstream constraint groups are present and what remains layout-owned (board outline, mounting, placement, stackup). Never claims board/Gerber/layout approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c05_scaffold_fw_spec", "handler": _h_c05_scaffold_fw_spec,
+     "description": "Scaffold the C05 firmware software-development spec sub-package (Functional_Spec / Module_Architecture / State_Machine / Task_Breakdown + Pin_Map_Bridge.json) from PRD §7 software intent and the C03 pin map. bodesign owns the SPEC; the FW team owns the firmware code. No firmware code is generated; absent inputs stay pending, never fabricated.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "software": {"type": "object"}, "pin_map": {}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c05_readiness", "handler": _h_c05_readiness,
+     "description": "Report C05 FW SW-spec readiness: which spec sections exist, whether PRD §7 functions and the C03 pin map are bridged, and what is pending. Never claims firmware code or completion.",
      "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
     {"name": "bodesign_reference_crosscheck", "handler": _h_crosscheck,
      "description": "Cross-check a generated net set vs a reference product's nets (control group): matched/missing/extra + coverage.",

@@ -29,6 +29,12 @@ from .c04_layout_constraints import (
     assess_c04_layout_readiness,
     emit_c04_layout_package,
 )
+from .c05_fw_spec import (
+    C05FwReadiness,
+    C05FwResult,
+    assess_c05_fw_readiness,
+    scaffold_c05_fw_spec,
+)
 from .gap_report import (
     EvidenceArtifactSummary,
     GapItem,
@@ -142,6 +148,8 @@ __all__ = [
     "C01TemplateError",
     "C04LayoutReadiness",
     "C04LayoutResult",
+    "C05FwReadiness",
+    "C05FwResult",
     "C02ConstraintItem",
     "C02ConstraintReadiness",
     "C02OpenScadResult",
@@ -204,6 +212,8 @@ __all__ = [
     "return_blocker",
     "assess_c04_layout_readiness",
     "emit_c04_layout_package",
+    "assess_c05_fw_readiness",
+    "scaffold_c05_fw_spec",
     "load_agent_registry",
     "load_c00_prd_rubric",
     "load_c00_prd_template",
