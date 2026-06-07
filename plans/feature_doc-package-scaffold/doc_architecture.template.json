@@ -265,33 +265,50 @@
       "engine": "plan-builder (lifecycle / scaffold / sync / readiness) — BUT the output file structure conforms to the RockBox PRD template, NOT plan-builder's default proposal/design/tasks.",
       "output_docs": [
         {
-          "file": "Project_Requirements.md",
+          "file": "Project_Requirements.docx",
           "sections": [
-            "產品定義 / 場景",
-            "功能需求 (← C05 FW 由此延伸)",
-            "系統方塊圖 / 架構",
-            "規格需求 (compute/memory/power...)",
-            "介面需求 (camera/display/audio/sensor/USB)",
-            "機構 / 外形",
-            "電源 / 電池",
-            "法規 / 認證目標",
-            "量產 / 數量",
-            "開放問題"
+            "1. Company Vision & Business Strategy",
+            "2. Project Overall",
+            "3. Project Objectives",
+            "4. System Architecture",
+            "5. ID / Mechanical Requirements  (→ C01/C02 源頭)",
+            "6. Electrical Requirements  (→ C03 源頭)",
+            "7. Software Requirements  (→ C05 FW 源頭)",
+            "8. Role & Responsibility",
+            "9. Assumption & Constraints",
+            "10. Project Management",
+            "11. Project High-level Schedule",
+            "12. Company & Vendor Team Roster"
           ]
         },
         {
-          "file": "RF_Requirements.md",
-          "conditional": "wireless/cellular/BLE present (comms answered)",
+          "file": "RF_Requirements.docx",
+          "conditional": "wireless/cellular/BLE present",
           "sections": [
-            "RF 標準 / 頻段",
-            "發射功率 / 靈敏度",
-            "天線 / 匹配",
-            "共存 (coexistence)",
-            "法規 / 認證 (FCC/CE/PTCRB/carrier)"
+            "1. Product Brief",
+            "2. Project Objectives",
+            "3. RF Specifications"
           ]
         }
       ],
-      "output_structure_note": "Derived from references in the TheSmartAI materials (RockBox PRD = 'Project Requirements' + 'RF Requirements'); the original 01.ROCKBOX PRD document is NOT on this system (only gerber fixtures were preserved), so the exact section list needs the user's confirmation or the real PRD to align precisely."
+      "output_structure_note": "Derived from references in the TheSmartAI materials (RockBox PRD = 'Project Requirements' + 'RF Requirements'); the original 01.ROCKBOX PRD document is NOT on this system (only gerber fixtures were preserved), so the exact section list needs the user's confirmation or the real PRD to align precisely.",
+      "real_artifacts": [
+        "Project requirements (.docx/.pdf)",
+        "RF requirements (.docx)"
+      ],
+      "bridges": {
+        "sec5_idme": [
+          "C01",
+          "C02"
+        ],
+        "sec6_electrical": [
+          "C03"
+        ],
+        "sec7_software": [
+          "C05"
+        ]
+      },
+      "ai_supplement": "The real PRD content lives in tables; AI fills depth per section via the question bank + plan-builder structure where the source is thin."
     },
     {
       "code": "C01",
@@ -321,7 +338,13 @@
       },
       "skill": [
         "(external — ID team; bodesign records interface constraints only)"
-      ]
+      ],
+      "real_artifacts": [
+        "Ai file (Illustrator)",
+        "CMF",
+        "Display UI/UX"
+      ],
+      "ai_supplement": "bodesign records interface constraints implied by §5; ID team owns the creative."
     },
     {
       "code": "C02",
@@ -351,7 +374,12 @@
       },
       "skill": [
         "(external — ME team; bodesign records interface constraints only)"
-      ]
+      ],
+      "real_artifacts": [
+        "3D File (.step)",
+        "Introduction of Assembly"
+      ],
+      "ai_supplement": "bodesign supplies board-outline/connector/height constraints; ME owns STEP/assembly."
     },
     {
       "code": "C03",
@@ -402,7 +430,13 @@
         "bom",
         "digikey/lcsc/mouser/element14",
         "jlcpcb/pcbway"
-      ]
+      ],
+      "real_artifacts": [
+        "Schematic (OrCAD .DSN/.opj)",
+        "BOM (.xlsx)",
+        "GPIOs table (.xlsx)"
+      ],
+      "ai_supplement": "Full AI-EDA lifecycle generates these (the one fully-covered layer)."
     },
     {
       "code": "C04",
@@ -439,7 +473,13 @@
       "skill": [
         "kicad (analyze_gerbers)",
         "jlcpcb/pcbway (DFM)"
-      ]
+      ],
+      "real_artifacts": [
+        "Board file (DVT)",
+        "Gerber File (EVT)",
+        "Stackup (6L 1.2T .xlsx)"
+      ],
+      "ai_supplement": "bodesign produces stackup/constraints/footprint-map; Board+Gerber by the layout engineer."
     },
     {
       "code": "C05",
@@ -477,7 +517,24 @@
         "plan-builder",
         "software-architect"
       ],
-      "principle": "FW is an extension of the PRD (functional description). bodesign does NOT write firmware; it establishes + maintains the SW-development architecture spec inside C05 using plan-builder-like methodology (proposal/design/tasks + IDEF0/GRAFCET for the software), bridged from PRD functional reqs + C03 pin map."
+      "principle": "FW is an extension of the PRD (functional description). bodesign does NOT write firmware; it establishes + maintains the SW-development architecture spec inside C05 using plan-builder-like methodology (proposal/design/tasks + IDEF0/GRAFCET for the software), bridged from PRD functional reqs + C03 pin map.",
+      "real_artifacts": [
+        "FW requirements (.docx/.pdf)",
+        "Image File",
+        "Program SOP",
+        "原始碼 (source — team-owned)"
+      ],
+      "output_docs": [
+        {
+          "file": "FW_Requirements.docx",
+          "sections": [
+            "1. Project Brief",
+            "2. Project Objectives",
+            "(+ requirement tables)"
+          ]
+        }
+      ],
+      "ai_supplement": "FW requirements is thin (brief+objectives+tables); AI's software-architect/plan-builder skill supplies the SW-dev architecture depth (modules/interfaces/state-machine/tasks), extending PRD §7. bodesign owns the spec; source code is team-owned."
     },
     {
       "code": "C06",
@@ -511,7 +568,12 @@
         "emc",
         "kicad",
         "kidoc"
-      ]
+      ],
+      "real_artifacts": [
+        "設計驗證 (design verification)",
+        "開機驗證 (boot / bring-up verification)"
+      ],
+      "ai_supplement": "bodesign drafts the verification/test plan + bring-up checklist from PRD + subsystems; actual EVT/DVT outsourced."
     }
   ],
   "gap_summary": {
@@ -526,5 +588,6 @@
       "C05 FW: stand up a plan-builder-like SW-dev spec sub-package (functional spec from PRD + pin map from C03); bodesign owns the spec, not the code."
     ]
   },
-  "orchestration": "bodesign's MCP is a thin orchestrator across a very large professional span; each C0* layer references a specialized external skill (see each section's `skill`) to do its work. bodesign owns the scaffold, the cross-layer contract, and the readiness compass — not every domain's expertise."
+  "orchestration": "bodesign's MCP is a thin orchestrator across a very large professional span; each C0* layer references a specialized external skill (see each section's `skill`) to do its work. bodesign owns the scaffold, the cross-layer contract, and the readiness compass — not every domain's expertise.",
+  "extracted_from": "Real 01.Rockbox C01–C07 project folder (de-productized: section architecture only, no client content / company names / part numbers)."
 }
