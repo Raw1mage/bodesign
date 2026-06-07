@@ -1,5 +1,13 @@
 import importlib
+import os
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+
+PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 
 
 class McpServerTests(unittest.TestCase):
@@ -22,6 +30,113 @@ class McpServerTests(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual("needs-clarification", r["result"]["status"])
         self.assertTrue(r["result"]["subsystems"])
+
+    def test_run_tool_c01_emit_and_readiness(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-", dir=PRIVATE_BASE))
+        try:
+            r = self.server.run_tool("bodesign_c01_emit_package", {
+                "out_dir": str(work),
+                "c00": "Battery camera product with microphone, BLE, USB-C, and LED status.",
+                "answers": {"product_name": "MCP C01 POC", "form_archetype": "desktop sensor"},
+            })
+            self.assertTrue(r["ok"])
+            self.assertTrue(r["result"]["readiness"]["usable"])
+            self.assertTrue((work / "C01-ID" / "CMF" / "CMF_Direction.md").exists())
+
+            readiness = self.server.run_tool("bodesign_c01_readiness", {"folder": str(work)})
+            self.assertTrue(readiness["ok"])
+            self.assertEqual(100, readiness["result"]["readiness_pct"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c01_generate_concept_image_requires_key(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-img-", dir=PRIVATE_BASE))
+        try:
+            with patch.dict(os.environ, {"BODESIGN_GOOGLE_API_KEY": "", "GEMINI_API_KEY": "", "GOOGLE_API_KEY": "", "BODESIGN_OPENCODE_ACCOUNTS_JSON": str(work / "missing-accounts.json")}, clear=False):
+                result = self.server.run_tool("bodesign_c01_generate_concept_image", {
+                    "out_dir": str(work),
+                    "prompt": "compact desktop edge AI camera sensor",
+                })
+            self.assertFalse(result["ok"])
+            self.assertIn("Google AI Studio API key", result["error"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c02_readiness_blocks_missing_board_outline(self):
+        result = self.server.run_tool("bodesign_c02_readiness", {
+            "constraints": {"component_heights": [{"ref": "J1", "height_mm": 8}]}
+        })
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["result"]["can_generate_cad_source"])
+        self.assertIn("Board outline", result["result"]["next_step"])
+
+    def test_run_tool_c02_readiness_accepts_minimum_source_constraints(self):
+        result = self.server.run_tool("bodesign_c02_readiness", {
+            "constraints": {
+                "board_outline": {"width_mm": 80, "height_mm": 50},
+                "component_heights": [{"ref": "U1", "height_mm": 4}],
+            }
+        })
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["result"]["can_generate_cad_source"])
+        self.assertFalse(result["result"]["can_create_printable_draft"])
+
+    def test_run_tool_c02_emit_enclosure_package(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-", dir=PRIVATE_BASE))
+        try:
+            result = self.server.run_tool("bodesign_c02_emit_enclosure_package", {
+                "out_dir": str(work),
+                "constraints": {"component_heights": [{"ref": "J1", "height_mm": 8}]},
+                "project_summary": "Desk AI sensor",
+                "prototype_intent": "vendor RFQ package",
+                "printer_profile": {"material": "PLA"},
+            })
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("package_emitted", result["result"]["status"])
+            self.assertFalse(result["result"]["source_ready"])
+            self.assertFalse(result["result"]["vendor_handoff_ready"])
+            self.assertFalse(result["result"]["me_approved"])
+            self.assertTrue((work / "C02-ME" / "Mechanical_Constraints.json").exists())
+            self.assertTrue((work / "C02-ME" / "Vendor_Handoff.md").exists())
+            self.assertFalse((work / "C02-ME" / "Enclosure.skp").exists())
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c02_generate_openscad_and_export_unavailable_stl(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-scad-", dir=PRIVATE_BASE))
+        try:
+            constraints = {
+                "board_outline": {"width_mm": 80, "height_mm": 50},
+                "component_heights": [{"ref": "J1", "height_mm": 8}],
+            }
+            source = self.server.run_tool("bodesign_c02_generate_openscad", {
+                "out_dir": str(work),
+                "constraints": constraints,
+                "wall_thickness_mm": 2.0,
+                "clearance_mm": 1.0,
+                "lid_clearance_mm": 0.4,
+            })
+
+            self.assertTrue(source["ok"])
+            self.assertEqual("source_generated", source["result"]["status"])
+            self.assertTrue((work / "C02-ME" / "Enclosure.scad").exists())
+            self.assertFalse(source["result"]["printable_draft_ready"])
+            self.assertFalse(source["result"]["me_approved"])
+
+            with patch("bodesign_workflow_core.c02_me_package.shutil.which", return_value=None):
+                stl = self.server.run_tool("bodesign_c02_export_stl", {"out_dir": str(work)})
+            self.assertTrue(stl["ok"])
+            self.assertEqual("export_unavailable", stl["result"]["status"])
+            self.assertFalse((work / "C02-ME" / "Enclosure.stl").exists())
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
 
     def test_unknown_tool_is_data_not_exception(self):
         r = self.server.run_tool("nope", {})

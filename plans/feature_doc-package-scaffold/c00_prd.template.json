@@ -1,0 +1,241 @@
+{
+  "name": "C00/C07 PRD consultant template",
+  "draft": true,
+  "source": "Rockbox-derived 12-section PRD structure, de-productized into a generic consultant template.",
+  "purpose": "Guide a human through an expert PRD workflow until the document is sufficient for C01-C06 handoff.",
+  "boundaries": {
+    "mcp_tools": [
+      "scaffold blank PRD structure",
+      "persist answers and draft state",
+      "compute completeness and downstream readiness",
+      "render PRD and handoff report"
+    ],
+    "ai_workflow_skill": [
+      "ask focused consultant questions",
+      "draft coherent PRD prose",
+      "separate facts, assumptions, decisions, and external confirmations",
+      "teach downstream implications"
+    ],
+    "human_or_external": [
+      "approve product and business decisions",
+      "confirm commercial, compliance, schedule, and responsibility claims",
+      "sign off downstream professional constraints"
+    ]
+  },
+  "readiness_states": [
+    "missing",
+    "drafted",
+    "answered",
+    "external-needed",
+    "blocked",
+    "accepted-risk"
+  ],
+  "documents": [
+    {
+      "file": "Project_Requirements.md",
+      "sections": [
+        {
+          "id": "s01_business_strategy",
+          "title": "1. Company Vision & Business Strategy",
+          "purpose": "Explain why the product exists, who it serves, and how it fits the business.",
+          "required_fields": ["target_customer", "problem_statement", "business_goal", "success_metric", "market_or_use_context"],
+          "ai_can_draft": ["problem framing", "customer/use-case summary", "success metric options"],
+          "human_decisions": ["target customer", "business priority", "launch success definition", "commercial claims"],
+          "external_inputs": ["sales/customer evidence when available"],
+          "consultant_prompts": [
+            "Who is the first real customer or user for this product?",
+            "What business outcome proves this product is worth building?",
+            "Which claim must the PRD avoid until customer or legal approval?"
+          ],
+          "handoff_targets": ["C06"]
+        },
+        {
+          "id": "s02_project_overall",
+          "title": "2. Project Overall",
+          "purpose": "Summarize the product concept, operating environment, major functions, and package scope.",
+          "required_fields": ["product_summary", "primary_use_cases", "operating_environment", "package_scope", "major_exclusions"],
+          "ai_can_draft": ["product overview", "scope boundaries", "use-case list"],
+          "human_decisions": ["in-scope functions", "out-of-scope functions", "target environment"],
+          "external_inputs": [],
+          "consultant_prompts": [
+            "Describe the product in one sentence as if briefing an engineering manager.",
+            "Where will the product be used physically and environmentally?",
+            "What tempting feature is explicitly out of scope for this version?"
+          ],
+          "handoff_targets": ["C03", "C05", "C06"]
+        },
+        {
+          "id": "s03_project_objectives",
+          "title": "3. Project Objectives",
+          "purpose": "Convert product intent into measurable objectives and acceptance criteria.",
+          "required_fields": ["functional_objectives", "performance_objectives", "quality_objectives", "acceptance_criteria"],
+          "ai_can_draft": ["objective wording", "acceptance criteria candidates", "risk-based priority"],
+          "human_decisions": ["objective priority", "minimum acceptable performance", "tradeoff acceptance"],
+          "external_inputs": ["customer acceptance criteria when available"],
+          "consultant_prompts": [
+            "Which three outcomes must be true for POC success?",
+            "Which objective is allowed to be weak in POC but not in EVT/DVT?",
+            "What measurable signal proves the main function works?"
+          ],
+          "handoff_targets": ["C03", "C05", "C06"]
+        },
+        {
+          "id": "s04_system_architecture",
+          "title": "4. System Architecture",
+          "purpose": "Define the product's subsystem map and main data/power/control flows.",
+          "required_fields": ["subsystems", "main_components", "power_flow", "data_flow", "control_flow", "interfaces"],
+          "ai_can_draft": ["subsystem decomposition", "architecture narrative", "interface map"],
+          "human_decisions": ["architecture option selection", "make/buy/module choices", "critical component choices"],
+          "external_inputs": ["reference designs", "datasheets", "engineering feasibility review"],
+          "consultant_prompts": [
+            "What are the required compute, sensing, connectivity, power, storage, and UI blocks?",
+            "Which subsystem choice is already fixed by business or supply constraints?",
+            "Which architecture decision needs evidence before schematic work begins?"
+          ],
+          "handoff_targets": ["C03", "C04", "C05", "C06"]
+        },
+        {
+          "id": "s05_id_me_requirements",
+          "title": "5. ID / Mechanical Requirements",
+          "purpose": "Provide the constraints that allow ID and ME teams to start without guessing product intent.",
+          "required_fields": ["industrial_design_intent", "dimensions", "mounting", "connectors", "display_or_ui", "environment", "assembly_constraints"],
+          "ai_can_draft": ["constraint checklist", "interface requirement wording", "open issue list"],
+          "human_decisions": ["form factor", "appearance priority", "connector/user-facing placement", "mechanical tradeoffs"],
+          "external_inputs": ["ID designer", "ME engineer", "enclosure/assembly constraints"],
+          "consultant_prompts": [
+            "What physical size or enclosure constraint must the electronics respect?",
+            "Which connectors, camera, microphone, display, buttons, or LEDs are user-facing?",
+            "What must ID/ME decide before PCB placement can be safe?"
+          ],
+          "handoff_targets": ["C01", "C02", "C04"]
+        },
+        {
+          "id": "s06_electrical_requirements",
+          "title": "6. Electrical Requirements",
+          "purpose": "Define enough electrical intent for C03 circuit design kickoff and downstream verification.",
+          "required_fields": ["compute", "power_input", "power_budget", "battery_or_charging", "memory", "connectivity", "sensors", "interfaces", "compliance_targets", "key_parts_or_references"],
+          "ai_can_draft": ["electrical requirement table", "subsystem list", "datasheet/reference evidence gaps"],
+          "human_decisions": ["target IC/module choices", "power and battery targets", "certification priorities", "cost/availability tradeoffs"],
+          "external_inputs": ["EE review", "datasheets", "reference schematics", "sourcing constraints"],
+          "consultant_prompts": [
+            "Which MCU/SoC/module choices are fixed, preferred, or still open?",
+            "What power source, battery, charging, and runtime assumptions are required?",
+            "Which electrical interface must be correct for firmware and mechanical teams?"
+          ],
+          "handoff_targets": ["C03", "C04", "C05", "C06"]
+        },
+        {
+          "id": "s07_software_requirements",
+          "title": "7. Software Requirements",
+          "purpose": "Extend PRD functionality into a C05 software-development spec boundary without writing firmware code.",
+          "required_fields": ["functional_behaviors", "operating_modes", "state_transitions", "external_interfaces", "firmware_responsibilities", "logging_or_update_policy", "pin_map_dependency"],
+          "ai_can_draft": ["functional spec outline", "module/interface candidates", "state-machine starter", "C05 task seeds"],
+          "human_decisions": ["feature behavior", "update/security/logging policy", "ownership split between device/app/cloud"],
+          "external_inputs": ["FW lead", "C03 pin map", "system integration constraints"],
+          "consultant_prompts": [
+            "What should the product do from power-on to normal operation?",
+            "Which behaviors belong in firmware versus app, cloud, or manufacturing tools?",
+            "Which C03 pin or interface decisions block the FW spec?"
+          ],
+          "handoff_targets": ["C05", "C06"]
+        },
+        {
+          "id": "s08_roles_responsibility",
+          "title": "8. Role & Responsibility",
+          "purpose": "Make ownership explicit so AI, user, engineers, vendors, and labs do not silently assume work belongs to someone else.",
+          "required_fields": ["owner_matrix", "decision_owner", "review_owner", "external_vendor_roles", "approval_owner"],
+          "ai_can_draft": ["RACI-style matrix", "handoff responsibility wording"],
+          "human_decisions": ["actual owner names/organizations", "approval authority", "vendor responsibility"],
+          "external_inputs": ["vendor/team confirmation"],
+          "consultant_prompts": [
+            "Who approves PRD, circuit, layout, FW spec, verification plan, and factory release?",
+            "Which deliverables are bodesign-assisted versus engineer/vendor-owned?",
+            "Who is responsible when a handoff has an unresolved assumption?"
+          ],
+          "handoff_targets": ["C01", "C02", "C03", "C04", "C05", "C06"]
+        },
+        {
+          "id": "s09_assumptions_constraints",
+          "title": "9. Assumption & Constraints",
+          "purpose": "Record assumptions, constraints, risks, and accepted gaps instead of hiding them in generated prose.",
+          "required_fields": ["assumptions", "constraints", "risks", "dependencies", "accepted_gaps"],
+          "ai_can_draft": ["risk register", "assumption list", "dependency list"],
+          "human_decisions": ["accepted risk", "blocked versus proceed", "constraint priority"],
+          "external_inputs": ["engineering/vendor/lab risk confirmation"],
+          "consultant_prompts": [
+            "Which assumption would be expensive if wrong?",
+            "What evidence is missing but required before EVT/DVT?",
+            "Which gap can proceed as accepted risk and which blocks handoff?"
+          ],
+          "handoff_targets": ["C03", "C04", "C05", "C06"]
+        },
+        {
+          "id": "s10_project_management",
+          "title": "10. Project Management",
+          "purpose": "Define milestone flow, deliverables, review cadence, and approval gates.",
+          "required_fields": ["milestones", "deliverables", "review_gates", "approval_process", "change_control"],
+          "ai_can_draft": ["milestone plan", "deliverable checklist", "review gate list"],
+          "human_decisions": ["milestone commitment", "approval path", "change-control tolerance"],
+          "external_inputs": ["vendor/factory schedule constraints"],
+          "consultant_prompts": [
+            "Is the immediate milestone POC, EVT, DVT, or production release?",
+            "Which artifact must be approved before money is spent externally?",
+            "How should requirement changes be handled after schematic kickoff?"
+          ],
+          "handoff_targets": ["C01", "C02", "C03", "C04", "C05", "C06"]
+        },
+        {
+          "id": "s11_schedule",
+          "title": "11. Project High-level Schedule",
+          "purpose": "Capture target timing and dependency order without pretending estimates are guarantees.",
+          "required_fields": ["target_dates", "dependency_order", "long_lead_items", "review_windows", "external_lead_times"],
+          "ai_can_draft": ["schedule skeleton", "dependency warnings", "long-lead risk list"],
+          "human_decisions": ["target dates", "schedule priority", "buffer acceptance"],
+          "external_inputs": ["vendor/factory/lab lead times"],
+          "consultant_prompts": [
+            "What date matters, and what happens if it slips?",
+            "Which external lead time is most likely to dominate the schedule?",
+            "Which downstream team must start first after PRD approval?"
+          ],
+          "handoff_targets": ["C01", "C02", "C03", "C04", "C05", "C06"]
+        },
+        {
+          "id": "s12_team_roster",
+          "title": "12. Company & Vendor Team Roster",
+          "purpose": "List teams, vendors, contacts, and escalation paths needed to execute the PRD.",
+          "required_fields": ["internal_contacts", "external_vendors", "reviewers", "approval_contacts", "escalation_path"],
+          "ai_can_draft": ["role placeholders", "vendor category checklist"],
+          "human_decisions": ["real names", "vendor selection", "authority and escalation"],
+          "external_inputs": ["vendor contact confirmation"],
+          "consultant_prompts": [
+            "Who will receive each handoff package?",
+            "Which vendor or lab must be contacted before the next milestone?",
+            "Who has final authority to approve the PRD?"
+          ],
+          "handoff_targets": ["C01", "C02", "C03", "C04", "C05", "C06"]
+        }
+      ]
+    },
+    {
+      "file": "RF_Requirements.md",
+      "conditional_when": "wireless, cellular, RF, BLE, Wi-Fi, antenna, or certification target is present",
+      "sections": [
+        {
+          "id": "rf01_product_brief",
+          "title": "1. Product Brief",
+          "required_fields": ["rf_use_case", "region", "radio_standard", "antenna_context"]
+        },
+        {
+          "id": "rf02_project_objectives",
+          "title": "2. Project Objectives",
+          "required_fields": ["rf_success_criteria", "range_or_link_target", "power_constraint"]
+        },
+        {
+          "id": "rf03_rf_specifications",
+          "title": "3. RF Specifications",
+          "required_fields": ["frequency_bands", "module_or_chip", "antenna_type", "certification_target", "test_needs"]
+        }
+      ]
+    }
+  ]
+}

@@ -19,6 +19,13 @@
       "key": "prd",
       "title": "PRD — 產品需求文件",
       "bodesign_role": "generate",
+      "template_ref": "c00_prd.template.json",
+      "rubric_ref": "c00_prd.rubric.json",
+      "consultant_boundary": {
+        "mcp_tools": "scaffold/persist/render/score deterministic PRD state",
+        "ai_workflow_skill": "ask expert follow-ups, draft prose, teach downstream implications, separate assumptions from decisions",
+        "human_or_external": "approve product/business decisions and professional handoff claims"
+      },
       "fill": [
         "產品定位 / 場景",
         "功能需求",
@@ -42,9 +49,9 @@
       "coverage": {
         "fill": "full",
         "elicit": "full",
-        "generate": "gap",
-        "verify": "gap",
-        "note": "Elicitation works (14-item bank). No structured PRD document emitter; no PRD completeness/consistency verifier."
+        "generate": "partial",
+        "verify": "partial",
+        "note": "C00 now has a dedicated PRD consultant template + readiness rubric in plan artifacts. Runtime emitter/verifier implementation remains pending."
       },
       "question_bank": [
         {
@@ -313,73 +320,104 @@
     {
       "code": "C01",
       "key": "id",
-      "title": "ID — 工業設計",
-      "bodesign_role": "track+interface",
+      "title": "ID — 工業設計 / Visual Source",
+      "bodesign_role": "visual-source",
       "owner": "ID team",
+      "template_ref": "c01_id.template.json",
+      "rubric_ref": "c01_id.rubric.json",
+      "workflow_ref": "c01_id.workflow.md",
       "fill": [
-        "概念 / CMF (團隊提供)",
-        "bodesign 記錄的介面約束"
+        "C00 外觀/人機/品牌意圖的視覺化描述",
+        "Rockbox target: Ai file（AI draft carrier: Ai file/Ai_Source.svg）",
+        "Rockbox target: CMF（AI draft carrier: CMF/CMF_Direction.md）",
+        "Rockbox target: Display UI/UX（AI draft carrier: Display UIUX/Display_UIUX_Mock.svg）",
+        "Interface_Constraints.json（給 C02/C03/C04/C05）",
+        "Handoff_to_ID_Designer.md"
       ],
       "elicit_with": [
-        "(none yet) — enclosure/dimensions only via PRD bank — TODO add ID interface questions"
+        "C00 PRD §1/§2/§5/§6/§7 visual/interface extractor",
+        "C01 visual-source workflow skill prompts"
       ],
       "generate_with": [
-        "interface_constraints_doc (connector/board-outline/height) — TODO"
+        "bodesign_c01_scaffold — TODO",
+        "bodesign_c01_emit_sources (SVG/Markdown/JSON drafts) — TODO",
+        "visual design workflow skill (CMF/UI/prompt pack)"
       ],
       "verify_with": [
-        "constraint consistency vs C02/C03 — TODO"
-      ],
-      "coverage": {
-        "fill": "full",
-        "elicit": "gap",
-        "generate": "gap",
-        "verify": "gap",
-        "note": "By-design track-only, but no interface-constraint emitter or check exists."
-      },
-      "skill": [
-        "(external — ID team; bodesign records interface constraints only)"
-      ],
-      "real_artifacts": [
-        "Ai file (Illustrator)",
-        "CMF",
-        "Display UI/UX"
-      ],
-      "ai_supplement": "bodesign records interface constraints implied by §5; ID team owns the creative."
-    },
-    {
-      "code": "C02",
-      "key": "me",
-      "title": "ME — 機構工程",
-      "bodesign_role": "track+interface",
-      "owner": "ME team",
-      "fill": [
-        "3D STEP / 組裝意圖 (團隊提供)",
-        "bodesign 記錄的介面約束"
-      ],
-      "elicit_with": [
-        "(dimensions via PRD bank) — TODO add ME interface questions"
-      ],
-      "generate_with": [
-        "interface_constraints_doc (board outline/connector/height) — TODO"
-      ],
-      "verify_with": [
-        "constraint consistency vs C01/C04 — TODO"
+        "bodesign_c01_readiness — TODO",
+        "constraint consistency vs C02/C03/C04/C05 — TODO",
+        "human/ID approval gate"
       ],
       "coverage": {
         "fill": "full",
         "elicit": "partial",
         "generate": "gap",
         "verify": "gap",
-        "note": "Same as C01: track-only, emitter/check not built."
+        "note": "Plan artifacts now define Rockbox-style C01 target package (Ai file/CMF/Display UIUX) and tool/skill boundary. Runtime extractor/emitter/readiness implementation remains pending."
       },
       "skill": [
-        "(external — ME team; bodesign records interface constraints only)"
+        "canvas-design / visual-source generation",
+        "kidoc (handoff docs)",
+        "external ID designer (final design authority)"
+      ],
+      "real_artifacts": [
+        "Ai file (Illustrator)",
+        "CMF",
+        "Display UI/UX"
+      ],
+      "ai_supplement": "bodesign generates machine-editable first-pass visual sources and constraints from C00; human ID owns final visual design, CMF approval, and production ID sign-off."
+    },
+    {
+      "code": "C02",
+      "key": "me",
+      "title": "ME — 機構工程 / Enclosure Draft",
+      "bodesign_role": "constraint-first-parametric-enclosure-draft",
+      "owner": "ME team",
+      "plan_ref": "c02_me_enclosure_plan.md",
+      "fill": [
+        "C02-pre: 機構/layout 約束、散熱/RF/合規風險、外露件與固定需求",
+        "C02-check: C04 layout 後檢查可裝、可開孔、可散熱、可列印/製造",
+        "C02-final: 可 360 度檢視的 Enclosure.skp（SketchUp toolchain 支援時）或 Enclosure.stl 草稿",
+        "可供修改的 Enclosure.scad / enclosure.py 參數化來源",
+        "SketchUp_Import_Guide.md / Assembly_Notes.md / Print_Settings.md / Mechanical_Assumptions.md",
+        "Mechanical_Constraints.json / Vendor_Handoff.md"
+      ],
+      "elicit_with": [
+        "C01 interface constraints and form intent",
+        "C03 component list, connector types, component heights, heat sources, battery, RF/ESD constraints",
+        "C04 board outline, mounting holes, connector coordinates, keepouts, antenna areas",
+        "C02 mechanical consultant skill questions for printability, assembly, access, compliance, and fidelity"
+      ],
+      "generate_with": [
+        "bodesign_c02_emit_enclosure_package — TODO",
+        "bodesign_c02_generate_openscad — TODO",
+        "bodesign_c02_export_stl / optional skp / step export when toolchain exists — TODO"
+      ],
+      "verify_with": [
+        "bodesign_c02_readiness — TODO",
+        "constraint consistency vs C01/C03/C04 — TODO",
+        "thermal/RF/EMC/environment readiness gate — TODO",
+        "home 3D print sanity gate / ME vendor approval gate"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "partial",
+        "generate": "gap",
+        "verify": "gap",
+        "note": "Rockbox code restored: C02 is ME by deliverable/vendor boundary. C02 is still constraint-first and participates in loop execution: pre-check before C04, check loop after C04, final enclosure draft only after C03/C04 constraints are sufficient. Runtime CAD source/STL/SKP emitter/readiness remain TODO."
+      },
+      "skill": [
+        "c02-mechanical-enclosure-consultant — TODO",
+        "OpenSCAD/CadQuery/FreeCAD export toolchain — optional deterministic tool",
+        "SketchUp SKP export/import toolchain — optional preferred review path",
+        "external ME/ID vendor (final STEP/assembly/manufacturing authority)"
       ],
       "real_artifacts": [
         "3D File (.step)",
         "Introduction of Assembly"
       ],
-      "ai_supplement": "bodesign supplies board-outline/connector/height constraints; ME owns STEP/assembly."
+      "execution_loop_role": "ME vendor/deliverable layer. In execution, C02-pre can constrain C04 layout before CAD, C02-check validates C04 geometry, and C02-final emits enclosure draft after C03/C04 constraints are sufficient.",
+      "ai_supplement": "bodesign may generate unapproved parametric enclosure sources and STL/SKP/STEP drafts only from explicit C03/C04 constraints. Final STEP, assembly, tolerance, DFM, and manufacturing sign-off remain ME/vendor-owned."
     },
     {
       "code": "C03",
@@ -419,7 +457,7 @@
         "elicit": "full",
         "generate": "full",
         "verify": "full",
-        "note": "The AI-complete core — the only layer with the full four-capability chain today."
+        "note": "Rockbox code restored: C03 is EE/circuit by deliverable/vendor boundary. The AI-complete engineering core feeds mechanical/layout constraints for C02/C04 loop execution."
       },
       "skill": [
         "kicad",
@@ -436,7 +474,8 @@
         "BOM (.xlsx)",
         "GPIOs table (.xlsx)"
       ],
-      "ai_supplement": "Full AI-EDA lifecycle generates these (the one fully-covered layer)."
+      "execution_loop_role": "EE vendor/deliverable layer. In execution, C03 may lead real component/interface constraints before C02/C04 converge, but the document code remains C03.",
+      "ai_supplement": "Full AI-EDA lifecycle generates these and feeds mechanical/layout constraints for C02/C04 iteration."
     },
     {
       "code": "C04",

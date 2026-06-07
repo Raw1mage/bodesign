@@ -1,0 +1,84 @@
+{
+  "name": "C01 ID visual source readiness rubric",
+  "draft": true,
+  "purpose": "Evaluate whether C01 has transformed C00 visual/human-interface intent into a Rockbox-style ID package that a human designer and downstream teams can use.",
+  "readiness_states": {
+    "missing": "No source artifact or usable requirement exists.",
+    "drafted": "AI-created source exists but human/ID approval is pending.",
+    "answered": "Human-approved direction or constraint exists.",
+    "external-needed": "ID/ME/EE/layout expert confirmation is required.",
+    "blocked": "A visual/interface decision blocks useful ID output.",
+    "accepted-risk": "User approved proceeding with a documented visual or constraint gap."
+  },
+  "artifact_gates": [
+    {
+      "artifact": "Ai file",
+      "ready_when": [
+        "at least one visual form archetype is selected or drafted",
+        "primary faces and user-facing component zones are represented",
+        "visible component callouts are present for all C00/C03 exposed interfaces",
+        "unresolved proportions/placement choices are labeled"
+      ]
+    },
+    {
+      "artifact": "CMF",
+      "ready_when": [
+        "visual tone and brand mood are drafted or answered",
+        "color/material/finish candidates are listed",
+        "environment/use-case rationale is linked back to C00",
+        "supplier/sample/approval gaps remain explicit"
+      ]
+    },
+    {
+      "artifact": "Display UI/UX",
+      "ready_when": [
+        "display/status model is present or explicitly not applicable",
+        "screen or LED states map to C00/C05 functional behavior",
+        "interaction states and firmware-facing labels are visible",
+        "UI style approval status is explicit"
+      ]
+    },
+    {
+      "artifact": "Interface_Constraints.json",
+      "ready_when": [
+        "exposed components are enumerated",
+        "preferred faces/zones and keepouts are machine-readable",
+        "constraints identify downstream target layers C02/C03/C04",
+        "conflicts and decision owners are explicit"
+      ]
+    },
+    {
+      "artifact": "Handoff_to_ID_Designer.md",
+      "ready_when": [
+        "C00-derived visual intent is summarized",
+        "AI drafts and human/external decisions are separated",
+        "open issues and blockers are listed",
+        "handoff owner/reviewer is identified or marked missing"
+      ]
+    }
+  ],
+  "downstream_gates": [
+    {
+      "target": "C02",
+      "requires": ["physical form archetype", "user-facing surfaces", "opening/connector/display/camera/mic placement zones", "assembly/handling assumptions"]
+    },
+    {
+      "target": "C03",
+      "requires": ["visible electrical interface list", "button/LED/display/sensor presence", "connector exposure", "antenna visibility or keepout assumptions"]
+    },
+    {
+      "target": "C04",
+      "requires": ["preferred component faces", "board-facing constraints", "keepout regions", "priority/conflict markers"]
+    },
+    {
+      "target": "C05",
+      "requires": ["display/status state model", "button/LED/user interaction mapping", "UI/UX state labels"]
+    }
+  ],
+  "scoring_policy": {
+    "complete_states": ["answered", "accepted-risk"],
+    "partial_states": ["drafted", "external-needed"],
+    "blocking_states": ["missing", "blocked"],
+    "rule": "C01 is usable when the three Rockbox target deliverables (Ai file, CMF, Display UI/UX) exist at least as drafts, supporting bridge/handoff artifacts exist, and every downstream conflict has an owner, state, and visible risk label."
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "name": "C01 ID visual source package",
+  "draft": true,
+  "source": "Rockbox C01 target artifacts: Ai file, CMF, Display UI/UX; de-productized into a generic visual source package.",
+  "purpose": "Turn C00 PRD visual, human-interface, brand, and exposed-component intent into first-pass source candidates for the original Rockbox C01 deliverables: Ai file, CMF, and Display UI/UX.",
+  "boundary": {
+    "from_c00": [
+      "target user/customer and use context",
+      "product positioning and visual tone",
+      "form-factor, size, mounting, environment, and user-facing interface requirements from PRD §5",
+      "electrical exposed-component constraints from PRD §6",
+      "display/UI behavior and interaction intent from PRD §7",
+      "assumptions, constraints, risks, milestone, and approval owner from PRD §9-§12"
+    ],
+    "mcp_tools": [
+      "extract visual/interface requirements from C00 source state",
+      "scaffold the C01-ID folder using Rockbox deliverable names",
+      "emit deterministic draft carriers for Ai file, CMF, and Display UI/UX",
+      "compute C01 readiness and downstream constraint completeness"
+    ],
+    "ai_workflow_skill": [
+      "translate PRD intent into visual language and layout direction",
+      "draft CMF direction and ID prompt packs",
+      "select which visual assumptions must remain explicit",
+      "explain handoff risks to ID/ME/EE/layout teams"
+    ],
+    "human_or_external": [
+      "final industrial design creativity and visual judgment",
+      "brand approval and CMF sample confirmation",
+      "final Ai file / CMF / Display UI/UX source sign-off",
+      "manufacturability validation with ID/ME vendors"
+    ]
+  },
+  "target_package": {
+    "folder": "C01-ID",
+    "outputs": [
+      {
+        "rockbox_deliverable": "Ai file",
+        "draft_carrier": "Ai file/Design_Direction.md",
+        "format_role": "structured script for Illustrator/design-source direction",
+        "accepted_final_formats": [".md", ".ai", ".svg", ".pdf", "designer-provided source"],
+        "contains": [
+          "product form archetype and usage posture",
+          "primary face and visible component placement intent",
+          "visible component callouts",
+          "camera/mic/display/button/LED/USB-C/antenna placement decisions or gaps",
+          "logo/label zone intent",
+          "AI draft assumptions and human/ID decision gates"
+        ],
+        "ai_can_generate": true,
+        "human_must_approve": ["final proportions", "visual style", "brand treatment", "manufacturing suitability"]
+      },
+      {
+        "rockbox_deliverable": "CMF",
+        "draft_carrier": "CMF/CMF_Direction.md",
+        "format_role": "color/material/finish direction brief",
+        "accepted_final_formats": [".pdf", ".md", ".pptx", "sample board photos", "designer-provided CMF board"],
+        "contains": [
+          "color palette direction",
+          "material candidates",
+          "surface finish candidates",
+          "brand mood keywords",
+          "environment/use-case rationale",
+          "supplier/sample confirmation gaps"
+        ],
+        "ai_can_generate": true,
+        "human_must_approve": ["material feasibility", "sample matching", "brand approval", "cost tradeoffs"]
+      },
+      {
+        "rockbox_deliverable": "Display UI/UX",
+        "draft_carrier": "Display UIUX/UIUX_Requirements.md",
+        "format_role": "display/status UI/UX requirement script",
+        "accepted_final_formats": [".md", ".svg", ".fig", ".ai", ".pdf", "designer-provided UI source"],
+        "contains": [
+          "screen/status states",
+          "LED/status mapping when no display exists",
+          "button/buzzer/app-facing status behavior when applicable",
+          "interaction flow notes",
+          "firmware-facing state labels"
+        ],
+        "ai_can_generate": true,
+        "human_must_approve": ["UI style", "copy/icons", "usability", "brand consistency"]
+      },
+      {
+        "support_artifact": "Interface_Constraints.json",
+        "rockbox_deliverable": "supporting bridge artifact, not a replacement for C01 target files",
+        "format_role": "C01 to C02/C03/C04 constraint contract",
+        "contains": [
+          "exposed components",
+          "preferred faces and placement zones",
+          "openings/windows/buttons/LEDs/connectors/antenna regions",
+          "user-contact surfaces",
+          "keepouts and unresolved placement decisions",
+          "downstream owners and blockers"
+        ],
+        "ai_can_generate": true,
+        "human_must_approve": ["constraint priority", "placement decisions", "conflict acceptance"]
+      },
+      {
+        "support_artifact": "Handoff_to_ID_Designer.md",
+        "rockbox_deliverable": "supporting handoff guide, not a replacement for C01 target files",
+        "format_role": "designer-facing brief and open-issue list",
+        "contains": [
+          "C00-derived visual intent",
+          "what AI drafted",
+          "what human/ID must decide",
+          "what ME/EE/layout must confirm",
+          "accepted risks and blockers"
+        ],
+        "ai_can_generate": true,
+        "human_must_approve": ["designer assignment", "handoff completeness", "decision owners"]
+      }
+    ]
+  },
+  "consultant_prompts": [
+    {
+      "key": "product_form_language",
+      "question": "Should this look like a dev-kit, handheld product, desktop sensor, wearable module, wall-mounted box, or another form archetype?",
+      "source": "C00 §1/§2/§5",
+      "responsible_party": "human"
+    },
+    {
+      "key": "visible_sensor_treatment",
+      "question": "Should camera, microphone, LEDs, and buttons be visually emphasized, subtly integrated, or hidden where possible?",
+      "source": "C00 §5/§6/§7",
+      "responsible_party": "human"
+    },
+    {
+      "key": "primary_face",
+      "question": "Which face is the user's primary interaction face, and which components must live there?",
+      "source": "C00 §5/§6/§7",
+      "responsible_party": "human+ID"
+    },
+    {
+      "key": "cmf_direction",
+      "question": "What emotional direction should CMF express: rugged, premium, medical-clean, playful, industrial, invisible/utility, or brand-specific?",
+      "source": "C00 §1/§2",
+      "responsible_party": "human+ID"
+    },
+    {
+      "key": "rf_antenna_visibility",
+      "question": "If wireless is present, should antenna regions be hidden, exposed, or treated as a visible design feature?",
+      "source": "C00 RF requirements / §6",
+      "responsible_party": "human+EE+ID"
+    }
+  ],
+  "non_goals": [
+    "Do not claim final production industrial design.",
+    "Do not generate manufacturable enclosure CAD as the default C01 artifact.",
+    "Do not silently decide brand, CMF, or final product appearance without human approval.",
+    "Do not let visual placement override electrical, RF, thermal, or mechanical constraints without explicit conflict resolution."
+  ]
+}

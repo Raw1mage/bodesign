@@ -122,6 +122,41 @@ def _h_readiness(a: dict) -> Any:
     return assess_package_readiness(a["folder"], a.get("milestone", "POC")).to_dict()
 
 
+def _h_c01_emit(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c01_rockbox_package
+    return emit_c01_rockbox_package(a["out_dir"], a.get("c00"), a.get("answers")).to_dict()
+
+
+def _h_c01_readiness(a: dict) -> Any:
+    from bodesign_workflow_core import assess_c01_package_readiness
+    return assess_c01_package_readiness(a["folder"]).to_dict()
+
+
+def _h_c01_generate_concept_image(a: dict) -> Any:
+    from bodesign_workflow_core import generate_c01_concept_image
+    return generate_c01_concept_image(a["out_dir"], a["prompt"], a.get("model")).to_dict()
+
+
+def _h_c02_readiness(a: dict) -> Any:
+    from bodesign_workflow_core import assess_c02_constraint_readiness
+    return assess_c02_constraint_readiness(a.get("constraints"), a.get("folder")).to_dict()
+
+
+def _h_c02_emit(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c02_enclosure_package
+    return emit_c02_enclosure_package(a["out_dir"], a.get("constraints"), a.get("project_summary"), a.get("prototype_intent"), a.get("printer_profile")).to_dict()
+
+
+def _h_c02_generate_openscad(a: dict) -> Any:
+    from bodesign_workflow_core import generate_c02_openscad
+    return generate_c02_openscad(a["out_dir"], a.get("constraints"), a.get("wall_thickness_mm"), a.get("clearance_mm"), a.get("lid_clearance_mm")).to_dict()
+
+
+def _h_c02_export_stl(a: dict) -> Any:
+    from bodesign_workflow_core import export_c02_stl
+    return export_c02_stl(a["out_dir"], a.get("openscad_bin")).to_dict()
+
+
 def _h_crosscheck(a: dict) -> Any:
     from bodesign_workflow_core import crosscheck_nets
     return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
@@ -214,6 +249,27 @@ TOOLS: list[dict] = [
     {"name": "bodesign_package_readiness", "handler": _h_readiness,
      "description": "Assess a product folder against the POC deliverable checklist; per-deliverable status + next step (the compass).",
      "schema": {"type": "object", "properties": {"folder": _STR, "milestone": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c01_emit_package", "handler": _h_c01_emit,
+     "description": "Emit a Rockbox-like C01 ID package: Ai file/Design_Direction.md, CMF/CMF_Direction.md, Display UIUX/UIUX_Requirements.md, Interface_Constraints.json, and ID handoff, with draft/decision markers.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c01_readiness", "handler": _h_c01_readiness,
+     "description": "Check whether the Rockbox-like C01 package has non-empty scripts for Ai file, CMF, Display UI/UX, constraints JSON, and ID handoff.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c01_generate_concept_image", "handler": _h_c01_generate_concept_image,
+     "description": "Optional C01 add-on: generate a reference-only concept image via Google AI Studio from a C01 concept prompt. Credential source is server-side only: BODESIGN_GOOGLE_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY env first, then active API account from opencode accounts.json (default family gemini-cli). Does not affect C01 readiness.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "prompt": _STR, "model": _STR}, "required": ["out_dir", "prompt"]}},
+    {"name": "bodesign_c02_readiness", "handler": _h_c02_readiness,
+     "description": "Assess C02 mechanical/enclosure constraint readiness before CAD generation. Reports missing board outline, heights, holes, connector openings, heat, RF, battery, and environment targets without guessing dimensions.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "constraints": {"type": "object"}}}},
+    {"name": "bodesign_c02_emit_enclosure_package", "handler": _h_c02_emit,
+     "description": "Emit a C02-ME mechanical enclosure support package without generating CAD/STL/SKP/STEP or ME approval. Missing geometry is preserved as engineering_pending with owner/reason.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "constraints": {"type": "object"}, "project_summary": {}, "prototype_intent": _STR, "printer_profile": {}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c02_generate_openscad", "handler": _h_c02_generate_openscad,
+     "description": "Generate C02-ME/Enclosure.scad prototype source from explicit board outline, component height constraints, wall thickness, clearance, and lid clearance. Missing dimensions return source_blocked; does not export STL/SKP/STEP or imply ME approval.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "constraints": {"type": "object"}, "wall_thickness_mm": {"type": "number"}, "clearance_mm": {"type": "number"}, "lid_clearance_mm": {"type": "number"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c02_export_stl", "handler": _h_c02_export_stl,
+     "description": "Export C02-ME/Enclosure.stl from Enclosure.scad using local OpenSCAD CLI when available; returns export_unavailable instead of creating fake STL when missing.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "openscad_bin": _STR}, "required": ["out_dir"]}},
     {"name": "bodesign_reference_crosscheck", "handler": _h_crosscheck,
      "description": "Cross-check a generated net set vs a reference product's nets (control group): matched/missing/extra + coverage.",
      "schema": {"type": "object", "properties": {"generated_nets": {"type": "array", "items": _STR},

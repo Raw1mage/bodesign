@@ -1,0 +1,84 @@
+{
+  "name": "C00/C07 PRD readiness rubric",
+  "draft": true,
+  "purpose": "Score whether the PRD is complete enough for expert handoff, without confusing AI draft text with human-approved decisions.",
+  "field_states": {
+    "missing": "No content exists.",
+    "drafted": "AI proposed text exists but user approval is pending.",
+    "answered": "Human-provided or human-approved content exists.",
+    "external-needed": "A named external expert/team must provide or confirm content.",
+    "blocked": "A required decision/artifact is absent and cannot be bypassed.",
+    "accepted-risk": "The user explicitly approved proceeding with a documented gap."
+  },
+  "document_gates": [
+    {
+      "gate": "business_contract",
+      "description": "The PRD states product purpose, target user/customer, business objective, measurable success, scope, and approval owner.",
+      "required_sections": ["s01_business_strategy", "s02_project_overall", "s03_project_objectives", "s08_roles_responsibility"]
+    },
+    {
+      "gate": "engineering_kickoff",
+      "description": "The PRD provides enough system, mechanical, electrical, software, and assumption context for downstream technical teams to start.",
+      "required_sections": ["s04_system_architecture", "s05_id_me_requirements", "s06_electrical_requirements", "s07_software_requirements", "s09_assumptions_constraints"]
+    },
+    {
+      "gate": "execution_control",
+      "description": "The PRD records milestone, schedule, responsibility, review, vendor, and escalation information.",
+      "required_sections": ["s08_roles_responsibility", "s10_project_management", "s11_schedule", "s12_team_roster"]
+    },
+    {
+      "gate": "rf_appendix",
+      "description": "When RF/wireless/cellular/BLE/Wi-Fi/antenna/compliance scope is present, RF requirements are explicit enough for RF review and certification planning.",
+      "conditional": "wireless_or_rf_present",
+      "required_sections": ["rf01_product_brief", "rf02_project_objectives", "rf03_rf_specifications"]
+    }
+  ],
+  "downstream_handoff_gates": [
+    {
+      "target": "C01/C02",
+      "source_sections": ["s05_id_me_requirements", "s09_assumptions_constraints", "s10_project_management"],
+      "ready_when": [
+        "dimensions_or_enclosure_constraints are answered or accepted-risk",
+        "user-facing connectors/display/camera/mic/buttons/LEDs are answered or explicitly not applicable",
+        "assembly/environment constraints are answered or external-needed with owner",
+        "ID/ME owner or vendor is identified"
+      ]
+    },
+    {
+      "target": "C03",
+      "source_sections": ["s04_system_architecture", "s06_electrical_requirements", "s09_assumptions_constraints"],
+      "ready_when": [
+        "compute/power/interfaces/memory/connectivity/sensors are answered or explicitly not applicable",
+        "key parts or reference designs are listed or marked external-needed",
+        "compliance and power constraints are answered or accepted-risk",
+        "blocked electrical decisions are absent"
+      ]
+    },
+    {
+      "target": "C05",
+      "source_sections": ["s03_project_objectives", "s07_software_requirements", "s08_roles_responsibility"],
+      "ready_when": [
+        "functional behaviors and operating modes are answered",
+        "firmware/application/cloud/manufacturing responsibility split is answered or drafted for approval",
+        "state/interface expectations are at least drafted",
+        "C03 pin-map dependency is recorded"
+      ]
+    },
+    {
+      "target": "C06",
+      "source_sections": ["s03_project_objectives", "s06_electrical_requirements", "s09_assumptions_constraints", "s10_project_management"],
+      "ready_when": [
+        "acceptance criteria are answered or drafted for approval",
+        "verification/certification targets are answered or external-needed",
+        "EVT/DVT/POC milestone intent is answered",
+        "risks and accepted gaps are explicit"
+      ]
+    }
+  ],
+  "scoring_policy": {
+    "complete_states": ["answered", "accepted-risk"],
+    "partial_states": ["drafted", "external-needed"],
+    "blocking_states": ["missing", "blocked"],
+    "rule": "A section is ready only when all required fields are complete or partial with an owner; a downstream handoff is ready only when its gate has no blocking states."
+  }
+}
