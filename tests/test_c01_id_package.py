@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from bodesign_workflow_core import assess_c01_package_readiness, emit_c01_rockbox_package, generate_c01_concept_image
+from bodesign_workflow_core import assess_c01_package_readiness, c01_next_question, c01_update_answers, emit_c01_rockbox_package, generate_c01_concept_image
 
 
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
@@ -75,6 +75,78 @@ class C01IdPackageTests(unittest.TestCase):
         self.assertEqual("present", statuses["ai_file"])
         self.assertEqual("missing", statuses["cmf"])
         self.assertIn("CMF", readiness.next_step)
+
+    def test_next_question_bootstraps_without_writing_state(self):
+        question = c01_next_question(self.work)
+
+        self.assertEqual("question_available", question.status)
+        self.assertEqual("form_archetype", question.target_field)
+        self.assertFalse(question.answer_state_exists)
+        self.assertFalse((self.work / "C01-ID" / "answer_state.json").exists())
+
+    def test_update_answers_persists_state_and_regenerates_package(self):
+        result = c01_update_answers(
+            self.work,
+            {
+                "form_archetype": "desktop sensor",
+                "usage_posture": {"value": "placed on desk", "state": "answered", "source": "user"},
+                "cmf_direction": {"value": "matte black utility", "state": "drafted", "source": "AI suggestion"},
+            },
+            "Desk AI sensor with camera, mic, USB-C, and BLE.",
+        )
+
+        self.assertEqual("answers_updated", result.status)
+        self.assertIn("form_archetype", result.updated_fields)
+        self.assertFalse(result.to_dict()["human_approved"])
+        self.assertTrue((self.work / "C01-ID" / "answer_state.json").exists())
+        self.assertTrue((self.work / "C01-ID" / "Ai file" / "Design_Direction.md").exists())
+        state = json.loads((self.work / "C01-ID" / "answer_state.json").read_text(encoding="utf-8"))
+        self.assertEqual("answered", state["fields"]["form_archetype"]["state"])
+        self.assertEqual("drafted", state["fields"]["cmf_direction"]["state"])
+        self.assertEqual("primary_face", result.next_question.target_field)
+
+    def test_readiness_uses_field_gaps_when_answer_state_exists(self):
+        c01_update_answers(
+            self.work,
+            {
+                "form_archetype": "desktop sensor",
+                "usage_posture": "placed on desk",
+                "cmf_direction": {"value": "matte black utility", "state": "drafted"},
+            },
+            "Desk AI sensor with camera, mic, USB-C, and BLE.",
+        )
+
+        readiness = assess_c01_package_readiness(self.work)
+
+        self.assertFalse(readiness.usable)
+        self.assertLess(readiness.readiness_pct, 100)
+        self.assertEqual("C01-ID/answer_state.json", readiness.answer_state_path)
+        gap_states = {gap["key"]: gap["state"] for gap in readiness.field_gaps}
+        self.assertEqual("missing", gap_states["primary_face"])
+        self.assertEqual("drafted", gap_states["cmf_direction"])
+        self.assertIn("primary_face", readiness.next_step)
+        self.assertFalse(readiness.to_dict()["human_approved"])
+
+    def test_readiness_treats_answered_fields_as_ready_without_approval(self):
+        answers = {
+            "form_archetype": "desktop sensor",
+            "usage_posture": "placed on desk",
+            "primary_face": "front face",
+            "visible_component_treatment": "subtle integrated openings",
+            "exposed_components": "camera, microphone, usb-c, led",
+            "cmf_direction": "matte black utility",
+            "display_uiux": "LED-only status model",
+            "owner": "product owner + ID designer",
+            "reference_image_cues": {"value": "no reference image preference", "state": "no-preference"},
+        }
+
+        c01_update_answers(self.work, answers, "Desk AI sensor with camera, mic, USB-C, and BLE.")
+        readiness = assess_c01_package_readiness(self.work)
+
+        self.assertTrue(readiness.usable)
+        self.assertEqual(100, readiness.readiness_pct)
+        self.assertEqual([], readiness.field_gaps)
+        self.assertFalse(readiness.to_dict()["human_approved"])
 
     def test_concept_image_requires_google_key(self):
         missing_accounts = self.work / "missing-accounts.json"

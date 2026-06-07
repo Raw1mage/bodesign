@@ -51,6 +51,40 @@ class McpServerTests(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_run_tool_c01_next_question_and_update_answers(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-interact-", dir=PRIVATE_BASE))
+        try:
+            question = self.server.run_tool("bodesign_c01_next_question", {"folder": str(work)})
+            self.assertTrue(question["ok"])
+            self.assertEqual("form_archetype", question["result"]["target_field"])
+            self.assertFalse(question["result"]["answer_state_exists"])
+
+            update = self.server.run_tool("bodesign_c01_update_answers", {
+                "folder": str(work),
+                "c00": "Desk edge AI device with camera, mic, USB-C, and LED.",
+                "answers": {
+                    "form_archetype": "desktop sensor",
+                    "usage_posture": "placed on desk",
+                },
+            })
+
+            self.assertTrue(update["ok"])
+            self.assertEqual("answers_updated", update["result"]["status"])
+            self.assertFalse(update["result"]["human_approved"])
+            self.assertEqual("primary_face", update["result"]["next_question"]["target_field"])
+            self.assertTrue((work / "C01-ID" / "answer_state.json").exists())
+            self.assertTrue((work / "C01-ID" / "Handoff_to_ID_Designer.md").exists())
+
+            readiness = self.server.run_tool("bodesign_c01_readiness", {"folder": str(work)})
+            self.assertTrue(readiness["ok"])
+            self.assertFalse(readiness["result"]["usable"])
+            self.assertEqual("C01-ID/answer_state.json", readiness["result"]["answer_state_path"])
+            self.assertIn("primary_face", readiness["result"]["next_step"])
+            self.assertFalse(readiness["result"]["human_approved"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def test_run_tool_c00_scaffold_prd(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-", dir=PRIVATE_BASE))

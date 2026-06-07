@@ -147,6 +147,16 @@ def _h_c01_readiness(a: dict) -> Any:
     return assess_c01_package_readiness(a["folder"]).to_dict()
 
 
+def _h_c01_next_question(a: dict) -> Any:
+    from bodesign_workflow_core import c01_next_question
+    return c01_next_question(a["folder"]).to_dict()
+
+
+def _h_c01_update_answers(a: dict) -> Any:
+    from bodesign_workflow_core import c01_update_answers
+    return c01_update_answers(a["folder"], a["answers"], a.get("c00")).to_dict()
+
+
 def _h_c01_generate_concept_image(a: dict) -> Any:
     from bodesign_workflow_core import generate_c01_concept_image
     return generate_c01_concept_image(a["out_dir"], a["prompt"], a.get("model")).to_dict()
@@ -294,6 +304,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c01_readiness", "handler": _h_c01_readiness,
      "description": "Check whether the Rockbox-like C01 package has non-empty scripts for Ai file, CMF, Display UI/UX, constraints JSON, and ID handoff.",
      "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c01_next_question", "handler": _h_c01_next_question,
+     "description": "Return the next C01 industrial-design preference question from C01-ID/answer_state.json. If no state exists, returns the first bootstrap question without writing files.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c01_update_answers", "handler": _h_c01_update_answers,
+     "description": "Update C01-ID/answer_state.json with user/design preferences, then regenerate the Rockbox-like C01 package and return the next question. Does not mark ID approval or create final .ai/Figma/CAD artifacts.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "c00": {}}, "required": ["folder", "answers"]}},
     {"name": "bodesign_c01_generate_concept_image", "handler": _h_c01_generate_concept_image,
      "description": "Optional C01 add-on: generate a reference-only concept image via Google AI Studio from a C01 concept prompt. Credential source is server-side only: BODESIGN_GOOGLE_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY env first, then active API account from opencode accounts.json (default family gemini-cli). Does not affect C01 readiness.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "prompt": _STR, "model": _STR}, "required": ["out_dir", "prompt"]}},

@@ -26,6 +26,74 @@ C01_OUTPUTS = {
     "handoff": Path("C01-ID") / "Handoff_to_ID_Designer.md",
 }
 
+C01_ANSWER_STATE_REL_PATH = Path("C01-ID") / "answer_state.json"
+C01_ANSWER_STATES = {"missing", "answered", "drafted", "no-preference", "external-needed", "blocked", "accepted-risk"}
+C01_INTERACTION_FIELDS = (
+    {
+        "key": "form_archetype",
+        "label": "Product form archetype",
+        "question": "Should this look like a dev-kit, handheld product, desktop sensor, wearable module, wall-mounted box, or another form archetype?",
+        "owner": "user",
+        "downstream_targets": ["C01", "C02"],
+    },
+    {
+        "key": "usage_posture",
+        "label": "Usage posture",
+        "question": "How will the product usually be used: held, placed on a desk, mounted, worn, embedded, or serviced occasionally?",
+        "owner": "user",
+        "downstream_targets": ["C01", "C02"],
+    },
+    {
+        "key": "primary_face",
+        "label": "Primary user-facing face",
+        "question": "Which face is the user's primary interaction face, and which components must live there?",
+        "owner": "user+ID",
+        "downstream_targets": ["C01", "C02", "C04"],
+    },
+    {
+        "key": "visible_component_treatment",
+        "label": "Visible component treatment",
+        "question": "Should camera, microphone, LEDs, buttons, connectors, and antenna regions be emphasized, subtly integrated, hidden, or protected?",
+        "owner": "user+ID",
+        "downstream_targets": ["C01", "C02", "C03", "C04"],
+    },
+    {
+        "key": "exposed_components",
+        "label": "Exposed component list",
+        "question": "Which components must be visible or user-accessible, such as camera, microphone, LED, button, display, USB-C, antenna, vents, or mounting features?",
+        "owner": "user+ID+EE",
+        "downstream_targets": ["C01", "C02", "C03", "C04", "C05"],
+    },
+    {
+        "key": "cmf_direction",
+        "label": "CMF direction",
+        "question": "What emotional direction should CMF express: rugged, premium, medical-clean, playful, industrial, invisible/utility, or brand-specific?",
+        "owner": "user+ID",
+        "downstream_targets": ["C01", "C02"],
+    },
+    {
+        "key": "display_uiux",
+        "label": "Display UI/UX or status behavior",
+        "question": "How should status be shown: display screens, LEDs, buttons, buzzer, app feedback, or no local status surface?",
+        "owner": "user+ID+FW",
+        "downstream_targets": ["C01", "C05"],
+    },
+    {
+        "key": "owner",
+        "label": "C01 approval owner",
+        "question": "Who owns C01 approval: product owner, ID designer, ME, EE/RF, FW, vendor, or another reviewer?",
+        "owner": "user",
+        "downstream_targets": ["C01"],
+    },
+    {
+        "key": "reference_image_cues",
+        "label": "Reference image cues",
+        "question": "Do you have reference images, and which cues should be borrowed or avoided?",
+        "owner": "user+ID",
+        "downstream_targets": ["C01"],
+    },
+)
+
 CONCEPT_IMAGE_REL_PATH = Path("C01-ID") / "Ai file" / "Concept_Reference.png"
 CONCEPT_REFERENCE_REL_PATH = Path("C01-ID") / "Ai file" / "Concept_Reference.md"
 DEFAULT_GOOGLE_IMAGE_MODEL = "gemini-2.0-flash-preview-image-generation"
@@ -61,6 +129,9 @@ class C01PackageReadiness:
     usable: bool
     next_step: str
     artifacts: list[C01PackageArtifact] = field(default_factory=list)
+    answer_state_path: str | None = None
+    field_gaps: list[dict[str, str]] = field(default_factory=list)
+    human_approved: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -68,6 +139,9 @@ class C01PackageReadiness:
             "readiness_pct": self.readiness_pct,
             "usable": self.usable,
             "next_step": self.next_step,
+            "answer_state_path": self.answer_state_path,
+            "field_gaps": self.field_gaps,
+            "human_approved": self.human_approved,
             "artifacts": [
                 {"key": a.key, "rel_path": a.rel_path, "status": a.status, "next_action": a.next_action}
                 for a in self.artifacts
@@ -106,6 +180,47 @@ class C01ConceptImageResult:
             "prompt": self.prompt,
             "mime_type": self.mime_type,
             "limitations": self.limitations,
+        }
+
+
+@dataclass(slots=True)
+class C01NextQuestionResult:
+    folder: str
+    target_field: str
+    question: str
+    field_state: str
+    answer_state_exists: bool
+    status: str = "question_available"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "folder": self.folder,
+            "status": self.status,
+            "target_field": self.target_field,
+            "question": self.question,
+            "field_state": self.field_state,
+            "answer_state_exists": self.answer_state_exists,
+        }
+
+
+@dataclass(slots=True)
+class C01AnswerUpdateResult:
+    folder: str
+    answer_state_path: str
+    updated_fields: list[str]
+    package: C01PackageResult
+    next_question: C01NextQuestionResult
+    status: str = "answers_updated"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "folder": self.folder,
+            "status": self.status,
+            "answer_state_path": self.answer_state_path,
+            "updated_fields": self.updated_fields,
+            "package": self.package.to_dict(),
+            "next_question": self.next_question.to_dict(),
+            "human_approved": False,
         }
 
 
@@ -150,11 +265,80 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
             continue
         artifacts.append(C01PackageArtifact(key, str(rel_path), "present"))
         present += 1
-    readiness_pct = round(100 * present / len(C01_OUTPUTS))
+    file_readiness_pct = round(100 * present / len(C01_OUTPUTS))
     pending = [a for a in artifacts if a.status != "present"]
-    usable = not pending
-    next_step = pending[0].next_action if pending else "C01 Rockbox-like package is usable as a first-pass ID handoff."
-    return C01PackageReadiness(str(root), readiness_pct, usable, next_step, artifacts)
+    answer_state_path = root / C01_ANSWER_STATE_REL_PATH
+    field_gaps: list[dict[str, str]] = []
+    field_readiness_pct: int | None = None
+    field_next_step = ""
+    if answer_state_path.exists():
+        state = _read_c01_answer_state(root)
+        field_gaps = _c01_field_gaps(state)
+        fields = state.get("fields") or {}
+        ready_fields = [field for field in fields.values() if isinstance(field, dict) and field.get("state") in {"answered", "no-preference", "accepted-risk"}]
+        field_readiness_pct = round(100 * len(ready_fields) / len(C01_INTERACTION_FIELDS))
+        next_question = c01_next_question(root)
+        if next_question.status != "complete":
+            field_next_step = f"Ask C01 preference `{next_question.target_field}`: {next_question.question}"
+    readiness_pct = min(file_readiness_pct, field_readiness_pct) if field_readiness_pct is not None else file_readiness_pct
+    usable = not pending and not field_gaps
+    if pending:
+        next_step = pending[0].next_action
+    elif field_next_step:
+        next_step = field_next_step
+    else:
+        next_step = "C01 Rockbox-like package is usable as a first-pass ID handoff."
+    return C01PackageReadiness(
+        str(root),
+        readiness_pct,
+        usable,
+        next_step,
+        artifacts,
+        str(C01_ANSWER_STATE_REL_PATH) if answer_state_path.exists() else None,
+        field_gaps,
+        False,
+    )
+
+
+def c01_next_question(folder: str | Path) -> C01NextQuestionResult:
+    root = Path(folder)
+    state_path = root / C01_ANSWER_STATE_REL_PATH
+    answer_state_exists = state_path.exists()
+    state = _read_c01_answer_state(root) if answer_state_exists else _new_c01_answer_state(None)
+    field = _first_open_c01_field(state)
+    if field is None:
+        return C01NextQuestionResult(str(root), "", "All C01 preference fields are complete enough for the current interaction model.", "answered", answer_state_exists, "complete")
+    return C01NextQuestionResult(str(root), field["key"], field["question"], field["state"], answer_state_exists)
+
+
+def c01_update_answers(
+    folder: str | Path,
+    answers: dict[str, Any],
+    c00: dict[str, Any] | str | None = None,
+) -> C01AnswerUpdateResult:
+    root = Path(folder)
+    state = _read_c01_answer_state(root) if (root / C01_ANSWER_STATE_REL_PATH).exists() else _new_c01_answer_state(c00)
+    if not isinstance(answers, dict) or not answers:
+        raise ValueError("answers must be a non-empty object for C01 update")
+    updated: list[str] = []
+    fields = state["fields"]
+    for key, raw in answers.items():
+        if key not in fields:
+            raise ValueError(f"Unknown C01 answer field: {key}")
+        value, answer_state, source, owner = _normalize_answer(raw, fields[key])
+        fields[key]["value"] = value
+        fields[key]["state"] = answer_state
+        fields[key]["source"] = source
+        fields[key]["owner"] = owner
+        updated.append(key)
+    state["status"] = "answers-updated"
+    state["package_emitted"] = False
+    _write_c01_answer_state(root, state)
+    package = emit_c01_rockbox_package(root, c00, _answers_from_c01_state(state))
+    state["package_emitted"] = True
+    _write_c01_answer_state(root, state)
+    next_question = c01_next_question(root)
+    return C01AnswerUpdateResult(str(root), str(C01_ANSWER_STATE_REL_PATH), updated, package, next_question)
 
 
 def generate_c01_concept_image(
@@ -196,6 +380,140 @@ def generate_c01_concept_image(
         mime_type=mime_type,
         limitations=_concept_limitations(),
     )
+
+
+def _new_c01_answer_state(c00: dict[str, Any] | str | None) -> dict[str, Any]:
+    fields = {}
+    for spec in C01_INTERACTION_FIELDS:
+        fields[spec["key"]] = {
+            "key": spec["key"],
+            "label": spec["label"],
+            "question": spec["question"],
+            "state": "missing",
+            "value": None,
+            "source": None,
+            "owner": spec["owner"],
+            "downstream_targets": spec["downstream_targets"],
+        }
+    return {
+        "schema": "bodesign.c01.answer_state.v1",
+        "status": "scaffold-only",
+        "source_summary": _source_text(c00),
+        "allowed_states": sorted(C01_ANSWER_STATES),
+        "package_emitted": False,
+        "human_approved": False,
+        "fields": fields,
+    }
+
+
+def _read_c01_answer_state(root: Path) -> dict[str, Any]:
+    path = root / C01_ANSWER_STATE_REL_PATH
+    if not path.exists():
+        raise FileNotFoundError(f"C01 answer state not found: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != "bodesign.c01.answer_state.v1":
+        raise ValueError(f"Unsupported C01 answer_state schema: {path}")
+    fields = data.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError(f"C01 answer_state fields must be a non-empty object: {path}")
+    for key, field in fields.items():
+        if not isinstance(field, dict):
+            raise ValueError(f"C01 answer_state field `{key}` must be an object")
+        state = field.get("state")
+        if state not in C01_ANSWER_STATES:
+            raise ValueError(f"C01 answer_state field `{key}` has invalid state: {state}")
+    return data
+
+
+def _write_c01_answer_state(root: Path, state: dict[str, Any]) -> None:
+    path = root / C01_ANSWER_STATE_REL_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _first_open_c01_field(state: dict[str, Any]) -> dict[str, Any] | None:
+    fields = state.get("fields") or {}
+    for spec in C01_INTERACTION_FIELDS:
+        field = fields.get(spec["key"])
+        if isinstance(field, dict) and field.get("state") in {"missing", "blocked"}:
+            return field
+    for spec in C01_INTERACTION_FIELDS:
+        field = fields.get(spec["key"])
+        if isinstance(field, dict) and field.get("state") in {"drafted", "external-needed"}:
+            return field
+    return None
+
+
+def _c01_field_gaps(state: dict[str, Any]) -> list[dict[str, str]]:
+    gaps: list[dict[str, str]] = []
+    fields = state.get("fields") or {}
+    for spec in C01_INTERACTION_FIELDS:
+        field = fields.get(spec["key"])
+        if not isinstance(field, dict):
+            gaps.append({
+                "key": spec["key"],
+                "label": spec["label"],
+                "state": "missing",
+                "owner": spec["owner"],
+                "next_action": spec["question"],
+            })
+            continue
+        field_state = str(field.get("state"))
+        if field_state in {"answered", "no-preference", "accepted-risk"}:
+            continue
+        gaps.append({
+            "key": str(field.get("key") or spec["key"]),
+            "label": str(field.get("label") or spec["label"]),
+            "state": field_state,
+            "owner": str(field.get("owner") or spec["owner"]),
+            "next_action": str(field.get("question") or spec["question"]),
+        })
+    return gaps
+
+
+def _normalize_answer(raw: Any, current: dict[str, Any]) -> tuple[Any, str, str, str]:
+    if isinstance(raw, dict):
+        value = raw.get("value")
+        state = raw.get("state") or "answered"
+        source = raw.get("source") or "user"
+        owner = raw.get("owner") or current.get("owner") or "user"
+    else:
+        value = raw
+        state = "answered"
+        source = "user"
+        owner = current.get("owner") or "user"
+    if state not in C01_ANSWER_STATES:
+        raise ValueError(f"Invalid C01 answer state for `{current.get('key')}`: {state}")
+    if state == "answered" and (value is None or value == ""):
+        raise ValueError(f"Answered C01 field `{current.get('key')}` requires a non-empty value")
+    return value, state, source, owner
+
+
+def _answers_from_c01_state(state: dict[str, Any]) -> dict[str, Any]:
+    answers: dict[str, Any] = {}
+    fields = state.get("fields") or {}
+    for key, field in fields.items():
+        if not isinstance(field, dict):
+            continue
+        value = field.get("value")
+        field_state = field.get("state")
+        if key == "visible_component_treatment":
+            answers["visual_tone"] = value if value not in (None, "") else f"missing — {field.get('question', 'visible component treatment is not decided')}"
+            continue
+        if key == "reference_image_cues":
+            continue
+        if key == "exposed_components" and isinstance(value, str):
+            value = [part.strip() for part in value.split(",") if part.strip()]
+        if value in (None, ""):
+            answers[key] = f"missing — {field.get('question', key)}"
+        elif field_state in {"drafted", "external-needed", "blocked", "accepted-risk", "no-preference"}:
+            answers[key] = f"{value} [{field_state}]"
+        else:
+            answers[key] = value
+    source_summary = state.get("source_summary")
+    if source_summary:
+        answers["source_summary"] = source_summary
+    return answers
 
 
 def _build_model(c00: dict[str, Any] | str | None, answers: dict[str, Any]) -> dict[str, Any]:

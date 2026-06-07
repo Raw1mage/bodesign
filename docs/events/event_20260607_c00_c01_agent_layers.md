@@ -82,13 +82,13 @@
 - Implemented C00 requirement-planning binding: `plan_design_intent` now validates its preserved public requirement keys against explicit C00 template section/field bindings, while keeping the existing MCP/API response shape and failing fast on missing template fields.
 - Packaged the C00 consultant prompt as `plans/feature_doc-package-scaffold/skills/c00-product-development-consultant/SKILL.md`, making C00's input-SSOT plus roll-up-index behavior available as a skill source for later distributed skill installation.
 - Defined C00 downstream dispatch contracts in `c00_downstream_contract.md`: `bodesign.c00.work_packet.v1` and `bodesign.c00.blocker_return.v1` describe how C00 sends scoped tasks to C01-C06 and how downstream blockers return without mutating product direction.
+- Implemented C01 interaction MVP: added C01 answer-state persistence, user-answerable preference question bank, workflow-core `c01_next_question` / `c01_update_answers`, MCP `bodesign_c01_next_question` / `bodesign_c01_update_answers`, and direct/MCP tests. Updating answers regenerates the Rockbox-like C01 package while preserving no-final-ID/no-approval boundaries.
+- Upgraded C01 readiness to field-level: `bodesign_c01_readiness` now detects `answer_state.json` to report preference gaps, aligns `next_step` with the next question, and combines file-level and field-level scores while maintaining backward compatibility with one-shot outputs.
 - Architecture Sync: Verified (No doc changes). `specs/architecture.md` already records MCP tool handlers, workflow-core, client-owned package outputs, fail-fast/no-final-output constraints, and external-fetch policy gates; this C01 add-on remains an optional MCP handler and does not change module boundaries.
 
 ## Remaining
 
 - Define C01 mode/session contract and blocker return format to C00.
-- Implement C01 answer state, preference question bank, `bodesign_c01_next_question`, and `bodesign_c01_update_answers`.
-- Upgrade C01 readiness from file-level checks to field-state and blocker-owner checks.
 - Add C01 reference image intake and traceability so uploaded examples can become confirmed design-intent evidence for the Rockbox-like documents.
 - Install/package C00/C01/C02 skill sources into the distributed skill bundle once skill packaging policy is finalized.
 - Complete Docker image build/recreate with OpenSCAD and validate real `Enclosure.stl` export inside the MCP container after Docker Desktop storage location is confirmed safe; C00 SSOT runtime work is the next non-Docker implementation path.
