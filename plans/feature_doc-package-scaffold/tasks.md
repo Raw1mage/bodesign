@@ -199,7 +199,7 @@ with a 4th state `forward(mcp)` → external MCP server.
 - [x] **F-2 Passthrough tool** — `bodesign_mcp_call(server, tool, arguments)` MCP tool: call any registered external MCP tool through bodesign with uniform degradation (small surface; avoids the ~100-tool limit).
 - [x] **F-3 Tests** — registry/unknown-server resolution; unreachable → degraded (fast, bounded timeout); in-session smoke connecting to a live bodesign HTTP server (bodesign→bodesign over real MCP) to prove the round-trip.
 - [ ] **F-4 (future) emit_doc→docxmcp binding** — convenience delegation once docxmcp's decompose/assemble API mapping is verified.
-- [ ] **F-5 (future) spine dispatch to external-MCP layers** — agent_registry marks a layer external-MCP-backed; C00 loop dispatches via `call_external_mcp_tool`.
+- [ ] **F-5 spine dispatch to external-MCP layers (declarative; design in `mcp_collaboration.md` §F-5)** — add a declarative `backend` ({native | worker:<group> | external_mcp:<server>+adapter}) per layer in `doc_architecture.template.json`, surfaced via `agent_registry` as `role.backend`. `c00_orchestration_tick` step 3 reads it (ONE `match` on backend.kind, no per-layer branches): native/worker unchanged; external_mcp invokes a per-MCP adapter (`mcp_adapters.py`) that calls `call_external_mcp_tool` and records result or a worker_unavailable/worker_starting blocker (never fabricated). Per-MCP adapter is the only hand-wired code (interface, not judgment), unit-tested with a mock. All C00–C06 ship native/worker by default → no regression. **Pending user approval of the design before implementation.**
 
 ### Acceptance (Batch F)
 

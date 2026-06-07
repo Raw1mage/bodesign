@@ -99,12 +99,82 @@ are layered on top later, once each external API mapping is verified.
 - No new dependency (uses the existing `mcp` SDK client).
 - The single external endpoint and "independently operable" design are unchanged.
 
-## Future
+## F-5 design (detailed): declarative backend binding + spine dispatch
 
-- `emit_doc → docxmcp` convenience binding (needs docxmcp's decompose/assemble API
-  mapping — a verifiable follow-up).
-- Spine dispatch: let `agent_registry` mark a layer external-MCP-backed and have the
-  C00 loop dispatch to it via `call_external_mcp_tool`.
+**Goal:** let the C00 autonomous loop dispatch a C0x layer to whatever backend serves
+it — a bodesign worker OR an external MCP server — **without scattered hardcoded
+branches**. The decision "which backend serves which layer" is *data*; the dispatch
+policy is the existing deterministic state machine; semantic judgment stays with the
+LLM/human (bodesign never makes it). The only hand-wired code is a small per-MCP
+*adapter* (an interface concern, not a judgment).
+
+### 1. Declarative `backend` on each layer (data, not code)
+
+Add a `backend` field to each section in `doc_architecture.template.json`; the
+`agent_registry` surfaces it as `role.backend`. Three kinds:
+
+```jsonc
+"backend": { "kind": "native" }                                  // pure-python, runs in core
+"backend": { "kind": "worker", "group": "me" }                   // bodesign own worker (/invoke)
+"backend": { "kind": "external_mcp", "server": "drawmiat",        // external MCP via call_external_mcp_tool
+             "adapter": "drawmiat_diagram" }
+```
+
+All C00–C06 ship as `native`/`worker` (their current reality) — F-5 is the *mechanism*;
+specific `external_mcp` bindings are added later as a one-line data edit + one adapter,
+when a real external-MCP-backed layer exists. No layer changes behaviour by default.
+
+### 2. Spine dispatch reads `role.backend` (one general branch, not per-layer)
+
+`c00_orchestration_tick` step 3 (dispatch a ready layer) consults `role.backend`:
+
+- `native` / `worker` → unchanged: create a `work_packet` (C01 via `enter_c01_mode`).
+- `external_mcp` → create the `work_packet` (for traceability + the contract), then
+  invoke the named **adapter**, which calls `call_external_mcp_tool(server, tool, args)`
+  and records the normalized result; if the external MCP is unavailable/starting, the
+  dispatch records a **blocker** (reusing `worker_unavailable`/`worker_starting`) that
+  surfaces to the user as "this layer's external tool isn't reachable" — never fabricated.
+
+This is ONE `match role.backend.kind` in the dispatch step — not `if layer == ...`
+branches per layer.
+
+### 3. Per-MCP adapters (the only hand-wired part — interface, not judgment)
+
+A small isolated registry `mcp_adapters.py` maps an adapter name → a function:
+
+```python
+def drawmiat_diagram(work_packet, project_state) -> dict:
+    args = _build_drawmiat_args(work_packet, project_state)   # map packet → external API
+    return call_external_mcp_tool("drawmiat", "generate_diagram", args)
+```
+
+One adapter per external-MCP integration; each is a thin argument-mapping + result
+normalization. This cannot be pure data because every external MCP (docxmcp's
+decompose/assemble, drawmiat's diagram schema) has its own API — but it is an interface
+adapter, not a decision. Adapters are unit-tested with a mock `call_external_mcp_tool`.
+
+### 4. Boundary recap (what is data vs code vs not-bodesign)
+
+- **Backend selection (which MCP/worker):** data — `role.backend` from the template.
+- **Dispatch policy (when/whether):** the existing deterministic spine (intentionally fixed).
+- **Arg mapping per external tool:** isolated adapter code (interface, ~1 per integration).
+- **Semantic judgment (is it good/right):** NOT bodesign's — LLM skill / human at gates.
+
+### Acceptance (F-5)
+
+- A layer declared `backend.kind = external_mcp` with a registered adapter is dispatched
+  to that MCP by `c00_orchestration_tick`; the result/blocker is recorded.
+- An external MCP that is unconfigured/unreachable yields a blocker (`worker_unavailable`/
+  `worker_starting`), never a fabricated layer output.
+- Layers without an `external_mcp` backend behave EXACTLY as today (no regression);
+  determinism preserved (same state → same dispatch).
+- Adding a new external-MCP-backed layer = one template data edit + one adapter; no
+  changes to the dispatch policy.
+
+## Future (after F-5)
+
+- `emit_doc → docxmcp` convenience binding (a concrete adapter; needs docxmcp's
+  decompose/assemble API mapping — a verifiable follow-up, F-4).
 - Option 3 gateway only if a single-endpoint requirement appears (reuse, don't build).
 
 ## Sources
