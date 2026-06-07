@@ -22,11 +22,14 @@ flow**: establish the structural skeleton first, then populate — the structure
 
 ## Effective Requirement Description
 
-1. Lift the **C0* document architecture** (C00/C07 PRD · C01 ID · C02 ME · C03 電路 · C04 Layout · C05 FW · C06 驗證) into a single declarative **template src** (the skeleton + per-section role + question prompts + required fields).
+1. Lift the **C0* document architecture** (C00/C07 PRD · C01 ID · C02 ME · C03 電路 · C04 Layout · C05 FW(SW-spec) · C06 驗證) into a single declarative **template src** (the skeleton + per-section role + question prompts + required fields + the four-capability bindings).
 2. Add an MCP tool that **scaffolds the blank skeleton** into a client token folder: C0* section folders + a stub doc per section (front-matter + headings + open questions), nothing fabricated.
 3. **Fill incrementally**: subsequent tools (requirement_planning, compose/emit, verify, kidoc) write into the matching section; `package_readiness` computes the compass from which sections are still stubs.
 4. The same template src drives **all three consumers**: the elicitation question bank, the scaffold, and the `kidoc` document output — so "題庫 ≡ 文件架構".
 5. **De-product**: the template is generic (RockBox/TheSmartAI are exemplars only); no client content ships in the program.
+6. **Each layer declares its four-capability chain** — `elicit_with` / `generate_with` / `verify_with` (+ a `coverage` status) — so the MCP+skills *know*, per layer, what to fill, how to ask, what generates it, and what verifies it. Only C03 is `full` today; the rest are explicit `partial`/`gap`.
+7. **FW (C05) is an extension of the PRD, realized as a software-development spec — not code.** bodesign does NOT write firmware; it stands up + maintains a **plan-builder-like SW-dev architecture spec** inside C05 (functional spec from the PRD's functional description + module/interface/state-machine + task breakdown, with its own IDEF0/GRAFCET), bridged to the C03 pin map. bodesign owns the *spec*, the FW team owns the *code*.
+8. **The MCP is a thin orchestrator across a very large professional span.** Each C0* layer **references a specialized external skill** (per-section `skill` binding) to do its domain work — C03→kicad/kidoc/spice/emc/datasheets/bom/distributors/fab, C05→plan-builder/software-architect, C00→plan-builder/kidoc, etc. bodesign owns the scaffold, the cross-layer contract, and the readiness compass — not every domain's expertise.
 
 ## Scope
 

@@ -12,93 +12,488 @@
   },
   "sections": [
     {
-      "code": "C00", "aliases": ["C07"], "key": "prd", "title": "PRD — 產品需求文件",
+      "code": "C00",
+      "aliases": [
+        "C07"
+      ],
+      "key": "prd",
+      "title": "PRD — 產品需求文件",
       "bodesign_role": "generate",
-      "fill": ["產品定位 / 場景", "功能需求", "規格需求", "介面需求", "合規 / 認證目標", "量產 / 數量", "開放問題"],
-      "elicit_with": ["bodesign_plan_design_intent"],
-      "generate_with": ["bodesign_emit_doc (needs a 'prd' kidoc doc_type — TODO)"],
-      "verify_with": ["prd_completeness_check (required fields answered) — TODO", "consistency vs C03 design intent — TODO"],
-      "coverage": {"fill": "full", "elicit": "full", "generate": "gap", "verify": "gap",
-                   "note": "Elicitation works (14-item bank). No structured PRD document emitter; no PRD completeness/consistency verifier."},
+      "fill": [
+        "產品定位 / 場景",
+        "功能需求",
+        "規格需求",
+        "介面需求",
+        "合規 / 認證目標",
+        "量產 / 數量",
+        "開放問題"
+      ],
+      "elicit_with": [
+        "bodesign_plan_design_intent"
+      ],
+      "generate_with": [
+        "bodesign_emit_doc (needs a 'prd' kidoc doc_type — TODO)"
+      ],
+      "verify_with": [
+        "prd_completeness_check (required fields answered) — TODO",
+        "consistency vs C03 design intent — TODO"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "full",
+        "generate": "gap",
+        "verify": "gap",
+        "note": "Elicitation works (14-item bank). No structured PRD document emitter; no PRD completeness/consistency verifier."
+      },
       "question_bank": [
-        {"key": "compute", "label": "Compute (MCU/SoC/NPU)", "required": true, "question": "Which exact MCU/SoC part and package? (e.g. STM32N657 VFBGA223)", "keywords": ["mcu", "soc", "npu", "processor", "cortex", "fpga", "晶片", "處理器", "運算", "主控"]},
-        {"key": "comms", "label": "Connectivity", "required": true, "question": "Which connectivity standard(s) and exact module? (cellular / Wi-Fi / BLE / Ethernet)", "keywords": ["nrf", "cellular", "lte", "wifi", "ble", "ethernet", "lora", "通訊", "無線", "網路"]},
-        {"key": "memory", "label": "Memory / storage", "required": true, "question": "Flash/RAM type, density, and interface? (e.g. 8 GB eMMC vs octal-SPI NOR)", "keywords": ["flash", "emmc", "nand", "nor", "psram", "sdram", "ddr", "記憶體", "儲存", "快閃"]},
-        {"key": "power_input", "label": "Power input", "required": true, "question": "Power input connector and voltage range? (USB-C PD profile? DC input?)", "keywords": ["usb-c", "type-c", "dc jack", "pd", "供電", "電源", "輸入電"]},
-        {"key": "charging", "label": "Charging", "required": false, "question": "Charging current and charger IC preference? cell chemistry to charge?", "keywords": ["charge", "charger", "充電", "充放電"]},
-        {"key": "battery", "label": "Battery", "required": false, "question": "Battery: cell count/config, capacity, and protection/fuel-gauge needs?", "keywords": ["18650", "battery", "li-ion", "lipo", "電池", "鋰電"]},
-        {"key": "dimensions", "label": "Form factor / dimensions", "required": true, "question": "Target board dimensions / form-factor or enclosure constraints?", "keywords": ["mm", "form factor", "board size", "outline", "enclosure", "尺寸", "外形", "板框"]},
-        {"key": "certification", "label": "Compliance targets", "required": false, "question": "Any compliance targets? (FCC / CE / EMC / safety)", "keywords": ["fcc", "ce", "emc", "rohs", "iec", "認證", "法規"]},
-        {"key": "volume", "label": "Build volume", "required": true, "question": "Prototype or production volume? (affects sourcing and DFM)", "keywords": ["prototype", "production", "quantity", "原型", "樣品", "量產", "數量"]},
-        {"key": "if_camera", "label": "Interface: camera", "required": false, "question": "Camera interface + sensor? (CSI/DCMI/MIPI)", "keywords": ["camera", "csi", "dcmi", "mipi", "相機", "鏡頭"]},
-        {"key": "if_display", "label": "Interface: display", "required": false, "question": "Display interface + panel? (DSI/LCD/OLED)", "keywords": ["display", "lcd", "oled", "dsi", "顯示", "螢幕"]},
-        {"key": "if_audio", "label": "Interface: audio", "required": false, "question": "Audio interface? (mic/speaker, I2S, codec)", "keywords": ["audio", "microphone", "i2s", "codec", "音訊", "麥克風", "喇叭"]},
-        {"key": "if_sensor", "label": "Interface: IMU / sensor", "required": false, "question": "Sensors and bus? (IMU/accel/gyro/magnetometer)", "keywords": ["imu", "accelerometer", "gyro", "sensor", "感測", "陀螺"]},
-        {"key": "if_usb_data", "label": "Interface: USB data", "required": false, "question": "USB data role + speed? (HS device/host/OTG)", "keywords": ["usb hs", "usb device", "otg", "資料傳輸"]}
+        {
+          "key": "compute",
+          "label": "Compute (MCU/SoC/NPU)",
+          "required": true,
+          "question": "Which exact MCU/SoC part and package? (e.g. STM32N657 VFBGA223)",
+          "keywords": [
+            "mcu",
+            "soc",
+            "npu",
+            "processor",
+            "cortex",
+            "fpga",
+            "晶片",
+            "處理器",
+            "運算",
+            "主控"
+          ]
+        },
+        {
+          "key": "comms",
+          "label": "Connectivity",
+          "required": true,
+          "question": "Which connectivity standard(s) and exact module? (cellular / Wi-Fi / BLE / Ethernet)",
+          "keywords": [
+            "nrf",
+            "cellular",
+            "lte",
+            "wifi",
+            "ble",
+            "ethernet",
+            "lora",
+            "通訊",
+            "無線",
+            "網路"
+          ]
+        },
+        {
+          "key": "memory",
+          "label": "Memory / storage",
+          "required": true,
+          "question": "Flash/RAM type, density, and interface? (e.g. 8 GB eMMC vs octal-SPI NOR)",
+          "keywords": [
+            "flash",
+            "emmc",
+            "nand",
+            "nor",
+            "psram",
+            "sdram",
+            "ddr",
+            "記憶體",
+            "儲存",
+            "快閃"
+          ]
+        },
+        {
+          "key": "power_input",
+          "label": "Power input",
+          "required": true,
+          "question": "Power input connector and voltage range? (USB-C PD profile? DC input?)",
+          "keywords": [
+            "usb-c",
+            "type-c",
+            "dc jack",
+            "pd",
+            "供電",
+            "電源",
+            "輸入電"
+          ]
+        },
+        {
+          "key": "charging",
+          "label": "Charging",
+          "required": false,
+          "question": "Charging current and charger IC preference? cell chemistry to charge?",
+          "keywords": [
+            "charge",
+            "charger",
+            "充電",
+            "充放電"
+          ]
+        },
+        {
+          "key": "battery",
+          "label": "Battery",
+          "required": false,
+          "question": "Battery: cell count/config, capacity, and protection/fuel-gauge needs?",
+          "keywords": [
+            "18650",
+            "battery",
+            "li-ion",
+            "lipo",
+            "電池",
+            "鋰電"
+          ]
+        },
+        {
+          "key": "dimensions",
+          "label": "Form factor / dimensions",
+          "required": true,
+          "question": "Target board dimensions / form-factor or enclosure constraints?",
+          "keywords": [
+            "mm",
+            "form factor",
+            "board size",
+            "outline",
+            "enclosure",
+            "尺寸",
+            "外形",
+            "板框"
+          ]
+        },
+        {
+          "key": "certification",
+          "label": "Compliance targets",
+          "required": false,
+          "question": "Any compliance targets? (FCC / CE / EMC / safety)",
+          "keywords": [
+            "fcc",
+            "ce",
+            "emc",
+            "rohs",
+            "iec",
+            "認證",
+            "法規"
+          ]
+        },
+        {
+          "key": "volume",
+          "label": "Build volume",
+          "required": true,
+          "question": "Prototype or production volume? (affects sourcing and DFM)",
+          "keywords": [
+            "prototype",
+            "production",
+            "quantity",
+            "原型",
+            "樣品",
+            "量產",
+            "數量"
+          ]
+        },
+        {
+          "key": "if_camera",
+          "label": "Interface: camera",
+          "required": false,
+          "question": "Camera interface + sensor? (CSI/DCMI/MIPI)",
+          "keywords": [
+            "camera",
+            "csi",
+            "dcmi",
+            "mipi",
+            "相機",
+            "鏡頭"
+          ]
+        },
+        {
+          "key": "if_display",
+          "label": "Interface: display",
+          "required": false,
+          "question": "Display interface + panel? (DSI/LCD/OLED)",
+          "keywords": [
+            "display",
+            "lcd",
+            "oled",
+            "dsi",
+            "顯示",
+            "螢幕"
+          ]
+        },
+        {
+          "key": "if_audio",
+          "label": "Interface: audio",
+          "required": false,
+          "question": "Audio interface? (mic/speaker, I2S, codec)",
+          "keywords": [
+            "audio",
+            "microphone",
+            "i2s",
+            "codec",
+            "音訊",
+            "麥克風",
+            "喇叭"
+          ]
+        },
+        {
+          "key": "if_sensor",
+          "label": "Interface: IMU / sensor",
+          "required": false,
+          "question": "Sensors and bus? (IMU/accel/gyro/magnetometer)",
+          "keywords": [
+            "imu",
+            "accelerometer",
+            "gyro",
+            "sensor",
+            "感測",
+            "陀螺"
+          ]
+        },
+        {
+          "key": "if_usb_data",
+          "label": "Interface: USB data",
+          "required": false,
+          "question": "USB data role + speed? (HS device/host/OTG)",
+          "keywords": [
+            "usb hs",
+            "usb device",
+            "otg",
+            "資料傳輸"
+          ]
+        }
+      ],
+      "skill": [
+        "plan-builder (spec structure)",
+        "kidoc (render)"
       ]
     },
     {
-      "code": "C01", "key": "id", "title": "ID — 工業設計", "bodesign_role": "track+interface", "owner": "ID team",
-      "fill": ["概念 / CMF (團隊提供)", "bodesign 記錄的介面約束"],
-      "elicit_with": ["(none yet) — enclosure/dimensions only via PRD bank — TODO add ID interface questions"],
-      "generate_with": ["interface_constraints_doc (connector/board-outline/height) — TODO"],
-      "verify_with": ["constraint consistency vs C02/C03 — TODO"],
-      "coverage": {"fill": "full", "elicit": "gap", "generate": "gap", "verify": "gap",
-                   "note": "By-design track-only, but no interface-constraint emitter or check exists."}
+      "code": "C01",
+      "key": "id",
+      "title": "ID — 工業設計",
+      "bodesign_role": "track+interface",
+      "owner": "ID team",
+      "fill": [
+        "概念 / CMF (團隊提供)",
+        "bodesign 記錄的介面約束"
+      ],
+      "elicit_with": [
+        "(none yet) — enclosure/dimensions only via PRD bank — TODO add ID interface questions"
+      ],
+      "generate_with": [
+        "interface_constraints_doc (connector/board-outline/height) — TODO"
+      ],
+      "verify_with": [
+        "constraint consistency vs C02/C03 — TODO"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "gap",
+        "generate": "gap",
+        "verify": "gap",
+        "note": "By-design track-only, but no interface-constraint emitter or check exists."
+      },
+      "skill": [
+        "(external — ID team; bodesign records interface constraints only)"
+      ]
     },
     {
-      "code": "C02", "key": "me", "title": "ME — 機構工程", "bodesign_role": "track+interface", "owner": "ME team",
-      "fill": ["3D STEP / 組裝意圖 (團隊提供)", "bodesign 記錄的介面約束"],
-      "elicit_with": ["(dimensions via PRD bank) — TODO add ME interface questions"],
-      "generate_with": ["interface_constraints_doc (board outline/connector/height) — TODO"],
-      "verify_with": ["constraint consistency vs C01/C04 — TODO"],
-      "coverage": {"fill": "full", "elicit": "partial", "generate": "gap", "verify": "gap",
-                   "note": "Same as C01: track-only, emitter/check not built."}
+      "code": "C02",
+      "key": "me",
+      "title": "ME — 機構工程",
+      "bodesign_role": "track+interface",
+      "owner": "ME team",
+      "fill": [
+        "3D STEP / 組裝意圖 (團隊提供)",
+        "bodesign 記錄的介面約束"
+      ],
+      "elicit_with": [
+        "(dimensions via PRD bank) — TODO add ME interface questions"
+      ],
+      "generate_with": [
+        "interface_constraints_doc (board outline/connector/height) — TODO"
+      ],
+      "verify_with": [
+        "constraint consistency vs C01/C04 — TODO"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "partial",
+        "generate": "gap",
+        "verify": "gap",
+        "note": "Same as C01: track-only, emitter/check not built."
+      },
+      "skill": [
+        "(external — ME team; bodesign records interface constraints only)"
+      ]
     },
     {
-      "code": "C03", "key": "circuit", "title": "電路設計", "bodesign_role": "generate",
-      "fill": ["設計定義", "原理圖 (kicad-cli 驗證)", "網表 / ERC", "關鍵零件 BOM", "pin / GPIO 配置表", "design review 報告"],
-      "elicit_with": ["bodesign_plan_design_intent", "bodesign_evidence_manifest", "datasheets (skill)"],
-      "generate_with": ["bodesign_emit_symbol", "bodesign_compose_schematic", "bodesign_pin_allocation", "bodesign_export_bom", "bodesign_export_netlist"],
-      "verify_with": ["kicad-cli ERC (in emit)", "bodesign_reference_crosscheck", "bodesign_simulate (SPICE)", "bodesign_analyze_emc", "bodesign_analyze_thermal", "kicad (skill)"],
-      "coverage": {"fill": "full", "elicit": "full", "generate": "full", "verify": "full",
-                   "note": "The AI-complete core — the only layer with the full four-capability chain today."}
+      "code": "C03",
+      "key": "circuit",
+      "title": "電路設計",
+      "bodesign_role": "generate",
+      "fill": [
+        "設計定義",
+        "原理圖 (kicad-cli 驗證)",
+        "網表 / ERC",
+        "關鍵零件 BOM",
+        "pin / GPIO 配置表",
+        "design review 報告"
+      ],
+      "elicit_with": [
+        "bodesign_plan_design_intent",
+        "bodesign_evidence_manifest",
+        "datasheets (skill)"
+      ],
+      "generate_with": [
+        "bodesign_emit_symbol",
+        "bodesign_compose_schematic",
+        "bodesign_pin_allocation",
+        "bodesign_export_bom",
+        "bodesign_export_netlist"
+      ],
+      "verify_with": [
+        "kicad-cli ERC (in emit)",
+        "bodesign_reference_crosscheck",
+        "bodesign_simulate (SPICE)",
+        "bodesign_analyze_emc",
+        "bodesign_analyze_thermal",
+        "kicad (skill)"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "full",
+        "generate": "full",
+        "verify": "full",
+        "note": "The AI-complete core — the only layer with the full four-capability chain today."
+      },
+      "skill": [
+        "kicad",
+        "kidoc",
+        "datasheets",
+        "spice",
+        "emc",
+        "bom",
+        "digikey/lcsc/mouser/element14",
+        "jlcpcb/pcbway"
+      ]
     },
     {
-      "code": "C04", "key": "layout", "title": "Layout — PCB 佈局", "bodesign_role": "constraints", "owner": "layout engineer",
-      "fill": ["疊層 (stackup)", "板框 / floorplan", "佈線約束", "footprint map", "(Board + Gerber 由佈局工程師產)"],
-      "elicit_with": ["(dimensions via PRD bank)"],
-      "generate_with": ["bodesign_emit_layout (placement + DRC, draft)", "bodesign_emit_fab", "footprint map (eda-bridge)"],
-      "verify_with": ["pcbnew DRC (in emit_layout)", "analyze_gerbers (kicad skill, when fab outputs exist)"],
-      "coverage": {"fill": "full", "elicit": "partial", "generate": "partial", "verify": "partial",
-                   "note": "Constraints + placement draft + DRC; full Board/Gerber by the layout engineer (by design)."}
+      "code": "C04",
+      "key": "layout",
+      "title": "Layout — PCB 佈局",
+      "bodesign_role": "constraints",
+      "owner": "layout engineer",
+      "fill": [
+        "疊層 (stackup)",
+        "板框 / floorplan",
+        "佈線約束",
+        "footprint map",
+        "(Board + Gerber 由佈局工程師產)"
+      ],
+      "elicit_with": [
+        "(dimensions via PRD bank)"
+      ],
+      "generate_with": [
+        "bodesign_emit_layout (placement + DRC, draft)",
+        "bodesign_emit_fab",
+        "footprint map (eda-bridge)"
+      ],
+      "verify_with": [
+        "pcbnew DRC (in emit_layout)",
+        "analyze_gerbers (kicad skill, when fab outputs exist)"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "partial",
+        "generate": "partial",
+        "verify": "partial",
+        "note": "Constraints + placement draft + DRC; full Board/Gerber by the layout engineer (by design)."
+      },
+      "skill": [
+        "kicad (analyze_gerbers)",
+        "jlcpcb/pcbway (DFM)"
+      ]
     },
     {
-      "code": "C05", "key": "fw", "title": "FW — 韌體", "bodesign_role": "track+interface", "owner": "FW team",
-      "fill": ["介面 / pin map", "FW feasibility (團隊確認)"],
-      "elicit_with": ["(derived from C03 pin allocation)"],
-      "generate_with": ["bodesign_pin_allocation (GPIO/pin bridge C03↔C05)"],
-      "verify_with": ["non-authority cross-check only (by design)"],
-      "coverage": {"fill": "full", "elicit": "partial", "generate": "partial", "verify": "gap",
-                   "note": "Pin-map bridge exists; FW content owned by the FW team."}
+      "code": "C05",
+      "key": "fw",
+      "title": "FW — 韌體（軟體開發架構 spec，非程式碼）",
+      "bodesign_role": "spec",
+      "owner": "FW team",
+      "fill": [
+        "FW 功能規格（由 PRD 功能描述延伸）",
+        "軟體開發架構（模組 / 介面 / 狀態機）",
+        "GPIO / pin map 橋接 C03↔C05",
+        "開發任務拆解 + 就緒度"
+      ],
+      "elicit_with": [
+        "(從 C00 PRD 功能描述延伸)",
+        "bodesign_pin_allocation (C03 pin map)"
+      ],
+      "generate_with": [
+        "plan-builder-like FW sub-spec scaffold (proposal/design/tasks + IDEF0/GRAFCET) — TODO",
+        "software-architect (skill)"
+      ],
+      "verify_with": [
+        "functional coverage vs PRD — TODO",
+        "pin map consistency vs C03 — TODO",
+        "spec drift (plan-builder wiki_validate-style) — TODO"
+      ],
+      "coverage": {
+        "fill": "partial",
+        "elicit": "partial",
+        "generate": "gap",
+        "verify": "gap",
+        "note": "Upgraded: C05 is a software-development architecture spec (plan-builder-like), an extension of the PRD's functional description. bodesign maintains the spec, NOT the firmware code. Only the pin-map bridge exists today."
+      },
+      "skill": [
+        "plan-builder",
+        "software-architect"
+      ],
+      "principle": "FW is an extension of the PRD (functional description). bodesign does NOT write firmware; it establishes + maintains the SW-development architecture spec inside C05 using plan-builder-like methodology (proposal/design/tasks + IDEF0/GRAFCET for the software), bridged from PRD functional reqs + C03 pin map."
     },
     {
-      "code": "C06", "key": "verification", "title": "驗證與測試", "bodesign_role": "draft+guide",
-      "fill": ["bring-up 計畫", "驗證 / 測試計畫", "in-house vs 外包 (EMC / RF / safety)"],
-      "elicit_with": ["(certification targets via PRD bank)"],
-      "generate_with": ["test_plan_doc assembling simulate/emc/thermal/crosscheck verdicts — TODO", "kidoc design-review/manufacturing (skill)"],
-      "verify_with": ["n/a — C06 is itself the verification layer; its inputs are the C03 verify tools"],
-      "coverage": {"fill": "full", "elicit": "partial", "generate": "partial", "verify": "n/a",
-                   "note": "The verify tools' output IS C06 content; assembling a bring-up/test-plan document is not yet built."}
+      "code": "C06",
+      "key": "verification",
+      "title": "驗證與測試",
+      "bodesign_role": "draft+guide",
+      "fill": [
+        "bring-up 計畫",
+        "驗證 / 測試計畫",
+        "in-house vs 外包 (EMC / RF / safety)"
+      ],
+      "elicit_with": [
+        "(certification targets via PRD bank)"
+      ],
+      "generate_with": [
+        "test_plan_doc assembling simulate/emc/thermal/crosscheck verdicts — TODO",
+        "kidoc design-review/manufacturing (skill)"
+      ],
+      "verify_with": [
+        "n/a — C06 is itself the verification layer; its inputs are the C03 verify tools"
+      ],
+      "coverage": {
+        "fill": "full",
+        "elicit": "partial",
+        "generate": "partial",
+        "verify": "n/a",
+        "note": "The verify tools' output IS C06 content; assembling a bring-up/test-plan document is not yet built."
+      },
+      "skill": [
+        "spice",
+        "emc",
+        "kicad",
+        "kidoc"
+      ]
     }
   ],
   "gap_summary": {
-    "full_chain": ["C03"],
+    "full_chain": [
+      "C03"
+    ],
     "key_gaps": [
       "C00 PRD: structured PRD document emitter (kidoc 'prd' doc_type) + PRD completeness/consistency verifier.",
       "C06: a test-plan/bring-up document assembler over the verify verdicts.",
       "C01/C02: an interface-constraints document emitter + cross-section consistency check.",
-      "Generic: a per-section 'verify existing content' capability (only C03 has real content verification today)."
+      "Generic: a per-section 'verify existing content' capability (only C03 has real content verification today).",
+      "C05 FW: stand up a plan-builder-like SW-dev spec sub-package (functional spec from PRD + pin map from C03); bodesign owns the spec, not the code."
     ]
-  }
+  },
+  "orchestration": "bodesign's MCP is a thin orchestrator across a very large professional span; each C0* layer references a specialized external skill (see each section's `skill`) to do its work. bodesign owns the scaffold, the cross-layer contract, and the readiness compass — not every domain's expertise."
 }
