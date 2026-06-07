@@ -17,8 +17,12 @@ Symptoms: C01-I1 (template loader) and C01-I3 (mode contract) sit undone *beneat
    document architecture), `orchestration.py` (`work_packet.v1`/`blocker_return.v1` persisted under
    `<folder>/_orchestration/` + dispatch/return/ingest, fail-fast), 7 new MCP tools, and the C00→C01
    mode contract `mode_contracts.enter_c01_mode` (C01-I3). RB-2 folded in. +29 tests (173 total green).
-3. **C — NEXT:** widen coverage so all 7 layers have minimal runtime — C04 layout constraint doc,
-   C05 FW SW-spec sub-package scaffold (plan-builder-like), C06 test-plan assembler.
+3. **C — DONE:** all 7 layers now have runtime — C04 `bodesign_c04_emit_layout_package` (constraint-first),
+   C05 `bodesign_c05_scaffold_fw_spec` (plan-builder-like SW-dev spec), C06 `bodesign_c06_assemble_test_plan`
+   (verdict assembler). Each constraint-first/draft-only, fail-fast, no fabricated pass/approval. +15 tests.
+
+**After A→B→C:** remaining is depth, not breadth — cross-section consistency checks, the autonomous
+C00-driven dispatch loop, RB-1 (canonical-artifact conformance), and C00 docx/pdf render + PRD verifier.
 
 **Re-baseline debts:**
 - **RB-1** (OPEN) custom artifact set ≠ plan-builder canonical (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates bypassed — conform or document deviation.

@@ -600,7 +600,7 @@
         "elicit": "partial",
         "generate": "partial",
         "verify": "n/a",
-        "note": "The verify tools' output IS C06 content; assembling a bring-up/test-plan document is not yet built."
+        "note": "The verify tools' output IS C06 content. Batch C: bodesign_c06_assemble_test_plan assembles Verification_Summary.json + Test_Plan.md + Bring_Up_Checklist.md over the simulate/emc/thermal/crosscheck verdicts (checks without a verdict stay not-run; no pass fabricated); bodesign_c06_readiness reports per-check status. EVT/DVT and certification stay external-lab gates and are never marked certified."
       },
       "skill": [
         "spice",
@@ -630,8 +630,8 @@
       "C00 PRD: docx/pdf render via kidoc 'prd' doc_type + a real PRD completeness/consistency verifier vs C03.",
       "C01: still open — cross-section consistency + downstream-gate tests; constraint hardening (N6); reference-image intake (N7/N8). (C01-I1 template loader/binding + C01-I3 mode contract: DONE.)",
       "C02: real STL export validation (C02-T7/V5) pending OpenSCAD-in-container end-to-end run.",
-      "C04 Layout / C06 verify: C04 constraint-doc emitter and C06 test-plan/bring-up assembler over verify verdicts — not started.",
-      "C05 FW: plan-builder-like SW-dev spec sub-package (functional spec from PRD + pin map from C03) — not started; bodesign owns the spec, not the code.",
+      "C04 Layout / C06 verify: LANDED (Batch C) — bodesign_c04_emit_layout_package (constraint-first) + bodesign_c06_assemble_test_plan (verdict assembler). Remaining: cross-section consistency.",
+      "C05 FW: LANDED (Batch C) — bodesign_c05_scaffold_fw_spec (plan-builder-like SW-dev spec from PRD §7 + C03 pin map); bodesign owns the spec, not the code.",
       "Generic: a per-section 'verify existing content' capability (only C03 has real content verification today).",
       "RB-1: this plan uses a custom artifact set, not plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema); lifecycle gates were bypassed. Conform or document the deviation.",
       "RB-2: DONE (Batch B) — runtime-depended templates moved to packages/workflow-core/bodesign_workflow_core/templates/; loaders updated. C01 templates move when C01-I1 lands."

@@ -266,6 +266,16 @@ def _h_c05_readiness(a: dict) -> Any:
     return assess_c05_fw_readiness(a["folder"]).to_dict()
 
 
+def _h_c06_assemble_test_plan(a: dict) -> Any:
+    from bodesign_workflow_core import assemble_c06_test_plan
+    return assemble_c06_test_plan(a["out_dir"], a.get("verdicts"), a.get("certification_targets")).to_dict()
+
+
+def _h_c06_readiness(a: dict) -> Any:
+    from bodesign_workflow_core import assess_c06_readiness
+    return assess_c06_readiness(a["folder"]).to_dict()
+
+
 def _h_crosscheck(a: dict) -> Any:
     from bodesign_workflow_core import crosscheck_nets
     return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
@@ -414,6 +424,12 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"out_dir": _STR, "software": {"type": "object"}, "pin_map": {}}, "required": ["out_dir"]}},
     {"name": "bodesign_c05_readiness", "handler": _h_c05_readiness,
      "description": "Report C05 FW SW-spec readiness: which spec sections exist, whether PRD §7 functions and the C03 pin map are bridged, and what is pending. Never claims firmware code or completion.",
+     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c06_assemble_test_plan", "handler": _h_c06_assemble_test_plan,
+     "description": "Assemble the C06 verification package (Verification_Summary.json + Test_Plan.md + Bring_Up_Checklist.md) from the verify-tool verdicts {simulate, emc, thermal, crosscheck}. Checks with no verdict are recorded `not-run`; no pass is fabricated. EVT/DVT and certification stay external-lab gates and are never marked certified.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "verdicts": {"type": "object"}, "certification_targets": {"type": "array"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c06_readiness", "handler": _h_c06_readiness,
+     "description": "Report C06 verification readiness: per-check status, how many verify tools have produced verdicts, which are not-run, and whether any failed. Never claims certified/EVT-DVT-passed.",
      "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
     {"name": "bodesign_reference_crosscheck", "handler": _h_crosscheck,
      "description": "Cross-check a generated net set vs a reference product's nets (control group): matched/missing/extra + coverage.",

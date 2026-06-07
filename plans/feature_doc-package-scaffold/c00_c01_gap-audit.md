@@ -2,14 +2,16 @@
 
 > **RE-BASELINED 2026-06-07 (handoff).** This audit predated the runtime commits and was stale.
 > The authoritative coverage/gap map is now `doc_architecture.template.json → gap_summary`.
-> Boxes below are flipped to `[x]` only where code + passing tests exist (144 green).
+> Boxes below are flipped to `[x]` only where code + passing tests exist (193 green after Batch C).
 
 ## Current Status
 
 - **C00 function model**: runtime LANDED (draft-grade). Template+rubric loaded by `c00_prd_template.py`; `bodesign_c00_scaffold_prd` / `_readiness` / `_emit_prd` live with answer-state field readiness, next-best question, downstream-gate assessment, and a Markdown handoff *report*. Consultant prompt packaged as a skill. `requirement_planning` fields bound+validated against the template.
 - **C01 function model**: runtime LANDED (draft-grade). `bodesign_c01_emit_package` / `_next_question` / `_update_answers` / `_readiness` (+ optional concept-image) live over Rockbox canonical slots. NOTE: emitters hardcode structure — `c01_id.template.json`/rubric are NOT yet loaded at runtime (C01-I1 genuinely undone).
 - **C02 function model**: runtime LANDED (draft-grade). package/openscad/export(stl·skp·step, toolchain-gated)/readiness live. Real STL export validation pending OpenSCAD-in-container.
-- **The remaining gap is NOT per-layer tools — it is the SPINE that connects them** (Cross-Cutting Gaps below): a drafted `work_packet.v1`/`blocker_return.v1` (in `c00_downstream_contract.md`) exists but is **not wired to runtime**. 15 tools, no conductor.
+- **C03**: full chain (pre-existing EE pipeline) + `bodesign_c03_export_mechanical_constraints`.
+- **C04/C05/C06** (Batch C): `bodesign_c04_emit_layout_package` (constraint-first layout), `bodesign_c05_scaffold_fw_spec` (plan-builder-like FW SW-dev spec, not code), `bodesign_c06_assemble_test_plan` (verdict assembler). **All 7 layers now have runtime.**
+- **SPINE wired** (Batch B): `work_packet.v1`/`blocker_return.v1` runtime + agent registry + C00→C01 mode contract. Remaining is depth: cross-section consistency, the autonomous C00 dispatch loop, RB-1, and C00 docx/pdf + PRD verifier.
 
 ## C00 Remaining Gaps
 

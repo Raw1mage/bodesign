@@ -35,6 +35,12 @@ from .c05_fw_spec import (
     assess_c05_fw_readiness,
     scaffold_c05_fw_spec,
 )
+from .c06_test_plan import (
+    C06Readiness,
+    C06Result,
+    assemble_c06_test_plan,
+    assess_c06_readiness,
+)
 from .gap_report import (
     EvidenceArtifactSummary,
     GapItem,
@@ -150,6 +156,8 @@ __all__ = [
     "C04LayoutResult",
     "C05FwReadiness",
     "C05FwResult",
+    "C06Readiness",
+    "C06Result",
     "C02ConstraintItem",
     "C02ConstraintReadiness",
     "C02OpenScadResult",
@@ -214,6 +222,8 @@ __all__ = [
     "emit_c04_layout_package",
     "assess_c05_fw_readiness",
     "scaffold_c05_fw_spec",
+    "assess_c06_readiness",
+    "assemble_c06_test_plan",
     "load_agent_registry",
     "load_c00_prd_rubric",
     "load_c00_prd_template",
