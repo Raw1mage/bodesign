@@ -138,6 +138,57 @@ class McpServerTests(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_run_tool_c02_export_skp_reports_unavailable(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-skp-", dir=PRIVATE_BASE))
+        try:
+            source = self.server.run_tool("bodesign_c02_generate_openscad", {
+                "out_dir": str(work),
+                "constraints": {
+                    "board_outline": {"width_mm": 80, "height_mm": 50},
+                    "component_heights": [{"ref": "J1", "height_mm": 8}],
+                },
+                "wall_thickness_mm": 2.0,
+                "clearance_mm": 1.0,
+                "lid_clearance_mm": 0.4,
+            })
+            self.assertTrue(source["ok"])
+
+            result = self.server.run_tool("bodesign_c02_export_skp", {"out_dir": str(work)})
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("skp_export_unavailable", result["result"]["status"])
+            self.assertIsNone(result["result"]["skp_path"])
+            self.assertFalse((work / "C02-ME" / "Enclosure.skp").exists())
+            self.assertTrue((work / "C02-ME" / "SketchUp_Import_Guide.md").exists())
+            self.assertFalse(result["result"]["me_approved"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_run_tool_c03_export_mechanical_constraints(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c03-", dir=PRIVATE_BASE))
+        try:
+            result = self.server.run_tool("bodesign_c03_export_mechanical_constraints", {
+                "out_dir": str(work),
+                "circuit": {
+                    "components": [
+                        {"ref": "J1", "value": "USB-C", "role": "connector", "height_mm": 3.2, "external": True},
+                        {"ref": "U1", "value": "AI MCU", "height_mm": 1.4, "thermal_watts": 1.8},
+                    ],
+                    "battery_envelope": {"width_mm": 30, "height_mm": 40, "depth_mm": 6},
+                },
+            })
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("mechanical_constraints_exported", result["result"]["status"])
+            self.assertFalse(result["result"]["mechanical_approval"])
+            self.assertTrue((work / "C03-EE" / "Mechanical_Constraint_Export.json").exists())
+            self.assertIn("component_heights", result["result"]["c02_ready_keys"])
+            self.assertNotIn("board_outline", result["result"]["constraints"])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def test_unknown_tool_is_data_not_exception(self):
         r = self.server.run_tool("nope", {})
         self.assertIn("error", r)

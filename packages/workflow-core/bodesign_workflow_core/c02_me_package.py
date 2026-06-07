@@ -147,6 +147,33 @@ class C02StlExportResult:
         }
 
 
+@dataclass(slots=True)
+class C02SkpExportResult:
+    folder: str
+    skp_path: str | None
+    status: str
+    message: str
+    guide_path: str
+    source_path: str | None = None
+    stl_path: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "folder": self.folder,
+            "skp_path": self.skp_path,
+            "status": self.status,
+            "message": self.message,
+            "guide_path": self.guide_path,
+            "source_path": self.source_path,
+            "stl_path": self.stl_path,
+            "source_ready": bool(self.source_path),
+            "viewable_draft_ready": bool(self.stl_path),
+            "printable_draft_ready": bool(self.stl_path),
+            "vendor_handoff_ready": False,
+            "me_approved": False,
+        }
+
+
 def emit_c02_enclosure_package(
     out_dir: str | Path,
     constraints: dict[str, Any] | None = None,
@@ -270,6 +297,27 @@ def export_c02_stl(
         status="stl_exported",
         message="Generated real STL via OpenSCAD CLI. This is still a prototype draft, not ME approval.",
         openscad_path=str(C02_OUTPUTS["openscad"]),
+    )
+
+
+def export_c02_skp(
+    out_dir: str | Path,
+) -> C02SkpExportResult:
+    """Report native SKP export unavailability and keep SketchUp import guidance current."""
+    root = Path(out_dir)
+    source = root / C02_OUTPUTS["openscad"]
+    stl = root / C02_OUTPUTS["stl"]
+    guide = root / C02_OUTPUTS["sketchup_guide"]
+    guide.parent.mkdir(parents=True, exist_ok=True)
+    guide.write_text(_render_sketchup_fallback_status(source.exists(), stl.exists()), encoding="utf-8")
+    return C02SkpExportResult(
+        folder=str(root),
+        skp_path=None,
+        status="skp_export_unavailable",
+        message="Native SKP export requires an explicit SketchUp-capable toolchain; use the import guide with the available STL/source artifact instead.",
+        guide_path=str(C02_OUTPUTS["sketchup_guide"]),
+        source_path=str(C02_OUTPUTS["openscad"]) if source.exists() else None,
+        stl_path=str(C02_OUTPUTS["stl"]) if stl.exists() else None,
     )
 
 
@@ -650,6 +698,29 @@ def _render_sketchup_guide(model: dict[str, Any]) -> str:
         "Do not treat this guide as proof that an SKP, STL, or STEP artifact exists.",
         "",
     ])
+
+
+def _render_sketchup_fallback_status(source_exists: bool, stl_exists: bool) -> str:
+    artifact = "C02-ME/Enclosure.stl" if stl_exists else "C02-ME/Enclosure.scad" if source_exists else "no 3D artifact yet"
+    return "\n".join([
+        "# SketchUp Import Guide",
+        "",
+        "## Native SKP Status",
+        "- `skp_export_unavailable`: true",
+        "- Reason: no explicit SketchUp-capable exporter, Ruby automation, SDK, or vendor conversion toolchain is configured.",
+        "- No `C02-ME/Enclosure.skp` file was generated.",
+        "",
+        "## Available Review Artifact",
+        f"- Current artifact: `{artifact}`",
+        "- If an STL exists, import it into SketchUp with an STL importer or convert it through a user-approved converter before saving as `.skp`.",
+        "- If only OpenSCAD source exists, export a real STL first with `bodesign_c02_export_stl` after OpenSCAD is installed/configured.",
+        "",
+        "## Limits",
+        "- SKP import/re-save is a review workflow, not ME approval.",
+        "- Do not treat this guide as proof that native SKP export succeeded.",
+        "",
+    ])
+
 
 
 def _item(key: str, data: dict[str, Any], owner: str, missing_message: str, blocks: list[str]) -> C02ConstraintItem:

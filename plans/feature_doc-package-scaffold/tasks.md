@@ -101,17 +101,25 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C02-T2 Parametric source generator** — implement `bodesign_c02_generate_openscad` from explicit board outline, mounting strategy, wall/clearance parameters, openings, component heights, battery, heat, RF, and keepout data.
 - [x] **C02-T3 STL export** — implement `bodesign_c02_export_stl` with local OpenSCAD/CAD tool detection, real `Enclosure.stl` output when available, and explicit `export_unavailable` when not.
 - [x] **C02-T4 Readiness checker** — report constraint readiness before CAD generation, including blockers for board outline, heights, openings, thermal/RF, battery, and environment targets.
-- [ ] **C02-T5 SketchUp import fallback** — emit `SketchUp_Import_Guide.md` and explicit `skp_export_unavailable` status when native SKP cannot be generated; native `bodesign_c02_export_skp` remains optional and toolchain-gated.
+- [x] **C02-T5 SketchUp import fallback** — emit `SketchUp_Import_Guide.md` and explicit `skp_export_unavailable` status when native SKP cannot be generated; native `bodesign_c02_export_skp` remains optional and toolchain-gated.
 - [ ] **C02-T6 STEP draft export** — optionally implement `bodesign_c02_export_step` only when a capable CAD toolchain exists, marking output as `draft_unapproved`.
+- [ ] **C02-T7 Real STL toolchain validation** — when OpenSCAD is installed/configured, run an end-to-end sample that produces a real `Enclosure.stl` and records toolchain/version metadata; until then, keep `export_unavailable` explicit.
 - [x] **C02-V1 Readiness validation** — add tests for no guessed dimensions, CAD-source blockers, missing constraint ownership, and no printable/CAD export claim at readiness stage.
 - [x] **C02-V2 Package validation** — test package emitter files, owner-tagged pending constraints, vendor handoff wording, and no production ME approval.
 - [x] **C02-V3 Source/STL validation** — test OpenSCAD generation, explicit dimension requirements, STL export unavailable behavior, and no fake STL output.
 - [ ] **C02-V4 Optional handoff validation** — test SketchUp fallback, optional native SKP gating, and optional STEP gating.
+- [ ] **C02-V5 Toolchain validation** — test real STL export only in an environment with OpenSCAD available; otherwise assert the unavailable path remains explicit and non-destructive.
+
+### Post-Commit Execution Queue
+
+1. **C02-T7 / C02-V5** — validate real STL export after OpenSCAD is installed or configured on the MCP host.
+2. **C02-T6 / C02-V4** — add optional STEP draft export only if a capable toolchain exists; keep native SKP as toolchain-gated.
+3. **C00-I1–I4** — implement the C00 SSOT/PRD runtime scaffold, readiness, and emitter after the C02 prototype path is stable.
 
 ## C03 Circuit Engineering Lead
 
 - [x] **C03-P1 Preserve Rockbox EE code** — keep C03 as circuit design by EE/vendor deliverable boundary while allowing C03 component constraints to lead C02/C04 execution loops.
-- [ ] **C03-P2 Mechanical constraint export** — ensure C03 circuit outputs include component heights, connector locations/types, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes for C02/C04.
+- [x] **C03-P2 Mechanical constraint export** — ensure C03 circuit outputs include component heights, connector locations/types, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes for C02/C04.
 
 ## Open Gap Audit
 

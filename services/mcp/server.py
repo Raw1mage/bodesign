@@ -157,6 +157,16 @@ def _h_c02_export_stl(a: dict) -> Any:
     return export_c02_stl(a["out_dir"], a.get("openscad_bin")).to_dict()
 
 
+def _h_c02_export_skp(a: dict) -> Any:
+    from bodesign_workflow_core import export_c02_skp
+    return export_c02_skp(a["out_dir"]).to_dict()
+
+
+def _h_c03_export_mech_constraints(a: dict) -> Any:
+    from bodesign_workflow_core import export_c03_mechanical_constraints
+    return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
+
+
 def _h_crosscheck(a: dict) -> Any:
     from bodesign_workflow_core import crosscheck_nets
     return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
@@ -270,6 +280,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c02_export_stl", "handler": _h_c02_export_stl,
      "description": "Export C02-ME/Enclosure.stl from Enclosure.scad using local OpenSCAD CLI when available; returns export_unavailable instead of creating fake STL when missing.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "openscad_bin": _STR}, "required": ["out_dir"]}},
+    {"name": "bodesign_c02_export_skp", "handler": _h_c02_export_skp,
+     "description": "Report native SketchUp SKP export as unavailable unless an explicit SketchUp-capable toolchain is later configured; updates SketchUp_Import_Guide.md and never fabricates Enclosure.skp.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR}, "required": ["out_dir"]}},
+    {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
+     "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
     {"name": "bodesign_reference_crosscheck", "handler": _h_crosscheck,
      "description": "Cross-check a generated net set vs a reference product's nets (control group): matched/missing/extra + coverage.",
      "schema": {"type": "object", "properties": {"generated_nets": {"type": "array", "items": _STR},

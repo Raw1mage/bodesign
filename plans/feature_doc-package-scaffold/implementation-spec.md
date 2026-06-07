@@ -152,6 +152,13 @@ C02 runtime work should target prototype enclosure drafts, not final production 
 5. `bodesign_c02_export_skp` — optional preferred SketchUp output; require an explicit SketchUp-capable converter/Ruby/vendor toolchain and return `skp_export_unavailable` otherwise. Native SKP is not required for vendor handoff if STL/DAE/OBJ import guidance exists.
 6. `bodesign_c02_export_step` — optional draft-only engineering handoff when a capable CAD toolchain exists; output must be marked `draft_unapproved` and cannot imply ME approval.
 
+### Post-Commit Execution Queue
+
+1. Implement SketchUp fallback first: expose explicit `skp_export_unavailable` behavior and keep `SketchUp_Import_Guide.md` as the deterministic baseline.
+2. Validate real STL export only after OpenSCAD is available on the MCP host; until then, tests must preserve the explicit unavailable path and never create fake STL output.
+3. Add C03 mechanical-relevant constraint export so C02/C04 receive component heights, connector locations, heat/RF/battery envelopes, and ESD/EMC notes from the circuit layer.
+4. Resume C00 SSOT/PRD runtime work after the C02 prototype enclosure path has stable package/source/export boundaries.
+
 ### C02 Verification Plan
 
 - **No-guess test**: missing board outline or mounting holes remain `engineering_pending`; tools do not fabricate hidden dimensions.
@@ -159,6 +166,7 @@ C02 runtime work should target prototype enclosure drafts, not final production 
 - **Source test**: generated parametric source includes board size, wall thickness, clearances, openings, and assumptions.
 - **Export test**: unavailable CAD/export toolchain returns explicit status and still keeps source/support docs.
 - **SketchUp test**: if native SKP export is unavailable, tools emit `SketchUp_Import_Guide.md` and do not claim `Enclosure.skp` exists.
+- **Toolchain test**: real STL export is validated only when OpenSCAD exists; otherwise the unavailable path stays explicit and non-destructive.
 - **STEP test**: optional STEP output is marked `draft_unapproved`; missing STEP toolchain returns explicit unavailable status.
 - **Handoff test**: vendor handoff states what is AI-generated, what is assumed, what the vendor must refine, and which Rockbox C02 targets remain vendor-owned.
 - **Approval test**: AI cannot mark `me_approved` without explicit external/human evidence.

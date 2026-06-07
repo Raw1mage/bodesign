@@ -41,11 +41,17 @@ from .c02_me_package import (
     C02ConstraintReadiness,
     C02OpenScadResult,
     C02PackageResult,
+    C02SkpExportResult,
     C02StlExportResult,
     assess_c02_constraint_readiness,
     emit_c02_enclosure_package,
+    export_c02_skp,
     export_c02_stl,
     generate_c02_openscad,
+)
+from .c03_mechanical_constraints import (
+    C03MechanicalConstraintResult,
+    export_c03_mechanical_constraints,
 )
 from .reference_crosscheck import (
     ReferenceCheck,
@@ -65,7 +71,9 @@ __all__ = [
     "C02ConstraintReadiness",
     "C02OpenScadResult",
     "C02PackageResult",
+    "C02SkpExportResult",
     "C02StlExportResult",
+    "C03MechanicalConstraintResult",
     "ClarifyingQuestion",
     "DeliverableStatus",
     "DesignIntentPlan",
@@ -96,7 +104,9 @@ __all__ = [
     "extract_part_candidates",
     "emit_c01_rockbox_package",
     "emit_c02_enclosure_package",
+    "export_c02_skp",
     "export_c02_stl",
+    "export_c03_mechanical_constraints",
     "generate_c01_concept_image",
     "generate_c02_openscad",
     "plan_design_intent",
