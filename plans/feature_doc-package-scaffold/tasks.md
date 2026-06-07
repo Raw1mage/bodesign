@@ -188,6 +188,23 @@ mounted via MCP-of-MCPs. Incremental, non-breaking; monolith keeps working.
 
 - Clients see ONE MCP endpoint; worker topology is invisible. A heavy dependency lives in exactly one worker. Stopping a worker degrades only its tools (to `*_unavailable`), never the server.
 
+## Batch F — MCP-to-MCP collaboration (targeted delegation)
+
+Design: `mcp_collaboration.md`. Option 4 (bodesign as a thin MCP *client* for targeted
+delegation) primary; Option 1 (host aggregation) default; Option 3 (external gateway)
+future. No new dep (uses the existing `mcp` SDK client). Generalizes the worker router
+with a 4th state `forward(mcp)` → external MCP server.
+
+- [ ] **F-1 Delegation primitive** — `mcp_delegate.py`: external-MCP registry (`BODESIGN_MCP_SERVERS` JSON / `BODESIGN_MCP_<NAME>_URL`) + `call_external_mcp_tool(server, tool, arguments)` over Streamable HTTP (`mcp.client`), sync-over-async via a worker thread. Degradation reuses worker semantics (unreachable → `worker_starting`; unknown → `worker_unavailable`); never fabricates.
+- [ ] **F-2 Passthrough tool** — `bodesign_mcp_call(server, tool, arguments)` MCP tool: call any registered external MCP tool through bodesign with uniform degradation (small surface; avoids the ~100-tool limit).
+- [ ] **F-3 Tests** — registry/unknown-server resolution; unreachable → degraded (fast, bounded timeout); in-session smoke connecting to a live bodesign HTTP server (bodesign→bodesign over real MCP) to prove the round-trip.
+- [ ] **F-4 (future) emit_doc→docxmcp binding** — convenience delegation once docxmcp's decompose/assemble API mapping is verified.
+- [ ] **F-5 (future) spine dispatch to external-MCP layers** — agent_registry marks a layer external-MCP-backed; C00 loop dispatches via `call_external_mcp_tool`.
+
+### Acceptance (Batch F)
+
+- bodesign can call an external MCP server's tool and return its result; unconfigured/unreachable degrades cleanly (no crash, no fabrication). No new dependency; single external endpoint + independently-operable design unchanged.
+
 ## Open Gap Audit
 
 - [x] **GAP-T1 C00/C01 gap audit** — document remaining prompt, runtime, tool, integration, verification, and cross-agent gaps in `c00_c01_gap-audit.md`.
