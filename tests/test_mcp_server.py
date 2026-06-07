@@ -409,25 +409,13 @@ class McpServerTests(unittest.TestCase):
         for t in ("bodesign_compose_schematic", "bodesign_emit_layout", "bodesign_simulate",
                   "bodesign_analyze_emc", "bodesign_export_bom", "bodesign_render_companion"):
             self.assertEqual(groups[t], "ee")
-        # LibreOffice rendering goes to the docs worker.
-        self.assertEqual(groups["bodesign_emit_doc"], "docs")
+        # emit_doc stays core: there is NO bodesign-docs worker — docx/pdf rendering is
+        # delegated to docxmcp (which already ships LibreOffice). emit_doc gates gracefully.
+        self.assertEqual(groups["bodesign_emit_doc"], "core")
         # Pure-python / core tools stay core (incl. EE-adjacent pure python).
         for t in ("bodesign_agent_registry", "bodesign_c02_readiness", "bodesign_c00_orchestration_tick",
                   "bodesign_pin_allocation", "bodesign_reference_crosscheck", "bodesign_ingest_project"):
             self.assertEqual(groups[t], "core")
-
-    def test_docs_tool_routes_to_docs_worker(self):
-        saved = self.server.SERVED_GROUPS
-        try:
-            self.server.SERVED_GROUPS = {"core"}
-            with patch.dict(os.environ, {"BODESIGN_DOCS_WORKER_URL": "http://bodesign-docs:8077"}):
-                self.assertEqual(self.server._route_tool("bodesign_emit_doc"),
-                                 ("forward", "http://bodesign-docs:8077"))
-            with patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("BODESIGN_DOCS_WORKER_URL", None)
-                self.assertEqual(self.server._route_tool("bodesign_emit_doc"), ("unavailable", "docs"))
-        finally:
-            self.server.SERVED_GROUPS = saved
 
     def test_ee_tool_routes_to_ee_worker(self):
         saved = self.server.SERVED_GROUPS

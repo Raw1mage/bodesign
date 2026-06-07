@@ -17,31 +17,11 @@ services:
     environment:
       BODESIGN_ME_WORKER_URL: "http://bodesign-me:8077"
       BODESIGN_EE_WORKER_URL: "http://bodesign-ee:8077"
-      BODESIGN_DOCS_WORKER_URL: "http://bodesign-docs:8077"
     depends_on:
       - bodesign-me
       - bodesign-ee
-      - bodesign-docs
-
-  bodesign-docs:
-    image: bodesign-docs:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.docs
-    command: ["--transport", "http", "--port", "8077", "--tools", "docs"]
-    volumes:
-      - "bodesign-sessions:/var/cache/bodesign/sessions"
-    environment:
-      PYTHONIOENCODING: utf-8
-      PYTHONUTF8: "1"
-      BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8077/healthz').status==200 else 1)"]
-      interval: 10s
-      timeout: 3s
-      retries: 6
-      start_period: 20s
+    # Final docx/pdf/pptx rendering is delegated to docxmcp (run alongside; it already
+    # ships LibreOffice). No bodesign-docs worker — bodesign emits the markdown source.
 
   bodesign-ee:
     image: bodesign-ee:latest

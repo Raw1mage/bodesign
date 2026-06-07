@@ -550,11 +550,12 @@ _EE_GROUP_TOOLS = {
 }
 
 
-# Deliverable rendering: LibreOffice (docx/pdf). Isolated so the core image can drop
-# the ~GB LibreOffice install. render_companion stays `ee` (it needs kicad-cli).
-_DOCS_GROUP_TOOLS = {
-    "bodesign_emit_doc",
-}
+# NOTE: there is intentionally NO bodesign-docs worker. Final docx/pdf/pptx rendering
+# is docxmcp's job — it already ships LibreOffice and the full decompose/assemble
+# system. bodesign emits markdown (the source of truth); bodesign_emit_doc is only an
+# optional in-process companion renderer that gates gracefully (skipped-no-soffice)
+# where LibreOffice is absent (e.g. the lean core), at which point the agent renders
+# via docxmcp. So emit_doc stays in `core` — we do not duplicate LibreOffice.
 
 
 def _group_of(name: str) -> str:
@@ -562,8 +563,6 @@ def _group_of(name: str) -> str:
         return "me"
     if name in _EE_GROUP_TOOLS:
         return "ee"
-    if name in _DOCS_GROUP_TOOLS:
-        return "docs"
     return "core"
 
 

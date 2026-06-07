@@ -30,14 +30,20 @@ that share KiCad across containers and ship KiCad twice.
 | **bodesign-core** | Product/spec/guide + orchestration — C00 PRD, C01 ID consult, C05 FW-spec, the spine | MCP server, agent_registry, orchestration loop, package_readiness, doc scaffold/emit, pm-skills, plan-builder, self-built C00/C01/C05 skills | light |
 | **bodesign-ee** | Electronics engineering — C03 circuit · C04 layout · C06 verify | KiCad 9 (kicad-cli + pcbnew), ngspice, pygerber, emc, datasheets, bom/distributors | heavy (~GB) |
 | **bodesign-me** | Mechanical engineering — C02 enclosure | build123d/OCP/vtk, OpenSCAD, (future FreeCAD/CadQuery) | heavy (~400MB+) |
-| **bodesign-docs** *(optional; may fold into core)* | Deliverable rendering (cross-cutting) | LibreOffice/soffice, kidoc render, pdf | mid-heavy |
+| **docx/pdf/pptx rendering** | Deliverable rendering (cross-cutting) | **docxmcp** (NOT a bodesign worker) | n/a |
 
 The grouping reads as real org boundaries: `ee` = the EE/PCB engineer's toolbox,
 `me` = the mechanical engineer's toolbox, `core` = the PM/architect's desk. Heavy-dep
 isolation (KiCad in ee, OCP in me) falls out for free.
 
-**Already-MCP toolchains** (`docxmcp`, `drawmiat`) are NOT re-containerized — they are
-mounted via the MCP-of-MCPs route (②) as upstream MCP servers.
+**No bodesign-docs worker — docs rendering is docxmcp's job.** docxmcp already ships
+LibreOffice and the full decompose/assemble system; standing up a second LibreOffice
+container would duplicate it. So: bodesign emits **markdown** (the source of truth);
+`bodesign_emit_doc` is only an optional in-process companion renderer that gates
+gracefully (`skipped-no-soffice`) where LibreOffice is absent (e.g. the lean core),
+at which point the agent renders via **docxmcp**. `docxmcp` and `drawmiat` are
+already independent MCP servers run alongside bodesign (MCP-of-MCPs ②), not
+re-containerized.
 
 ## Worker contract
 
@@ -79,14 +85,13 @@ mounted via the MCP-of-MCPs route (②) as upstream MCP servers.
   lean `Dockerfile.ee`, compose routes me+ee away from core. The core *process* stops
   executing EE work (failure-isolated); a lean `Dockerfile.core` (so the core *image*
   drops KiCad/LibreOffice too) follows Phase 3 once emit_doc's LibreOffice moves out.
-- **Phase 3 — DONE: `bodesign-docs`** (LibreOffice — `emit_doc` tagged `docs`, lean
-  `Dockerfile.docs`) **+ lean `Dockerfile.core`** (no KiCad/LibreOffice/OpenSCAD/OCP).
-  The compose overlay now builds the core from `Dockerfile.core` and forwards
-  me+ee+docs, so **every heavy dependency lives only in its worker** and the core
-  image is finally slim. `docxmcp`/`drawmiat` are already independent MCP servers a
-  client connects to directly; true MCP-of-MCPs *aggregation* (bodesign re-exposing
-  their tools under one endpoint) remains an optional future enhancement — not needed
-  for them to be used alongside bodesign today.
+- **Phase 3 — DONE: lean `Dockerfile.core`** (no KiCad/LibreOffice/OpenSCAD/OCP). The
+  compose overlay builds the core from `Dockerfile.core` and forwards me+ee, so **every
+  heavy bodesign dependency lives only in its worker** and the core image is slim.
+  **Docs rendering is delegated to docxmcp** (no bodesign-docs worker — see note above):
+  bodesign emits markdown, `emit_doc` gates gracefully, docxmcp renders. True MCP-of-MCPs
+  *aggregation* (bodesign re-exposing docxmcp/drawmiat tools under one endpoint) — and a
+  programmatic `emit_doc → docxmcp` delegation — remain optional future enhancements.
 
 ## Non-goals
 
