@@ -1,0 +1,48 @@
+{
+  "name": "C0* product document package",
+  "draft": true,
+  "source": "Extracted from the 01.ROCKBOX shipped-product structure; generic (exemplar only, no client content).",
+  "numbering_note": "RockBox numbers PRD as C07; the genesis-first variant uses C00. Both map to key 'prd'.",
+  "roles": {
+    "generate": "bodesign produces the content (factory-ready / reviewable).",
+    "constraints": "bodesign supplies constraints only; the deliverable is produced downstream.",
+    "track+interface": "owned by another team; bodesign records interface constraints + keeps them in sync.",
+    "draft+guide": "bodesign drafts a plan + readiness guide; actual execution is outsourced."
+  },
+  "sections": [
+    {
+      "code": "C00", "aliases": ["C07"], "key": "prd", "title": "PRD — 產品需求文件",
+      "bodesign_role": "generate",
+      "stub_headings": ["產品定位 / 場景", "功能需求", "規格需求", "介面需求", "合規 / 認證目標", "量產 / 數量", "開放問題 (clarifying questions)"],
+      "question_bank": [
+        {"key": "compute", "label": "Compute (MCU/SoC/NPU)", "required": true, "question": "Which exact MCU/SoC part and package? (e.g. STM32N657 VFBGA223)", "keywords": ["mcu", "soc", "npu", "processor", "cortex", "fpga", "晶片", "處理器", "運算", "主控"]},
+        {"key": "comms", "label": "Connectivity", "required": true, "question": "Which connectivity standard(s) and exact module? (cellular / Wi-Fi / BLE / Ethernet)", "keywords": ["nrf", "cellular", "lte", "wifi", "ble", "ethernet", "lora", "通訊", "無線", "網路"]},
+        {"key": "memory", "label": "Memory / storage", "required": true, "question": "Flash/RAM type, density, and interface? (e.g. 8 GB eMMC vs octal-SPI NOR)", "keywords": ["flash", "emmc", "nand", "nor", "psram", "sdram", "ddr", "記憶體", "儲存", "快閃"]},
+        {"key": "power_input", "label": "Power input", "required": true, "question": "Power input connector and voltage range? (USB-C PD profile? DC input?)", "keywords": ["usb-c", "type-c", "dc jack", "pd", "供電", "電源", "輸入電"]},
+        {"key": "charging", "label": "Charging", "required": false, "question": "Charging current and charger IC preference? cell chemistry to charge?", "keywords": ["charge", "charger", "充電", "充放電"]},
+        {"key": "battery", "label": "Battery", "required": false, "question": "Battery: cell count/config, capacity, and protection/fuel-gauge needs?", "keywords": ["18650", "battery", "li-ion", "lipo", "電池", "鋰電"]},
+        {"key": "dimensions", "label": "Form factor / dimensions", "required": true, "question": "Target board dimensions / form-factor or enclosure constraints?", "keywords": ["mm", "form factor", "board size", "outline", "enclosure", "尺寸", "外形", "板框"]},
+        {"key": "certification", "label": "Compliance targets", "required": false, "question": "Any compliance targets? (FCC / CE / EMC / safety)", "keywords": ["fcc", "ce", "emc", "rohs", "iec", "認證", "法規"]},
+        {"key": "volume", "label": "Build volume", "required": true, "question": "Prototype or production volume? (affects sourcing and DFM)", "keywords": ["prototype", "production", "quantity", "原型", "樣品", "量產", "數量"]},
+        {"key": "if_camera", "label": "Interface: camera", "required": false, "question": "Camera interface + sensor? (CSI/DCMI/MIPI)", "keywords": ["camera", "csi", "dcmi", "mipi", "相機", "鏡頭"]},
+        {"key": "if_display", "label": "Interface: display", "required": false, "question": "Display interface + panel? (DSI/LCD/OLED)", "keywords": ["display", "lcd", "oled", "dsi", "顯示", "螢幕"]},
+        {"key": "if_audio", "label": "Interface: audio", "required": false, "question": "Audio interface? (mic/speaker, I2S, codec)", "keywords": ["audio", "microphone", "i2s", "codec", "音訊", "麥克風", "喇叭"]},
+        {"key": "if_sensor", "label": "Interface: IMU / sensor", "required": false, "question": "Sensors and bus? (IMU/accel/gyro/magnetometer)", "keywords": ["imu", "accelerometer", "gyro", "sensor", "感測", "陀螺"]},
+        {"key": "if_usb_data", "label": "Interface: USB data", "required": false, "question": "USB data role + speed? (HS device/host/OTG)", "keywords": ["usb hs", "usb device", "otg", "資料傳輸"]}
+      ]
+    },
+    {"code": "C01", "key": "id", "title": "ID — 工業設計", "bodesign_role": "track+interface", "owner": "ID team",
+     "contributes": "機構 / 連接器介面約束", "stub_headings": ["概念 / CMF (團隊提供)", "bodesign 記錄的介面約束"]},
+    {"code": "C02", "key": "me", "title": "ME — 機構工程", "bodesign_role": "track+interface", "owner": "ME team",
+     "contributes": "板框 / 連接器 / 高度約束", "stub_headings": ["3D STEP / 組裝意圖 (團隊提供)", "bodesign 記錄的介面約束"]},
+    {"code": "C03", "key": "circuit", "title": "電路設計", "bodesign_role": "generate",
+     "contributes": "原理圖 → 網表 → BOM → pin 配置 → ERC → design review",
+     "stub_headings": ["設計定義", "原理圖 (kicad-cli 驗證)", "網表 / ERC", "關鍵零件 BOM", "pin / GPIO 配置表", "design review 報告"]},
+    {"code": "C04", "key": "layout", "title": "Layout — PCB 佈局", "bodesign_role": "constraints", "owner": "layout engineer",
+     "contributes": "footprint map / 疊層 / 佈線約束", "stub_headings": ["疊層 (stackup)", "板框 / floorplan", "佈線約束", "footprint map", "(Board + Gerber 由佈局工程師產)"]},
+    {"code": "C05", "key": "fw", "title": "FW — 韌體", "bodesign_role": "track+interface", "owner": "FW team",
+     "contributes": "GPIO / pin 配置橋接 C03↔C05", "stub_headings": ["介面 / pin map", "FW feasibility (團隊確認)"]},
+    {"code": "C06", "key": "verification", "title": "驗證與測試", "bodesign_role": "draft+guide",
+     "contributes": "驗證 / 測試計畫 + bring-up checklist", "stub_headings": ["bring-up 計畫", "驗證 / 測試計畫", "in-house vs 外包 (EMC / RF / safety)"]}
+  ]
+}
