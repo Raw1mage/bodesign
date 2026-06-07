@@ -510,6 +510,10 @@ for _t in TOOLS:
 # Tool groups this process executes locally. Set from --tools; default monolith.
 SERVED_GROUPS: set[str] = {"all"}
 
+# When a configured worker is briefly unreachable (booting/warming), tell the caller
+# to retry after this many seconds instead of treating it as permanently absent.
+WORKER_RETRY_AFTER_SECONDS: int = int(os.environ.get("BODESIGN_WORKER_RETRY_AFTER", "5") or 5)
+
 
 def _serves_locally(group: str) -> bool:
     return "all" in SERVED_GROUPS or group in SERVED_GROUPS
@@ -531,18 +535,26 @@ def _route_tool(name: str) -> tuple[str, str | None]:
     return ("forward", url) if url else ("unavailable", group)
 
 
-def _forward_to_worker(url: str, name: str, arguments: dict) -> dict:
+def _forward_to_worker(url: str, name: str, arguments: dict, group: str = "?") -> dict:
     """Forward a tool call to its worker over the compose network. Worker resolves
-    the token on the shared session volume, so we forward the raw arguments."""
+    the token on the shared session volume, so we forward the raw arguments.
+
+    The worker URL is configured, so the worker is EXPECTED: a transport failure
+    means it is booting/warming or briefly down → return a retryable `worker_starting`
+    status (not `worker_unavailable`, which is reserved for "not in this deployment")."""
     import httpx
     try:
         resp = httpx.post(url.rstrip("/") + "/invoke",
-                          json={"name": name, "arguments": arguments}, timeout=180.0)
+                          json={"name": name, "arguments": arguments},
+                          timeout=httpx.Timeout(180.0, connect=10.0))
         resp.raise_for_status()
         return resp.json()
     except Exception as error:
-        return {"ok": False, "error": f"worker for '{name}' unreachable at {url}: {type(error).__name__}: {error}",
-                "worker_unavailable": True}
+        return {"ok": False, "status": "worker_starting", "worker_starting": True,
+                "retry_after_seconds": WORKER_RETRY_AFTER_SECONDS, "group": group,
+                "error": f"worker '{group}' for '{name}' not reachable yet at {url} "
+                         f"({type(error).__name__}); it may be starting — retry in "
+                         f"{WORKER_RETRY_AFTER_SECONDS}s"}
 
 
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
@@ -576,11 +588,15 @@ def run_tool(name: str, arguments: dict) -> dict:
     # unavailable when no worker is configured (the build123d gate, generalized).
     decision, target = _route_tool(name)
     if decision == "forward":
-        return _forward_to_worker(target, name, arguments or {})
+        group = (TOOLS_BY_NAME.get(name) or {}).get("group", "?")
+        return _forward_to_worker(target, name, arguments or {}, group=group)
     if decision == "unavailable":
-        return {"ok": False,
-                "error": f"tool '{name}' is served by the '{target}' worker, which is not running/configured here",
-                "worker_unavailable": True, "group": target}
+        # No worker configured for this group: a deliberate slim deployment that
+        # cannot do this here. Permanent (do not retry) — distinct from worker_starting.
+        return {"ok": False, "status": "worker_unavailable", "worker_unavailable": True, "group": target,
+                "error": f"tool '{name}' is served by the '{target}' worker, which is not configured "
+                         f"in this deployment (no BODESIGN_{target.upper()}_WORKER_URL); this deployment "
+                         f"cannot run it"}
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
         return {"error": f"unknown tool: {name}"}

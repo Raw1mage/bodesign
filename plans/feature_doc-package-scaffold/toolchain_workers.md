@@ -55,10 +55,15 @@ mounted via the MCP-of-MCPs route (②) as upstream MCP servers.
   (token doc_dir + cache) mounts into every worker, so all see the same project tree:
   constraints in, `Enclosure.step`/gerbers/reports out. Payloads over the wire stay
   small (args + token); bulk data is files on the shared volume.
-- **Unavailable-gate generalizes.** If a worker is absent/unreachable, the core returns
-  that tool's `*_unavailable` result — exactly like `_build123d_available()` today.
+- **Unavailable-gate generalizes, with a starting/unavailable distinction.** Two
+  cases, surfaced as distinct retry semantics (never fabricate output for either):
+  - **No worker configured** for the group (a deliberate slim deployment) → permanent
+    `worker_unavailable` (status, `group`): this deployment cannot run it; do not retry.
+  - **Worker configured but unreachable** (booting/warming/briefly down) → retryable
+    `worker_starting` (`retry_after_seconds`, `group`): the caller should wait and retry.
+  This keeps workers always-on (cheap idle) while giving an agent a clean "warming up,
+  retry" signal during boot — instead of mistaking a starting worker for an absent one.
   Minimal deployment = just `bodesign-core`; add a worker to light up its capabilities.
-  Never fabricate output for a missing worker.
 - **In-process fallback for hybrids.** A tool that can run in-process (e.g. build123d
   imported locally) keeps that path when no worker is configured; the worker is an
   optional acceleration/isolation, not a hard requirement.

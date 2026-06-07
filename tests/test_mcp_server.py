@@ -452,6 +452,33 @@ class McpServerTests(unittest.TestCase):
         finally:
             self.server.SERVED_GROUPS = saved
 
+    def test_configured_worker_unreachable_reports_starting(self):
+        # Worker URL set but nothing listening -> retryable "starting", NOT permanent unavailable.
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"core"}
+            with patch.dict(os.environ, {"BODESIGN_ME_WORKER_URL": "http://127.0.0.1:1"}):
+                r = self.server.run_tool("bodesign_c02_export_step", {"out_dir": "/x"})
+                self.assertFalse(r["ok"])
+                self.assertTrue(r["worker_starting"])
+                self.assertNotIn("worker_unavailable", r)
+                self.assertEqual(r["group"], "me")
+                self.assertGreater(r["retry_after_seconds"], 0)
+        finally:
+            self.server.SERVED_GROUPS = saved
+
+    def test_unconfigured_worker_is_unavailable_not_starting(self):
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"core"}
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("BODESIGN_ME_WORKER_URL", None)
+                r = self.server.run_tool("bodesign_c02_export_step", {"out_dir": "/x"})
+                self.assertTrue(r["worker_unavailable"])
+                self.assertNotIn("worker_starting", r)  # deliberate slim deployment: do not retry
+        finally:
+            self.server.SERVED_GROUPS = saved
+
     def test_me_worker_serves_me_tools_locally(self):
         saved = self.server.SERVED_GROUPS
         try:
