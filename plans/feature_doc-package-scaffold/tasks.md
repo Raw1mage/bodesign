@@ -175,12 +175,12 @@ isolated per worker; absent worker → tool `*_unavailable` (gate generalized). 
 by function/responsibility, NOT by weight. Already-MCP toolchains (docxmcp/drawmiat)
 mounted via MCP-of-MCPs. Incremental, non-breaking; monolith keeps working.
 
-- [ ] **E-1 Tool→group routing** — add a `group` (core|ee|me|docs) to each tool in the registry; a `--tools <group>` selector so one image can run as any worker; core forwards `tools/call` to the owning worker (else in-process). Absent worker → that tool's `*_unavailable`.
-- [ ] **E-2 Shared session volume model** — mount `bodesign-sessions` into every worker so all see the same token doc_dir; wire-payloads stay small (args+token), bulk stays files.
-- [ ] **E-3 Phase 1: `bodesign-me` worker (reference)** — compose `me` service + route `bodesign_c02_*`; build123d/OCP/OpenSCAD live only in this image; verify real STEP on the shared volume and `*_unavailable` when stopped.
-- [ ] **E-4 Phase 2: `bodesign-ee` worker** — KiCad/ngspice/pygerber/emc/datasheets/bom; route C03/C04/C06 tools.
+- [x] **E-1 Tool→group routing** — each tool carries a `group` (me tagged; rest core); `--tools <group>` selector sets `SERVED_GROUPS`; `run_tool` routes via `_route_tool` → local / forward (`_forward_to_worker` httpx POST `/invoke`) / `worker_unavailable`. Monolith default `--tools all` = every tool local, zero behaviour change.
+- [x] **E-2 Shared session volume model** — `/invoke` worker entrypoint runs the tool against the shared `bodesign-sessions` tree (worker resolves the token itself); compose mounts the same named volume into core + worker; wire payload = args+token only.
+- [x] **E-3 Phase 1: `bodesign-me` worker (reference)** — lean `Dockerfile.me` (build123d/OCP + GL libs + OpenSCAD, NO KiCad/LibreOffice) + `docker-compose.workers.yml` overlay routing `bodesign_c02_*` to it. Proven in-process: `--tools me` → `/healthz` served_groups=[me]; `/invoke` c02_export_step → real ISO-10303 STEP.
+- [ ] **E-4 Phase 2: `bodesign-ee` worker** — tag C03/C04/C06 KiCad/ngspice/pygerber/emc/datasheets/bom tools `ee`; lean `Dockerfile.ee`; route. (Trims KiCad out of core.)
 - [ ] **E-5 Phase 3: optional `bodesign-docs`** + mount docxmcp/drawmiat via MCP-of-MCPs.
-- [ ] **E-6 Tests/validation** — core-only returns `*_unavailable` for worker tools (no fabrication); with `me` up, c02 STEP real; one heavy dep per image (no KiCad/OCP duplication); single external endpoint throughout.
+- [x] **E-6 Tests/validation** — routing unit tests (monolith all-local; core+url→forward; core+no-url→`worker_unavailable`, no fabrication/crash; worker serves its group) + an in-process `/invoke` real-STEP smoke. Full image e2e (build123d-in-Dockerfile.me) validated at deploy. +5 tests (211 total green).
 
 ### Acceptance (Batch E)
 

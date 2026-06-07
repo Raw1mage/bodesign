@@ -1,0 +1,6 @@
+# bodesign-me worker — mechanical/CAD toolchain (C02).
+# Installed only in the `me` worker image (Docker build arg WITH_CAD=1), NOT in the
+# lean core image. Heavy: build123d pulls cadquery-ocp + vtk (hundreds of MB); the
+# Dockerfile adds the matching system GL/X libs. The C02 STEP tool stays gated on
+# import, so a host without this reports step_export_unavailable rather than failing.
+build123d

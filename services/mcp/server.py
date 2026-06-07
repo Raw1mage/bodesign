@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import uuid
 from dataclasses import asdict, is_dataclass
@@ -491,6 +492,58 @@ TOOLS: list[dict] = [
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
+# ── Toolchain worker grouping/routing (Batch E) ────────────────────────
+# Tools are grouped by C0x responsibility / toolchain so heavy deps can live in
+# dedicated worker containers (see plans/.../toolchain_workers.md). The default
+# served group is "all" (monolith — every tool runs in-process, zero behaviour
+# change). A worker runs e.g. `--tools me`; the core runs `--tools core` and
+# forwards a non-local tool to its worker URL, or reports it unavailable.
+_ME_GROUP_TOOLS = {
+    "bodesign_c02_generate_openscad",
+    "bodesign_c02_export_stl",
+    "bodesign_c02_export_skp",
+    "bodesign_c02_export_step",
+}
+for _t in TOOLS:
+    _t["group"] = "me" if _t["name"] in _ME_GROUP_TOOLS else "core"
+
+# Tool groups this process executes locally. Set from --tools; default monolith.
+SERVED_GROUPS: set[str] = {"all"}
+
+
+def _serves_locally(group: str) -> bool:
+    return "all" in SERVED_GROUPS or group in SERVED_GROUPS
+
+
+def _worker_url_for_group(group: str) -> str | None:
+    return os.environ.get(f"BODESIGN_{group.upper()}_WORKER_URL") or None
+
+
+def _route_tool(name: str) -> tuple[str, str | None]:
+    """Decide how to run a tool: ('local', None) | ('forward', url) | ('unavailable', group)."""
+    spec = TOOLS_BY_NAME.get(name)
+    if spec is None:
+        return ("local", None)  # unknown name handled (as an error) by run_tool
+    group = spec.get("group", "core")
+    if _serves_locally(group):
+        return ("local", None)
+    url = _worker_url_for_group(group)
+    return ("forward", url) if url else ("unavailable", group)
+
+
+def _forward_to_worker(url: str, name: str, arguments: dict) -> dict:
+    """Forward a tool call to its worker over the compose network. Worker resolves
+    the token on the shared session volume, so we forward the raw arguments."""
+    import httpx
+    try:
+        resp = httpx.post(url.rstrip("/") + "/invoke",
+                          json={"name": name, "arguments": arguments}, timeout=180.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as error:
+        return {"ok": False, "error": f"worker for '{name}' unreachable at {url}: {type(error).__name__}: {error}",
+                "worker_unavailable": True}
+
 
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
@@ -519,6 +572,15 @@ def _produced(doc_dir: Path, before: dict) -> list[str]:
 
 
 def run_tool(name: str, arguments: dict) -> dict:
+    # Worker routing: forward a non-local tool to its worker, or report it
+    # unavailable when no worker is configured (the build123d gate, generalized).
+    decision, target = _route_tool(name)
+    if decision == "forward":
+        return _forward_to_worker(target, name, arguments or {})
+    if decision == "unavailable":
+        return {"ok": False,
+                "error": f"tool '{name}' is served by the '{target}' worker, which is not running/configured here",
+                "worker_unavailable": True, "group": target}
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
         return {"error": f"unknown tool: {name}"}
@@ -914,7 +976,14 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         await session_manager.handle_request(scope, receive, send)
 
     async def healthz(request: Request) -> Response:
-        return JSONResponse({"status": "ok", "service": SERVER_NAME, "tools": len(TOOLS)})
+        return JSONResponse({"status": "ok", "service": SERVER_NAME, "tools": len(TOOLS),
+                             "served_groups": sorted(SERVED_GROUPS)})
+
+    async def invoke(request: Request) -> Response:
+        # Internal worker entrypoint: the core forwards a tool call here. Runs the
+        # tool locally on this (worker) process against the shared session volume.
+        body = await request.json()
+        return JSONResponse(run_tool(body.get("name", ""), body.get("arguments") or {}))
 
     async def idef0_svg(request: Request) -> Response:
         svg = _assets_dir() / "idef0.zh.svg"
@@ -989,6 +1058,7 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         Route("/idef0.svg", idef0_svg),
         Route("/skills/{name}", skill_download),
         Route("/healthz", healthz),
+        Route("/invoke", invoke, methods=["POST"]),
         Route("/files", upload_file, methods=["POST"]),
         Route("/files/{token}/blob/{rel:path}", get_blob),
         Mount("/mcp", app=handle_mcp),
@@ -1014,7 +1084,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=None, help="serve HTTP on this TCP port (external)")
     parser.add_argument("--uds", default=None, help="serve HTTP on this unix socket (local)")
+    parser.add_argument("--tools", default="all",
+                        help="comma-separated tool groups this process serves locally "
+                             "(e.g. 'me' for a worker, 'core' for the front); default 'all' (monolith)")
     args = parser.parse_args(argv)
+    global SERVED_GROUPS
+    SERVED_GROUPS = {g.strip() for g in args.tools.split(",") if g.strip()} or {"all"}
     if args.transport == "stdio":
         asyncio.run(run_stdio())
     else:

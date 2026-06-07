@@ -1,0 +1,38 @@
+# bodesign worker overlay (Batch E Phase 1) — opt-in responsibility-grouped split.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.workers.yml up -d --build
+#
+# Without this overlay, `docker-compose.yml` alone is the monolith (everything
+# in-process, --tools defaults to "all") — unchanged, non-breaking. With it, the
+# core serves core+ee locally and FORWARDS bodesign_c02_* to the lean bodesign-me
+# worker. Both mount the same bodesign-sessions volume (the shared project tree).
+services:
+  bodesign:
+    # Core front: serve everything except the mechanical group; forward that to the worker.
+    command: ["--transport", "http", "--uds", "/run/bodesign/bodesign.sock",
+              "--host", "0.0.0.0", "--port", "8077", "--tools", "core,ee"]
+    environment:
+      BODESIGN_ME_WORKER_URL: "http://bodesign-me:8077"
+    depends_on:
+      - bodesign-me
+
+  bodesign-me:
+    image: bodesign-me:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.me
+    command: ["--transport", "http", "--port", "8077", "--tools", "me"]
+    volumes:
+      # Same session tree as the core so constraints/Enclosure.step are shared.
+      - "bodesign-sessions:/var/cache/bodesign/sessions"
+    environment:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+      BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8077/healthz').status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s

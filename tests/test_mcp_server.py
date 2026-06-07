@@ -399,6 +399,71 @@ class McpServerTests(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_tool_groups_assigned(self):
+        groups = {t["name"]: t["group"] for t in self.server.TOOLS}
+        # C02 CAD generation/export tools belong to the mechanical worker group.
+        for t in ("bodesign_c02_export_step", "bodesign_c02_export_stl",
+                  "bodesign_c02_generate_openscad", "bodesign_c02_export_skp"):
+            self.assertEqual(groups[t], "me")
+        # Pure-python / core tools stay core.
+        for t in ("bodesign_agent_registry", "bodesign_c02_readiness", "bodesign_c00_orchestration_tick"):
+            self.assertEqual(groups[t], "core")
+
+    def test_monolith_runs_everything_local(self):
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"all"}
+            for name in ("bodesign_c02_export_step", "bodesign_agent_registry"):
+                self.assertEqual(self.server._route_tool(name)[0], "local")
+        finally:
+            self.server.SERVED_GROUPS = saved
+
+    def test_core_without_worker_reports_unavailable(self):
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"core"}
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("BODESIGN_ME_WORKER_URL", None)
+                decision, target = self.server._route_tool("bodesign_c02_export_step")
+                self.assertEqual((decision, target), ("unavailable", "me"))
+                # run_tool surfaces it as data, never a crash, never a fabricated STEP.
+                r = self.server.run_tool("bodesign_c02_export_step", {"out_dir": "/x"})
+                self.assertFalse(r["ok"])
+                self.assertTrue(r["worker_unavailable"])
+                # A core tool still runs locally.
+                self.assertEqual(self.server._route_tool("bodesign_agent_registry")[0], "local")
+        finally:
+            self.server.SERVED_GROUPS = saved
+
+    def test_core_with_worker_forwards(self):
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"core"}
+            with patch.dict(os.environ, {"BODESIGN_ME_WORKER_URL": "http://bodesign-me:8077"}):
+                decision, target = self.server._route_tool("bodesign_c02_export_step")
+                self.assertEqual(decision, "forward")
+                self.assertEqual(target, "http://bodesign-me:8077")
+                # run_tool forwards (patch the forwarder to avoid a live worker).
+                with patch.object(self.server, "_forward_to_worker",
+                                  return_value={"ok": True, "result": {"status": "step_exported"}}) as fwd:
+                    r = self.server.run_tool("bodesign_c02_export_step", {"out_dir": "/x"})
+                    fwd.assert_called_once()
+                    self.assertEqual(r["result"]["status"], "step_exported")
+        finally:
+            self.server.SERVED_GROUPS = saved
+
+    def test_me_worker_serves_me_tools_locally(self):
+        saved = self.server.SERVED_GROUPS
+        try:
+            self.server.SERVED_GROUPS = {"me"}
+            self.assertEqual(self.server._route_tool("bodesign_c02_export_step")[0], "local")
+            # A core tool on the worker, with no core worker url, is unavailable (core never forwards core tools here).
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("BODESIGN_CORE_WORKER_URL", None)
+                self.assertEqual(self.server._route_tool("bodesign_agent_registry")[0], "unavailable")
+        finally:
+            self.server.SERVED_GROUPS = saved
+
     def test_handler_error_is_captured(self):
         # missing required "folder" -> KeyError captured as data, not raised
         r = self.server.run_tool("bodesign_ingest_project", {})

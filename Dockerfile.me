@@ -1,0 +1,44 @@
+# bodesign-me — mechanical/CAD worker (C02). Batch E Phase 1.
+#
+# A LEAN worker: only the mechanical toolchain (build123d/OCP for STEP, OpenSCAD for
+# STL) + the system GL/X libs OCP/vtk need — NO KiCad, NO LibreOffice. It runs the
+# same bodesign server with `--tools me`; the core forwards bodesign_c02_* calls here
+# and both share the session volume, so constraints/Enclosure.step live on one tree.
+#
+# Build: docker build -f Dockerfile.me -t bodesign-me:latest .
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONIOENCODING=utf-8 \
+    PYTHONUTF8=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# python + OpenSCAD (STL) + the system libs cadquery-ocp/vtk dlopen for headless
+# STEP export (derived from ldd of the OCP/vtk wheels: GL + core X + expat).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip ca-certificates \
+        openscad \
+        libgl1 libglx-mesa0 libglu1-mesa libx11-6 libxext6 libxrender1 libxcb1 libsm6 libexpat1 \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+COPY services/mcp/requirements.txt services/mcp/requirements-me.txt /app/services/mcp/
+# Build-time smoke check: import build123d so a missing GL lib fails the build
+# here (demonstrate, don't claim) rather than at first STEP export.
+RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt \
+ && pip install --no-cache-dir -r /app/services/mcp/requirements-me.txt \
+ && python -c "import build123d; print('build123d', build123d.__version__)"
+
+COPY packages /app/packages
+COPY services /app/services
+
+ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/component-knowledge:/app/packages/component-kb:/app/packages/doc-core:/app/packages/source-core:/app/packages/reverse-core:/app/packages/gerber-core:/app/packages/eda-bridge:/app/packages/workflow-core:/app/packages/storage-core:/app/packages/kicad-plugin:/app/services/mcp:/app" \
+    BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions
+
+ENTRYPOINT ["python", "/app/services/mcp/server.py"]
+# Serve only the mechanical tool group over TCP on the internal compose network.
+CMD ["--transport", "http", "--port", "8077", "--tools", "me"]
