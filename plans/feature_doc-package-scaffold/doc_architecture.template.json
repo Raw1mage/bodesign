@@ -32,7 +32,8 @@
         "bodesign_plan_design_intent"
       ],
       "generate_with": [
-        "bodesign_emit_doc (needs a 'prd' kidoc doc_type — TODO)"
+        "plan-builder scaffold + sync (engine)",
+        "bodesign_emit_doc / kidoc render (RockBox 2-doc structure)"
       ],
       "verify_with": [
         "prd_completeness_check (required fields answered) — TODO",
@@ -260,7 +261,37 @@
       "skill": [
         "plan-builder (spec structure)",
         "kidoc (render)"
-      ]
+      ],
+      "engine": "plan-builder (lifecycle / scaffold / sync / readiness) — BUT the output file structure conforms to the RockBox PRD template, NOT plan-builder's default proposal/design/tasks.",
+      "output_docs": [
+        {
+          "file": "Project_Requirements.md",
+          "sections": [
+            "產品定義 / 場景",
+            "功能需求 (← C05 FW 由此延伸)",
+            "系統方塊圖 / 架構",
+            "規格需求 (compute/memory/power...)",
+            "介面需求 (camera/display/audio/sensor/USB)",
+            "機構 / 外形",
+            "電源 / 電池",
+            "法規 / 認證目標",
+            "量產 / 數量",
+            "開放問題"
+          ]
+        },
+        {
+          "file": "RF_Requirements.md",
+          "conditional": "wireless/cellular/BLE present (comms answered)",
+          "sections": [
+            "RF 標準 / 頻段",
+            "發射功率 / 靈敏度",
+            "天線 / 匹配",
+            "共存 (coexistence)",
+            "法規 / 認證 (FCC/CE/PTCRB/carrier)"
+          ]
+        }
+      ],
+      "output_structure_note": "Derived from references in the TheSmartAI materials (RockBox PRD = 'Project Requirements' + 'RF Requirements'); the original 01.ROCKBOX PRD document is NOT on this system (only gerber fixtures were preserved), so the exact section list needs the user's confirmation or the real PRD to align precisely."
     },
     {
       "code": "C01",
