@@ -3,6 +3,7 @@
   "draft": true,
   "source": "Extracted from the 01.ROCKBOX shipped-product structure; generic (exemplar only, no client content).",
   "numbering_note": "RockBox numbers PRD as C07; the genesis-first variant uses C00. Both map to key 'prd'.",
+  "contract": "Every section declares the four capabilities so the MCP+skills know, per layer, WHAT to fill, HOW to elicit it, WHICH tool generates it, and WHICH tool verifies it. `coverage` flags status: full | partial | gap.",
   "roles": {
     "generate": "bodesign produces the content (factory-ready / reviewable).",
     "constraints": "bodesign supplies constraints only; the deliverable is produced downstream.",
@@ -13,7 +14,12 @@
     {
       "code": "C00", "aliases": ["C07"], "key": "prd", "title": "PRD — 產品需求文件",
       "bodesign_role": "generate",
-      "stub_headings": ["產品定位 / 場景", "功能需求", "規格需求", "介面需求", "合規 / 認證目標", "量產 / 數量", "開放問題 (clarifying questions)"],
+      "fill": ["產品定位 / 場景", "功能需求", "規格需求", "介面需求", "合規 / 認證目標", "量產 / 數量", "開放問題"],
+      "elicit_with": ["bodesign_plan_design_intent"],
+      "generate_with": ["bodesign_emit_doc (needs a 'prd' kidoc doc_type — TODO)"],
+      "verify_with": ["prd_completeness_check (required fields answered) — TODO", "consistency vs C03 design intent — TODO"],
+      "coverage": {"fill": "full", "elicit": "full", "generate": "gap", "verify": "gap",
+                   "note": "Elicitation works (14-item bank). No structured PRD document emitter; no PRD completeness/consistency verifier."},
       "question_bank": [
         {"key": "compute", "label": "Compute (MCU/SoC/NPU)", "required": true, "question": "Which exact MCU/SoC part and package? (e.g. STM32N657 VFBGA223)", "keywords": ["mcu", "soc", "npu", "processor", "cortex", "fpga", "晶片", "處理器", "運算", "主控"]},
         {"key": "comms", "label": "Connectivity", "required": true, "question": "Which connectivity standard(s) and exact module? (cellular / Wi-Fi / BLE / Ethernet)", "keywords": ["nrf", "cellular", "lte", "wifi", "ble", "ethernet", "lora", "通訊", "無線", "網路"]},
@@ -31,18 +37,68 @@
         {"key": "if_usb_data", "label": "Interface: USB data", "required": false, "question": "USB data role + speed? (HS device/host/OTG)", "keywords": ["usb hs", "usb device", "otg", "資料傳輸"]}
       ]
     },
-    {"code": "C01", "key": "id", "title": "ID — 工業設計", "bodesign_role": "track+interface", "owner": "ID team",
-     "contributes": "機構 / 連接器介面約束", "stub_headings": ["概念 / CMF (團隊提供)", "bodesign 記錄的介面約束"]},
-    {"code": "C02", "key": "me", "title": "ME — 機構工程", "bodesign_role": "track+interface", "owner": "ME team",
-     "contributes": "板框 / 連接器 / 高度約束", "stub_headings": ["3D STEP / 組裝意圖 (團隊提供)", "bodesign 記錄的介面約束"]},
-    {"code": "C03", "key": "circuit", "title": "電路設計", "bodesign_role": "generate",
-     "contributes": "原理圖 → 網表 → BOM → pin 配置 → ERC → design review",
-     "stub_headings": ["設計定義", "原理圖 (kicad-cli 驗證)", "網表 / ERC", "關鍵零件 BOM", "pin / GPIO 配置表", "design review 報告"]},
-    {"code": "C04", "key": "layout", "title": "Layout — PCB 佈局", "bodesign_role": "constraints", "owner": "layout engineer",
-     "contributes": "footprint map / 疊層 / 佈線約束", "stub_headings": ["疊層 (stackup)", "板框 / floorplan", "佈線約束", "footprint map", "(Board + Gerber 由佈局工程師產)"]},
-    {"code": "C05", "key": "fw", "title": "FW — 韌體", "bodesign_role": "track+interface", "owner": "FW team",
-     "contributes": "GPIO / pin 配置橋接 C03↔C05", "stub_headings": ["介面 / pin map", "FW feasibility (團隊確認)"]},
-    {"code": "C06", "key": "verification", "title": "驗證與測試", "bodesign_role": "draft+guide",
-     "contributes": "驗證 / 測試計畫 + bring-up checklist", "stub_headings": ["bring-up 計畫", "驗證 / 測試計畫", "in-house vs 外包 (EMC / RF / safety)"]}
-  ]
+    {
+      "code": "C01", "key": "id", "title": "ID — 工業設計", "bodesign_role": "track+interface", "owner": "ID team",
+      "fill": ["概念 / CMF (團隊提供)", "bodesign 記錄的介面約束"],
+      "elicit_with": ["(none yet) — enclosure/dimensions only via PRD bank — TODO add ID interface questions"],
+      "generate_with": ["interface_constraints_doc (connector/board-outline/height) — TODO"],
+      "verify_with": ["constraint consistency vs C02/C03 — TODO"],
+      "coverage": {"fill": "full", "elicit": "gap", "generate": "gap", "verify": "gap",
+                   "note": "By-design track-only, but no interface-constraint emitter or check exists."}
+    },
+    {
+      "code": "C02", "key": "me", "title": "ME — 機構工程", "bodesign_role": "track+interface", "owner": "ME team",
+      "fill": ["3D STEP / 組裝意圖 (團隊提供)", "bodesign 記錄的介面約束"],
+      "elicit_with": ["(dimensions via PRD bank) — TODO add ME interface questions"],
+      "generate_with": ["interface_constraints_doc (board outline/connector/height) — TODO"],
+      "verify_with": ["constraint consistency vs C01/C04 — TODO"],
+      "coverage": {"fill": "full", "elicit": "partial", "generate": "gap", "verify": "gap",
+                   "note": "Same as C01: track-only, emitter/check not built."}
+    },
+    {
+      "code": "C03", "key": "circuit", "title": "電路設計", "bodesign_role": "generate",
+      "fill": ["設計定義", "原理圖 (kicad-cli 驗證)", "網表 / ERC", "關鍵零件 BOM", "pin / GPIO 配置表", "design review 報告"],
+      "elicit_with": ["bodesign_plan_design_intent", "bodesign_evidence_manifest", "datasheets (skill)"],
+      "generate_with": ["bodesign_emit_symbol", "bodesign_compose_schematic", "bodesign_pin_allocation", "bodesign_export_bom", "bodesign_export_netlist"],
+      "verify_with": ["kicad-cli ERC (in emit)", "bodesign_reference_crosscheck", "bodesign_simulate (SPICE)", "bodesign_analyze_emc", "bodesign_analyze_thermal", "kicad (skill)"],
+      "coverage": {"fill": "full", "elicit": "full", "generate": "full", "verify": "full",
+                   "note": "The AI-complete core — the only layer with the full four-capability chain today."}
+    },
+    {
+      "code": "C04", "key": "layout", "title": "Layout — PCB 佈局", "bodesign_role": "constraints", "owner": "layout engineer",
+      "fill": ["疊層 (stackup)", "板框 / floorplan", "佈線約束", "footprint map", "(Board + Gerber 由佈局工程師產)"],
+      "elicit_with": ["(dimensions via PRD bank)"],
+      "generate_with": ["bodesign_emit_layout (placement + DRC, draft)", "bodesign_emit_fab", "footprint map (eda-bridge)"],
+      "verify_with": ["pcbnew DRC (in emit_layout)", "analyze_gerbers (kicad skill, when fab outputs exist)"],
+      "coverage": {"fill": "full", "elicit": "partial", "generate": "partial", "verify": "partial",
+                   "note": "Constraints + placement draft + DRC; full Board/Gerber by the layout engineer (by design)."}
+    },
+    {
+      "code": "C05", "key": "fw", "title": "FW — 韌體", "bodesign_role": "track+interface", "owner": "FW team",
+      "fill": ["介面 / pin map", "FW feasibility (團隊確認)"],
+      "elicit_with": ["(derived from C03 pin allocation)"],
+      "generate_with": ["bodesign_pin_allocation (GPIO/pin bridge C03↔C05)"],
+      "verify_with": ["non-authority cross-check only (by design)"],
+      "coverage": {"fill": "full", "elicit": "partial", "generate": "partial", "verify": "gap",
+                   "note": "Pin-map bridge exists; FW content owned by the FW team."}
+    },
+    {
+      "code": "C06", "key": "verification", "title": "驗證與測試", "bodesign_role": "draft+guide",
+      "fill": ["bring-up 計畫", "驗證 / 測試計畫", "in-house vs 外包 (EMC / RF / safety)"],
+      "elicit_with": ["(certification targets via PRD bank)"],
+      "generate_with": ["test_plan_doc assembling simulate/emc/thermal/crosscheck verdicts — TODO", "kidoc design-review/manufacturing (skill)"],
+      "verify_with": ["n/a — C06 is itself the verification layer; its inputs are the C03 verify tools"],
+      "coverage": {"fill": "full", "elicit": "partial", "generate": "partial", "verify": "n/a",
+                   "note": "The verify tools' output IS C06 content; assembling a bring-up/test-plan document is not yet built."}
+    }
+  ],
+  "gap_summary": {
+    "full_chain": ["C03"],
+    "key_gaps": [
+      "C00 PRD: structured PRD document emitter (kidoc 'prd' doc_type) + PRD completeness/consistency verifier.",
+      "C06: a test-plan/bring-up document assembler over the verify verdicts.",
+      "C01/C02: an interface-constraints document emitter + cross-section consistency check.",
+      "Generic: a per-section 'verify existing content' capability (only C03 has real content verification today)."
+    ]
+  }
 }
