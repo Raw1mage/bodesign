@@ -340,8 +340,17 @@ def _h_stage_dir(a: dict) -> Any:
     return default_store().stage_files(a["files"])
 
 
+def _h_mcp_call(a: dict) -> Any:
+    from mcp_delegate import call_external_mcp_tool
+    return call_external_mcp_tool(a["server"], a["tool"], a.get("arguments"))
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
+    {"name": "bodesign_mcp_call", "handler": _h_mcp_call,
+     "description": "MCP-to-MCP delegation: call a tool on an external MCP server registered by name (via BODESIGN_MCP_SERVERS or BODESIGN_MCP_<NAME>_URL) and return its result. Use to drive docxmcp/drawmiat/other MCP servers through bodesign. Degrades cleanly: an unconfigured server is worker_unavailable, a configured-but-unreachable one is worker_starting (retryable); never fabricates a result.",
+     "schema": {"type": "object", "properties": {"server": _STR, "tool": _STR, "arguments": {"type": "object"}},
+                "required": ["server", "tool"]}},
     {"name": "bodesign_stage_dir", "handler": _h_stage_dir,
      "description": "Stage an inline file tree {relpath:{content,encoding}} into a token namespace; returns {token, doc_dir, files}. Pass the token to other tools to operate inside that tree (docxmcp-style).",
      "schema": {"type": "object", "properties": {"files": {"type": "object"}}, "required": ["files"]}},

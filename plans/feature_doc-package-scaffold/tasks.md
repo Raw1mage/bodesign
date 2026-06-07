@@ -195,9 +195,9 @@ delegation) primary; Option 1 (host aggregation) default; Option 3 (external gat
 future. No new dep (uses the existing `mcp` SDK client). Generalizes the worker router
 with a 4th state `forward(mcp)` → external MCP server.
 
-- [ ] **F-1 Delegation primitive** — `mcp_delegate.py`: external-MCP registry (`BODESIGN_MCP_SERVERS` JSON / `BODESIGN_MCP_<NAME>_URL`) + `call_external_mcp_tool(server, tool, arguments)` over Streamable HTTP (`mcp.client`), sync-over-async via a worker thread. Degradation reuses worker semantics (unreachable → `worker_starting`; unknown → `worker_unavailable`); never fabricates.
-- [ ] **F-2 Passthrough tool** — `bodesign_mcp_call(server, tool, arguments)` MCP tool: call any registered external MCP tool through bodesign with uniform degradation (small surface; avoids the ~100-tool limit).
-- [ ] **F-3 Tests** — registry/unknown-server resolution; unreachable → degraded (fast, bounded timeout); in-session smoke connecting to a live bodesign HTTP server (bodesign→bodesign over real MCP) to prove the round-trip.
+- [x] **F-1 Delegation primitive** — `mcp_delegate.py`: external-MCP registry (`BODESIGN_MCP_SERVERS` JSON / `BODESIGN_MCP_<NAME>_URL`) + `call_external_mcp_tool(server, tool, arguments)` over Streamable HTTP (`mcp.client`), sync-over-async via a worker thread. Degradation reuses worker semantics (unreachable → `worker_starting`; unknown → `worker_unavailable`); never fabricates.
+- [x] **F-2 Passthrough tool** — `bodesign_mcp_call(server, tool, arguments)` MCP tool: call any registered external MCP tool through bodesign with uniform degradation (small surface; avoids the ~100-tool limit).
+- [x] **F-3 Tests** — registry/unknown-server resolution; unreachable → degraded (fast, bounded timeout); in-session smoke connecting to a live bodesign HTTP server (bodesign→bodesign over real MCP) to prove the round-trip.
 - [ ] **F-4 (future) emit_doc→docxmcp binding** — convenience delegation once docxmcp's decompose/assemble API mapping is verified.
 - [ ] **F-5 (future) spine dispatch to external-MCP layers** — agent_registry marks a layer external-MCP-backed; C00 loop dispatches via `call_external_mcp_tool`.
 
