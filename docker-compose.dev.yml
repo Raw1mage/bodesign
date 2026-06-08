@@ -20,3 +20,13 @@ services:
       # project folders through the MCP tools (pass paths under /work). Set
       # BODESIGN_WORK_DIR to your projects dir (default: ./.work in the repo).
       - "${BODESIGN_WORK_DIR:-./.work}:/work"
+  # Workers also get the live source so a code change reloads on restart (no rebuild).
+  # Only active when the worker overlay is composed too (docker-compose.workers.yml).
+  bodesign-ee:
+    volumes:
+      - "./packages:/app/packages:ro"
+      - "./services:/app/services:ro"
+  bodesign-me:
+    volumes:
+      - "./packages:/app/packages:ro"
+      - "./services:/app/services:ro"

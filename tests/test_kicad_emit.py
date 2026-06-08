@@ -94,3 +94,49 @@ class KiCadEmitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExtendsFlattenTests(unittest.TestCase):
+    """Regression: a derived symbol (`(extends "Base")`) must be flattened into a
+    standalone symbol, since kicad-cli refuses a schematic whose embedded symbol
+    still references an unresolved base (e.g. Regulator_Linear:AMS1117-3.3)."""
+
+    FIXTURE = '''(kicad_symbol_lib
+  (symbol "Base"
+    (pin_names (offset 0))
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U" (at 0 0 0))
+    (property "Value" "Base" (at 0 0 0))
+    (symbol "Base_0_1"
+      (rectangle (start -2 2) (end 2 -2))
+    )
+    (symbol "Base_1_1"
+      (pin power_in line (at -5 0 0) (length 3) (name "VIN") (number "3"))
+      (pin power_out line (at 5 0 0) (length 3) (name "VOUT") (number "2"))
+      (pin power_in line (at 0 -5 90) (length 3) (name "GND") (number "1"))
+    )
+  )
+  (symbol "Deriv"
+    (extends "Base")
+    (property "Reference" "U" (at 0 0 0))
+    (property "Value" "Deriv-3.3" (at 0 0 0))
+  )
+)
+'''
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-extends-", dir=PRIVATE_BASE))
+        (self.work / "Test.kicad_sym").write_text(self.FIXTURE, encoding="utf-8")
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def test_derived_symbol_is_flattened(self):
+        definition, pins = load_symbol("Test:Deriv", self.work)
+        self.assertNotIn("(extends", definition)               # extends resolved away
+        self.assertIn("Deriv_0_1", definition)                  # base units renamed to derived
+        self.assertIn("Deriv_1_1", definition)
+        self.assertNotIn("Base_0_1", definition)                # no leftover base unit names
+        self.assertIn('"Deriv-3.3"', definition)                # derived property override kept
+        self.assertEqual({"1", "2", "3"}, set(pins))            # pins inherited from base

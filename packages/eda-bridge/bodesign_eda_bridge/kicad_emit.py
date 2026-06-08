@@ -98,6 +98,7 @@ def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR)
     block = _extract_symbol_block(source, name)
     if block is None:
         raise KeyError(f"Symbol {name!r} not found in {lib_path}")
+    block = _flatten_extends(block, name, source)
     embedded = block.replace(f'(symbol "{name}"', f'(symbol "{lib_id}"', 1)
     return embedded, _pin_endpoints(block)
 
@@ -117,6 +118,61 @@ def _extract_symbol_block(source: str, name: str) -> str | None:
             if depth == 0:
                 return source[start : index + 1]
     return None
+
+
+def _balanced_block(s: str, start: int) -> str:
+    depth = 0
+    for index in range(start, len(s)):
+        if s[index] == "(":
+            depth += 1
+        elif s[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return s[start : index + 1]
+    return s[start:]
+
+
+def _symbol_children(block: str) -> list[str]:
+    """Immediate child s-expressions of a ``(symbol "NAME" ...)`` block."""
+    i = block.index('"')
+    i = block.index('"', i + 1) + 1  # skip past the symbol name string
+    children: list[str] = []
+    while i < len(block):
+        while i < len(block) and block[i] not in "()":
+            i += 1
+        if i >= len(block) or block[i] == ")":
+            break
+        sub = _balanced_block(block, i)
+        children.append(sub)
+        i += len(sub)
+    return children
+
+
+def _flatten_extends(block: str, name: str, source: str, _depth: int = 0) -> str:
+    """Resolve a derived symbol (``(extends "Base")``) into a standalone one.
+
+    KiCad schematic ``lib_symbols`` cannot carry ``extends`` — eeschema flattens
+    derived symbols on save, and ``kicad-cli`` refuses to load a schematic whose
+    embedded symbol still references an unresolved base. We reconstruct the
+    derived symbol from the base's graphics/pins (its unit sub-symbols renamed to
+    the derived name) plus the derived symbol's own property overrides.
+    """
+    match = re.search(r'\(extends "([^"]+)"\)', block)
+    if match is None or _depth > 8:
+        return block
+    base_name = match.group(1)
+    base = _extract_symbol_block(source, base_name)
+    if base is None:
+        return block  # base absent from this library; leave as-is rather than crash
+    base = _flatten_extends(base, base_name, source, _depth + 1)  # base may itself extend
+    derived_props = [c for c in _symbol_children(block) if c.startswith("(property")]
+    base_children = _symbol_children(base)
+    base_attrs = [c for c in base_children
+                  if not c.startswith("(property") and not c.startswith('(symbol "')]
+    base_units = [c.replace(f"{base_name}_", f"{name}_") for c in base_children
+                  if c.startswith(f'(symbol "{base_name}_')]
+    body = "\n".join(base_attrs + derived_props + base_units)
+    return f'(symbol "{name}"\n{body}\n)'
 
 
 def _pin_endpoints(block: str) -> dict[str, tuple[float, float]]:
