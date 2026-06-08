@@ -227,6 +227,42 @@ def _h_c03_export_mech_constraints(a: dict) -> Any:
     return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
 
 
+# ── Datasheet vault (lazy, MPN-keyed, provenance-tracked) ──────────────
+# The anti-hallucination spec store for RCA: ground an electrical-spec claim in a real
+# datasheet/source before asserting it, or label it unverified. Lazy by design — call
+# at the moment a bug investigation needs a part's spec, not as a bulk BOM import.
+def _h_datasheet_lookup(a: dict) -> Any:
+    from bodesign_component_kb import lookup
+    entry = lookup(a["mpn"], root=a.get("vault_root"))
+    if entry is None:
+        return {"status": "absent", "mpn": a["mpn"],
+                "advice": "Not in the datasheet vault. Before stating any spec for this part, "
+                          "acquire its datasheet (bodesign_datasheet_register with a real PDF "
+                          "or cited vendor/distributor URL). Do not assert specs from memory."}
+    fields = a.get("fields")
+    if fields:
+        specs = {k: v for k, v in entry.get("specs", {}).items() if k in fields}
+        entry = {**entry, "specs": specs}
+    return {"status": "present", **entry}
+
+
+def _h_datasheet_register(a: dict) -> Any:
+    import datetime
+    from bodesign_component_kb import register
+    return register(
+        a["mpn"], vendor=a.get("vendor"), source_url=a.get("source_url"),
+        pdf_path=a.get("pdf_path"), specs=a.get("specs"), aliases=a.get("aliases"),
+        description=a.get("description"), note=a.get("note"),
+        now=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        root=a.get("vault_root"))
+
+
+def _h_spec_check(a: dict) -> Any:
+    from bodesign_component_kb import spec_check
+    return spec_check(a["mpn"], a["field"], claimed_value=a.get("claimed_value"),
+                      root=a.get("vault_root"))
+
+
 # ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
 def _h_agent_registry(a: dict) -> Any:
     from bodesign_workflow_core import load_agent_registry
@@ -485,6 +521,15 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
      "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_datasheet_lookup", "handler": _h_datasheet_lookup,
+     "description": "Look up a part (by MPN) in the local datasheet vault. RCA anti-hallucination guard: call this BEFORE stating an electrical spec for a part. Returns the stored specs with provenance (verified=cited source vs unverified=model memory), or status 'absent' (acquire the datasheet first — do NOT state the value from memory as if confirmed). Lazy: the vault holds only parts someone has investigated.",
+     "schema": {"type": "object", "properties": {"mpn": _STR, "fields": {"type": "array", "items": _STR}, "vault_root": _STR}, "required": ["mpn"]}},
+    {"name": "bodesign_datasheet_register", "handler": _h_datasheet_register,
+     "description": "Register/update a part in the local datasheet vault: copies a datasheet PDF (pdf_path) into <vault>/<mpn>/ and/or records a cited source_url, vendor, aliases, and specs. specs is {field: value} (bare value = recorded UNVERIFIED) or {field: {value, unit, source, confidence}} (with a real source = VERIFIED). Use at RCA time to capture a part's real spec from its datasheet so future claims are grounded, not guessed.",
+     "schema": {"type": "object", "properties": {"mpn": _STR, "vendor": _STR, "source_url": _STR, "pdf_path": _STR, "specs": {"type": "object"}, "aliases": {"type": "array", "items": _STR}, "description": _STR, "note": _STR, "vault_root": _STR}, "required": ["mpn"]}},
+    {"name": "bodesign_spec_check", "handler": _h_spec_check,
+     "description": "Check whether a specific spec field of a part is backed by the datasheet vault (verified | unverified | no-field | absent), optionally comparing a claimed_value to the stored one. The RCA discipline gate: if 'absent'/'unverified', acquire/cite the datasheet before relying on the value.",
+     "schema": {"type": "object", "properties": {"mpn": _STR, "field": _STR, "claimed_value": {}, "vault_root": _STR}, "required": ["mpn", "field"]}},
     {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
      "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},
