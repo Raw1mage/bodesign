@@ -4,3 +4,8 @@
 # Dockerfile adds the matching system GL/X libs. The C02 STEP tool stays gated on
 # import, so a host without this reports step_export_unavailable rather than failing.
 build123d
+# 3D board-model render (bodesign_render_board_model): glTF/Draco parse + offscreen GL
+pygltflib
+DracoPy
+trimesh
+pyrender

@@ -215,6 +215,13 @@ def _h_c02_export_step(a: dict) -> Any:
                            a.get("wall_thickness_mm"), a.get("clearance_mm"), a.get("lid_clearance_mm")).to_dict()
 
 
+def _h_render_board_model(a: dict) -> Any:
+    from bodesign_eda_bridge import render_board_model
+    return render_board_model(a["glb_path"], a["out_dir"],
+                              views=tuple(a.get("views", ["top", "iso"])),
+                              width=a.get("width", 1700), height=a.get("height", 1300)).to_dict()
+
+
 def _h_c03_export_mech_constraints(a: dict) -> Any:
     from bodesign_workflow_core import export_c03_mechanical_constraints
     return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
@@ -470,6 +477,11 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"out_dir": _STR, "constraints": {"type": "object"},
                 "wall_thickness_mm": {"type": "number"}, "clearance_mm": {"type": "number"}, "lid_clearance_mm": {"type": "number"}},
                 "required": ["out_dir"]}},
+    {"name": "bodesign_render_board_model", "handler": _h_render_board_model,
+     "description": "Render a published 3D board model (glTF/.glb, incl. KHR_draco_mesh_compression) to board-view PNGs (top/iso). For open-hardware whose REAL board is published as a 3D model (e.g. OpenMV's OPENMV_N6.glb), this renders the actual board — not an auto-generated layout. Decodes Draco in-process (DracoPy), applies node transforms, colours by material, rasterises offscreen via pyrender/EGL on the me worker. Degrades to no-deps/no-gl rather than crashing.",
+     "schema": {"type": "object", "properties": {"glb_path": _STR, "out_dir": _STR,
+                "views": {"type": "array", "items": _STR}, "width": {"type": "integer"}, "height": {"type": "integer"}},
+                "required": ["glb_path", "out_dir"]}},
     {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
      "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
@@ -549,6 +561,7 @@ _ME_GROUP_TOOLS = {
     "bodesign_c02_export_stl",
     "bodesign_c02_export_skp",
     "bodesign_c02_export_step",
+    "bodesign_render_board_model",
 }
 # Electronics engineering (C03/C04/C06): tools whose handlers need KiCad
 # (kicad-cli/pcbnew) or ngspice. Pure-python EE-adjacent tools (pin_allocation,
