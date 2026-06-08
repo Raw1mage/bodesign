@@ -263,6 +263,11 @@ def _h_spec_check(a: dict) -> Any:
                       root=a.get("vault_root"))
 
 
+def _h_rca_spec_audit(a: dict) -> Any:
+    from bodesign_component_kb import audit_claims
+    return audit_claims(a["claims"], root=a.get("vault_root"))
+
+
 # ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
 def _h_agent_registry(a: dict) -> Any:
     from bodesign_workflow_core import load_agent_registry
@@ -530,6 +535,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_spec_check", "handler": _h_spec_check,
      "description": "Check whether a specific spec field of a part is backed by the datasheet vault (verified | unverified | no-field | absent), optionally comparing a claimed_value to the stored one. The RCA discipline gate: if 'absent'/'unverified', acquire/cite the datasheet before relying on the value.",
      "schema": {"type": "object", "properties": {"mpn": _STR, "field": _STR, "claimed_value": {}, "vault_root": _STR}, "required": ["mpn", "field"]}},
+    {"name": "bodesign_rca_spec_audit", "handler": _h_rca_spec_audit,
+     "description": "Gate a whole RCA before publishing: pass the list of spec values the analysis asserts (claims=[{mpn, field, asserted_value}]) and get back which are datasheet-grounded and which are BLOCKING — absent (part not in vault), unverified (no source = model memory), or contradicting the datasheet. Returns publishable=false if any blocker. Run this before stating spec-dependent conclusions so RCA rides on real datasheets, not guesses.",
+     "schema": {"type": "object", "properties": {"claims": {"type": "array", "items": {"type": "object"}}, "vault_root": _STR}, "required": ["claims"]}},
     {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
      "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},

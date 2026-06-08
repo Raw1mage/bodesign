@@ -9,6 +9,7 @@ from .contracts import (
     reuse_component_knowledge,
 )
 from .vault import (
+    audit_claims,
     list_entries,
     lookup,
     propose_vcc_from_text,
@@ -31,6 +32,7 @@ __all__ = [
     "lookup",
     "register",
     "spec_check",
+    "audit_claims",
     "list_entries",
     "propose_vcc_from_text",
 ]

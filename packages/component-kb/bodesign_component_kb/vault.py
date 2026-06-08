@@ -198,6 +198,46 @@ def spec_check(mpn: str, field: str, claimed_value: Any = None,
     return out
 
 
+def audit_claims(claims: list[dict], root: str | os.PathLike | None = None,
+                 work_dir: str | os.PathLike | None = None) -> dict:
+    """Gate the spec values an RCA is about to state, against the vault.
+
+    Each claim: ``{mpn, field, asserted_value?, note?}`` where ``asserted_value`` is the
+    spec value the agent intends to write (e.g. flash ``vcc_min_v`` = 2.7). A claim is
+    **blocking** — i.e. must be resolved or explicitly labelled before the RCA ships — when
+    its spec is ``absent`` (part not acquired), ``no-field``/``unverified`` (no datasheet
+    source), or ``verified`` but the asserted value *contradicts* the datasheet (a
+    hallucinated spec). Returns the per-claim verdicts, the blocking subset, and
+    ``publishable`` = no blockers.
+
+    This is the discipline gate: RCA conclusions ride on real specs, not guesses.
+    """
+    verdicts: list[dict] = []
+    blocking: list[dict] = []
+    for c in claims:
+        asserted = c.get("asserted_value", c.get("claimed_value"))
+        res = spec_check(c["mpn"], c["field"], claimed_value=asserted,
+                         root=root, work_dir=work_dir)
+        block_reason = None
+        if res["status"] in ("absent", "no-field"):
+            block_reason = res["status"]
+        elif res["status"] == "unverified":
+            block_reason = "unverified (no datasheet source)"
+        elif res["status"] == "verified" and asserted is not None and res.get("matches") is False:
+            block_reason = "contradicts datasheet (asserted {} vs vault {})".format(
+                asserted, res.get("value"))
+        v = {**res, "blocking": bool(block_reason)}
+        if block_reason:
+            v["block_reason"] = block_reason
+            blocking.append(v)
+        verdicts.append(v)
+    return {"publishable": not blocking, "claim_count": len(claims),
+            "blocking_count": len(blocking), "claims": verdicts, "blocking": blocking,
+            "advice": ("All asserted specs are datasheet-grounded." if not blocking else
+                       "Resolve blockers before publishing: acquire/cite the datasheet for "
+                       "absent/unverified specs, or correct claims that contradict the vault.")}
+
+
 def list_entries(root: str | os.PathLike | None = None,
                  work_dir: str | os.PathLike | None = None) -> list[dict]:
     """One-line summary per vault entry (for an overview / audit)."""

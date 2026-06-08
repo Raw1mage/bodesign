@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bodesign_component_kb import list_entries, lookup, register, spec_check
+from bodesign_component_kb import audit_claims, list_entries, lookup, register, spec_check
 
 
 class DatasheetVaultTests(unittest.TestCase):
@@ -54,6 +54,33 @@ class DatasheetVaultTests(unittest.TestCase):
         self.assertEqual(meta["vendor"], "Texas Instruments")
         names = [e["mpn"] for e in list_entries(root=self.root)]
         self.assertIn("TLV75733PDRVR", names)
+
+
+    def test_rca_audit_blocks_ungrounded_claims(self):
+        register("W25Q128JVSIQ",
+                 specs={"vcc_min_v": {"value": 2.7, "source": "Digi-Key spec table"}}, root=self.root)
+        register("TLV75733PDRVR",
+                 specs={"vout_v": 3.3}, root=self.root)  # unverified (no source)
+        out = audit_claims([
+            {"mpn": "W25Q128JVSIQ", "field": "vcc_min_v", "asserted_value": 2.7},   # verified+match -> ok
+            {"mpn": "W25Q128JVSIQ", "field": "vcc_min_v", "asserted_value": 1.65},  # verified but contradicts -> block
+            {"mpn": "TLV75733PDRVR", "field": "vout_v", "asserted_value": 3.3},      # unverified -> block
+            {"mpn": "AMS1117", "field": "vout_v", "asserted_value": 3.3},            # absent -> block
+        ], root=self.root)
+        self.assertFalse(out["publishable"])
+        self.assertEqual(out["blocking_count"], 3)
+        reasons = {b["field"] + ":" + str(b.get("claimed_value")): b["block_reason"] for b in out["blocking"]}
+        self.assertIn("contradicts", reasons["vcc_min_v:1.65"])
+
+    def test_rca_audit_passes_when_all_grounded(self):
+        register("W25Q128JVSIQ",
+                 specs={"vcc_min_v": {"value": 2.7, "source": "ds"}, "vcc_max_v": {"value": 3.6, "source": "ds"}},
+                 root=self.root)
+        out = audit_claims([
+            {"mpn": "W25Q128JVSIQ", "field": "vcc_min_v", "asserted_value": 2.7},
+            {"mpn": "W25Q128JVSIQ", "field": "vcc_max_v"},  # no asserted value, just must be grounded
+        ], root=self.root)
+        self.assertTrue(out["publishable"])
 
 
 if __name__ == "__main__":
