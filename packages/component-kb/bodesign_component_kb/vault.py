@@ -16,10 +16,13 @@ Design constraints (from the user):
     NOT bulk-fetched from a BOM. ``lookup`` on a missing part returns ``absent`` with a
     handle to acquire it, rather than fabricating a value.
 
-The vault is project-agnostic on purpose: a datasheet is identical across projects, so
-one shared root (default ``$BODESIGN_DATASHEET_VAULT`` or ``<work>/.bodesign-datasheets``)
-is reused everywhere. No network is required to register — a user-dropped PDF or a cited
-URL both count; auto-extraction of fields is best-effort and always flagged as such.
+The vault is **project-scoped**: it lives under the project it documents (mirroring how a
+real EDA project keeps a ``06-DATASHEET`` folder), so a part captured while investigating
+that product stays with that product. Callers pass ``vault_root`` = the project's
+``datasheets/`` dir; ``$BODESIGN_DATASHEET_VAULT`` overrides, and absent both it falls back
+to ``<work_dir or cwd>/datasheets`` (never a hidden global library). No network is required
+to register — a user-dropped PDF or a cited URL both count; auto-extraction of fields is
+best-effort and always flagged as such.
 """
 
 from __future__ import annotations
@@ -34,12 +37,18 @@ from typing import Any
 
 
 def vault_root(work_dir: str | os.PathLike | None = None) -> Path:
-    """Resolve the vault root: env override, else <work>/.bodesign-datasheets."""
+    """Resolve the vault root, project-scoped.
+
+    Precedence: explicit ``$BODESIGN_DATASHEET_VAULT`` env; else ``<work_dir>/datasheets``
+    when a project work dir is given; else ``<cwd>/datasheets``. There is deliberately no
+    hidden global library — a datasheet captured for a project belongs with that project,
+    so real calls should pass ``vault_root`` = ``<project>/datasheets``.
+    """
     env = os.environ.get("BODESIGN_DATASHEET_VAULT")
     if env:
         return Path(env)
-    base = Path(work_dir) if work_dir else Path(os.environ.get("BODESIGN_WORK_DIR", "/work"))
-    return base / ".bodesign-datasheets"
+    base = Path(work_dir) if work_dir else Path.cwd()
+    return base / "datasheets"
 
 
 def _norm(mpn: str) -> str:
