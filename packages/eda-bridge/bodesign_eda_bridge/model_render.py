@@ -66,11 +66,39 @@ def _node_matrix(node, np):
     return m
 
 
+_GLTF_CT = {5120: ("i1", 1), 5121: ("u1", 1), 5122: ("<i2", 2),
+            5123: ("<u2", 2), 5125: ("<u4", 4), 5126: ("<f4", 4)}
+_GLTF_NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
+
+
+def _read_accessor(g, blob, idx, np):
+    """Read a glTF accessor (uncompressed) into an (count, ncomp) numpy array."""
+    acc = g.accessors[idx]
+    bv = g.bufferViews[acc.bufferView]
+    dt, sz = _GLTF_CT[acc.componentType]
+    nc = _GLTF_NC[acc.type]
+    base = (bv.byteOffset or 0) + (acc.byteOffset or 0)
+    stride = bv.byteStride or (sz * nc)
+    if stride == sz * nc:
+        return np.frombuffer(blob, dtype=dt, count=acc.count * nc, offset=base).reshape(acc.count, nc)
+    rows = np.empty((acc.count, nc), dtype=dt)
+    for i in range(acc.count):
+        rows[i] = np.frombuffer(blob, dtype=dt, count=nc, offset=base + i * stride)
+    return rows
+
+
 def _decode_mesh(glb_path):
-    """Return (vertices, faces, vertex_colors) in world coords, or None on failure."""
+    """Return (vertices, faces, vertex_colors) in world coords, or None on failure.
+
+    Handles both Draco-compressed (KHR_draco_mesh_compression) and plain glTF
+    primitives, so e.g. OpenMV's Draco .glb and a build123d STEP->glb both render.
+    """
     import numpy as np
     from pygltflib import GLTF2
-    import DracoPy
+    try:
+        import DracoPy
+    except ImportError:
+        DracoPy = None
 
     g = GLTF2().load_binary(str(glb_path))
     blob = g.binary_blob()
@@ -95,13 +123,21 @@ def _decode_mesh(glb_path):
         mat = world.get(mi, np.eye(4))
         for prim in mesh.primitives:
             ext = (prim.extensions or {}).get("KHR_draco_mesh_compression")
-            if not ext:
-                continue  # non-draco primitives are skipped in this slice
-            bv = g.bufferViews[ext["bufferView"]]
-            off = bv.byteOffset or 0
-            dm = DracoPy.decode(blob[off:off + bv.byteLength])
-            pts = np.array(dm.points, float).reshape(-1, 3)
-            fcs = np.array(dm.faces).reshape(-1, 3)
+            if ext and DracoPy is not None:
+                bv = g.bufferViews[ext["bufferView"]]
+                off = bv.byteOffset or 0
+                dm = DracoPy.decode(blob[off:off + bv.byteLength])
+                pts = np.array(dm.points, float).reshape(-1, 3)
+                fcs = np.array(dm.faces).reshape(-1, 3)
+            else:
+                pos = getattr(prim.attributes, "POSITION", None)
+                if pos is None:
+                    continue
+                pts = _read_accessor(g, blob, pos, np).astype(float)
+                if prim.indices is not None:
+                    fcs = _read_accessor(g, blob, prim.indices, np).reshape(-1, 3).astype(int)
+                else:
+                    fcs = np.arange(len(pts) // 3 * 3).reshape(-1, 3)
             pts = (mat[:3, :3] @ pts.T).T + mat[:3, 3]
             col = [180, 180, 185, 255]
             if prim.material is not None:
