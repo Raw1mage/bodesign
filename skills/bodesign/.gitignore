@@ -1,0 +1,10 @@
+# Private worked-example board vault — resolved locally via root symlinks
+# (see references/worked-examples.md). NEVER distribute: these point at the
+# maintainer's product board data (customer/product names). Stage guides cite
+# them illustratively; a distributed copy of this skill must omit them.
+/openmv
+/thesmart_products
+
+# Per-run analysis artifacts (regenerable)
+**/analysis/
+**/__pycache__/

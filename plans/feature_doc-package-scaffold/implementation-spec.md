@@ -77,7 +77,7 @@ Implement C01 as the Rockbox-style document package completer with an industrial
 
 ### AI Workflow Skill Contract
 
-- Build and load a dedicated `c01-industrial-design-requirements` skill before treating C01 as ready for users.
+- Load the repo-local canonical `bodesign` skill and follow `skills/bodesign/stages/c01-id/GUIDE.md` before treating C01 as ready for users.
 - Use C00 as the source of product intent; do not duplicate C00 PRD questioning.
 - Ask only visual/source questions: form archetype, primary face, visible sensor treatment, CMF direction, UI/status expression, antenna/connector treatment.
 - When the user uploads or references images, analyze them as preference evidence: identify reusable cues, ask what the user likes/dislikes, and generalize into design intent instead of copying the reference.
@@ -88,8 +88,8 @@ Implement C01 as the Rockbox-style document package completer with an industrial
 
 ### Skill Build Order
 
-1. Create the `c01-industrial-design-requirements` skill package from `c01_skill_build_plan.md`.
-2. Seed the skill with Rockbox C01 targets, C00 input mapping, CMF framework, Display/UIUX script rules, exposed-interface checklist, downstream constraint map, and risk map.
+1. Promote the C01 method from `c01_skill_build_plan.md` into repo-local canonical `skills/bodesign/stages/c01-id/GUIDE.md`.
+2. Keep the canonical guide seeded with Rockbox C01 targets, C00 input mapping, CMF framework, Display/UIUX script rules, exposed-interface checklist, downstream constraint map, and risk map.
 3. Add C01 mode/session contract: C00 may trigger C01 mode; C01 may ask C01-scoped follow-ups; unresolved product decisions return to C00.
 4. Make Rockbox-like script output the first acceptance target: all three canonical C01 targets must have non-empty scripts before C01 is considered usable.
 5. Add examples only from known sources or real project sessions; do not import arbitrary GitHub app behavior as authority.

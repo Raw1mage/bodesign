@@ -1,0 +1,67 @@
+{
+  "schema": "bodesign.c02.mechanical_constraints.v1",
+  "state": "draft",
+  "product_name": "<product>",
+  "component_heights": [
+    { "ref": "<REF>", "height_mm": 0.0, "source": "C03 component spec", "status": "explicit" }
+  ],
+  "connector_openings": [
+    {
+      "name": "<connector>",
+      "ref": "<REF>",
+      "type": "<USB-C | RJ45 | display window | button | ...>",
+      "preferred_edge": "<edge/face — from C01 placement_preference>",
+      "opening": "<what the cutout is for>",
+      "status": "explicit_without_final_coordinates",
+      "owner": "C03 EE / C04 layout / C02 ME"
+    }
+  ],
+  "heat_sources": [
+    { "ref": "<REF>", "watts": 0.0, "source": "C03 component power" }
+  ],
+  "antenna_keepouts": [
+    { "ref": "<REF>", "area": "<keepout zone>", "notes": "non-metal enclosure material here; keep metal/battery away" }
+  ],
+  "battery_envelope": {
+    "chemistry": "<Li-ion ... | none>",
+    "status": "TBC — capacity/form pending ME envelope confirmation",
+    "provisional": "<cell code ~mAh (assumption, not final)>"
+  },
+  "esd_emc_notes": [
+    "<external-port ESD targets; protection parts; note FCC/CE are EXTERNAL-LAB gates>"
+  ],
+  "source": {
+    "layer": "C03",
+    "tool": "bodesign_c03_export_mechanical_constraints",
+    "notes": "Only explicit C03 circuit/spec values are exported. Board outline, mounting holes, placement coordinates, and final dimensions remain C04/C02 responsibilities."
+  },
+  "board_outline": {
+    "width_mm": 0,
+    "height_mm": 0,
+    "status": "provisional — derived from C00 enclosure envelope (inner minus wall+clearance); final board outline is owned by C04 layout / ME, not final",
+    "source": "C00 enclosure envelope (derived, unapproved)"
+  },
+  "mounting_holes": [
+    { "x": 0, "y": 0, "d_mm": 0.0 }
+  ],
+  "constraint_status": {
+    "source": "bodesign_c02_emit_enclosure_package",
+    "notes": "Package emitter preserves missing data as engineering_pending; it does not generate CAD dimensions.",
+    "pending": [
+      {
+        "key": "environment_targets",
+        "status": "engineering_pending",
+        "owner": "C00 user / C06 verification",
+        "reason": "Environment targets drive waterproofing, dust, drop, material, and test assumptions.",
+        "blocks": ["compliance_review", "vendor_handoff"]
+      }
+    ]
+  },
+  "approval_status": {
+    "source_ready": false,
+    "viewable_draft_ready": false,
+    "printable_draft_ready": false,
+    "vendor_handoff_ready": false,
+    "me_approved": false
+  }
+}

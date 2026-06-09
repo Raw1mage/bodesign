@@ -1,0 +1,82 @@
+{
+  "schema": "bodesign.c00.answer_state.v1",
+  "status": "scaffolded",
+  "project_name": "<PROJECT NAME>",
+  "include_rf": false,
+  "readiness_computed": false,
+  "prd_emitted": false,
+  "human_approved": false,
+  "allowed_states": [
+    "missing",
+    "drafted",
+    "answered",
+    "external-needed",
+    "blocked",
+    "accepted-risk"
+  ],
+  "_field_template": {
+    "state": "missing",
+    "value": null,
+    "reason": "not yet answered",
+    "owner": null,
+    "source": null,
+    "handoff_targets": []
+  },
+  "_note": "Every field MUST carry state + source + owner + handoff_targets. A state without a reason is a defect. Do not invent values; mark missing/external-needed/blocked/accepted-risk with a reason. human_approved stays false until the named approver signs off — never flip it yourself.",
+  "documents": {
+    "Project_Requirements.md": {
+      "sections": [
+        { "id": "s01_business_strategy", "title": "1. Company Vision & Business Strategy", "state": "missing",
+          "handoff_targets": ["C06"],
+          "fields": { "target_customer": {}, "problem_statement": {}, "business_goal": {}, "success_metric": {}, "market_or_use_context": {} } },
+        { "id": "s02_project_overall", "title": "2. Project Overall", "state": "missing",
+          "handoff_targets": ["C03", "C05", "C06"],
+          "fields": { "product_summary": {}, "primary_use_cases": {}, "engineering_scope": {}, "build_volume": {}, "derivation_baseline": {} } },
+        { "id": "s03_project_objectives", "title": "3. Project Objectives", "state": "missing",
+          "handoff_targets": ["C06", "C07"],
+          "fields": { "objectives": {}, "performance_target": {}, "cost_target": {}, "maturity_target": {} } },
+        { "id": "s04_system_architecture", "title": "4. System Architecture", "state": "missing",
+          "handoff_targets": ["C03", "C05"],
+          "fields": { "architecture_diagram": {}, "compute": {}, "memory": {}, "power_chain": {}, "connectivity": {}, "sensors_io": {} } },
+        { "id": "s05_id_me_requirements", "title": "5. ID / ME Requirements", "state": "missing",
+          "handoff_targets": ["C01", "C02"],
+          "fields": { "enclosure_material_tooling": {}, "form_and_mount": {}, "dimensions": {}, "front_face_features": {}, "buttons_leds": {}, "ports": {}, "antenna_keepout_ingress_drop": {} } },
+        { "id": "s06_electrical_requirements", "title": "6. Electrical Requirements", "state": "missing",
+          "handoff_targets": ["C03"],
+          "fields": { "application_processor": {}, "flash": {}, "ram": {}, "radios": {}, "phy_or_wired": {}, "camera_sensors": {}, "power_input": {}, "charger_powerpath": {}, "regulators_loadswitches": {}, "esd_tvs_temp": {} } },
+        { "id": "s07_software_requirements", "title": "7. Software Requirements", "state": "missing",
+          "handoff_targets": ["C05"],
+          "fields": { "on_device_behaviour": {}, "operating_modes": {}, "alerting": {}, "pairing": {}, "update_ota": {}, "security": {}, "model_data_management": {} } },
+        { "id": "s08_roles_responsibility", "title": "8. Roles & Responsibility", "state": "missing",
+          "handoff_targets": ["C05"],
+          "fields": { "product_owner": {}, "ee_owner": {}, "me_id_owner": {}, "fw_owner": {}, "qa_lab_owner": {} } },
+        { "id": "s09_assumptions_constraints", "title": "9. Assumptions & Constraints", "state": "missing",
+          "handoff_targets": ["C01", "C02", "C03", "C06"],
+          "fields": { "baseline_assumption": {}, "external_cert_gates": {}, "out_of_scope": {}, "tbc_component_choices": {}, "known_limits": {} } },
+        { "id": "s10_project_management", "title": "10. Project Management", "state": "missing",
+          "handoff_targets": ["C06"],
+          "fields": { "stage_gate_plan": {}, "sync_cadence": {}, "change_control": {}, "issue_tracking": {}, "risk_register": {} } },
+        { "id": "s11_schedule", "title": "11. High-level Schedule", "state": "missing",
+          "handoff_targets": [],
+          "fields": { "prd_freeze": {}, "schematic_bom": {}, "layout_gerber": {}, "evt_build": {}, "verify": {}, "dvt_pre_mp": {} } },
+        { "id": "s12_team_roster", "title": "12. Team Roster", "state": "missing",
+          "handoff_targets": [],
+          "fields": { "chip_vendor": {}, "module_vendor": {}, "odm_assembly": {}, "cert_lab": {}, "internal_team": {} } }
+      ]
+    },
+    "RF_Requirements.md": {
+      "_include_when": "include_rf == true",
+      "sections": [
+        { "id": "rf01_product_brief", "title": "1. Product Brief", "state": "missing",
+          "handoff_targets": ["C03"],
+          "fields": { "rf_use_case": {}, "region": {}, "radio_standard": {}, "antenna_context": {} } },
+        { "id": "rf02_project_objectives", "title": "2. Project Objectives", "state": "missing",
+          "handoff_targets": ["C06"],
+          "fields": { "rf_success_criteria": {}, "range_or_link_target": {}, "power_constraint": {} } },
+        { "id": "rf03_rf_specifications", "title": "3. RF Specifications", "state": "missing",
+          "handoff_targets": ["C03", "C07"],
+          "fields": { "frequency_bands": {}, "module_or_chip": {}, "antenna_type": {}, "certification_target": {}, "test_needs": {} } }
+      ]
+    }
+  }
+}

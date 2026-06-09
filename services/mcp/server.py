@@ -947,10 +947,9 @@ I18N = {
                    "或用 <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> 工具以 inline 方式上傳。工具也接受本機路徑（同機 UDS）。"),
     "caveat": ("Reliability is <b>shown, not asserted</b>: bodesign cross-checks against a known-good shipped board (control group) and runs SPICE/EMC. These are pre-silicon risk layers — they do not replace accredited EMC / EVT / DVT at the lab/factory, and no send-to-fab output is emitted without validation + explicit approval.",
                "可靠度是「<b>展示，而非宣稱</b>」：bodesign 以已量產良品（對照組）交叉檢核並執行 SPICE/EMC。這些是矽前風險層，無法取代實驗室／工廠的 EMC／EVT／DVT 認證；未經驗證與明確批准不會輸出送廠檔案。"),
-    "skills_intro": ("bodesign generates; mature skills verify/source/document. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>); install the ones you need:",
-                     "bodesign 負責生成；成熟 skills 負責驗證／採購／文件。它們在 agent 端執行（或在 server 主機，透過 <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>）；按需安裝："),
+    "skills_intro": ("Install the bodesign lifecycle skill for the C00–C07 workflow; install the EDA companion bundle for verification/source/document engines. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>):",
+                     "安裝 bodesign lifecycle skill 取得 C00–C07 工作流；安裝 EDA companion bundle 取得驗證／採購／文件引擎。它們在 agent 端執行（或在 server 主機，透過 <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>）："),
     "skills_dl": ("Download skill packages", "下載 skill 套件"),
-    "skills_dl_bundle": ("Full EDA skill bundle", "完整 EDA skill 套件包"),
     "tools_full": ("full call schemas →", "完整呼叫 schema →"),
     "idx_crumb": ("tools", "工具"),
     "idx_title": ("Tool catalog", "工具目錄"),
@@ -1028,14 +1027,19 @@ def _human_size(n: int) -> str:
 
 
 def _skill_downloads() -> list[tuple[str, str, str]]:
-    """(filename, label, human_size) for vendored skill tarballs; bundle first."""
+    """(filename, label, human_size) for vendored skill tarballs; lifecycle first."""
     d = _assets_dir() / "skills"
     if not d.is_dir():
         return []
-    files = sorted(d.glob("*.tar.gz"), key=lambda p: (not p.name.startswith("bodesign-eda"), p.name))
+    files = sorted(d.glob("*.tar.gz"), key=lambda p: (p.name != "bodesign.tar.gz", not p.name.startswith("bodesign-eda"), p.name))
     out = []
     for p in files:
-        label = "bundle" if p.name.startswith("bodesign-eda") else p.name[:-len(".tar.gz")]
+        if p.name == "bodesign.tar.gz":
+            label = "bodesign lifecycle"
+        elif p.name.startswith("bodesign-eda"):
+            label = "EDA bundle"
+        else:
+            label = p.name[:-len(".tar.gz")]
         out.append((p.name, label, _human_size(p.stat().st_size)))
     return out
 
@@ -1078,13 +1082,17 @@ def _landing_html(uds_path: str | None = None, tcp_port: int | None = None, lang
     dl = _skill_downloads()
     dl_html = ""
     if dl:
-        bundle = next((d for d in dl if d[1] == "bundle"), None)
-        per = [d for d in dl if d[1] != "bundle"]
+        featured = [d for d in dl if d[1] in {"bodesign lifecycle", "EDA bundle"}]
+        per = [d for d in dl if d not in featured]
+        featured_links = " · ".join(
+            f'<a href="{b}/skills/{esc(fn)}" style="color:var(--accent);font-weight:700">⬇ {esc(lb)}</a> '
+            f'<span style="color:var(--muted)">({sz})</span>'
+            for fn, lb, sz in featured
+        )
         links = " · ".join(f'<a href="{b}/skills/{esc(fn)}">{esc(lb)}</a> <span style="color:var(--muted)">({sz})</span>'
                            for fn, lb, sz in per)
-        bundle_link = (f'<a href="{b}/skills/{esc(bundle[0])}" style="color:var(--accent);font-weight:700">⬇ {L("skills_dl_bundle")}</a> '
-                       f'<span style="color:var(--muted)">({bundle[2]})</span> · <a href="{b}/skills/MANIFEST.md">MANIFEST</a>' if bundle else "")
-        dl_html = f'<p style="margin-top:10px"><b>{L("skills_dl")}:</b> {bundle_link}</p><p style="font-size:.9rem">{links}</p>'
+        manifest = f'<a href="{b}/skills/MANIFEST.md">MANIFEST</a>'
+        dl_html = f'<p style="margin-top:10px"><b>{L("skills_dl")}:</b> {featured_links} · {manifest}</p><p style="font-size:.9rem">{links}</p>'
     workflow = "".join(
         f'<div class="step"><div class="sh">{esc(zh_h if lang == "zh" else eh)}</div>'
         f'<div class="sb">{zb if lang == "zh" else eb}</div></div>'

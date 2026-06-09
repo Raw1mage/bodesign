@@ -8,7 +8,7 @@ This repository will host `bodesign` as a host-agnostic MCP server plus web serv
 
 - `apps/web`: `/bodesign/` web viewer for circuit/PCB view, Gerber layers, evidence overlays, confidence, component knowledge summaries, and reports.
 - `services/api`: FastAPI/Python backend for project APIs, Postgres-backed design jobs, storage access, web APIs, MCP tool handlers, AI orchestration, validation, approval, Gerber generation, and export.
-- `services/mcp`: Host-agnostic MCP server exposing bodesign tools to any MCP-capable IDE/agent/HTTP client.
+- `services/mcp`: Host-agnostic MCP server exposing bodesign tools to any MCP-capable IDE/agent/HTTP client. Its HTTP landing page also publishes installable skill downloads under `/skills/{name}`: the repo-local `skills/bodesign` lifecycle skill as `bodesign.tar.gz`, plus EDA companion bundles from `services/mcp/assets/skills/`.
 - `packages/design-ir`: Product-owned PCB source of truth, evidence model, schema validation, and versioning.
 - `packages/component-kb`: Datasheet ingestion, part-number resolution, pinout/package normalization, interface grouping, and layout-rule knowledge.
 - `packages/doc-core`: OpenMV schematic/datasheet evidence extraction and design-intent normalization.

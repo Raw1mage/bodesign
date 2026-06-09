@@ -95,5 +95,5 @@
 - RB-1: conform to plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema) or formally document the deviation; RB-3 = C01-I1 template loader.
 - Assemble the autonomous C00-driven loop (select/dispatch packets, surface blockers as the next user question) on top of the now-wired spine primitives.
 - Add C01 reference image intake and traceability so uploaded examples can become confirmed design-intent evidence for the Rockbox-like documents.
-- Install/package C00/C01/C02 skill sources into the distributed skill bundle once skill packaging policy is finalized.
+- Superseded 2026-06-09: C00/C01/C02 skill authority moved into repo-local canonical `skills/bodesign/stages/*/GUIDE.md`; plan-local skill copies are retired instead of being installed as separate distributed skills.
 - Complete Docker image build/recreate with OpenSCAD and validate real `Enclosure.stl` export inside the MCP container after Docker Desktop storage location is confirmed safe; C00 SSOT runtime work is the next non-Docker implementation path.

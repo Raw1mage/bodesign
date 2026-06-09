@@ -368,12 +368,12 @@
         "note": "Runtime LANDED: bodesign_c01_emit_package (Rockbox slots Ai file/CMF/Display UIUX + Interface_Constraints.json + Handoff_to_ID_Designer.md), bodesign_c01_next_question / bodesign_c01_update_answers (answer-state interaction), bodesign_c01_readiness (field-level), optional bodesign_c01_generate_concept_image, C01-I1 template loader + emitter binding (c01_id_template.py / validate_c01_outputs_binding), and C01-I3 C00→C01 mode contract (enter_c01_mode). Still pending: cross-section consistency check + downstream-gate tests; constraint hardening (N6); reference-image intake (N7/N8)."
       },
       "skill": [
-        "c01-industrial-design-requirements (self-built — the C01 authority: CMF framework, form/DFM-for-ID, moodboard/concept prompts, archetype library)",
+        "skills/bodesign/stages/c01-id/GUIDE.md (self-built C01 authority: CMF framework, form/DFM-for-ID, moodboard/concept prompts, archetype library)",
         "canvas-design / frontend-design (screen/graphic UI only — NOT industrial design; supporting use)",
         "kidoc (handoff docs)",
         "external ID designer (final design authority)"
       ],
-      "skill_note": "Community search found no real industrial-design/CMF skill (all 'design' skills are graphic/UI) — see EXTERNAL_SKILLS.md. C01 method authority is the self-built c01-industrial-design-requirements skill, strengthened with a CMF decision framework + DFM-for-ID + moodboard/concept-prompt framework.",
+      "skill_note": "Community search found no real industrial-design/CMF skill (all 'design' skills are graphic/UI) — see EXTERNAL_SKILLS.md. C01 method authority is the repo-local canonical bodesign C01 guide, strengthened with a CMF decision framework + DFM-for-ID + moodboard/concept-prompt framework; plan-local skill copies are not maintained.",
       "real_artifacts": [
         "Ai file (Illustrator)",
         "CMF",
@@ -403,7 +403,7 @@
         "C01 interface constraints and form intent",
         "C03 component list, connector types, component heights, heat sources, battery, RF/ESD constraints",
         "C04 board outline, mounting holes, connector coordinates, keepouts, antenna areas",
-        "C02 mechanical consultant skill questions for printability, assembly, access, compliance, and fidelity"
+        "repo-local canonical bodesign C02 guide questions for printability, assembly, access, compliance, and fidelity"
       ],
       "generate_with": [
         "bodesign_c02_emit_enclosure_package — TODO",
@@ -424,7 +424,7 @@
         "note": "Runtime LANDED: bodesign_c02_emit_enclosure_package, bodesign_c02_generate_openscad, bodesign_c02_export_stl / _skp / _step (toolchain-gated, explicit *_unavailable when absent), bodesign_c02_readiness (constraint readiness, does NOT claim printable/STL until real export). C02 stays constraint-first: pre-check before C04, check loop after C04, final draft only after C03/C04 constraints suffice. STEP backend LANDED (C02-T6b): export_c02_step builds a real Enclosure.step via the build123d/OCP kernel from the same constraints as the OpenSCAD path when the kernel + explicit dims are present, else stays step_export_unavailable (no dims/no kernel → no fake STEP); output is draft_unapproved, never me_approved. build123d is dev-installed only — NOT yet in requirements/Docker, so runtime stays gated until the heavy OCP/vtk dep is approved. Still pending: C02-T7/V5 real STL export needs OpenSCAD in the container; cross-section consistency vs C01/C03/C04."
       },
       "skill": [
-        "c02-mechanical-enclosure-consultant — TODO",
+        "skills/bodesign/stages/c02-me/GUIDE.md — canonical C02 mechanical consultant authority",
         "OpenSCAD/CadQuery/FreeCAD export toolchain — optional deterministic tool",
         "SketchUp SKP export/import toolchain — optional preferred review path",
         "external ME/ID vendor (final STEP/assembly/manufacturing authority)"

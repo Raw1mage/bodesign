@@ -2,7 +2,7 @@
 
 ## Decision
 
-Build a dedicated `c01-industrial-design-requirements` skill. Public GitHub discovery did not find a ready-to-adopt specialist skill, and generic visual/brand/frontend skills are insufficient authority for the C01 workflow.
+Build C01 method authority inside the repo-local canonical `bodesign` skill (`skills/bodesign/stages/c01-id/GUIDE.md`). Public GitHub discovery did not find a ready-to-adopt specialist skill, and generic visual/brand/frontend skills are insufficient authority for the C01 workflow. Do not maintain a separate plan-local `c01-industrial-design-requirements` skill copy.
 
 ## Skill Purpose
 

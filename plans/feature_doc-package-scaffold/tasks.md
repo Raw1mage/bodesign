@@ -85,13 +85,13 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C01-T3 Readiness rubric** — define artifact gates and downstream gates for C02/C03/C04/C05.
 - [x] **C01-T4 Workflow spec** — define C00→C01 extraction, visual prompt loop, AI-draft labeling, and ID designer handoff.
 - [x] **C01-T5 Template binding** — update the C01 section in `doc_architecture.template.json` from track-only to visual-source package.
-- [x] **C01-T6 Skill build strategy** — decide to self-build `c01-industrial-design-requirements` and seed it from Rockbox C01, C00 handoff inputs, generic ID/CMF/UIUX practice, and observed project experience.
+- [x] **C01-T6 Skill build strategy** — decide to self-build C01 method authority in repo-local canonical `skills/bodesign/stages/c01-id/GUIDE.md`, seeded from Rockbox C01, C00 handoff inputs, generic ID/CMF/UIUX practice, and observed project experience.
 - [x] **C01-T7 Rockbox-like MVP gate** — require the first usable C01 capability to produce non-empty structured scripts for `Ai file`, `CMF`, and `Display UI/UX`, plus constraints and ID handoff.
 
 ### Next Implementation Backlog
 
 - [x] **C01-I1 Template loader** — `c01_id_template.py`: `load_c01_id_template` / `load_c01_id_rubric` (fail-fast) + `validate_c01_outputs_binding`, which asserts the emitter's `C01_OUTPUTS` Rockbox carriers match the template's `target_package.outputs` (drift fails fast). Resolves RB-3: C01 is now template-bound like C00.
-- [x] **C01-I2 Skill package** — create `c01-industrial-design-requirements` with role prompt, question strategy, CMF framework, UI/status script, exposed-interface checklist, downstream constraint map, risk map, and `known_gaps` section.
+- [x] **C01-I2 Skill package** — merge the role prompt, question strategy, CMF framework, UI/status script, exposed-interface checklist, downstream constraint map, risk map, and known-gap discipline into `skills/bodesign/stages/c01-id/GUIDE.md`; plan-local skill copies are retired.
 - [x] **C01-I3 Mode contract** — `mode_contracts.enter_c01_mode` (Batch B): C00 dispatches a C01 work packet scoped to the PRD sections whose `handoff_targets` include C01 (derived from the template), emits the Rockbox C01 package, and returns the next C01 preference question. C01 asks preference questions directly; product-level decisions return to C00 via `return_blocker`; C01 never mutates the PRD. MCP tool `bodesign_enter_c01_mode`.
 - [x] **C01-I4 Visual extractor** — extract C00 §1/§2/§5/§6/§7 content into normalized visual/interface requirements.
 - [x] **C01-I5 Scaffold function/tool** — create the C01-ID package using Rockbox deliverable names: `Ai file/`, `CMF/`, `Display UIUX/`, plus support artifacts.
@@ -112,7 +112,7 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 
 ### C01 Concept Image Support
 
-- [x] **C01-A1 Skill prompt generation** — the strengthened `c01-industrial-design-requirements` skill now carries a Moodboard & Concept-Prompt framework (archetype + CMF route + brand tone → reference-only prompts, copyright-safe) feeding `bodesign_c01_generate_concept_image`.
+- [x] **C01-A1 Skill prompt generation** — the strengthened `skills/bodesign/stages/c01-id/GUIDE.md` now carries a Moodboard & Concept-Prompt framework (archetype + CMF route + brand tone → reference-only prompts, copyright-safe) feeding `bodesign_c01_generate_concept_image`.
 - [x] **C01-A2 Prompt artifacts** — `emit_c01_concept_prompts` persists reference-only `Concept_Image_Prompts.md` / `Moodboard_Prompts.md` / `UI_Concept_Prompts.md` from accumulated intent; MCP `bodesign_c01_emit_concept_prompts`.
 - [x] **C01-A3 Image generation tool** — add `bodesign_c01_generate_concept_image` behind explicit Google AI Studio provider/API key config; fail fast when unavailable and never fallback silently.
 - [x] **C01-A4 Reference metadata** — write `Concept_Reference.md` with image path, prompt, provider/model, timestamp, and reference-only limitation statement.
@@ -124,7 +124,7 @@ Make C01 an industrial-design consultant and Rockbox C01 document completer: dia
 - [x] **C02-P2 Three MVP gates** — require outputs that the boss can view, the user can 3D print, and an ME/ID vendor can take over.
 - [x] **C02-P3 Workflow phases** — split ME work into C02-pre constraints, C02-check after C04 layout, and C02-final enclosure draft.
 - [x] **C02-P4 Restore Rockbox code** — keep C02 as ME by deliverable/vendor boundary; express C03-led component constraints through execution-loop metadata instead of renumbering.
-- [x] **C02-S1 Mechanical consultant skill** — create `c02-mechanical-enclosure-consultant` skill for user-answerable mechanical questions, assumptions, printability tradeoffs, compliance risks, and vendor handoff guidance.
+- [x] **C02-S1 Mechanical consultant skill** — merge C02 mechanical consultant behavior into `skills/bodesign/stages/c02-me/GUIDE.md` for user-answerable mechanical questions, assumptions, printability tradeoffs, compliance risks, and vendor handoff guidance; plan-local skill copies are retired.
 - [x] **C02-P5 Implementation stages** — split the remaining C02 work into package emitter, OpenSCAD source, STL export, optional SKP/STEP handoff, and validation gates.
 - [x] **C02-T1 Enclosure package tool** — implement `bodesign_c02_emit_enclosure_package` to emit `Mechanical_Constraints.json`, `Mechanical_Assumptions.md`, `Assembly_Notes.md`, `Print_Settings.md`, `Vendor_Handoff.md`, and SketchUp fallback guidance without claiming CAD readiness.
 - [x] **C02-T2 Parametric source generator** — implement `bodesign_c02_generate_openscad` from explicit board outline, mounting strategy, wall/clearance parameters, openings, component heights, battery, heat, RF, and keepout data.

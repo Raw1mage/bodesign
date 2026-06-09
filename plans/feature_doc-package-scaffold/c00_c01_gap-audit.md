@@ -6,7 +6,7 @@
 
 ## Current Status
 
-- **C00 function model**: runtime LANDED (draft-grade). Template+rubric loaded by `c00_prd_template.py`; `bodesign_c00_scaffold_prd` / `_readiness` / `_emit_prd` live with answer-state field readiness, next-best question, downstream-gate assessment, and a Markdown handoff *report*. Consultant prompt packaged as a skill. `requirement_planning` fields bound+validated against the template.
+- **C00 function model**: runtime LANDED (draft-grade). Template+rubric loaded by `c00_prd_template.py`; `bodesign_c00_scaffold_prd` / `_readiness` / `_emit_prd` live with answer-state field readiness, next-best question, downstream-gate assessment, and a Markdown handoff *report*. Consultant method lives in repo-local canonical `skills/bodesign/stages/c00-prd/GUIDE.md`, not a plan-local skill copy. `requirement_planning` fields bound+validated against the template.
 - **C01 function model**: runtime LANDED (draft-grade). `bodesign_c01_emit_package` / `_next_question` / `_update_answers` / `_readiness` (+ optional concept-image) live over Rockbox canonical slots. NOTE: emitters hardcode structure — `c01_id.template.json`/rubric are NOT yet loaded at runtime (C01-I1 genuinely undone).
 - **C02 function model**: runtime LANDED (draft-grade). package/openscad/export(stl·skp·step, toolchain-gated)/readiness live. Real STL export validation pending OpenSCAD-in-container.
 - **C03**: full chain (pre-existing EE pipeline) + `bodesign_c03_export_mechanical_constraints`.
@@ -18,7 +18,7 @@
 ### Prompt / Agent Packaging
 
 - [x] Draft C00 consultant system prompt.
-- [x] Decide where C00 prompt lives at runtime: packaged as a skill source (`skills/c00-product-development-consultant/SKILL.md`).
+- [x] Decide where C00 prompt lives at runtime: repo-local canonical `skills/bodesign/stages/c00-prd/GUIDE.md`, not `plans/.../skills/c00-product-development-consultant/SKILL.md`.
 - [x] Define how C00 dispatches C01-C06 work packets without letting downstream agents mutate the PRD contract directly. — WIRED (Batch B): `orchestration.dispatch_work_packet` (`work_packet.v1`) + `return_blocker`/`ingest_blocker`; downstream layers inherit allowed/forbidden actions from the registry and return blockers to C00.
 
 ### MCP / Runtime Tools
@@ -52,9 +52,9 @@
 - [x] Loaded `skill-finder` after restoring the runtime `skill` loader.
 - [x] Searched external/public sources for industrial-design / CMF / product-design-brief / hardware UIUX skill candidates.
 - [x] Found no ready-to-adopt C01 specialist skill. One rough repository candidate appeared (`TheFrenchPixel/designfuse`, an industrial design brief app), but it is not an opencode skill and does not provide the C01 agent prompt, CMF framework, downstream constraint map, or blocker-return contract needed here.
-- [x] Decide to create a dedicated `c01-industrial-design-requirements` skill instead of relying on generic visual-design skills. Initial build plan lives in `c01_skill_build_plan.md`.
+- [x] Decide to keep C01 method authority inside repo-local canonical `skills/bodesign/stages/c01-id/GUIDE.md` instead of relying on generic visual-design skills or maintaining a plan-local skill copy. Initial build rationale lives in `c01_skill_build_plan.md`.
 - [ ] Optionally borrow supporting concepts from generic `canvas-design`, `brand-guidelines`, and `frontend-design`, but do not treat them as sufficient C01 authority.
-- [x] Create the initial skill package source and keep a `known_gaps` / learned-patterns section so real project experience can improve the skill over time.
+- [x] Merge the initial C01 package source into repo-local canonical `skills/bodesign/stages/c01-id/GUIDE.md` and keep known-gap / learned-pattern discipline there so real project experience improves one authority.
 
 ### Prompt / Agent Packaging
 

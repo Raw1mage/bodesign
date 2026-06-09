@@ -1,11 +1,13 @@
 # External specialist skills adopted per C00–C06 layer
 
-bodesign *generates* the design and *orchestrates* mature skills for the rest
-(its own EDA skills ship in `services/mcp/assets/skills/`; the per-layer `skill`
+bodesign *generates* the design and *orchestrates* mature skills for the rest.
+The canonical lifecycle skill now lives in this repo at `skills/bodesign/`;
+plan-local `plans/.../skills/*/SKILL.md` copies are retired to avoid drift. EDA
+companion skills ship in `services/mcp/assets/skills/`; the per-layer `skill`
 binding lives in `templates/doc_architecture.template.json` and flows into
-`agent_registry`). This file records third-party skills adopted to fill the
-non-EE upstream layers, with provenance and license so an externally-operated
-deployment stays compliant.
+`agent_registry`. This file records third-party skills adopted to fill the non-EE
+upstream layers, with provenance and license so an externally-operated deployment
+stays compliant.
 
 ## C00 — Product / PRD (ADOPTED)
 
@@ -68,7 +70,7 @@ deployment stays compliant.
      in `services/mcp/requirements.txt` or the Docker image** — runtime stays
      honestly gated until you approve adding the dependency.
 - **DFM caveat:** text-to-cad's DFM is only a SendCutSend format check, so the C02
-  DFM/manufacturing consultant remains self-built (`c02-mechanical-enclosure-consultant`).
+  DFM/manufacturing consultant remains self-built inside `skills/bodesign/stages/c02-me/GUIDE.md`.
 
 ## C01 — Industrial Design / CMF (NO EXTERNAL SOLUTION — self-build)
 
@@ -76,6 +78,6 @@ deployment stays compliant.
   canvas/frontend-design): every "design" skill found is graphic/UI/HTML-artifact
   design, **none is industrial/product design (form, CMF, enclosure aesthetics,
   moodboard for physical products)**. This confirms the earlier gap-audit finding.
-- **Decision:** keep and strengthen the self-built
-  `skills/c01-industrial-design-requirements`, seeded from the RockBox C01
-  shipped-product document architecture.
+- **Decision:** keep and strengthen the self-built C01 method inside
+  `skills/bodesign/stages/c01-id/GUIDE.md`, seeded from the RockBox C01 shipped-product
+  document architecture. Do not maintain a separate plan-local C01 skill copy.

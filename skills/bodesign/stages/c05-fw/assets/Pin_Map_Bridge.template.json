@@ -1,0 +1,18 @@
+{
+  "schema": "bodesign.c05.pin_map_bridge.v1",
+  "state": "drafted",
+  "source": {
+    "layer": "C05",
+    "from_c03_pin_map": true
+  },
+  "signals": [
+    {
+      "ref": "<component ref + part, exactly as C03 names it, e.g. U_AP (STM32N657L0)>",
+      "pin": "<physical ball/pin from a C03 pinmap row, e.g. PA2>",
+      "net": "<C03 net name, e.g. UART0>",
+      "firmware_signal": "<signal name FW will use; default to the net name>",
+      "responsibility": "TBD by FW team (init/direction/driver/ISR)."
+    }
+  ],
+  "note": "Bridges the C03 pin map to firmware signal responsibilities. Driver/ISR/init code is FW-team owned. Every signal MUST trace to a C03 pinmap row — no invented pins. If C03 delivered only an interface subset, bridge that subset and record the missing-connectivity boundary here rather than back-filling."
+}

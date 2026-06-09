@@ -1,16 +1,21 @@
-# bodesign EDA skill pack
+# bodesign skill downloads
 
-The mature EDA skills that the **bodesign** MCP server orchestrates (analysis · docs ·
-simulation · sourcing · fabrication). bodesign *generates* the design; these skills
-*verify, source, and document* it. Reviewed and cleaned for distribution
-(no secrets — all distributor API keys are read from environment variables;
-no `__pycache__`/personal paths/internal ticket refs).
+The **bodesign** MCP server publishes two skill layers:
 
-> **`kicad` and `kidoc` are now folded into the unified `bodesign` skill** (as `engines/kicad`
-> and `engines/kidoc`). Prefer installing the `bodesign` skill — it carries the C00–C07 workflow,
-> drives this MCP's `bodesign_*` generation tools, and the MCP's verification tools resolve its
-> analyzer via `BODESIGN_KICAD_SKILL` (default `~/.claude/skills/bodesign/engines/kicad`). The
-> standalone `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use only.
+- `bodesign.tar.gz` — the canonical C00–C07 lifecycle skill for the bodesign workflow.
+- `bodesign-eda-skills-bundle.tar.gz` — companion EDA skills for analysis, docs,
+  simulation, sourcing, and fabrication.
+
+Both are reviewed and cleaned for distribution (no secrets — all distributor API
+keys are read from environment variables; no `__pycache__`/personal paths/internal
+ticket refs).
+
+> **`kicad` and `kidoc` are folded into the unified `bodesign` skill** (as
+> `engines/kicad` and `engines/kidoc`). Prefer installing `bodesign.tar.gz`: it
+> carries the C00–C07 workflow, drives this MCP's `bodesign_*` generation tools,
+> and the MCP's verification tools resolve its analyzer via `BODESIGN_KICAD_SKILL`
+> (default `~/.claude/skills/bodesign/engines/kicad`). The standalone
+> `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use only.
 
 ## Install
 
@@ -18,6 +23,7 @@ These are Claude **skills**. Place each skill directory under your skill locatio
 (default `~/.claude/skills/`):
 
 ```
+tar -xzf bodesign.tar.gz -C ~/.claude/skills/
 tar -xzf bodesign-eda-skills-bundle.tar.gz -C ~/.claude/skills/
 # or a single skill:
 tar -xzf kicad.tar.gz -C ~/.claude/skills/
@@ -29,6 +35,7 @@ No install script is bundled by design — extract where your skill manager expe
 
 | Skill | Role |
 |---|---|
+| **bodesign** | Canonical C00–C07 hardware product-design lifecycle: PRD → ID → ME → EE → Layout → FW → Verify → MFG. |
 | **kicad** | Schematic/PCB/Gerber analysis — ERC/DRC, netlist, power tree, subcircuit detection, design review. The hub the others feed. |
 | **kidoc** | Engineering doc packages — HDD, CE technical file, ICD, design-review, manufacturing-transfer; schematic/PCB renders + block/power-tree diagrams. |
 | **spice** | ngspice simulation of detected subcircuits (filters, dividers, op-amp gain, LC/crystal). |

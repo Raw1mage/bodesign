@@ -1,0 +1,43 @@
+{
+  "schema": "bodesign.c01.interface_constraints.v1",
+  "state": "drafted",
+  "product_name": "<product name from C00>",
+  "source": "C00-derived C01 ID direction",
+  "exposed_components": [
+    {
+      "name": "<visible component, e.g. camera>",
+      "placement_preference": "draft/missing — C01 must ask user or ID designer",
+      "decision_status": "drafted",
+      "owner": "C00 user + ID designer",
+      "downstream_targets": ["C02", "C04"],
+      "risk_notes": "<concrete failure mode + mitigation, e.g. FOV can be obstructed by enclosure geometry; opening + clearance needed>"
+    }
+  ],
+  "downstream_targets": {
+    "C02": [
+      "form archetype",
+      "openings",
+      "primary/user-facing surfaces",
+      "mounting and handling assumptions"
+    ],
+    "C03": [
+      "visible electrical interfaces",
+      "connector/display/button/LED/sensor presence",
+      "antenna constraints"
+    ],
+    "C04": [
+      "preferred component faces",
+      "placement keepouts",
+      "visibility/RF/acoustic constraints"
+    ],
+    "C05": [
+      "status state labels",
+      "button/LED/display/app interaction behavior"
+    ]
+  },
+  "open_decisions": [
+    "primary face and placement zones require human/ID confirmation",
+    "CMF route requires material/sample/brand approval",
+    "UI/status vocabulary requires C05 alignment"
+  ]
+}
