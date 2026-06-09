@@ -1,0 +1,50 @@
+{
+  "machine": "EDA MCP Toolchain Integration Lifecycle",
+  "initial": "planned",
+  "states": [
+    "planned",
+    "implementing_impedance",
+    "implementing_pcb_mutators",
+    "implementing_gerber_preview",
+    "validating_runtime",
+    "verified",
+    "blocked"
+  ],
+  "transitions": [
+    {
+      "from": "planned",
+      "to": "implementing_impedance",
+      "condition": "implementation starts"
+    },
+    {
+      "from": "implementing_impedance",
+      "to": "implementing_pcb_mutators",
+      "condition": "impedance solver registered and tested"
+    },
+    {
+      "from": "implementing_pcb_mutators",
+      "to": "implementing_gerber_preview",
+      "condition": "widen and length-match tools registered and EE-routed"
+    },
+    {
+      "from": "implementing_gerber_preview",
+      "to": "validating_runtime",
+      "condition": "preview tool implemented or dependency blocker recorded"
+    },
+    {
+      "from": "validating_runtime",
+      "to": "verified",
+      "condition": "unit tests and socket-level smoke tests pass"
+    },
+    {
+      "from": "*",
+      "to": "blocked",
+      "condition": "missing pcbnew EE worker, hidden defaults required, or MCP runtime path cannot be proven"
+    }
+  ],
+  "stop_gates": [
+    "approval needed for dependency footprint expansion",
+    "EE worker unavailable for pcbnew tools",
+    "unresolved stackup/timing/process inputs"
+  ]
+}

@@ -130,6 +130,10 @@ class GerberValidationResult:
     blocking_errors: list[str] = field(default_factory=list)
 
 
+GERBER_PREVIEW_EXTS = {".art", ".gbr", ".gtl", ".gbl", ".gto", ".gbo", ".gts", ".gbs", ".gko", ".gm1"}
+SUPPORTED_GERBER_PREVIEW_MODES = {"layer", "single", "single-layer"}
+
+
 def normalize_allegro_gerber_source(source_code: str) -> tuple[str, list[str]]:
     removed_codes: list[str] = []
     normalized_lines: list[str] = []
@@ -232,6 +236,72 @@ def render_gerber_raster_with_pygerber(path: str | Path, output_dir: str | Path,
         removed_extended_codes=removed_codes,
         warnings=[],
     )
+
+
+def render_gerber_preview(
+    gerber_dir: str | Path,
+    out_path: str | Path,
+    mode: str,
+    drill_dir: str | Path | None = None,
+    layer_glob: str | None = None,
+) -> dict:
+    selected_mode = str(mode or "").strip().lower()
+    output_path = Path(out_path)
+    output_root = output_path.parent
+    layers = _find_gerber_layers(gerber_dir, layer_glob)
+    skipped: list[dict] = []
+
+    if selected_mode not in SUPPORTED_GERBER_PREVIEW_MODES:
+        return {
+            "status": "render-unavailable",
+            "image": None,
+            "mode": mode,
+            "rendered_layers": [],
+            "skipped": [{
+                "reason": "unsupported-preview-mode",
+                "mode": mode,
+                "detail": "Current core infrastructure renders one Gerber layer through pygerber raster; multilayer/front assembly compositing is not available without a dedicated renderer.",
+            }],
+        }
+
+    if not layers:
+        return {
+            "status": "no-input",
+            "image": None,
+            "mode": mode,
+            "rendered_layers": [],
+            "skipped": [{"reason": "no-gerber-layers", "gerber_dir": str(Path(gerber_dir)), "layer_glob": layer_glob}],
+        }
+
+    selected_layer = layers[0]
+    for unrendered in layers[1:]:
+        skipped.append({"path": str(unrendered), "reason": "not-selected-by-single-layer-preview"})
+    if drill_dir:
+        skipped.append({"path": str(Path(drill_dir)), "reason": "drill-overlay-unsupported-by-pygerber-raster-adapter"})
+
+    result = render_gerber_raster_with_pygerber(selected_layer, output_root)
+    image = result.output_path
+    if result.status == "rendered" and image:
+        rendered_path = Path(image)
+        if rendered_path != output_path:
+            output_path.write_bytes(rendered_path.read_bytes())
+            image = str(output_path)
+
+    return {
+        "status": result.status,
+        "image": image,
+        "mode": mode,
+        "rendered_layers": [{
+            "path": result.source_path,
+            "output": image,
+            "status": result.status,
+            "renderer": result.renderer,
+            "normalized": result.normalized,
+            "removed_extended_codes": result.removed_extended_codes,
+            "warnings": result.warnings,
+        }],
+        "skipped": skipped,
+    }
 
 
 def focus_svg_viewbox(svg_source: str, padding_ratio: float = 0.08) -> str:
@@ -407,6 +477,28 @@ def _decode_coordinate(value: str | None, previous: float | None, coordinate_sca
 def _count_aperture_use(apertures: dict[str, GerberAperture], selected_aperture: str | None) -> None:
     if selected_aperture is not None and selected_aperture in apertures:
         apertures[selected_aperture].use_count += 1
+
+
+def _find_gerber_layers(gerber_dir: str | Path, layer_glob: str | None = None) -> list[Path]:
+    root = Path(gerber_dir)
+    if not root.exists() or not root.is_dir():
+        return []
+    if layer_glob:
+        candidates = [path for path in root.glob(layer_glob) if path.is_file()]
+    else:
+        candidates = [path for path in root.iterdir() if path.is_file() and path.suffix.lower() in GERBER_PREVIEW_EXTS]
+    return sorted(candidates, key=lambda path: (_layer_sort_key(path), path.name.lower()))
+
+
+def _layer_sort_key(path: Path) -> int:
+    name = path.name.lower()
+    if any(token in name for token in ("f_cu", "top", "l1", ".gtl")):
+        return 0
+    if any(token in name for token in ("f_silk", "topsilk", ".gto")):
+        return 1
+    if any(token in name for token in ("f_mask", "topmask", ".gts")):
+        return 2
+    return 10
 
 
 def _extended_code_name(block: str) -> str:

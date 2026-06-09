@@ -1,0 +1,53 @@
+{
+  "model": "EDA MCP Toolchain Integration",
+  "node": "A0",
+  "function": "Convert validated EDA scripts into reusable bodesign MCP tools",
+  "inputs": [
+    "Validated OpenMV C04 scripts",
+    "KiCad netlists and PCB boards",
+    "Stackup and timing constraints",
+    "Gerber/drill outputs"
+  ],
+  "controls": [
+    "Fail-fast no-fallback policy",
+    "EE worker boundary for pcbnew",
+    "DRC/SI/user-approval gates",
+    "BoardDesign IR remains product source of truth"
+  ],
+  "outputs": [
+    "Registered MCP tools",
+    "Structured validation reports",
+    "Routed/tuned board artifacts",
+    "Gerber preview evidence"
+  ],
+  "mechanisms": [
+    "bodesign_eda_bridge",
+    "services/mcp/server.py",
+    "KiCad EE worker",
+    "ngspice",
+    "Freerouting",
+    "Gerber renderer dependencies"
+  ],
+  "children": [
+    {
+      "node": "A1",
+      "function": "Promote pure calculations",
+      "outputs": ["bodesign_impedance_solve"]
+    },
+    {
+      "node": "A2",
+      "function": "Promote PCB mutation primitives",
+      "outputs": ["bodesign_widen_bus_tracks", "bodesign_length_match_bus"]
+    },
+    {
+      "node": "A3",
+      "function": "Promote review/render evidence",
+      "outputs": ["bodesign_render_gerber_preview or explicit blocker"]
+    },
+    {
+      "node": "A4",
+      "function": "Validate through MCP runtime path",
+      "outputs": ["socket smoke results", "event log", "architecture sync note"]
+    }
+  ]
+}

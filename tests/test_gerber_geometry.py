@@ -1,12 +1,13 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "packages" / "gerber-core"))
 
-from bodesign_gerber_core import focus_svg_viewbox, normalize_allegro_gerber_source, parse_drill_file, parse_gerber_file, render_gerber_with_pygerber, render_geometry_svg
+from bodesign_gerber_core import GerberRenderResult, focus_svg_viewbox, normalize_allegro_gerber_source, parse_drill_file, parse_gerber_file, render_gerber_preview, render_gerber_with_pygerber, render_geometry_svg
 from bodesign_shared import data_root
 
 GERBER = data_root() / "fixtures" / "rockbox" / "gerber"
@@ -84,6 +85,30 @@ class GerberGeometryTests(unittest.TestCase):
         self.assertIn("viewBox=\"", focused)
         self.assertNotIn('viewBox="0 0 158 199"', focused)
         self.assertNotIn('width="158.0" height="199.0"', focused)
+
+    def test_gerber_preview_renders_selected_layer_through_pygerber_adapter(self):
+        work = REPO_ROOT / ".artifacts" / "tests" / "gerber-preview-unit"
+        work.mkdir(parents=True, exist_ok=True)
+        gerber = work / "L1_top.art"
+        gerber.write_text("M02*\n", encoding="utf-8")
+        rendered = work / "L1_top.pygerber.png"
+        rendered.write_bytes(b"png")
+
+        with patch("bodesign_gerber_core.contracts.render_gerber_raster_with_pygerber",
+                   return_value=GerberRenderResult(str(gerber), str(rendered), "pygerber-raster", "rendered")):
+            result = render_gerber_preview(work, work / "preview.png", "layer", layer_glob="*.art")
+
+        self.assertEqual("rendered", result["status"])
+        self.assertEqual(str(work / "preview.png"), result["image"])
+        self.assertEqual(str(gerber), result["rendered_layers"][0]["path"])
+        self.assertEqual("pygerber-raster", result["rendered_layers"][0]["renderer"])
+
+    def test_gerber_preview_reports_composite_mode_unavailable(self):
+        result = render_gerber_preview(REPO_ROOT, REPO_ROOT / ".artifacts" / "tests" / "stack.png", "stack")
+
+        self.assertEqual("render-unavailable", result["status"])
+        self.assertIsNone(result["image"])
+        self.assertEqual("unsupported-preview-mode", result["skipped"][0]["reason"])
 
 
 if __name__ == "__main__":

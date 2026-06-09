@@ -407,15 +407,73 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual(groups[t], "me")
         # Electronics-engineering tools (KiCad/ngspice) belong to the ee worker group.
         for t in ("bodesign_compose_schematic", "bodesign_emit_layout", "bodesign_simulate",
-                  "bodesign_analyze_emc", "bodesign_export_bom", "bodesign_render_companion"):
+                  "bodesign_analyze_emc", "bodesign_export_bom", "bodesign_render_companion",
+                  "bodesign_widen_bus_tracks", "bodesign_length_match_bus"):
             self.assertEqual(groups[t], "ee")
         # emit_doc stays core: there is NO bodesign-docs worker — docx/pdf rendering is
         # delegated to docxmcp (which already ships LibreOffice). emit_doc gates gracefully.
         self.assertEqual(groups["bodesign_emit_doc"], "core")
         # Pure-python / core tools stay core (incl. EE-adjacent pure python).
         for t in ("bodesign_agent_registry", "bodesign_c02_readiness", "bodesign_c00_orchestration_tick",
-                  "bodesign_pin_allocation", "bodesign_reference_crosscheck", "bodesign_ingest_project"):
+                  "bodesign_pin_allocation", "bodesign_reference_crosscheck", "bodesign_ingest_project",
+                  "bodesign_impedance_solve", "bodesign_render_gerber_preview"):
             self.assertEqual(groups[t], "core")
+
+    def test_run_tool_impedance_solve_is_core_and_structured(self):
+        result = self.server.run_tool("bodesign_impedance_solve", {
+            "stackup": {"dielectric_height_mm": 0.18, "er": 4.2},
+            "targets": {"se50": {"impedance_ohm": 50}},
+        })
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.server.TOOLS_BY_NAME["bodesign_impedance_solve"]["group"], "core")
+        self.assertIn("se50", result["result"]["classes"])
+        self.assertIn("width_mm", result["result"]["classes"]["se50"])
+        self.assertIn("actual_ohm", result["result"]["classes"]["se50"])
+        self.assertIn("ps_per_mm", result["result"]["classes"]["se50"])
+
+        missing = self.server.run_tool("bodesign_impedance_solve", {"stackup": {"er": 4.2}, "targets": {"se50": 50}})
+        self.assertFalse(missing["ok"])
+        self.assertIn("dielectric_height_mm", missing["error"])
+
+    def test_widen_bus_tracks_schema_and_core_routing(self):
+        spec = self.server.TOOLS_BY_NAME["bodesign_widen_bus_tracks"]
+
+        self.assertEqual(spec["group"], "ee")
+        self.assertEqual(spec["schema"]["required"], ["in_path", "out_path", "nets", "target_mm"])
+        self.assertIn("clearance_mm", spec["schema"]["properties"])
+        self.assertIn("in_path", self.server.PATH_ARG_KEYS)
+        self.assertIn("out_path", self.server.PATH_ARG_KEYS)
+        self.assertIn("report_path", self.server.PATH_ARG_KEYS)
+
+    def test_length_match_bus_schema_and_core_routing(self):
+        spec = self.server.TOOLS_BY_NAME["bodesign_length_match_bus"]
+
+        self.assertEqual(spec["group"], "ee")
+        self.assertEqual(spec["schema"]["required"], ["in_path", "out_path", "nets", "budget_ps", "ps_per_mm"])
+        self.assertIn("report_path", spec["schema"]["properties"])
+        self.assertIn("clearance_mm", spec["schema"]["properties"])
+        self.assertIn("in_path", self.server.PATH_ARG_KEYS)
+        self.assertIn("out_path", self.server.PATH_ARG_KEYS)
+
+    def test_render_gerber_preview_schema_and_core_unavailable_mode(self):
+        spec = self.server.TOOLS_BY_NAME["bodesign_render_gerber_preview"]
+
+        self.assertEqual(spec["group"], "core")
+        self.assertEqual(spec["schema"]["required"], ["gerber_dir", "out_path", "mode"])
+        self.assertIn("drill_dir", spec["schema"]["properties"])
+        self.assertIn("layer_glob", spec["schema"]["properties"])
+        self.assertIn("gerber_dir", self.server.PATH_ARG_KEYS)
+        self.assertIn("drill_dir", self.server.PATH_ARG_KEYS)
+
+        result = self.server.run_tool("bodesign_render_gerber_preview", {
+            "gerber_dir": str(Path(__file__).resolve().parents[1]),
+            "out_path": str(Path(__file__).resolve().parents[1] / ".artifacts" / "tests" / "mcp-stack.png"),
+            "mode": "stack",
+        })
+        self.assertTrue(result["ok"])
+        self.assertEqual("render-unavailable", result["result"]["status"])
+        self.assertEqual("unsupported-preview-mode", result["result"]["skipped"][0]["reason"])
 
     def test_ee_tool_routes_to_ee_worker(self):
         saved = self.server.SERVED_GROUPS
@@ -424,10 +482,15 @@ class McpServerTests(unittest.TestCase):
             with patch.dict(os.environ, {"BODESIGN_EE_WORKER_URL": "http://bodesign-ee:8077"}):
                 decision, target = self.server._route_tool("bodesign_compose_schematic")
                 self.assertEqual((decision, target), ("forward", "http://bodesign-ee:8077"))
+                decision, target = self.server._route_tool("bodesign_widen_bus_tracks")
+                self.assertEqual((decision, target), ("forward", "http://bodesign-ee:8077"))
+                decision, target = self.server._route_tool("bodesign_length_match_bus")
+                self.assertEqual((decision, target), ("forward", "http://bodesign-ee:8077"))
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("BODESIGN_EE_WORKER_URL", None)
-                decision, target = self.server._route_tool("bodesign_compose_schematic")
-                self.assertEqual((decision, target), ("unavailable", "ee"))
+                for name in ("bodesign_compose_schematic", "bodesign_widen_bus_tracks", "bodesign_length_match_bus"):
+                    decision, target = self.server._route_tool(name)
+                    self.assertEqual((decision, target), ("unavailable", "ee"))
         finally:
             self.server.SERVED_GROUPS = saved
 
