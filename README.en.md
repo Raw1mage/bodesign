@@ -104,7 +104,8 @@ bodesign/
 │   └── kicad-plugin/             in-KiCad Action Plugin contract (roadmap)
 ├── specs/                        spec / knowledge base (plan-builder)
 │   ├── architecture.md           cross-cutting architecture index
-│   └── product/pcb_ai_viewer/    living design spec + IDEF0/GRAFCET SVGs + Chinese README
+│   ├── product/pcb_ai_viewer/    living product design spec + IDEF0/GRAFCET SVGs + Chinese README
+│   └── feature/eda-mcp-toolchain/  living C04 EDA toolchain spec (routing/finishing MCP tools)
 ├── tests/                        test suite (green on a clean clone; data-dependent tests skip)
 ├── Dockerfile · docker-compose.yml · mcpctl.sh   container packaging + ops
 ├── mcp.json                      MCP registration manifest

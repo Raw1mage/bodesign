@@ -101,7 +101,8 @@ bodesign/
 │   └── kicad-plugin/             in-KiCad Action Plugin 契約（roadmap）
 ├── specs/                        規格／知識庫（plan-builder）
 │   ├── architecture.md           跨領域架構索引
-│   └── product/pcb_ai_viewer/    已上線（living）設計規格 ＋ IDEF0/GRAFCET SVG ＋ 中文 README
+│   ├── product/pcb_ai_viewer/    已上線（living）產品設計規格 ＋ IDEF0/GRAFCET SVG ＋ 中文 README
+│   └── feature/eda-mcp-toolchain/  已上線（living）C04 EDA 工具鏈規格（routing/finishing MCP 工具）
 ├── tests/                        測試（乾淨 clone 全綠；資料相依測試自動跳過）
 ├── Dockerfile · docker-compose.yml · mcpctl.sh   容器封裝 ＋ 操作
 ├── mcp.json                      MCP 註冊資訊
