@@ -57,7 +57,13 @@ def emit_layout(
     footprint_dir: str | Path = DEFAULT_FOOTPRINT_DIR,
     columns: int = 4,
     render: bool = True,
+    place_start_mm: float = 15.0,
+    place_pitch_mm: float = 12.0,
+    margin_mm: float = 10.0,
 ) -> LayoutResult:
+    # H3: placement grid + outline margin are caller-overridable. Defaults suit a small
+    # (~60x40mm) prototype board; pass place_start_mm/place_pitch_mm/margin_mm + board_mm
+    # for larger or denser layouts instead of mis-placing on the baked small-board grid.
     if not PCBNEW_AVAILABLE:
         return LayoutResult(status="no-pcbnew", warnings=["pcbnew not importable (KiCad not installed here)."])
 
@@ -82,13 +88,13 @@ def emit_layout(
             result.unresolved_footprints.append(f"{ref} ({fp_id})")
             continue
         fp.SetReference(ref)
-        x = 15.0 + (index % columns) * 12.0
-        y = 15.0 + (index // columns) * 12.0
+        x = place_start_mm + (index % columns) * place_pitch_mm
+        y = place_start_mm + (index // columns) * place_pitch_mm
         fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y)))
         board.Add(fp)
         result.placed += 1
 
-    _add_outline(board, board_mm[0], board_mm[1])
+    _add_outline(board, board_mm[0], board_mm[1], margin_mm=margin_mm)
     board_path = out_root / f"{project_name}.kicad_pcb"
     pcbnew.SaveBoard(str(board_path), board)
     result.board_path = str(board_path)

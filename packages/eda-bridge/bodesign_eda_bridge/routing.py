@@ -205,9 +205,16 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
 
 
 # -------------------------------------------------------------------------------- copper planes
-def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool = True) -> dict:
+def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool = True,
+                stitch_net: str = "GND", stitch_pitch_mm: float = 14.0,
+                stitch_drill_mm: float = 0.3, stitch_pad_mm: float = 0.6) -> dict:
     """Pour filled copper zones. `planes` = ["F.Cu:GND", "In1.Cu:GND", "In4.Cu:V3V3", ...].
-    Optionally adds GND stitching vias; dangling ones are stripped."""
+    Optionally adds stitching vias on `stitch_net`; dangling ones are stripped.
+
+    H5: the stitch net + grid/via geometry are caller-overridable. Defaults
+    (GND, 14mm pitch, 0.3/0.6mm drill/pad) are a JLCPCB-class process reference,
+    not a hidden assumption — pass stitch_net/stitch_pitch_mm/stitch_drill_mm/
+    stitch_pad_mm for a different ground name or denser/looser stitching."""
     _need_pcbnew()
     b = pcbnew.LoadBoard(in_path)
     box = b.GetBoardEdgesBoundingBox(); m = pcbnew.FromMM(0.3)
@@ -226,17 +233,18 @@ def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool 
         out.append({"layer": layer_name, "net": netname})
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     stitched = 0
-    if stitch and b.FindNet("GND"):
+    gnd = b.FindNet(stitch_net)
+    if stitch and gnd:
         pads = [p.GetPosition() for fp in b.GetFootprints() for p in fp.Pads()]
-        step = pcbnew.FromMM(14)
+        step = pcbnew.FromMM(stitch_pitch_mm)
         x = box.GetLeft() + step
         while x < box.GetRight():
             y = box.GetTop() + step
             while y < box.GetBottom():
                 if all(abs(pp.x - x) > pcbnew.FromMM(1.6) or abs(pp.y - y) > pcbnew.FromMM(1.6) for pp in pads):
                     v = pcbnew.PCB_VIA(b); v.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
-                    v.SetDrill(pcbnew.FromMM(0.3)); v.SetWidth(pcbnew.FromMM(0.6))
-                    v.SetNet(b.FindNet("GND")); b.Add(v); stitched += 1
+                    v.SetDrill(pcbnew.FromMM(stitch_drill_mm)); v.SetWidth(pcbnew.FromMM(stitch_pad_mm))
+                    v.SetNet(gnd); b.Add(v); stitched += 1
                 y += step
             x += step
     pcbnew.SaveBoard(out_path, b)

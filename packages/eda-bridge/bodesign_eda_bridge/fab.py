@@ -35,7 +35,11 @@ def emit_fab_outputs(
     board_path: str | Path,
     out_dir: str | Path,
     formats: tuple[str, ...] = ("gerbers", "drill", "pos", "step", "pdf"),
+    pdf_layers: str | None = None,
 ) -> FabResult:
+    # H4: the PDF layer set is caller-overridable. The default suits 2/4-layer boards;
+    # pass pdf_layers (e.g. add In1.Cu..In4.Cu) so 6+ layer inner copper is not omitted.
+    pdf_layers = pdf_layers or _PDF_LAYERS
     board = Path(board_path)
     out_root = Path(out_dir)
     out_root.mkdir(parents=True, exist_ok=True)
@@ -62,7 +66,7 @@ def emit_fab_outputs(
             out_arg = str(target)
         cmd = [cli, "pcb", "export", sub, str(board), "-o", out_arg]
         if fmt == "pdf":
-            cmd += ["--layers", _PDF_LAYERS]
+            cmd += ["--layers", pdf_layers]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         produced = (is_dir and target.is_dir() and any(target.iterdir())) or (not is_dir and target.exists())
         if produced:

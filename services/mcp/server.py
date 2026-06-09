@@ -98,13 +98,18 @@ def _h_pin_alloc(a: dict) -> Any:
 def _h_layout(a: dict) -> Any:
     from bodesign_eda_bridge import emit_layout
     r = emit_layout(a["out_dir"], a["project_name"], a["components"],
-                    board_mm=tuple(a.get("board_mm", [60, 40])))
+                    board_mm=tuple(a.get("board_mm", [60, 40])),
+                    columns=a.get("columns", 4),
+                    place_start_mm=a.get("place_start_mm", 15.0),
+                    place_pitch_mm=a.get("place_pitch_mm", 12.0),
+                    margin_mm=a.get("margin_mm", 10.0))
     return asdict(r)
 
 
 def _h_fab(a: dict) -> Any:
     from bodesign_eda_bridge import emit_fab_outputs
-    r = emit_fab_outputs(a["board_path"], a["out_dir"], tuple(a.get("formats", ["gerbers", "drill", "pos", "step", "pdf"])))
+    r = emit_fab_outputs(a["board_path"], a["out_dir"], tuple(a.get("formats", ["gerbers", "drill", "pos", "step", "pdf"])),
+                         pdf_layers=a.get("pdf_layers"))
     return asdict(r)
 
 
@@ -420,7 +425,11 @@ def _h_via_in_pad(a: dict) -> Any:
 
 def _h_pour_planes(a: dict) -> Any:
     from bodesign_eda_bridge import pour_planes
-    return pour_planes(a["in_path"], a["out_path"], a["planes"], stitch=a.get("stitch", True))
+    return pour_planes(a["in_path"], a["out_path"], a["planes"], stitch=a.get("stitch", True),
+                       stitch_net=a.get("stitch_net", "GND"),
+                       stitch_pitch_mm=a.get("stitch_pitch_mm", 14.0),
+                       stitch_drill_mm=a.get("stitch_drill_mm", 0.3),
+                       stitch_pad_mm=a.get("stitch_pad_mm", 0.6))
 
 
 def _h_widen_bus_tracks(a: dict) -> Any:
@@ -469,11 +478,11 @@ TOOLS: list[dict] = [
      "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part).",
      "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}, "connectors": {"type": "object", "description": "{refdes: {net_name: [pad ids]}} explicit connector pin expansion; omit to use the built-in USB-C table for USB-C footprints"}}, "required": ["netlist_path", "out_path"]}},
     {"name": "bodesign_via_in_pad", "handler": _h_via_in_pad,
-     "description": "Fine-pitch BGA via-in-pad fanout: drop a through-via through each netted ball pad of the given refs (except the outer keep_rings rings, which escape on the surface) so inner balls reach inner signal layers. Needs a filled+capped (POFV) process — JLCPCB advanced.",
+     "description": "Fine-pitch BGA via-in-pad fanout: drop a through-via through each netted ball pad of the given refs (except the outer keep_rings rings, which escape on the surface) so inner balls reach inner signal layers. via geometry is caller-overridable (drill_mm/pad_mm/keep_rings); defaults (0.2/0.3mm, 2 rings) are a JLCPCB-advanced filled+capped (POFV) process reference — tune for other pad pitches/processes.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "refs": {"type": "array", "items": _STR}, "drill_mm": {"type": "number"}, "pad_mm": {"type": "number"}, "keep_rings": {"type": "integer"}}, "required": ["in_path", "out_path", "refs"]}},
     {"name": "bodesign_pour_planes", "handler": _h_pour_planes,
-     "description": "Pour filled copper plane zones (e.g. ['In1.Cu:GND','In4.Cu:V3V3']) + optional GND stitching vias, giving high-speed nets a solid impedance reference plane.",
-     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR}, "stitch": {"type": "boolean"}}, "required": ["in_path", "out_path", "planes"]}},
+     "description": "Pour filled copper plane zones (e.g. ['In1.Cu:GND','In4.Cu:V3V3']) + optional stitching vias, giving high-speed nets a solid impedance reference plane. Stitch net + grid/via geometry are caller-overridable (stitch_net/stitch_pitch_mm/stitch_drill_mm/stitch_pad_mm); defaults (GND, 14mm, 0.3/0.6mm) are a JLCPCB-class process reference, not a hidden assumption.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR}, "stitch": {"type": "boolean"}, "stitch_net": _STR, "stitch_pitch_mm": {"type": "number"}, "stitch_drill_mm": {"type": "number"}, "stitch_pad_mm": {"type": "number"}}, "required": ["in_path", "out_path", "planes"]}},
     {"name": "bodesign_widen_bus_tracks", "handler": _h_widen_bus_tracks,
      "description": "Clearance-safe C04 bus finishing: widen selected routed bus tracks to target_mm only where foreign copper/pads keep clearance_mm; writes a new .kicad_pcb and returns widened/kept counts.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "target_mm": {"type": "number"}, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "target_mm"]}},
@@ -520,12 +529,12 @@ TOOLS: list[dict] = [
      "description": "Build a pin/GPIO allocation table (C03->FW interface) from a net list; returns CSV.",
      "schema": {"type": "object", "properties": {"nets": {"type": "array"}, "mcu_refs": {"type": "array", "items": _STR}}, "required": ["nets"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
-     "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion.",
+     "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "components": {"type": "array"},
-                "board_mm": {"type": "array"}}, "required": ["out_dir", "project_name", "components"]}},
+                "board_mm": {"type": "array"}, "columns": {"type": "integer"}, "place_start_mm": {"type": "number"}, "place_pitch_mm": {"type": "number"}, "margin_mm": {"type": "number"}}, "required": ["out_dir", "project_name", "components"]}},
     {"name": "bodesign_emit_fab", "handler": _h_fab,
-     "description": "Export fab outputs (gerbers/drill/pos/step/pdf) from a .kicad_pcb via kicad-cli.",
-     "schema": {"type": "object", "properties": {"board_path": _STR, "out_dir": _STR, "formats": {"type": "array", "items": _STR}}, "required": ["board_path", "out_dir"]}},
+     "description": "Export fab outputs (gerbers/drill/pos/step/pdf) from a .kicad_pcb via kicad-cli. The PDF layer set is caller-overridable via pdf_layers; the default (F.Cu,B.Cu,F.SilkS,B.SilkS,Edge.Cuts) suits 2/4-layer boards — pass inner copper layers for 6+ layer stacks so they are not omitted.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "out_dir": _STR, "formats": {"type": "array", "items": _STR}, "pdf_layers": _STR}, "required": ["board_path", "out_dir"]}},
     {"name": "bodesign_simulate", "handler": _h_simulate,
      "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "simulator": _STR, "types": _STR}, "required": ["schematic_path", "out_dir"]}},

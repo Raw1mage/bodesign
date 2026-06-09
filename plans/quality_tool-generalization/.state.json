@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "implementing",
+  "state": "verified",
   "profile": [],
   "history": [
     {
@@ -34,6 +34,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "begin H1/H2 silent-failure remediation (T4-T9): route_net2pcb connector pinmap + report, si_check overridable rdrv/cload/edge/thresholds with echoed effective values"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-09T06:35:45.152Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "all tasks T1-T12 done: H1/H2 silent-failure fixed, H3-H5 visible overfits exposed, generality check artifact (docs/generality-check.md) + regression guard (tests/test_tool_generality.py) built; 19 unit/schema tests OK + socket smoke no-regression; architecture synced. Board-level mutation regression env-gated on pcbnew (documented)."
     }
   ]
 }
