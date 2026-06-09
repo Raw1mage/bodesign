@@ -1,16 +1,64 @@
 {
+  "schema_version": 1,
   "state": "verified",
+  "profile": [],
   "slug": "feature_eda-mcp-toolchain",
   "title": "EDA MCP Toolchain Integration",
-  "mode": "plan-builder",
   "source_experience": "OpenMV/STM32N657 C04 board run",
-  "created": "2026-06-09",
-  "approval_required_before_implementation": false,
-  "current_task": null,
   "verification": {
     "unit": "passed (19 ok, 1 skipped) on 2026-06-09",
     "socket_smoke": "passed 2026-06-09: real MCP stdio initialize+list_tools+call_tool roundtrip (tests.test_mcp_server.test_socket_level_list_and_call_smoke), run in an MCP-SDK venv; skips on bare host",
     "env_gated_remaining": "real-board EE widen/length-match and KiCad/pcbnew execution still require an EE worker with pcbnew; not exercisable on this host"
   },
-  "notes": "All tasks T2-T11 done. HEAD repaired 2026-06-09 (impedance.py + gerber preview impl had been left untracked while their wiring was committed). T10 socket smoke unblocked by a durable, mcp-gated test."
+  "notes": "All tasks T0-T11 done. HEAD repaired 2026-06-09 (impedance.py + gerber preview impl had been left untracked while their wiring was committed). Legacy package migrated to specbase artifact contract 2026-06-09; ready for user-gated graduate -> living.",
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-09T03:11:00.000Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "plan created from OpenMV/STM32N657 C04 board-run experience"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-09T03:19:00.000Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "implementation-spec + IDEF0/GRAFCET companion artifacts authored"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-09T03:22:00.000Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks T0-T11 with dependencies + approval gates; C00-C07 inventory complete"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-09T03:54:00.000Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "T2-T9 landed: impedance_solve (core), widen/length-match (EE), gerber preview; HEAD repaired (orphaned impl committed)"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-09T06:30:00.000Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "T10 socket-level MCP smoke passed via durable mcp-gated test; T11 architecture synced; all 13 verified-state artifacts valid"
+    },
+    {
+      "from": "verified",
+      "to": "verified",
+      "at": "2026-06-09T06:40:00.000Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "legacy package migrated to specbase artifact contract (proposal/spec/design/sequence/data-schema/handoff/test-vectors/errors/observability + events/ + idef0 activities + grafcet array)"
+    }
+  ]
 }

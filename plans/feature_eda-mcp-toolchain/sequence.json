@@ -1,0 +1,31 @@
+[
+  {
+    "title": "C04 end-to-end EDA workflow through MCP tools",
+    "participants": ["Agent", "core", "EE worker", "ngspice", "Freerouting"],
+    "messages": [
+      { "from": "Agent", "to": "core", "text": "bodesign_impedance_solve(stackup, targets) -> class widths + ps_per_mm" },
+      { "from": "Agent", "to": "EE worker", "text": "bodesign_route_net2pcb(netlist, placements) -> netted .kicad_pcb" },
+      { "from": "Agent", "to": "EE worker", "text": "bodesign_via_in_pad / bodesign_pour_planes -> escaped BGA + reference planes" },
+      { "from": "Agent", "to": "Freerouting", "text": "bodesign_autoroute(passes)" },
+      { "from": "Agent", "to": "EE worker", "text": "bodesign_widen_bus_tracks -> clearance-safe widths (new path)" },
+      { "from": "Agent", "to": "EE worker", "text": "bodesign_length_match_bus(budget_ps, ps_per_mm) -> tuned skew (new path)" },
+      { "from": "Agent", "to": "ngspice", "text": "bodesign_si_check -> per-net SI grade" },
+      { "from": "Agent", "to": "EE worker", "text": "bodesign_layout_drc_gate -> copper/unconnected hard gate" },
+      { "from": "Agent", "to": "core", "text": "bodesign_render_gerber_preview -> single-layer image or render-unavailable" }
+    ]
+  },
+  {
+    "title": "Socket-level MCP smoke (T10)",
+    "participants": ["MCP client", "server.py(stdio)", "run_tool", "EE routing"],
+    "messages": [
+      { "from": "MCP client", "to": "server.py(stdio)", "text": "initialize" },
+      { "from": "server.py(stdio)", "to": "MCP client", "text": "serverInfo = bodesign 0.1.0" },
+      { "from": "MCP client", "to": "server.py(stdio)", "text": "list_tools" },
+      { "from": "server.py(stdio)", "to": "MCP client", "text": "68 tools incl. 4 new C04 tools" },
+      { "from": "MCP client", "to": "run_tool", "text": "call_tool bodesign_impedance_solve" },
+      { "from": "run_tool", "to": "MCP client", "text": "{ok:true, result:{classes:{se50:50.0, usb_dp:90.0 diff}}}" },
+      { "from": "MCP client", "to": "EE routing", "text": "call_tool bodesign_widen_bus_tracks (no worker)" },
+      { "from": "EE routing", "to": "MCP client", "text": "{ok:false} fail-fast, no fabricated success" }
+    ]
+  }
+]

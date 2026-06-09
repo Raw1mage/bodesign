@@ -1,0 +1,79 @@
+{
+  "title": "C04 MCP tool I/O shapes",
+  "definitions": {
+    "ImpedanceSolveInput": {
+      "type": "object",
+      "properties": {
+        "stackup": {
+          "type": "object",
+          "properties": {
+            "dielectric_height_mm": { "type": "number" },
+            "er": { "type": "number" },
+            "copper_thickness_mm": { "type": "number" }
+          },
+          "required": ["dielectric_height_mm", "er"]
+        },
+        "targets": {
+          "description": "dict keyed by class name OR list of {name, impedance_ohm, kind, gap_mm|width_mm}",
+          "type": ["object", "array"]
+        }
+      },
+      "required": ["stackup", "targets"]
+    },
+    "ImpedanceSolveResult": {
+      "type": "object",
+      "properties": {
+        "classes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": { "enum": ["single-ended", "differential"] },
+              "width_mm": { "type": "number" },
+              "gap_mm": { "type": "number" },
+              "actual_ohm": { "type": "number" },
+              "ps_per_mm": { "type": "number" }
+            }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "BusMutationInput": {
+      "type": "object",
+      "description": "widen_bus_tracks / length_match_bus (EE worker)",
+      "properties": {
+        "in_path": { "type": "string" },
+        "out_path": { "type": "string", "description": "new path written + returned" },
+        "nets": { "type": "array", "items": { "type": "string" } },
+        "target_mm": { "type": "number", "description": "widen only" },
+        "budget_ps": { "type": "number", "description": "length-match only" },
+        "ps_per_mm": { "type": "number", "description": "length-match only; required, no default" },
+        "clearance_mm": { "type": "number" }
+      },
+      "required": ["in_path", "out_path", "nets"]
+    },
+    "GerberPreviewResult": {
+      "type": "object",
+      "properties": {
+        "image": { "type": ["string", "null"] },
+        "mode": { "type": "string" },
+        "rendered_layers": { "type": "array", "items": { "type": "string" } },
+        "skipped": { "type": "array", "items": { "type": "string" } },
+        "status": { "enum": ["ok", "render-unavailable"], "description": "render-unavailable for composite/front/stack" }
+      }
+    },
+    "RunToolEnvelope": {
+      "type": "object",
+      "description": "uniform MCP run_tool envelope",
+      "properties": {
+        "ok": { "type": "boolean" },
+        "result": { "type": "object", "description": "present when ok=true" },
+        "error": { "type": "string", "description": "present when ok=false" },
+        "status": { "type": "string", "description": "e.g. worker_unavailable" }
+      },
+      "required": ["ok"]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
-  "model": "EDA MCP Toolchain Integration",
-  "node": "A0",
+  "diagram_title": "EDA MCP Toolchain Integration",
+  "node_reference": "A0",
   "function": "Convert validated EDA scripts into reusable bodesign MCP tools",
   "inputs": [
     "Validated OpenMV C04 scripts",
@@ -28,24 +28,24 @@
     "Freerouting",
     "Gerber renderer dependencies"
   ],
-  "children": [
+  "activities": [
     {
-      "node": "A1",
+      "node_reference": "A1",
       "function": "Promote pure calculations",
       "outputs": ["bodesign_impedance_solve"]
     },
     {
-      "node": "A2",
+      "node_reference": "A2",
       "function": "Promote PCB mutation primitives",
       "outputs": ["bodesign_widen_bus_tracks", "bodesign_length_match_bus"]
     },
     {
-      "node": "A3",
+      "node_reference": "A3",
       "function": "Promote review/render evidence",
-      "outputs": ["bodesign_render_gerber_preview or explicit blocker"]
+      "outputs": ["bodesign_render_gerber_preview or explicit render-unavailable"]
     },
     {
-      "node": "A4",
+      "node_reference": "A4",
       "function": "Validate through MCP runtime path",
       "outputs": ["socket smoke results", "event log", "architecture sync note"]
     }

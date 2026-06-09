@@ -1,50 +1,45 @@
-{
-  "machine": "EDA MCP Toolchain Integration Lifecycle",
-  "initial": "planned",
-  "states": [
-    "planned",
-    "implementing_impedance",
-    "implementing_pcb_mutators",
-    "implementing_gerber_preview",
-    "validating_runtime",
-    "verified",
-    "blocked"
-  ],
-  "transitions": [
-    {
-      "from": "planned",
-      "to": "implementing_impedance",
-      "condition": "implementation starts"
-    },
-    {
-      "from": "implementing_impedance",
-      "to": "implementing_pcb_mutators",
-      "condition": "impedance solver registered and tested"
-    },
-    {
-      "from": "implementing_pcb_mutators",
-      "to": "implementing_gerber_preview",
-      "condition": "widen and length-match tools registered and EE-routed"
-    },
-    {
-      "from": "implementing_gerber_preview",
-      "to": "validating_runtime",
-      "condition": "preview tool implemented or dependency blocker recorded"
-    },
-    {
-      "from": "validating_runtime",
-      "to": "verified",
-      "condition": "unit tests and socket-level smoke tests pass"
-    },
-    {
-      "from": "*",
-      "to": "blocked",
-      "condition": "missing pcbnew EE worker, hidden defaults required, or MCP runtime path cannot be proven"
-    }
-  ],
-  "stop_gates": [
-    "approval needed for dependency footprint expansion",
-    "EE worker unavailable for pcbnew tools",
-    "unresolved stackup/timing/process inputs"
-  ]
-}
+[
+  {
+    "step": "S0",
+    "name": "planned",
+    "initial": true,
+    "action": "C00-C07 inventory done; C04 MCP gap identified",
+    "transition": "implementation starts -> S1"
+  },
+  {
+    "step": "S1",
+    "name": "implementing_impedance",
+    "action": "Extract + register bodesign_impedance_solve (pure core)",
+    "transition": "impedance solver registered and tested -> S2"
+  },
+  {
+    "step": "S2",
+    "name": "implementing_pcb_mutators",
+    "action": "Extract + register widen_bus_tracks and length_match_bus, EE-routed",
+    "transition": "EE mutators registered and routed -> S3"
+  },
+  {
+    "step": "S3",
+    "name": "implementing_gerber_preview",
+    "action": "Implement render_gerber_preview (single-layer real; composite -> render-unavailable)",
+    "transition": "preview implemented -> S4"
+  },
+  {
+    "step": "S4",
+    "name": "validating_runtime",
+    "action": "Unit tests + durable socket-level MCP smoke through server.py --transport stdio",
+    "transition": "unit + socket smoke pass -> S5"
+  },
+  {
+    "step": "S5",
+    "name": "verified",
+    "action": "All tasks T0-T11 done; HEAD repaired; architecture synced",
+    "transition": "user-gated graduate -> living"
+  },
+  {
+    "step": "SB",
+    "name": "blocked",
+    "action": "Missing pcbnew EE worker, hidden defaults required, or MCP runtime path unprovable",
+    "transition": "resolve dependency/approval -> resume prior step"
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "TV-IMP-1",
+    "requirement": "Pure impedance solving in core",
+    "tool": "bodesign_impedance_solve",
+    "given": "stackup {dielectric_height_mm:0.1, er:4.2, copper_thickness_mm:0.035}; targets se50(50,single) + usb_dp(90,diff,gap_mm:0.15)",
+    "then": "classes.se50.actual_ohm≈50.0 single-ended; classes.usb_dp.actual_ohm≈90.0 differential with gap_mm; warnings present",
+    "expect": { "se50_kind": "single-ended", "se50_actual_ohm": 50.0, "usb_dp_kind": "differential", "usb_dp_actual_ohm": 90.0 }
+  },
+  {
+    "id": "TV-EE-FAILFAST-1",
+    "requirement": "Board-mutating tools route to the EE worker",
+    "tool": "bodesign_widen_bus_tracks",
+    "given": "no EE worker configured; missing board path",
+    "then": "ok:false, no fabricated routed board",
+    "expect": { "ok": false }
+  },
+  {
+    "id": "TV-PREVIEW-UNAVAIL-1",
+    "requirement": "Gerber preview fail-fast on unsupported modes",
+    "tool": "bodesign_render_gerber_preview",
+    "given": "composite/front/stack mode with no safe multilayer renderer",
+    "then": "explicit render-unavailable, no decorative image",
+    "expect": { "status": "render-unavailable" }
+  },
+  {
+    "id": "TV-SOCKET-1",
+    "requirement": "Tools callable through the real MCP server path",
+    "tool": "server.py --transport stdio",
+    "given": "MCP client initialize -> list_tools -> call_tool",
+    "then": "all 4 new C04 tools listed; impedance_solve returns structured result over protocol; EE tool fails fast",
+    "expect": { "tools_listed": ["bodesign_impedance_solve", "bodesign_widen_bus_tracks", "bodesign_length_match_bus", "bodesign_render_gerber_preview"], "impedance_ok": true, "ee_ok": false }
+  }
+]
