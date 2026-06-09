@@ -6,6 +6,15 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
+### Fixed — workers topology silently reverted to monolith on rebuild
+- `mcpctl.sh` only knew `docker-compose.yml` (monolith), so any `rebuild`/`restart`
+  dropped the opt-in `docker-compose.workers.yml` split (heavy CAD/EDA dep isolation,
+  core + me/ee workers) and orphaned the worker containers — a silent regression.
+- Added a **sticky `BODESIGN_WORKERS` mode** (mirrors `BODESIGN_DEV`): once started with
+  `BODESIGN_WORKERS=1`, a `.run/.workers` marker keeps every later `restart`/`rebuild` in
+  workers mode; `BODESIGN_WORKERS=0` reverts to the monolith. `status` now reports the mode
+  + per-worker health; all `up` calls use `--remove-orphans` so switching modes stays clean.
+
 ### Added — C00→C04 judgment layer, recursive reconciliation, feasibility triage
 - Per-stage **design-judgment references** — the "how to think" layer the agent reads,
   distinct from the execution engines/MCP. C01: reduction-lens + Ashby material selection
