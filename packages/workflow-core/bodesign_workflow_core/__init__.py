@@ -76,6 +76,16 @@ from .package_readiness import (
     assess_package_readiness,
     render_readiness_markdown,
 )
+from .feasibility import (
+    FeasibilityVerdict,
+    classify_product_feasibility,
+)
+from .si_handoff import (
+    NetClassConstraint,
+    SiHandoffResult,
+    StackupSpec,
+    emit_si_constraint_export,
+)
 from .c00_prd_template import (
     C00EmitResult,
     C00PrdRubric,
@@ -195,6 +205,12 @@ __all__ = [
     "assess_package_readiness",
     "assess_c01_package_readiness",
     "assess_c02_constraint_readiness",
+    "FeasibilityVerdict",
+    "classify_product_feasibility",
+    "NetClassConstraint",
+    "StackupSpec",
+    "SiHandoffResult",
+    "emit_si_constraint_export",
     "crosscheck_nets",
     "c00_update_answers",
     "emit_c00_prd_markdown",

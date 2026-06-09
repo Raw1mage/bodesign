@@ -88,6 +88,16 @@ allowed (this is how the honesty model and the Definition of Done coexist — se
 `references/honesty-model.md`). "I can produce X if you'd like" is the anti-pattern: produce X, or
 mark it blocked and say why.
 
+**…and not done while you own an open cross-stage reconciliation.** A stage is also NOT done while
+`list_blockers(folder, unresolved_only=True)` returns a record naming this stage in
+`affected_downstream_layers` (`references/cross-stage-reconciliation.md`). This is the recursive loop: a
+downstream area/thermal/height overflow or a C06 verdict-fail routes *back* here as a `BlockerReturn`;
+you re-enter, **fix the design** (never relax the threshold — the C04 floating-PSRAM lesson), then
+`ingest_blocker` to resolve it, or escalate to the next lever's stage. You — the agent running
+bodesign — are the orchestrator that runs this scan each time you would advance or report done. The
+`bodesign_package_readiness` roll-up also surfaces these open blockers so the gate is machine-checked,
+not memory-dependent.
+
 **Self-verify before you report.** Run the stage's readiness check and state its result (which
 required items are present / partial / missing) in your completion report:
 - C00 / C01 / C02 / C05 / C06 → `bodesign_c00_readiness` … `bodesign_c06_readiness` (`folder`).

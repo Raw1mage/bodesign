@@ -91,6 +91,16 @@ distributors, fab) plus the standalone `kicad`/`kidoc` (legacy, now folded into 
 are downloadable from the running service at `/skills/` (bundle + per-skill); install under your skill
 location.
 
+Above the execution layer the skill adds a **design-judgment** layer (per-stage references: C01
+reduction-lens + Ashby material selection, C02 DFM/DFA/IP-sealing + a geometry-authoring loop, C03 EE
+advisory + a pinout→circuit synthesis method, C04 stackup/HDI/SI). A cross-stage budget that doesn't
+close (area / thermal / height, or a C06 verdict-fail) routes *back* to the owning stage via the
+existing `BlockerReturn` and blocks the downstream all-clear (recursive self-correction). A
+**feasibility triage** classifies the product from C00 up front (Tier 1 fab-ready · 2 human-SI
+sign-off · 3 HDI-class → pro-EDA) so "give C00, get C01–C04" is honest per-product; Tier-3 emits a
+neutral SI constraint package (`emit_si_constraint_export`: JSON + CSV + per-tool mapping) so the
+routing wall is a clean handoff, not a dead-end.
+
 ## Layout
 
 ```text
@@ -109,7 +119,8 @@ bodesign/
 │   ├── reverse-core/             project ingest, companion render, doc emit, board reconstruct
 │   ├── gerber-core/              Gerber / drill parsing + preview
 │   ├── eda-bridge/               KiCad bridge: symbol / schematic / layout / fab / BOM / SPICE / EMC
-│   ├── workflow-core/            requirement planning, evidence sourcing, readiness compass, cross-check
+│   ├── workflow-core/            requirement planning, evidence sourcing, readiness compass, cross-check,
+│   │                             feasibility triage (C04 delivery tier), cross-stage reconciliation gate, SI handoff
 │   ├── storage-core/             client-owned project registry
 │   └── kicad-plugin/             in-KiCad Action Plugin contract (roadmap)
 ├── specs/                        spec / knowledge base (plan-builder)

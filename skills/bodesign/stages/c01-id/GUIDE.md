@@ -89,9 +89,16 @@ and write `Design_Direction.md` with:
 - **Visible Component Intent** — a table of every exposed component with `Placement Preference`
   and `Decision Status`. Until a human decides placement, the honest value is
   `draft/missing — C01 must ask user or ID designer` at status `drafted`. Do **not** assert a
-  specific face/coordinate you have not been given.
+  specific face/coordinate you have not been given. Run the **removal audit** from
+  `references/design-direction-method.md` here — for each component ask "what breaks if we remove
+  this?"; a survivor earns a defensible reason, a non-survivor becomes an Open ID Decision
+  ("needed, or parity-only?"), never silently kept or cut.
 - **Open ID Decisions** — list what genuinely needs human/ID approval (proportions, brand
-  treatment, logo/label zones, visual hierarchy).
+  treatment, logo/label zones, visual hierarchy). **Ergonomics / human factors** (grip, one-handed
+  use, control reach, viewing angle, handedness) belong here too — these are **designer/user
+  preference, not something to pre-load or assume an anthropometric value for**. If C00 or the user
+  didn't specify, record it as an Open ID Decision and **ask** (honesty rule 6); do not invent a
+  hand size or reach envelope to make the direction look complete.
 
 ### 3. Author the CMF Direction (`CMF/CMF_Direction.md`)
 
@@ -99,6 +106,10 @@ and write `Design_Direction.md` with:
 - **Direction** — one CMF-intent sentence (material, finish, key optical/RF surfaces) plus an
   **Environment rationale** that *justifies* it from the PRD environment (IP rating, temp range,
   deployment). The rationale is what makes this a defensible draft rather than a taste assertion.
+  For the *material* half, use the Ashby constraint-filter method in
+  `references/design-direction-method.md` § "Material selection for CMF" — filter on temp / UV /
+  flammability / skin-contact / RF-transparency / processability to a defensible family, and leave
+  the grade-level pick + samples to the human ID/vendor.
 - **Candidate Routes** — offer 2–3 labelled routes so the human chooses, don't pre-decide:
   e.g. *Clean utility* (neutral/low-gloss, broad acceptance) · *Industrial durable*
   (darker, textured, protected openings) · *Brand-forward* (controlled accent + status zone,
@@ -159,6 +170,13 @@ This doc makes the human boundary explicit:
 
 - **Package Status** — "first-pass C01 package; suitable for ID continuation and downstream
   constraint discussion; **not** final `.ai`, CMF board, Display UI/UX, CAD, or sign-off."
+- **Feasibility tier (declare it here — the honest half of "give C00")** — run
+  `classify_product_feasibility(...)` on the C00 estimate
+  (`../../references/feasibility-triage.md`) and state the result plainly: *"Assessed **Tier N** —
+  bodesign will deliver `<C04 target>` for this product."* Tier 1–2 → an autonomous C00→C04 path to a
+  (near-)fab-ready board; Tier 3 (HDI/phone-class) → concept+constraints with the C04 routing handed
+  to pro-EDA. If this tier clashes with what the user expects, that's a reconciliation routed to
+  C00/C01 — surface it now, not at the C04 wall. C03 re-runs the triage on the firm component set.
 - **From C00** — the source paragraph from step 1.
 - **AI Drafted** — bullet the form / posture / primary-face / CMF / UI-status directions you wrote.
 - **Human / ID Must Decide** — final proportions & style; CMF route, samples, finish, brand fit;
@@ -189,8 +207,12 @@ examples (`openmv/C01-ID/`, `rockbox/c01-id/`):
 | ID-designer handoff | `Handoff_to_ID_Designer.md` | explicit human-boundary + open decisions |
 
 Optional accelerated artifacts (do not fake; mark `draft` if produced): a UX **state diagram**
-(drawmiat), low-fidelity **UI mockups** (frontend-design / canvas-design), or a **handoff deck**
-(pptx via docxmcp). These supplement — they never replace the five core docs above.
+(drawmiat), low-fidelity **UI mockups** (frontend-design / canvas-design), a **CMF / concept render**
+(an ID-native tool such as Vizcom, sketch→render), or a **handoff deck** (pptx via docxmcp). These
+supplement — they never replace the five core docs above. **A photoreal render carries extra risk:**
+it *looks* decided when the CMF/form is still `drafted`, so label it loudly as an illustrative
+concept, keep it routed to *Open ID Decisions*, and never let it promote a status. Ignore any tool's
+"must look stunning / avoid boring shapes" mandate — C01 authors defensible *direction*, not chosen art.
 
 A template for the JSON lives in `assets/Interface_Constraints.template.json`.
 
@@ -250,10 +272,20 @@ conflict as risk*, but only a human can, and that acceptance is recorded back in
 
 ## Tools & companion skills
 
+- **`references/design-direction-method.md`** — the reduction lens (Rams/Ive as constraints) +
+  essential-function framing + the removal audit, mapped onto each C01 artifact. A *method scaffold*
+  for reasoning toward Design Direction / CMF / Visible-Component Intent — it sharpens the argument,
+  it never promotes a `drafted` status to decided. Use it in SOP steps 2–4.
 - **drawmiat** (`mcp__drawmiat__validate_diagram` → `generate_diagram`) — turn the UI/UX status
   model into a Grafcet/IEC-60848 state diagram or C4 view for C05. Validate before generate.
 - **frontend-design** / **canvas-design** — low-fidelity UI mockups or a CMF mood board. These are
   *illustrative drafts*, never final art; label them `draft`.
+- **Vizcom** (or any sketch→render ID tool) — a CMF / concept render for human discussion, more
+  ID-native than the above for *form/material* feel. SaaS-backed (no local capability — it's prompt
+  craft over an external canvas); the one transferable nugget is material/lighting prompt precision
+  ("anodized aluminium", "frosted glass", explicit lighting) to dodge the plastic-y AI look. Subject
+  to the photoreal-render caveat above: illustrative draft only, never a decided CMF, drop its
+  "must be stunning" mandate.
 - **docxmcp** MCP (`docxmcp_pptx_*`) / **pptx** / **docx** / **pdf** — package the handoff as a
   deck or doc for the ID designer / product owner when a human-facing artifact is wanted.
 - **foundation-persona** — if the target user/visual tone is thin in C00, generate an

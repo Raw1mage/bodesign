@@ -290,6 +290,22 @@ Direct applications of `../../references/honesty-model.md`:
   document it as a tool-availability limit and leave the check `not-run`; do not back-fill a junction
   temperature you did not compute. If an upstream bus was excluded in C03, it stays out of the verdict.
 
+## Feedback to the design stages — a failing verdict is routed, not just reported
+
+A `warn`/`fail` verdict with a **design owner** is the *backward* half of the co-design loop
+(`../../references/cross-stage-reconciliation.md` § "Two trigger directions"). C06 does not fix it —
+it doesn't own the artifact — but it must not let the fail die as a line in a report either. **Emit a
+reconciliation record** routing the fail to the stage that owns the lever:
+
+- **SI** overshoot/settling `fail` → `must_act: C04` (re-route / stackup) and/or `C03` (the SI
+  requirement / part). · **EMC** margin → `C04`/`C03`. · **DRC** copper+unconnected → `C04`. ·
+  **thermal** verdict → the existing `thermal` record (C02/C04/C03).
+
+The hard rule (the floating-PSRAM lesson, and C06's own non-ownership): the `must_act` stage resolves
+by **fixing the design**, and C06 **never** relaxes a threshold or rewrites a verdict to make it pass.
+An `open` verify-initiated record blocks the C07 transfer the same way an unverified claim does — C07
+carries it through as "open, routed to <stage>", not as resolved.
+
 ## Handoff to C07 (MFG)
 
 To **C07 (`../c07-mfg/GUIDE.md`)** export the **verification evidence bundle** for the transfer

@@ -75,6 +75,13 @@ block diagram. Model these on the real examples — see
 `thesmart_products/openmv/C03-EE/03_output/Design_Definition.md` and
 `thesmart_products/openmv/N6_board/C03_EE/{EE_Design_Specification,Architecture,Power_Tree,Interface_Definitions}.md`.
 
+Once the key parts are chosen, **re-run the feasibility triage on the firm component set**
+(`../../references/feasibility-triage.md`: `classify_product_feasibility(..., source="C03-componentset")`)
+— now the finest BGA pitch, high-speed-net count, and layer estimate are real, so the tier becomes
+`confidence: firm`. If it rose above what C01 declared (e.g. C00 looked Tier-2 but the chosen SoC is a
+0.4 mm BGA → Tier-3), that is a reconciliation routed to C00/C01 to re-set the delivery expectation —
+not a surprise to bury until C04 can't route it.
+
 Mark the document `draft` with a reason until an EE owner signs off ("未核可;佈局凍結前需 EE
 設計審查 gate"). An unsigned spec is `draft`, not silently "done" (honesty rule 3).
 
@@ -96,6 +103,10 @@ bodesign MCP server"):** generate rather than hand-draw.
 - `bodesign_compose_schematic` (`out_dir`, `project_name`, `spec`, `symbol_dirs`, `validate=true`)
   to place + net a schematic from the structured design spec; it returns `placed`, `nets`,
   `unresolved_pins`, and a `kicad-cli` validation block. Resolve `unresolved_pins` before moving on.
+  **The `spec` is the output of reasoning, not a given** — derive it with the pinout→circuit method
+  in `references/pinout-to-circuit-method.md` (classify each pin's obligation → ground in the
+  reference design → complete each interface), so every net traces to a datasheet requirement rather
+  than being invented to fill the spec.
 - `bodesign_pin_allocation` (`nets`, `mcu_refs`) to derive the GPIO/peripheral map for step 7/FW.
 
 **Fallback — manual KiCad capture** (MCP absent, or a reverse-engineered baseline with no spec to
@@ -294,6 +305,17 @@ C06 produces the verdicts; C03 names the plan.
 
 ## Tools & companion skills
 
+- **`references/ee-design-advisory.md`** — the *design-side* judgment layer: regulator topology
+  (LDO/buck/boost) selection, decoupling cascade + dielectric/derating, the **SI requirement numbers
+  C04 must hit** (Z0, return paths, 3W, termination, λ/10 threshold), thermal sizing (θJA, copper,
+  thermal vias), RF link budget. Heuristics for *what to design*; the engine below still **verifies**,
+  the `datasheets` engine backs the part specs, and SPICE/EMC **verdicts** stay in C06 — never assert
+  a value a rule of thumb produced but the analyzer/datasheet hasn't confirmed.
+- **`references/pinout-to-circuit-method.md`** — the *reasoning method* for the most AI-heavy part of
+  C03: going from an extracted chip **pinout → a complete design `spec`**. Classify every pin into its
+  mandatory obligation (power→decoupling, boot-strap→defined pull, clock→load caps…), ground in the
+  datasheet's reference design, complete each interface, then build+verify. This is what produces the
+  `spec` that `bodesign_compose_schematic` consumes — use it in SOP steps 1–2.
 - **KiCad analysis engine** — `../../engines/kicad/` (`ENGINE.md`). Scripts in
   `engines/kicad/scripts/`: `analyze_schematic.py` (with `--lifecycle`, `--schema`,
   `--stage/--audience`), `what_if.py`, `diff_analysis.py`, `summarize_findings.py`,

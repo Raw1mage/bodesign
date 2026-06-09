@@ -74,12 +74,17 @@ class PackageReadiness:
     readiness_pct: int = 0
     next_step: str = ""
     summary: str = ""
+    # Unresolved cross-stage reconciliation records (BlockerReturn) that name a stage as
+    # recommended_owner. An open blocker blocks the milestone's all-clear even when every
+    # deliverable is present — see references/cross-stage-reconciliation.md.
+    open_blockers: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "folder": self.folder, "milestone": self.milestone,
             "readiness_pct": self.readiness_pct, "next_step": self.next_step, "summary": self.summary,
             "external_sections": self.external_sections,
+            "open_blockers": self.open_blockers,
             "deliverables": [
                 {"key": d.key, "name": d.name, "producer": d.producer, "required": d.required,
                  "status": d.status, "files": d.files, "next_action": d.next_action}
@@ -149,10 +154,32 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
     readiness.readiness_pct = round(100 * len(present_required) / max(len(required), 1))
     pending = [d for d in readiness.deliverables if d.status != "present" and d.required] or \
               [d for d in readiness.deliverables if d.status != "present"]
-    readiness.next_step = pending[0].next_action if pending else "All tracked deliverables present for this milestone."
+    # Cross-stage reconciliation: an unresolved BlockerReturn (area/thermal/height overflow or a
+    # C06 verdict-fail routed back) blocks the all-clear even when every deliverable is present.
+    # The orchestration store may be absent (no blockers ever filed) — that is the normal case.
+    try:
+        from .orchestration import list_blockers
+        open_blockers = list_blockers(folder, unresolved_only=True)
+    except Exception:
+        open_blockers = []
+    readiness.open_blockers = [b.to_dict() for b in open_blockers]
+
+    if open_blockers:
+        routed = ", ".join(
+            f"{b.blocker_id}→{','.join(b.affected_downstream_layers) or b.recommended_owner or '?'}"
+            for b in open_blockers
+        )
+        readiness.next_step = (
+            f"Resolve/route {len(open_blockers)} open reconciliation blocker(s) before this "
+            f"milestone is done: {routed}."
+        )
+    else:
+        readiness.next_step = pending[0].next_action if pending else "All tracked deliverables present for this milestone."
+    blocker_note = f" {len(open_blockers)} open reconciliation blocker(s)." if open_blockers else ""
     readiness.summary = (
         f"{milestone}: {len(present_required)}/{len(required)} required deliverables present "
-        f"({readiness.readiness_pct}%). External (not bodesign): {', '.join(readiness.external_sections) or 'none'}."
+        f"({readiness.readiness_pct}%).{blocker_note} "
+        f"External (not bodesign): {', '.join(readiness.external_sections) or 'none'}."
     )
     return readiness
 

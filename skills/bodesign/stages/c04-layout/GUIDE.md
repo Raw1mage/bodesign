@@ -7,6 +7,18 @@ constraints, the routed `.kicad_pcb`, and the **gated fabrication + assembly out
 takes C03's verified netlist plus the mechanical/interface constraints and produces a board that is
 either still a **draft** or has passed the C04 gate (`bodesign_layout_drc_gate` + `c04_readiness`).
 
+**Honour the feasibility tier C03 set** (`../../references/feasibility-triage.md`). **Tier 1–2** is
+C04's autonomous lane — route + gate to a (near-)fab-ready board. **Tier 3** (HDI/any-layer / ≤0.4 mm
+BGA / DDR/RF) is **not** routable on KiCad + the MCP: deliver the **concept+constraints** package and
+hand routing to pro-EDA + human SI + HDI fab — cleanly, not as a half-routed dead-end. Emit it with
+`emit_si_constraint_export(...)` (`../../references/si-constraint-handoff.md`): it writes
+`SI_Constraint_Export.json` (source of truth) + `SI_Net_Classes.csv` (the table Allegro/Xpedition/
+Altium import) + `SI_Constraint_Handoff.md` (per-tool mapping), with any constraint bodesign didn't
+derive listed under `tbd[]` — never guessed. The net-classes come from C03's SI requirements + this
+stage's stackup/floorplan; **the handoff package *is* the Tier-3 deliverable — make it whole.** If
+placement reality diverges from C03's tier (denser/harder than estimated), that's a reconciliation
+back to C03/C01, not a gate to stretch.
+
 What C04 does **not** own:
 - It does not invent connectivity. The netlist comes from C03; if a connection is unknown there
   (e.g. a boot-ROM-configured bus), it stays unknown here — you route what exists, not a guess.
@@ -259,6 +271,12 @@ These remain `pending` against the C04-freeze gate until the gate (`layout_drc_g
 
 ## Tools & companion skills
 
+- **`references/stackup-and-placement.md`** — the *design-intent* layer behind the MCP calls:
+  stackup choice (2L/4L/6L + plane adjacency), placement partitioning (power/noise/thermal,
+  decoupling-at-pin), and how to **realise C03's SI requirements** (return-path continuity,
+  via-stitching, length-match, 3W). It supplies the judgment; the MCP (`impedance_solve` /
+  `length_match_bus` / `si_check` / `layout_drc_gate`) executes and the engine verifies — never
+  relax a gate to pass (the floating-PSRAM lesson).
 - **KiCad analysis engine** — `../../engines/kicad/` (`ENGINE.md`). Key scripts in
   `engines/kicad/scripts/`: `analyze_pcb.py --full` (copper presence, fanout, length, DFM),
   `analyze_gerbers.py`, `cross_analysis.py` / `cross_verify.py` (schematic↔PCB sync, design intent),

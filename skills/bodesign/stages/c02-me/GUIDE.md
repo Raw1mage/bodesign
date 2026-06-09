@@ -134,7 +134,10 @@ Validate the JSON: `python3 -m json.tool Mechanical_Constraints.json >/dev/null`
 
 Mirror the real example's sections: **Scope** (what this package is/isn't), **Project Summary**
 (one-paragraph product description from C00), **Prototype Intent** (e.g. "EVT soft-tooling PC/ABS;
-FDM/SLA to validate volume + opening fit; production injection moulding deferred to DVT"),
+FDM/SLA to validate volume + opening fit; production injection moulding deferred to DVT" — use the
+five scoping gate questions in `references/mechanical-design-advisory.md` § "Scope it before you
+model" to pin process/volume/structural/assembly/compliance, and record any unanswered one as
+`engineering_pending` rather than a guess),
 **Engineering Pending Items** (each `key` from the ledger with its owner + reason), a
 **Non-Approval Statement** ("AI/tool output is not production mechanical approval, DFM approval,
 waterproofing/strength approval, or tolerance sign-off"), and an **OpenSCAD/STEP Source Status**
@@ -154,6 +157,12 @@ dimensions come from explicit constraints. (See `openmv/C02-ME/03_output/Enclosu
 If `which openscad` succeeds, you *may* render a preview/STL (`openscad -o Enclosure.stl
 Enclosure.scad`) and then flip `printable_draft_ready` after recording print assumptions. If it
 fails, the `.scad` ships as un-rendered source and STL stays `not-run`.
+
+Author it with the **inspect-don't-visualise loop** in `references/geometry-authoring-loop.md`:
+smallest correct skeleton first (delay fillets/cosmetics), generate *evidence* after each change,
+fix one defect at a time. When `openscad` is absent you still inspect — via the `.scad`'s `echo`'d
+computed sizes, bounding-box vs the constraint envelope, and section reasoning — rather than trusting
+the shape in your head. Never report a fit-critical model correct without evidence (honesty rule 5).
 
 ### 6. Emit the draft STEP — **only if build123d is present**
 
@@ -193,6 +202,15 @@ installed on this worker", and say so in `STEP_Draft_Handoff.md`. Never fabricat
   assembly approach, DFM risks, quote/timeline), current readiness (mirror `approval_status`), and
   vendor-owned outputs (final/refined `.step`, assembly/exploded view, tolerance/material/structural/
   waterproofing/thermal/DFM sign-off).
+- **Optional — a draft dimensioned drawing** (`Enclosure_drawing.svg`/`.dxf`). When build123d is
+  present (same gate as the STEP), you *may* project an orthographic technical drawing from the same
+  model as a vendor aid (build123d `TechnicalDrawing` / `render_technical_drawing()`; see
+  build123d's tech-drawing tutorial). Honesty rules, identical to the model: the **3D model stays the
+  one source of truth — the sheet is a projection, never a second geometry source**; default to
+  front + top + right views; **dimension only interfaces, clearances, and inspection-critical
+  features**; never add a section/datum/label that can't be traced back to the model; mark it
+  `draft_unapproved` (GD&T + tolerance sign-off is the vendor's). Absent build123d ⇒ skip it; don't
+  hand-draw an SVG.
 
 ### 8. Self-check before declaring the gate
 
@@ -279,11 +297,30 @@ Apply `../../references/honesty-model.md` here as follows:
   depth) as an open item — only C04/ME can resolve it, and the resolution is recorded, not assumed.
 - **To C06 (Verify):** the environment targets and ESD/EMC notes seed the verification plan
   (`../c06-verify/GUIDE.md`); they remain `engineering_pending` until C00/C06 confirms them.
+- **Cross-stage reconciliation — C02 is a lever owner.** C02's enclosure holds the levers for the
+  **area** and **thermal** budgets (`../../references/cross-stage-reconciliation.md`): the
+  `board_outline` (area), and surface area / vent-vs-IP / heatsink (thermal). When C03 emits an `open`
+  area or thermal record naming C02 in `must_act`, re-evaluate the enclosure (larger outline, vent —
+  which opens a coupled IP record, see § Sealing & IP — or spreader) and record the resolution; don't
+  leave it for a downstream stage to absorb.
 
 ## Tools & companion skills
 
+- **`references/mechanical-design-advisory.md`** — advisory DFM / DFA / tolerance-stack / material
+  rules of thumb (injection-moulding *and* FDM/SLA), the three design principles, and the C02-pre
+  scoping gate questions. Knowledge layer for the consultant role — it does **not** move the C02
+  boundary; the vendor still owns DFM/tolerance/strength sign-off and `me_approved` stays `false`.
+  Feed its numbers into `Print_Settings.md`, the `Enclosure.scad` parameters, and `Vendor_Handoff.md`.
+- **`references/geometry-authoring-loop.md`** — the *method* for getting `Enclosure.scad`/STEP
+  geometrically correct: the inspect-don't-visualise loop, how to inspect **without a renderer**
+  (echo'd sizes, bounding-box, section reasoning), defect diagnosis, and the "no claimed fit without
+  evidence" rule. Same stack as C02 (OpenSCAD + build123d). Use it in SOP steps 5–6.
 - **build123d / OCP** (`assets/emit_step.py`) — the honest path to a real draft STEP. Requires the
-  Python CAD kernel; verify `python3 -c "import build123d"` first. Absent ⇒ STEP `not-run`.
+  Python CAD kernel; verify `python3 -c "import build123d"` first. Absent ⇒ STEP `not-run`. The same
+  runtime also projects an optional draft **technical drawing** (`TechnicalDrawing`, SVG/DXF) — see
+  step 7. Two reusable-module ideas worth growing in `emit_step.py` rather than re-deriving each
+  time: parametric **snap-fit hook** and **hinge** generators for lids/clips (cantilever beam +
+  catch geometry, watertight single-component).
 - **OpenSCAD** (`openscad` CLI) — render `Enclosure.scad` to STL/preview. Verify `which openscad`
   first; frequently absent on the authoring machine.
 - **drawmiat** (`mcp__drawmiat__validate_diagram` → `generate_diagram`) — optional assembly/exploded
@@ -291,5 +328,11 @@ Apply `../../references/honesty-model.md` here as follows:
 - **docxmcp** MCP (`docxmcp_pptx_*` / `docxmcp_document`) / **docx** / **pdf** / **xlsx** — produce
   the vendor handoff doc, an RFQ, or a tolerance/opening table. Do everything *through* the tools;
   never hand-edit OOXML.
+- **Optional product render (CAD → marketing image)** — to turn `Enclosure.scad`/`.stl` into a
+  polished "boss/marketing" image (the *viewable* artifact the C02 plan wants), a CAD→AI-render
+  pipeline (e.g. CadQuery/OpenSCAD → ComfyUI, after `edhahn/agent-skills` product-illustrator) is an
+  option. It needs a running **ComfyUI** server — absent ⇒ skip and rely on the STL preview /
+  `enclosure_3d` `.glb` viewer. A render is an **illustrative draft**, label it so; it is not a
+  geometry source and never replaces the `.scad`/STEP (honesty rule 5).
 - No KiCad/kidoc engine work happens at C02 (those enter at C03+). C02 sits between C01's interface
   constraints and C04's authoritative board outline.

@@ -6,6 +6,30 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
+### Added — C00→C04 judgment layer, recursive reconciliation, feasibility triage
+- Per-stage **design-judgment references** — the "how to think" layer the agent reads,
+  distinct from the execution engines/MCP. C01: reduction-lens + Ashby material selection
+  + design-for-disassembly. C02: DFM/DFA/tolerance/material + IP-sealing advisory, and a
+  geometry-authoring (inspect-don't-visualise) loop. C03: EE-design advisory (regulator
+  selection, decoupling, the SI requirement numbers, thermal, RF, power-sequencing) and a
+  **pinout→circuit synthesis method** (classify every pin's obligation, ground in the
+  reference design). C04: stackup/placement, HDI (IPC-2226), SI realisation.
+- **Cross-stage reconciliation** ([`references/cross-stage-reconciliation.md`](skills/bodesign/references/cross-stage-reconciliation.md)) —
+  area / thermal / height budgets and C06 verdict-fails route *back* to the owning stage,
+  reusing the existing `BlockerReturn` primitive (`return_blocker`/`list_blockers`/
+  `ingest_blocker`). `assess_package_readiness` now surfaces unresolved blockers and blocks
+  the milestone all-clear — machine-enforced, not memory-dependent.
+- **Feasibility triage** (`classify_product_feasibility`, `bodesign_workflow_core.feasibility`)
+  — classifies a product into a C04 delivery tier (1 fab-ready · 2 routed-draft · 3
+  concept+constraints → pro-EDA) by the hardest complexity driver, declared up front at C01
+  so "give C00, get C01–C04" is honest per-product; re-run firm at C03.
+- **SI constraint handoff** (`emit_si_constraint_export`, `bodesign_workflow_core.si_handoff`)
+  — Tier-3 (HDI/DDR/RF) products emit a neutral SI constraint package (JSON source-of-truth
+  + CSV net-classes + per-tool import mapping for Allegro / Xpedition / Altium); the routing
+  wall becomes a clean pro-EDA handoff. Constraints bodesign did not derive are listed under
+  `tbd[]`, never guessed.
+- Tests: `test_feasibility`, `test_reconciliation_gate`, `test_si_handoff` (full suite green).
+
 ### Added — C04 EDA toolchain (MCP)
 - `bodesign_impedance_solve` — pure-core closed-form microstrip/differential class
   widths + delay constants from an explicit stackup (guidance; fab-solver confirmed).

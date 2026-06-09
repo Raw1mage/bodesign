@@ -85,6 +85,14 @@ skill，而非獨立的 `kicad`／`kidoc`。分工是雙向的：skill 驅動本
 連同獨立的 `kicad`／`kidoc`（legacy，已併入 `bodesign` skill），都可從執行中的服務在 `/skills/`
 下載（整包＋個別 skill），安裝到你的 skill 目錄。
 
+skill 在執行層之上再加一層**設計判斷**（各階段的 reference：C01 reduction-lens＋Ashby 選材、
+C02 DFM/DFA/IP 密封＋幾何作圖迴圈、C03 EE advisory＋「腳位→電路」合成法、C04 stackup/HDI/SI）。
+跨站不收斂（面積／散熱／高度 budget、C06 verdict fail）會以既有 `BlockerReturn` **回饋**到負責的
+階段並擋住下游完成（遞迴自我修正）。一開始就用**可行性 triage** 從 C00 估算分級(Tier 1 可直接
+投板／2 需人類 SI 簽核／3 HDI 級交專業 EDA)，讓「給 C00，得 C01–C04」對每個產品**誠實**；
+Tier-3 由 `emit_si_constraint_export` 產出中性 SI 約束包（JSON＋CSV＋逐工具對應），把繞線硬牆變成
+乾淨交接而非斷點。
+
 ## 目錄結構
 
 ```text
@@ -103,7 +111,8 @@ bodesign/
 │   ├── reverse-core/             專案匯入、伴隨檔渲染、文件輸出、board 重建
 │   ├── gerber-core/              Gerber／鑽孔解析 ＋ 預覽
 │   ├── eda-bridge/               KiCad 橋接：符號／原理圖／佈局／製造／BOM／SPICE／EMC
-│   ├── workflow-core/            需求規劃、證據蒐集、就緒度羅盤、對照組交叉檢核
+│   ├── workflow-core/            需求規劃、證據蒐集、就緒度羅盤、對照組交叉檢核、
+│   │                             可行性 triage（C04 交付分級）、跨站對帳閘、SI 約束交接
 │   ├── storage-core/             客戶自有專案登錄
 │   └── kicad-plugin/             in-KiCad Action Plugin 契約（roadmap）
 ├── specs/                        規格／知識庫（plan-builder）
