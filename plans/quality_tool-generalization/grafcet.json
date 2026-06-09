@@ -1,0 +1,45 @@
+[
+  {
+    "step": "S0",
+    "name": "inventory_done",
+    "initial": true,
+    "action": "Session generality inventory complete; 5 overfit hotspots line-verified",
+    "transition": "5-axis generality check + lint/test concept written -> S1"
+  },
+  {
+    "step": "S1",
+    "name": "check_defined",
+    "action": "Generality check authored (checklist + lint/test concept)",
+    "transition": "H1-H5 severity-classified -> S2"
+  },
+  {
+    "step": "S2",
+    "name": "hotspots_classified",
+    "action": "Hotspots split into silent-failure {H1,H2} / expose {H3,H4} / document {H5}",
+    "transition": "begin remediation with H1 route_net2pcb and H2 si_check -> S3"
+  },
+  {
+    "step": "S3",
+    "name": "remediating_silent_failures",
+    "action": "route_net2pcb connector pinmap + report; si_check rdrv/cload/edge/thresholds as inputs",
+    "transition": "fixes landed with MCP schemas -> S4"
+  },
+  {
+    "step": "S4",
+    "name": "validating_generality",
+    "action": "Run non-OpenMV-board regression tests; confirm fail-fast on missing inputs preserved",
+    "transition": "tests pass -> S5"
+  },
+  {
+    "step": "S5",
+    "name": "verified",
+    "action": "Generality bar enforced; silent-failure overfits removed; architecture synced",
+    "transition": "terminal"
+  },
+  {
+    "step": "SB",
+    "name": "blocked",
+    "action": "A fix would require fabricating a board/process default, or EE worker / pcbnew unavailable for board-mutation tests",
+    "transition": "resolve dependency or scope decision -> resume prior step"
+  }
+]

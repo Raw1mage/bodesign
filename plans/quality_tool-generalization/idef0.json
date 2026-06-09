@@ -1,0 +1,48 @@
+{
+  "diagram_title": "Tool Generalization Check",
+  "node_reference": "A0",
+  "function": "Audit the bodesign tool suite for silent overfit and remediate the silent-failure cases",
+  "inputs": [
+    "Shipped tool layer (packages/*/bodesign_*, services/mcp/server.py handlers)",
+    "Session generality inventory (5 overfit hotspots, line-verified)",
+    "workflow-core de-productized contract (the generality bar)"
+  ],
+  "controls": [
+    "Bar = no SILENT overfit (overridable OR reported, never silently wrong)",
+    "Preserve pcbnew EE-worker routing and no-fabricated-success rules",
+    "Backward-compatible: existing defaults become documented defaults, not removed"
+  ],
+  "outputs": [
+    "Repeatable generality check (checklist + lint/test concept)",
+    "Severity-classified hotspot list (silent-failure / rule-violation / acceptable-caveat)",
+    "Remediated route_net2pcb + si_check with caller inputs / reporting",
+    "Generality regression tests on a non-OpenMV board shape"
+  ],
+  "mechanisms": [
+    "packages/eda-bridge/bodesign_eda_bridge",
+    "services/mcp/server.py schemas + handlers",
+    "tests/test_eda_bridge.py, tests/test_mcp_server.py"
+  ],
+  "activities": [
+    {
+      "node_reference": "A1",
+      "function": "Define the generality check (5-axis checklist + lint/test concept)",
+      "outputs": ["generality-check artifact"]
+    },
+    {
+      "node_reference": "A2",
+      "function": "Classify hotspots H1-H5 by severity",
+      "outputs": ["silent-failure set {H1,H2}", "expose set {H3,H4}", "document set {H5}"]
+    },
+    {
+      "node_reference": "A3",
+      "function": "Remediate silent-failure overfits",
+      "outputs": ["route_net2pcb connector pinmap + applied/skip report", "si_check overridable rdrv/cload/edge/thresholds"]
+    },
+    {
+      "node_reference": "A4",
+      "function": "Prove generality with non-OpenMV-board regression tests",
+      "outputs": ["passing tests", "architecture sync note"]
+    }
+  ]
+}

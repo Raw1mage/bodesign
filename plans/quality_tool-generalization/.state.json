@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "state": "planned",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-09T06:00:08.570Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-09T06:04:27.319Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "authored spec.md (requirements + scenarios for H1/H2 + generality check), design.md (Context/Goals/Decisions/Risks/Critical Files), idef0 (activities), grafcet (array of steps), sequence.json, data-schema.json"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-09T06:06:24.547Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md (T1-T12 with dep + stop gates), handoff.md (execution contract + required reads + stop gates), test-vectors.json (TV-H1/H2 + fail-fast + check), errors.md (Error Catalogue), observability.md (Events + Metrics) authored"
+    }
+  ]
+}

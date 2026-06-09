@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Generality check on a new tool",
+    "participants": ["Contributor", "GeneralityCheck", "ToolRegistry", "Lint/Test"],
+    "messages": [
+      { "from": "Contributor", "to": "ToolRegistry", "text": "register new EE tool with a baked-in board constant" },
+      { "from": "Contributor", "to": "GeneralityCheck", "text": "run 5-axis checklist + lint" },
+      { "from": "GeneralityCheck", "to": "Lint/Test", "text": "scan shipped tool layer for non-overridable board/process constants" },
+      { "from": "Lint/Test", "to": "GeneralityCheck", "text": "flag: constant not exposed as input nor reported" },
+      { "from": "GeneralityCheck", "to": "Contributor", "text": "FAIL — expose as input or echo in result before passing the bar" }
+    ]
+  },
+  {
+    "title": "route_net2pcb on a non-J1 USB-C board (H1)",
+    "participants": ["Agent", "route_net2pcb", "Board"],
+    "messages": [
+      { "from": "Agent", "to": "route_net2pcb", "text": "net2pcb(board with USB-C at J5, no explicit connectors pinmap)" },
+      { "from": "route_net2pcb", "to": "Board", "text": "apply built-in USB-C table only to matching refdes" },
+      { "from": "route_net2pcb", "to": "Agent", "text": "result: unmapped_connectors=[J5] (reported, not silent no-op)" }
+    ]
+  },
+  {
+    "title": "si_check with overridden driver/load (H2)",
+    "participants": ["Agent", "si_check", "ngspice"],
+    "messages": [
+      { "from": "Agent", "to": "si_check", "text": "si_check(nets, rdrv=33, cload=5e-12, edge_ns=0.5)" },
+      { "from": "si_check", "to": "ngspice", "text": "build deck with supplied driver/load/edge" },
+      { "from": "ngspice", "to": "si_check", "text": "overshoot/undershoot per net" },
+      { "from": "si_check", "to": "Agent", "text": "verdict + effective {rdrv,cload,edge_ns,thresholds} echoed" }
+    ]
+  }
+]

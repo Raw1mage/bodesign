@@ -1,0 +1,66 @@
+{
+  "title": "Tool generality check data shapes",
+  "definitions": {
+    "HotspotVerdict": {
+      "type": "object",
+      "description": "One row of the generality audit",
+      "properties": {
+        "id": { "type": "string", "examples": ["H1", "H2", "H3", "H4", "H5"] },
+        "tool": { "type": "string" },
+        "location": { "type": "string", "description": "file:line of the baked-in constant" },
+        "issue": { "type": "string" },
+        "severity": { "enum": ["silent-failure", "rule-violation", "acceptable-caveat"] },
+        "remediation": { "enum": ["caller-input", "report-applied", "expose-param", "document-only"] }
+      },
+      "required": ["id", "tool", "location", "severity"]
+    },
+    "RouteNet2PcbConnectorsInput": {
+      "type": "object",
+      "description": "H1: explicit connector pin mapping, replacing the implicit J1-gated _USBC table",
+      "additionalProperties": {
+        "type": "object",
+        "description": "refdes -> {signal -> [pad ids]}",
+        "additionalProperties": { "type": "array", "items": { "type": "string" } }
+      },
+      "examples": [{ "J5": { "VBUS": ["A4", "A9", "B4", "B9"], "GND": ["A1", "A12", "B1", "B12"], "CC1": ["A5"], "CC2": ["B5"] } }]
+    },
+    "RouteNet2PcbConnectorReport": {
+      "type": "object",
+      "description": "H1: added to route_net2pcb result so mapping is never a silent no-op",
+      "properties": {
+        "applied_pinmaps": { "type": "array", "items": { "type": "string" }, "description": "refdes the mapping applied to" },
+        "unmapped_connectors": { "type": "array", "items": { "type": "string" }, "description": "connector refdes left unmapped" }
+      },
+      "required": ["applied_pinmaps", "unmapped_connectors"]
+    },
+    "SiCheckInputs": {
+      "type": "object",
+      "description": "H2: SI driver/load/edge/thresholds promoted to optional inputs (defaults documented as STM32-class CMOS reference)",
+      "properties": {
+        "z0": { "type": "number", "default": 50.0, "note": "already an input today" },
+        "rs": { "type": "number", "default": 22.0, "note": "already an input today" },
+        "vdd": { "type": "number", "default": 1.8, "note": "already an input today" },
+        "ps_per_mm": { "type": "number", "default": 5.97, "note": "documented 4-layer JLC reference; today PS_PER_MM_DEFAULT" },
+        "rdrv": { "type": "number", "default": 17.0, "note": "NEW input; today hardcoded" },
+        "cload": { "type": "number", "default": 3e-12, "note": "NEW input; today hardcoded" },
+        "edge_ns": { "type": "number", "default": 0.3, "note": "NEW input; today hardcoded in deck" },
+        "overshoot_pass_pct": { "type": "number", "default": 10.0, "note": "NEW input; today hardcoded threshold" },
+        "overshoot_warn_pct": { "type": "number", "default": 20.0, "note": "NEW input; today hardcoded threshold" }
+      }
+    },
+    "SiCheckEffectiveEcho": {
+      "type": "object",
+      "description": "H2: result echoes the effective SI assumptions so the verdict is interpretable",
+      "properties": {
+        "effective": {
+          "type": "object",
+          "properties": {
+            "rdrv": { "type": "number" }, "cload": { "type": "number" },
+            "edge_ns": { "type": "number" }, "ps_per_mm": { "type": "number" },
+            "overshoot_pass_pct": { "type": "number" }, "overshoot_warn_pct": { "type": "number" }
+          }
+        }
+      }
+    }
+  }
+}

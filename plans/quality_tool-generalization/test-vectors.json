@@ -1,0 +1,65 @@
+[
+  {
+    "id": "TV-H1-1",
+    "requirement": "No silent connector-mapping overfit (H1)",
+    "tool": "route_net2pcb",
+    "given": "board with USB-C connector at refdes J5, no explicit connectors pinmap",
+    "when": "route_net2pcb runs",
+    "then": "result.unmapped_connectors contains 'J5'; the connector is NOT silently left unmapped without report",
+    "expect": { "unmapped_connectors_contains": "J5", "silent_noop": false }
+  },
+  {
+    "id": "TV-H1-2",
+    "requirement": "No silent connector-mapping overfit (H1)",
+    "tool": "route_net2pcb",
+    "given": "caller passes connectors={'J5': {'VBUS': ['A4','A9','B4','B9'], 'GND': ['A1','A12','B1','B12'], 'CC1': ['A5'], 'CC2': ['B5']}}",
+    "when": "route_net2pcb runs",
+    "then": "the supplied pinmap is applied to J5 and result.applied_pinmaps contains 'J5'",
+    "expect": { "applied_pinmaps_contains": "J5" }
+  },
+  {
+    "id": "TV-H1-3",
+    "requirement": "Backward compatibility (DD-3)",
+    "tool": "route_net2pcb",
+    "given": "the original OpenMV board with USB-C at J1, no explicit pinmap",
+    "when": "route_net2pcb runs",
+    "then": "the built-in USB-C table still applies to J1 (identical to today) and result.applied_pinmaps contains 'J1'",
+    "expect": { "applied_pinmaps_contains": "J1", "output_unchanged_vs_baseline": true }
+  },
+  {
+    "id": "TV-H2-1",
+    "requirement": "No hidden SI assumptions (H2)",
+    "tool": "si_check",
+    "given": "rdrv=33, cload=5e-12, edge_ns=0.5 supplied",
+    "when": "si_check runs",
+    "then": "the ngspice deck uses the supplied values and result.effective echoes rdrv=33, cload=5e-12, edge_ns=0.5",
+    "expect": { "effective": { "rdrv": 33, "cload": 5e-12, "edge_ns": 0.5 } }
+  },
+  {
+    "id": "TV-H2-2",
+    "requirement": "Backward compatibility (DD-3)",
+    "tool": "si_check",
+    "given": "only board and nets supplied, SI assumptions omitted",
+    "when": "si_check runs",
+    "then": "documented STM32-class defaults are used (rdrv=17.0, cload=3e-12, edge_ns=0.3, pass<10%, warn<20%) AND result.effective reports them",
+    "expect": { "effective": { "rdrv": 17.0, "cload": 3e-12, "edge_ns": 0.3, "overshoot_pass_pct": 10.0, "overshoot_warn_pct": 20.0 } }
+  },
+  {
+    "id": "TV-FAILFAST-1",
+    "requirement": "Fail-fast preserved",
+    "tool": "route_net2pcb / si_check",
+    "given": "a genuinely missing required input (e.g. missing board path)",
+    "when": "the tool runs",
+    "then": "result.ok is false (structured error), no fabricated success, EE tools still worker-routed",
+    "expect": { "ok": false }
+  },
+  {
+    "id": "TV-CHECK-1",
+    "requirement": "Repeatable generality check",
+    "tool": "generality-lint",
+    "given": "a planted board-specific constant (a refdes string) in a shipped tool not exposed as input",
+    "when": "the generality check runs",
+    "then": "the constant is flagged by name; a planted universal-physics constant (speed of light) is NOT flagged",
+    "expect": { "flags_board_constant": true, "flags_physics_constant": false }
+  }
+]
