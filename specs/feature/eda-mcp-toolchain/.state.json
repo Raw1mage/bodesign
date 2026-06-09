@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "verified",
+  "state": "living",
   "profile": [],
   "slug": "feature_eda-mcp-toolchain",
   "title": "EDA MCP Toolchain Integration",
@@ -59,6 +59,14 @@
       "by": "pkcs12",
       "mode": "sync",
       "reason": "legacy package migrated to specbase artifact contract (proposal/spec/design/sequence/data-schema/handoff/test-vectors/errors/observability + events/ + idef0 activities + grafcet array)"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-09T06:14:51.332Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-confirmed graduation: verified, 13/13 artifacts valid, C04 MCP toolchain landed + socket-smoke proven"
     }
   ]
 }
