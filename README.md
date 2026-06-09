@@ -72,11 +72,18 @@ tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
 curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
 ```
 
-## Skill 套件
+## Skill 配對
 
-bodesign 負責生成；分析／文件／模擬／採購／製造則編排成熟的 **EDA skill 套件**
-（`kicad`、`kidoc`、`spice`、`emc`、`datasheets`、`bom`、distributors、fab）。可從執行中的服務在
-`/skills/` 下載（整包＋個別 skill），安裝到你的 skill 目錄。
+bodesign（MCP）是**生成的那一半**；配套的 **`bodesign` skill** 是工作流大腦（C00–C07 生命週期、
+誠實契約、各階段 SOP），**並且**承載分析／文件引擎——`kicad`（原理圖／PCB／Gerber 分析）與
+`kidoc`（工程文件）現在以 `engines/kicad`、`engines/kidoc` 的形式住在那裡，所以請安裝 `bodesign`
+skill，而非獨立的 `kicad`／`kidoc`。分工是雙向的：skill 驅動本 MCP 的 `bodesign_*` 工具來**生成**，
+而 MCP 的驗證工具（`bodesign_simulate`／`analyze_emc`／`analyze_thermal`）回頭呼叫 skill 的引擎來
+**分析**（透過 `BODESIGN_KICAD_SKILL` 解析，預設 `~/.claude/skills/bodesign/engines/kicad`）。
+
+其餘成熟的模擬／採購／製造 EDA skill（`spice`、`emc`、`datasheets`、`bom`、distributors、fab），
+連同獨立的 `kicad`／`kidoc`（legacy，已併入 `bodesign` skill），都可從執行中的服務在 `/skills/`
+下載（整包＋個別 skill），安裝到你的 skill 目錄。
 
 ## 目錄結構
 

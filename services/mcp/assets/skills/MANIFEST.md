@@ -6,6 +6,12 @@ simulation · sourcing · fabrication). bodesign *generates* the design; these s
 (no secrets — all distributor API keys are read from environment variables;
 no `__pycache__`/personal paths/internal ticket refs).
 
+> **`kicad` and `kidoc` are now folded into the unified `bodesign` skill** (as `engines/kicad`
+> and `engines/kidoc`). Prefer installing the `bodesign` skill — it carries the C00–C07 workflow,
+> drives this MCP's `bodesign_*` generation tools, and the MCP's verification tools resolve its
+> analyzer via `BODESIGN_KICAD_SKILL` (default `~/.claude/skills/bodesign/engines/kicad`). The
+> standalone `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use only.
+
 ## Install
 
 These are Claude **skills**. Place each skill directory under your skill location

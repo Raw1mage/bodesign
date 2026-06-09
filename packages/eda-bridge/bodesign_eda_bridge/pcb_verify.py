@@ -13,13 +13,9 @@ EMC lab, but it flags layout-level risks before prototyping. Degrades gracefully
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
-import os
 import subprocess
 
-
-def _skill(explicit, name: str, env: str) -> Path | None:
-    p = explicit or os.environ.get(env) or str(Path.home() / ".claude" / "skills" / name)
-    return Path(p) if (Path(p) / "scripts").is_dir() else None
+from .skill_paths import resolve_skill
 
 
 @dataclass(slots=True)
@@ -56,8 +52,8 @@ def analyze_emc(
     *, kicad_skill=None, emc_skill=None, standard: str = "fcc-class-b",
 ) -> PcbVerifyResult:
     out_root = Path(out_dir); out_root.mkdir(parents=True, exist_ok=True)
-    kicad = _skill(kicad_skill, "kicad", "BODESIGN_KICAD_SKILL")
-    emc = _skill(emc_skill, "emc", "BODESIGN_EMC_SKILL")
+    kicad = resolve_skill("kicad", "BODESIGN_KICAD_SKILL", kicad_skill)
+    emc = resolve_skill("emc", "BODESIGN_EMC_SKILL", emc_skill)
     if kicad is None or emc is None:
         return PcbVerifyResult("emc", "skipped-no-skills", warnings=["kicad/emc skill not found."])
     if not Path(schematic_path).exists() or not Path(pcb_path).exists():
@@ -85,7 +81,7 @@ def analyze_thermal(
     *, kicad_skill=None, ambient: float = 25.0,
 ) -> PcbVerifyResult:
     out_root = Path(out_dir); out_root.mkdir(parents=True, exist_ok=True)
-    kicad = _skill(kicad_skill, "kicad", "BODESIGN_KICAD_SKILL")
+    kicad = resolve_skill("kicad", "BODESIGN_KICAD_SKILL", kicad_skill)
     if kicad is None:
         return PcbVerifyResult("thermal", "skipped-no-skills", warnings=["kicad skill not found."])
     if not Path(schematic_path).exists() or not Path(pcb_path).exists():

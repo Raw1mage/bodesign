@@ -75,11 +75,21 @@ tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
 curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
 ```
 
-## Skill suite
+## Skill pairing
 
-bodesign generates; it orchestrates a mature **EDA skill suite** for analysis/docs/sim/sourcing/fab
-(`kicad`, `kidoc`, `spice`, `emc`, `datasheets`, `bom`, distributors, fab). The suite is downloadable
-from the running service at `/skills/` (bundle + per-skill); install under your skill location.
+bodesign (the MCP) is the **generation half**; its companion **`bodesign` skill** is the workflow
+brain (the C00–C07 lifecycle, honesty contract, stage SOPs) **and** the analysis/doc engines —
+`kicad` (schematic/PCB/Gerber analysis) and `kidoc` (engineering docs) now live there as
+`engines/kicad` and `engines/kidoc`, so install the `bodesign` skill rather than the standalone
+`kicad`/`kidoc` skills. The split is bidirectional: the skill drives this MCP's `bodesign_*` tools to
+*generate*, and the MCP's verification tools (`bodesign_simulate` / `analyze_emc` / `analyze_thermal`)
+call the skill's engines to *analyse* (resolved via `BODESIGN_KICAD_SKILL`, default
+`~/.claude/skills/bodesign/engines/kicad`).
+
+The remaining mature EDA skills for sim/sourcing/fab (`spice`, `emc`, `datasheets`, `bom`,
+distributors, fab) plus the standalone `kicad`/`kidoc` (legacy, now folded into the `bodesign` skill)
+are downloadable from the running service at `/skills/` (bundle + per-skill); install under your skill
+location.
 
 ## Layout
 

@@ -15,14 +15,10 @@ raises — when a dependency is absent.
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
-import os
 import shutil
 import subprocess
 
-
-def _default_skill(name: str, env: str) -> Path | None:
-    p = os.environ.get(env) or str(Path.home() / ".claude" / "skills" / name)
-    return Path(p) if (Path(p) / "scripts").is_dir() else None
+from .skill_paths import resolve_skill
 
 
 @dataclass(slots=True)
@@ -49,11 +45,8 @@ def simulate_schematic(
     out_root = Path(out_dir)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    def _valid(p):
-        return p if (p is not None and (Path(p) / "scripts").is_dir()) else None
-
-    kicad = _valid(kicad_skill) if kicad_skill else _default_skill("kicad", "BODESIGN_KICAD_SKILL")
-    spice = _valid(spice_skill) if spice_skill else _default_skill("spice", "BODESIGN_SPICE_SKILL")
+    kicad = resolve_skill("kicad", "BODESIGN_KICAD_SKILL", kicad_skill)
+    spice = resolve_skill("spice", "BODESIGN_SPICE_SKILL", spice_skill)
     if kicad is None or spice is None:
         return SimResult(status="skipped-no-skills",
                          warnings=["kicad/spice skill not found (set BODESIGN_KICAD_SKILL / BODESIGN_SPICE_SKILL)."])
