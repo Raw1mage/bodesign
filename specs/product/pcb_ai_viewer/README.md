@@ -60,6 +60,10 @@ bodesign 正是此系統：一個以 **KiCad 生命週期**為核心、具 **doc
 
 _… 其餘 13 項 · [完整清單 →](./design.md#code-anchors)_
 
+### Related entries
+
+- [eda-mcp-toolchain — C04 EDA 工具鏈 feature](../../feature/eda-mcp-toolchain/)：本產品的 C04 routing/finishing MCP 工具鏈規格。
+
 ### 事件記錄
 
 - 2026-06-06：[`event_20260605_pcb_ai_viewer.md`](./events/event_20260605_pcb_ai_viewer.md)
