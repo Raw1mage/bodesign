@@ -1,6 +1,6 @@
 import unittest
 
-from bodesign_eda_bridge import build_kicad_native_extension_contract, length_match_bus, plan_kicad_bridge, solve_impedance, widen_bus_tracks
+from bodesign_eda_bridge import build_kicad_native_extension_contract, length_match_bus, plan_kicad_bridge, resolve_connector_pads, si_status, solve_impedance, widen_bus_tracks
 
 
 class EdaBridgeTests(unittest.TestCase):
@@ -69,6 +69,48 @@ class EdaBridgeTests(unittest.TestCase):
             length_match_bus("in.kicad_pcb", "out.kicad_pcb", ["D0"], 25, 0)
         with self.assertRaisesRegex(ValueError, "clearance_mm"):
             length_match_bus("in.kicad_pcb", "out.kicad_pcb", ["D0"], 25, 5.97, clearance_mm=-0.1)
+
+    # ---- H1: connector pin expansion is not silently refdes-gated ---------------------
+    def test_connector_expansion_applies_to_usb_c_on_any_refdes(self):
+        # USB-C at J5 (NOT J1): the built-in table must still expand VBUS -> 4 pads.
+        pads, expanded = resolve_connector_pads(
+            "J5", "VBUS", "VBUS", connectors={}, usb_refs={"J5"})
+        self.assertTrue(expanded)
+        self.assertEqual(["A4", "A9", "B4", "B9"], pads)
+
+    def test_connector_expansion_backward_compatible_on_j1(self):
+        # DD-3: the original OpenMV J1 board keeps identical expansion.
+        pads, expanded = resolve_connector_pads(
+            "J1", "GND", "GND", connectors={}, usb_refs={"J1"})
+        self.assertTrue(expanded)
+        self.assertEqual(["A1", "A12", "B1", "B12"], pads)
+
+    def test_connector_explicit_pinmap_wins(self):
+        pads, expanded = resolve_connector_pads(
+            "J5", "VBUS", "VBUS",
+            connectors={"J5": {"VBUS": ["P1", "P2"]}}, usb_refs=set())
+        self.assertTrue(expanded)
+        self.assertEqual(["P1", "P2"], pads)
+
+    def test_connector_no_match_keeps_single_pin_and_reports_not_expanded(self):
+        # A non-connector net node stays as its single pin; expanded=False signals
+        # "no silent multi-pad expansion happened" so the caller can report it.
+        pads, expanded = resolve_connector_pads(
+            "U1", "DATA0", "B7", connectors={}, usb_refs=set())
+        self.assertFalse(expanded)
+        self.assertEqual(["B7"], pads)
+
+    # ---- H2: SI status thresholds are caller-overridable, not hardcoded ----------------
+    def test_si_status_default_thresholds(self):
+        self.assertEqual("pass", si_status(5.0, 4.0, 10.0, 20.0))
+        self.assertEqual("warn", si_status(15.0, 2.0, 10.0, 20.0))
+        self.assertEqual("fail", si_status(25.0, 2.0, 10.0, 20.0))
+
+    def test_si_status_respects_overridden_thresholds(self):
+        # A stricter device: 15% overshoot is a fail when pass<5 / warn<10.
+        self.assertEqual("fail", si_status(15.0, 2.0, 5.0, 10.0))
+        # A looser device: same 15% is a pass when pass<20.
+        self.assertEqual("pass", si_status(15.0, 2.0, 20.0, 30.0))
 
 
 if __name__ == "__main__":

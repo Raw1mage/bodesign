@@ -408,7 +408,8 @@ def _h_route_net2pcb(a: dict) -> Any:
     return net2pcb_board(a["netlist_path"], a["out_path"], layers=a.get("layers", 2),
                          plane_layers=a.get("plane_layers"), track_mm=a.get("track_mm"),
                          placement=a.get("placement"), fpdir=a.get("fpdir"),
-                         clearance_mm=a.get("clearance_mm", 0.13))
+                         clearance_mm=a.get("clearance_mm", 0.13),
+                         connectors=a.get("connectors"))
 
 
 def _h_via_in_pad(a: dict) -> Any:
@@ -442,7 +443,10 @@ def _h_layout_drc_gate(a: dict) -> Any:
 def _h_si_check(a: dict) -> Any:
     from bodesign_eda_bridge import si_check
     return si_check(a["board_path"], a["nets"], z0=a.get("z0", 50.0), rs=a.get("rs", 22.0),
-                    vdd=a.get("vdd", 1.8))
+                    vdd=a.get("vdd", 1.8), rdrv=a.get("rdrv", 17.0), cload=a.get("cload", 3e-12),
+                    edge_ns=a.get("edge_ns", 0.3),
+                    overshoot_pass_pct=a.get("overshoot_pass_pct", 10.0),
+                    overshoot_warn_pct=a.get("overshoot_warn_pct", 20.0))
 
 
 def _h_autoroute(a: dict) -> Any:
@@ -462,8 +466,8 @@ TOOLS: list[dict] = [
      "description": "Pure-python C04 impedance estimate: solve microstrip class widths and delay constants from explicit stackup and target impedances. Differential targets require gap_mm or width_mm; outputs are guidance only and require fab field-solver confirmation.",
      "schema": {"type": "object", "properties": {"stackup": {"type": "object"}, "targets": {}}, "required": ["stackup", "targets"]}},
     {"name": "bodesign_route_net2pcb", "handler": _h_route_net2pcb,
-     "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Returns placed/nets/pads_assigned/unmapped; unmapped>0 means a footprint's pad names don't match the symbol (floating part).",
-     "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}}, "required": ["netlist_path", "out_path"]}},
+     "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part).",
+     "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}, "connectors": {"type": "object", "description": "{refdes: {net_name: [pad ids]}} explicit connector pin expansion; omit to use the built-in USB-C table for USB-C footprints"}}, "required": ["netlist_path", "out_path"]}},
     {"name": "bodesign_via_in_pad", "handler": _h_via_in_pad,
      "description": "Fine-pitch BGA via-in-pad fanout: drop a through-via through each netted ball pad of the given refs (except the outer keep_rings rings, which escape on the surface) so inner balls reach inner signal layers. Needs a filled+capped (POFV) process — JLCPCB advanced.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "refs": {"type": "array", "items": _STR}, "drill_mm": {"type": "number"}, "pad_mm": {"type": "number"}, "keep_rings": {"type": "integer"}}, "required": ["in_path", "out_path", "refs"]}},
@@ -480,8 +484,8 @@ TOOLS: list[dict] = [
      "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool.",
      "schema": {"type": "object", "properties": {"board_path": _STR}, "required": ["board_path"]}},
     {"name": "bodesign_si_check", "handler": _h_si_check,
-     "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup.",
-     "schema": {"type": "object", "properties": {"board_path": _STR, "nets": {"type": "array", "items": _STR}, "z0": {"type": "number"}, "rs": {"type": "number"}, "vdd": {"type": "number"}}, "required": ["board_path", "nets"]}},
+     "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup. Driver/load/edge/thresholds (rdrv/cload/edge_ns/overshoot_pass_pct/overshoot_warn_pct) are caller-overridable — defaults are a documented STM32-class CMOS reference, not a hidden assumption; the result echoes the effective values under `effective`.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "nets": {"type": "array", "items": _STR}, "z0": {"type": "number"}, "rs": {"type": "number"}, "vdd": {"type": "number"}, "rdrv": {"type": "number"}, "cload": {"type": "number"}, "edge_ns": {"type": "number"}, "overshoot_pass_pct": {"type": "number"}, "overshoot_warn_pct": {"type": "number"}}, "required": ["board_path", "nets"]}},
     {"name": "bodesign_autoroute", "handler": _h_autoroute,
      "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}}, "required": ["board_path", "out_path"]}},

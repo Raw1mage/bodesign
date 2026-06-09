@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "planned",
+  "state": "implementing",
   "profile": [],
   "history": [
     {
@@ -26,6 +26,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "tasks.md (T1-T12 with dep + stop gates), handoff.md (execution contract + required reads + stop gates), test-vectors.json (TV-H1/H2 + fail-fast + check), errors.md (Error Catalogue), observability.md (Events + Metrics) authored"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-09T06:17:38.083Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "begin H1/H2 silent-failure remediation (T4-T9): route_net2pcb connector pinmap + report, si_check overridable rdrv/cload/edge/thresholds with echoed effective values"
     }
   ]
 }

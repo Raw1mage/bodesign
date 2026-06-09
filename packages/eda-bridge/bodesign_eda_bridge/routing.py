@@ -38,6 +38,20 @@ _USBC = {"VBUS": ["A4", "A9", "B4", "B9"], "GND": ["A1", "A12", "B1", "B12"],
          "CC1": ["A5"], "CC2": ["B5"], "SHLD": ["S1"]}
 
 
+def resolve_connector_pads(ref: str, net: str, pin: str, *, connectors: dict,
+                           usb_refs: set) -> tuple[list[str], bool]:
+    """H1: decide the physical pads a (ref, net) node expands to, without any refdes hardcoding.
+
+    Returns (pads, expanded). An explicit ``connectors[ref]`` map wins; otherwise a USB-C
+    footprint (ref in ``usb_refs``, detected by FPID, not by being named J1) uses the built-in
+    USB-C table. If no map matches the net, the node keeps its single ``pin`` and expanded=False.
+    Pure + pcbnew-free so the silent-failure fix is testable on a bare host."""
+    pinmap = connectors.get(ref) or (_USBC if ref in usb_refs else None)
+    if pinmap and net in pinmap:
+        return list(pinmap[net]), True
+    return [pin], False
+
+
 def _parse_netlist(path: str) -> tuple[dict, dict]:
     """Return ({ref: footprint_id}, {net: [(ref, pad), ...]}) from a KiCad s-expr netlist."""
     text = open(path).read()
@@ -57,9 +71,16 @@ def _parse_netlist(path: str) -> tuple[dict, dict]:
 def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
                   plane_layers: list[str] | None = None, track_mm: float | None = None,
                   placement: dict | None = None, fpdir: str | None = None,
-                  clearance_mm: float = 0.13) -> dict:
+                  clearance_mm: float = 0.13, connectors: dict | None = None) -> dict:
     """Build a netted .kicad_pcb from a netlist: load footprints, place, assign nets, set
-    copper-layer count / reserved plane layers / default track width, draw a board outline."""
+    copper-layer count / reserved plane layers / default track width, draw a board outline.
+
+    Connector pin expansion (one logical symbol pin -> several physical pads, e.g. USB-C
+    VBUS -> A4/A9/B4/B9) is caller-overridable and reported, never silently refdes-gated:
+    pass ``connectors = {refdes: {net_name: [pads]}}`` to map an arbitrary connector; when
+    omitted, any USB-C footprint (by FPID, on ANY refdes — not just J1) uses the built-in
+    USB-C table. The result reports ``applied_pinmaps`` and ``unmapped_connectors`` so a
+    USB-C/declared connector that got no expansion is surfaced, not lost."""
     _need_pcbnew()
     comps, nets = _parse_netlist(netlist_path)
     board = pcbnew.CreateEmptyBoard()
@@ -102,6 +123,11 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             gx += 8
             if gx > 80: gx = 0; gy += 8
         board.Add(fp)
+    # H1: per-connector effective pin map — explicit caller map, else built-in USB-C
+    # table for any USB-C footprint (detected by FPID on ANY refdes). Tracked + reported.
+    connectors = connectors or {}
+    usb_refs = {ref for ref, fp in fps.items() if "USB" in fp.GetFPIDAsString().upper()}
+    applied_pinmaps: set[str] = set()
     code = 1; assigned = unmapped = 0
     for name, nodes in nets.items():
         ni = pcbnew.NETINFO_ITEM(board, name, code); board.Add(ni); code += 1
@@ -109,13 +135,18 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             fp = fps.get(ref)
             if not fp:
                 continue
-            isusbc = "USB" in fp.GetFPIDAsString().upper()
-            pads = _USBC[name] if (ref == "J1" and isusbc and name in _USBC) else [pin]
+            pads, expanded = resolve_connector_pads(ref, name, pin, connectors=connectors,
+                                                     usb_refs=usb_refs)
+            if expanded:
+                applied_pinmaps.add(ref)
             for padname in pads:
                 pad = fp.FindPadByNumber(padname)
                 if pad is None:
                     unmapped += 1; continue
                 pad.SetNet(ni); assigned += 1
+    # Connectors that look like they need expansion (USB-C footprint or an explicit caller
+    # entry) but matched no net name -> reported, never a silent no-op.
+    unmapped_connectors = sorted((usb_refs | set(connectors)) - applied_pinmaps)
     # board outline from pad extents
     xs = []; ys = []
     for fp in fps.values():
@@ -131,7 +162,9 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(pcbnew.FromMM(0.15)); board.Add(s)
     pcbnew.SaveBoard(out_path, board)
     return {"board": out_path, "placed": len(fps), "nets": len(nets),
-            "pads_assigned": assigned, "unmapped": unmapped}
+            "pads_assigned": assigned, "unmapped": unmapped,
+            "applied_pinmaps": sorted(applied_pinmaps),
+            "unmapped_connectors": unmapped_connectors}
 
 
 # --------------------------------------------------------------------------- via-in-pad BGA fanout
@@ -463,12 +496,26 @@ def drc_gate(board_path: str) -> dict:
 
 
 # --------------------------------------------------------------------------------- ngspice SI gate
+def si_status(over_pct: float, under_pct: float, pass_pct: float, warn_pct: float) -> str:
+    """H2: classify overshoot/undershoot vs caller-overridable thresholds (pure, ngspice-free)."""
+    if over_pct < pass_pct and under_pct < pass_pct:
+        return "pass"
+    if over_pct < warn_pct and under_pct < warn_pct:
+        return "warn"
+    return "fail"
+
+
 def si_check(board_path: str, nets: list[str], *, z0: float = 50.0, rs: float = 22.0,
-             vdd: float = 1.8, ps_per_mm: float = PS_PER_MM_DEFAULT) -> dict:
-    """Per-net series-terminated transmission-line SI: overshoot/undershoot -> pass/warn/fail."""
+             vdd: float = 1.8, ps_per_mm: float = PS_PER_MM_DEFAULT,
+             rdrv: float = 17.0, cload: float = 3e-12, edge_ns: float = 0.3,
+             overshoot_pass_pct: float = 10.0, overshoot_warn_pct: float = 20.0) -> dict:
+    """Per-net series-terminated transmission-line SI: overshoot/undershoot -> pass/warn/fail.
+
+    Driver/load/edge/thresholds are caller-overridable (H2); the defaults are a documented
+    STM32-class CMOS output-buffer reference, NOT a hidden assumption. The result echoes the
+    effective values used (``effective``) so the verdict is interpretable on any device."""
     _need_pcbnew()
     b = pcbnew.LoadBoard(board_path)
-    rdrv, cload = 17.0, 3e-12
     res = []
     for nm in nets:
         L = sum(math.hypot(t.GetEnd().x - t.GetStart().x, t.GetEnd().y - t.GetStart().y)
@@ -476,9 +523,9 @@ def si_check(board_path: str, nets: list[str], *, z0: float = 50.0, rs: float = 
         if L < 0.1:
             continue
         td = L * ps_per_mm * 1e-12
-        deck = (f"* SI {nm}\nVin in 0 PWL(0 0 0.1n 0 0.3n {vdd})\nRd in d {rdrv}\nRs d s {rs}\n"
+        deck = (f"* SI {nm}\nVin in 0 PWL(0 0 0.1n 0 {edge_ns}n {vdd})\nRd in d {rdrv}\nRs d s {rs}\n"
                 f"T1 s 0 r 0 Z0={z0} TD={td:.4e}\nCl r 0 {cload}\n.tran 5p 6n\n.control\nrun\n"
-                f"meas tran vmax MAX v(r) from=0.3n to=6n\nmeas tran vmin MIN v(r) from=1n to=6n\n"
+                f"meas tran vmax MAX v(r) from={edge_ns}n to=6n\nmeas tran vmin MIN v(r) from=1n to=6n\n"
                 f"print vmax vmin\n.endc\n.end\n")
         with tempfile.NamedTemporaryFile("w", suffix=".cir", delete=False) as f:
             f.write(deck); cir = f.name
@@ -497,12 +544,16 @@ def si_check(board_path: str, nets: list[str], *, z0: float = 50.0, rs: float = 
         if vmax is None:
             continue
         over = max(0.0, (vmax - vdd) / vdd * 100); under = max(0.0, -vmin / vdd * 100)
-        st = "pass" if over < 10 and under < 10 else ("warn" if over < 20 and under < 20 else "fail")
+        st = si_status(over, under, overshoot_pass_pct, overshoot_warn_pct)
         res.append({"net": nm, "len_mm": round(L, 2), "overshoot_pct": round(over, 1),
                     "undershoot_pct": round(under, 1), "status": st})
     order = {"pass": 0, "warn": 1, "fail": 2}
     worst = max((order[r["status"]] for r in res), default=0)
-    return {"z0": z0, "rs": rs, "nets": res, "worst": ["pass", "warn", "fail"][worst]}
+    return {"z0": z0, "rs": rs, "nets": res, "worst": ["pass", "warn", "fail"][worst],
+            "effective": {"z0": z0, "rs": rs, "vdd": vdd, "ps_per_mm": ps_per_mm,
+                          "rdrv": rdrv, "cload": cload, "edge_ns": edge_ns,
+                          "overshoot_pass_pct": overshoot_pass_pct,
+                          "overshoot_warn_pct": overshoot_warn_pct}}
 
 
 # -------------------------------------------------------------------------------- autoroute (opt)

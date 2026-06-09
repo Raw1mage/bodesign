@@ -456,6 +456,21 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("in_path", self.server.PATH_ARG_KEYS)
         self.assertIn("out_path", self.server.PATH_ARG_KEYS)
 
+    def test_route_net2pcb_exposes_connector_pinmap_override(self):
+        # H1: the connector pin map must be a reachable caller input (no silent J1 gating).
+        spec = self.server.TOOLS_BY_NAME["bodesign_route_net2pcb"]
+        self.assertEqual(spec["group"], "ee")
+        self.assertIn("connectors", spec["schema"]["properties"])
+        self.assertIn("applied_pinmaps", spec["description"])
+        self.assertIn("unmapped_connectors", spec["description"])
+
+    def test_si_check_exposes_driver_load_and_threshold_overrides(self):
+        # H2: rdrv/cload/edge/thresholds must be reachable inputs, not hidden defaults.
+        spec = self.server.TOOLS_BY_NAME["bodesign_si_check"]
+        self.assertEqual(spec["group"], "ee")
+        for k in ("rdrv", "cload", "edge_ns", "overshoot_pass_pct", "overshoot_warn_pct"):
+            self.assertIn(k, spec["schema"]["properties"])
+
     def test_render_gerber_preview_schema_and_core_unavailable_mode(self):
         spec = self.server.TOOLS_BY_NAME["bodesign_render_gerber_preview"]
 
