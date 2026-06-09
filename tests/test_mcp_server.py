@@ -624,6 +624,78 @@ class McpServerTests(unittest.TestCase):
         server = self.server.build_server()
         self.assertEqual("bodesign", server.name)
 
+    def test_socket_level_list_and_call_smoke(self):
+        """T10: real MCP JSON-RPC roundtrip through the actual server process.
+
+        Spawns ``server.py --transport stdio`` as a subprocess and drives it with
+        the official MCP client (initialize -> list_tools -> call_tool). Proves the
+        new C04 tools are reachable through the real protocol path, that the pure
+        core tool returns a structured result, and that an EE-group board tool fails
+        fast (never fabricates success) when no worker can run pcbnew here. Skipped
+        unless the MCP SDK is installed (host interpreter has no socket transport).
+        """
+        try:
+            import mcp  # noqa: F401
+        except ImportError:
+            self.skipTest("mcp SDK not installed in this interpreter")
+        import asyncio
+        import sys
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        repo = Path(self.server.__file__).resolve().parents[2]
+        pkgs = ["services/mcp", "packages/workflow-core", "packages/eda-bridge",
+                "packages/gerber-core", "packages/reverse-core", "packages/me-bridge",
+                "packages/shared"]
+        new_tools = {"bodesign_impedance_solve", "bodesign_widen_bus_tracks",
+                     "bodesign_length_match_bus", "bodesign_render_gerber_preview"}
+
+        async def roundtrip():
+            env = dict(os.environ)
+            env["PYTHONPATH"] = os.pathsep.join(str(repo / p) for p in pkgs)
+            params = StdioServerParameters(
+                command=sys.executable,
+                args=[str(repo / "services/mcp/server.py"), "--transport", "stdio"],
+                env=env,
+            )
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    init = await session.initialize()
+                    self.assertEqual("bodesign", init.serverInfo.name)
+
+                    listed = await session.list_tools()
+                    names = {t.name for t in listed.tools}
+                    self.assertTrue(new_tools <= names,
+                                    f"new C04 tools missing from list_tools: {new_tools - names}")
+
+                    res = await session.call_tool("bodesign_impedance_solve", {
+                        "stackup": {"dielectric_height_mm": 0.1, "er": 4.2,
+                                    "copper_thickness_mm": 0.035},
+                        "targets": [
+                            {"name": "se50", "impedance_ohm": 50, "kind": "single"},
+                            {"name": "usb_dp", "impedance_ohm": 90, "kind": "diff",
+                             "gap_mm": 0.15},
+                        ],
+                    })
+                    env_payload = json.loads(res.content[0].text)
+                    self.assertTrue(env_payload.get("ok"), env_payload)
+                    classes = env_payload["result"]["classes"]
+                    self.assertEqual("single-ended", classes["se50"]["kind"])
+                    self.assertEqual("differential", classes["usb_dp"]["kind"])
+                    self.assertIn("gap_mm", classes["usb_dp"])
+                    self.assertTrue(env_payload["result"].get("warnings"))
+
+                    res2 = await session.call_tool("bodesign_widen_bus_tracks", {
+                        "in_path": "/nonexistent/none.kicad_pcb",
+                        "out_path": str(PRIVATE_BASE / "none.out.kicad_pcb"),
+                        "nets": ["D0"], "target_mm": 0.2,
+                    })
+                    env2 = json.loads(res2.content[0].text)
+                    self.assertFalse(env2.get("ok"),
+                                     f"EE board tool must not fabricate success: {env2}")
+
+        asyncio.run(roundtrip())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,7 @@
 - [x] T7 — Register `bodesign_length_match_bus` and route it to EE worker.
 - [x] T8 — Consolidate Gerber preview scripts behind one MCP preview tool or record dependency blocker.
 - [x] T9 — Add direct/unit tests for handlers, tool grouping, and pure math outputs.
-- [!] T10 — Run socket-level smoke tests for new MCP tools. Blocked in current host Python: MCP SDK unavailable (`test_build_server_when_mcp_available` skipped), so real socket-level MCP list/call cannot be launched here.
+- [x] T10 — Run socket-level smoke tests for new MCP tools. Done via `tests.test_mcp_server.McpServerTests.test_socket_level_list_and_call_smoke`: spawns `server.py --transport stdio` and drives a real MCP client (initialize → list_tools → call_tool). Verified all 4 new C04 tools listed, `bodesign_impedance_solve` returns a structured core result (se50=50.0Ω, usb_dp=90.0Ω diff), and EE-group `bodesign_widen_bus_tracks` fails fast (`ok:false`) without a worker. Test is gated on `import mcp`, so it runs in an MCP-SDK env and skips gracefully on the bare host interpreter.
 - [x] T11 — Update event log and architecture sync notes before completion.
 
 ## Dependencies

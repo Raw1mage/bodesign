@@ -1,16 +1,16 @@
 {
-  "state": "implementing",
+  "state": "verified",
   "slug": "feature_eda-mcp-toolchain",
   "title": "EDA MCP Toolchain Integration",
   "mode": "plan-builder",
   "source_experience": "OpenMV/STM32N657 C04 board run",
   "created": "2026-06-09",
   "approval_required_before_implementation": false,
-  "current_task": "T10",
+  "current_task": null,
   "verification": {
     "unit": "passed (19 ok, 1 skipped) on 2026-06-09",
-    "socket_smoke": "blocked: host interpreter lacks MCP SDK",
-    "blocks_verified_state_until": "T10 socket-level MCP list/call proven in an MCP-SDK environment"
+    "socket_smoke": "passed 2026-06-09: real MCP stdio initialize+list_tools+call_tool roundtrip (tests.test_mcp_server.test_socket_level_list_and_call_smoke), run in an MCP-SDK venv; skips on bare host",
+    "env_gated_remaining": "real-board EE widen/length-match and KiCad/pcbnew execution still require an EE worker with pcbnew; not exercisable on this host"
   },
-  "notes": "T2-T9,T11 done and committed; HEAD repaired 2026-06-09 (impedance.py + gerber preview impl had been left untracked while their wiring was committed)."
+  "notes": "All tasks T2-T11 done. HEAD repaired 2026-06-09 (impedance.py + gerber preview impl had been left untracked while their wiring was committed). T10 socket smoke unblocked by a durable, mcp-gated test."
 }
