@@ -210,6 +210,241 @@ def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool 
     return {"board": out_path, "zones": out, "stitch_vias": stitched}
 
 
+# ------------------------------------------------------------------------- clearance-safe widening
+def _distance_point_to_segment(px: int, py: int, ax: int, ay: int, bx: int, by: int) -> float:
+    dx, dy = bx - ax, by - ay
+    if dx == 0 and dy == 0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / float(dx * dx + dy * dy)))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def _distance_segments(a1: Any, a2: Any, b1: Any, b2: Any) -> float:
+    def ccw(p1: Any, p2: Any, p3: Any) -> bool:
+        return (p3.y - p1.y) * (p2.x - p1.x) > (p2.y - p1.y) * (p3.x - p1.x)
+
+    if ccw(a1, b1, b2) != ccw(a2, b1, b2) and ccw(a1, a2, b1) != ccw(a1, a2, b2):
+        return 0.0
+    return min(
+        _distance_point_to_segment(a1.x, a1.y, b1.x, b1.y, b2.x, b2.y),
+        _distance_point_to_segment(a2.x, a2.y, b1.x, b1.y, b2.x, b2.y),
+        _distance_point_to_segment(b1.x, b1.y, a1.x, a1.y, a2.x, a2.y),
+        _distance_point_to_segment(b2.x, b2.y, a1.x, a1.y, a2.x, a2.y),
+    )
+
+
+def _pad_radius_iu(pad: Any) -> float:
+    try:
+        box = pad.GetBoundingBox()
+        return math.hypot(box.GetWidth(), box.GetHeight()) / 2.0
+    except Exception:
+        return 0.0
+
+
+def _widening_is_clear(board: Any, track: Any, target_iu: int, clearance_iu: int) -> bool:
+    required_new_radius = target_iu / 2.0
+    start, end = track.GetStart(), track.GetEnd()
+    netname = track.GetNetname()
+    layer = track.GetLayer()
+    for other in board.GetTracks():
+        if other is track or other.GetNetname() == netname:
+            continue
+        if other.GetClass() == 'PCB_TRACK' and other.GetLayer() == layer:
+            gap = _distance_segments(start, end, other.GetStart(), other.GetEnd())
+            if gap < required_new_radius + other.GetWidth() / 2.0 + clearance_iu:
+                return False
+        elif other.GetClass() == 'PCB_VIA':
+            gap = _distance_point_to_segment(other.GetPosition().x, other.GetPosition().y, start.x, start.y, end.x, end.y)
+            if gap < required_new_radius + other.GetWidth() / 2.0 + clearance_iu:
+                return False
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetname() == netname:
+                continue
+            gap = _distance_point_to_segment(pad.GetPosition().x, pad.GetPosition().y, start.x, start.y, end.x, end.y)
+            if gap < required_new_radius + _pad_radius_iu(pad) + clearance_iu:
+                return False
+    return True
+
+
+def widen_bus_tracks(in_path: str, out_path: str, nets: list[str], target_mm: float,
+                     *, clearance_mm: float = 0.13) -> dict:
+    """Widen routed bus segments to `target_mm` only when nearby foreign copper/pads keep clearance."""
+    if not in_path or not out_path:
+        raise ValueError("in_path and out_path are required")
+    if not isinstance(nets, list) or not nets or not all(isinstance(n, str) and n for n in nets):
+        raise ValueError("nets must be a non-empty list of net names")
+    if target_mm <= 0:
+        raise ValueError("target_mm must be > 0")
+    if clearance_mm < 0:
+        raise ValueError("clearance_mm must be >= 0")
+    _need_pcbnew()
+    board = pcbnew.LoadBoard(in_path)
+    target_iu = pcbnew.FromMM(float(target_mm)); clearance_iu = pcbnew.FromMM(float(clearance_mm))
+    netset = set(nets); widened = kept = 0
+    for track in board.GetTracks():
+        if track.GetClass() != 'PCB_TRACK' or track.GetNetname() not in netset:
+            continue
+        if track.GetWidth() >= target_iu:
+            kept += 1; continue
+        if _widening_is_clear(board, track, target_iu, clearance_iu):
+            track.SetWidth(target_iu); widened += 1
+        else:
+            kept += 1
+    pcbnew.SaveBoard(out_path, board)
+    return {"board": out_path, "widened": widened, "kept": kept, "target_mm": target_mm}
+
+
+# ------------------------------------------------------------------- clearance-aware length match
+def _track_length_mm(track: Any) -> float:
+    return math.hypot(track.GetEnd().x - track.GetStart().x, track.GetEnd().y - track.GetStart().y) / 1e6
+
+
+def _net_track_lengths(board: Any, netset: set[str]) -> dict[str, float]:
+    return {
+        net: sum(_track_length_mm(t) for t in board.GetTracks()
+                 if t.GetClass() == 'PCB_TRACK' and t.GetNetname() == net)
+        for net in netset
+    }
+
+
+def _segment_is_clear(board: Any, netname: str, layer: int, width_iu: int, clearance_iu: int,
+                      start: Any, end: Any, *, ignore: Any | None = None) -> bool:
+    required_radius = width_iu / 2.0
+    for other in board.GetTracks():
+        if other is ignore or other.GetNetname() == netname:
+            continue
+        if other.GetClass() == 'PCB_TRACK' and other.GetLayer() == layer:
+            gap = _distance_segments(start, end, other.GetStart(), other.GetEnd())
+            if gap < required_radius + other.GetWidth() / 2.0 + clearance_iu:
+                return False
+        elif other.GetClass() == 'PCB_VIA':
+            gap = _distance_point_to_segment(other.GetPosition().x, other.GetPosition().y, start.x, start.y, end.x, end.y)
+            if gap < required_radius + other.GetWidth() / 2.0 + clearance_iu:
+                return False
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetname() == netname:
+                continue
+            gap = _distance_point_to_segment(pad.GetPosition().x, pad.GetPosition().y, start.x, start.y, end.x, end.y)
+            if gap < required_radius + _pad_radius_iu(pad) + clearance_iu:
+                return False
+    return True
+
+
+def _points_inside_board_edges(board: Any, points: list[Any], clearance_iu: int) -> bool:
+    try:
+        box = board.GetBoardEdgesBoundingBox()
+        return all(
+            box.GetLeft() + clearance_iu <= p.x <= box.GetRight() - clearance_iu and
+            box.GetTop() + clearance_iu <= p.y <= box.GetBottom() - clearance_iu
+            for p in points
+        )
+    except Exception:
+        return True
+
+
+def _try_insert_serpentine(board: Any, netname: str, add_mm: float, clearance_iu: int) -> float:
+    candidates = sorted(
+        (t for t in board.GetTracks() if t.GetClass() == 'PCB_TRACK' and t.GetNetname() == netname),
+        key=_track_length_mm,
+        reverse=True,
+    )
+    if add_mm <= 0 or not candidates or not hasattr(board, "Remove"):
+        return 0.0
+    add_iu = pcbnew.FromMM(float(add_mm))
+    min_leg_iu = pcbnew.FromMM(0.25)
+    for track in candidates:
+        start = track.GetStart(); end = track.GetEnd()
+        dx, dy = end.x - start.x, end.y - start.y
+        length_iu = math.hypot(dx, dy)
+        if length_iu < min_leg_iu * 4:
+            continue
+        margin_iu = max(min_leg_iu, min(length_iu / 4.0, pcbnew.FromMM(1.0)))
+        amp_iu = add_iu / 2.0
+        if amp_iu < min_leg_iu or amp_iu > length_iu:
+            continue
+        ux, uy = dx / length_iu, dy / length_iu
+        nx, ny = -uy, ux
+        p1 = pcbnew.VECTOR2I(int(start.x + ux * margin_iu), int(start.y + uy * margin_iu))
+        p4 = pcbnew.VECTOR2I(int(end.x - ux * margin_iu), int(end.y - uy * margin_iu))
+        for direction in (1.0, -1.0):
+            p2 = pcbnew.VECTOR2I(int(p1.x + nx * amp_iu * direction), int(p1.y + ny * amp_iu * direction))
+            p3 = pcbnew.VECTOR2I(int(p4.x + nx * amp_iu * direction), int(p4.y + ny * amp_iu * direction))
+            points = [start, p1, p2, p3, p4, end]
+            if not _points_inside_board_edges(board, points, clearance_iu):
+                continue
+            legs = list(zip(points[:-1], points[1:]))
+            if not all(_segment_is_clear(board, netname, track.GetLayer(), track.GetWidth(), clearance_iu, a, b, ignore=track)
+                       for a, b in legs):
+                continue
+            board.Remove(track)
+            for a, b in legs:
+                segment = pcbnew.PCB_TRACK(board)
+                segment.SetStart(a); segment.SetEnd(b); segment.SetLayer(track.GetLayer())
+                segment.SetWidth(track.GetWidth()); segment.SetNet(track.GetNet())
+                board.Add(segment)
+            return add_mm
+    return 0.0
+
+
+def length_match_bus(in_path: str, out_path: str, nets: list[str], budget_ps: float,
+                     ps_per_mm: float, *, report_path: str | None = None,
+                     clearance_mm: float = 0.13) -> dict:
+    """Tune routed bus skew with clearance-aware single-detour serpentine insertion where safe."""
+    if not in_path or not out_path:
+        raise ValueError("in_path and out_path are required")
+    if not isinstance(nets, list) or not nets or not all(isinstance(n, str) and n for n in nets):
+        raise ValueError("nets must be a non-empty list of net names")
+    if budget_ps is None or float(budget_ps) < 0:
+        raise ValueError("budget_ps must be >= 0")
+    if ps_per_mm is None or float(ps_per_mm) <= 0:
+        raise ValueError("ps_per_mm must be > 0")
+    if clearance_mm < 0:
+        raise ValueError("clearance_mm must be >= 0")
+    _need_pcbnew()
+    board = pcbnew.LoadBoard(in_path)
+    netset = set(nets)
+    missing = [net for net in nets if board.FindNet(net) is None]
+    if missing:
+        raise ValueError(f"missing nets: {', '.join(missing)}")
+    initial = _net_track_lengths(board, netset)
+    unrouted = [net for net, length in initial.items() if length <= 0]
+    if unrouted:
+        raise ValueError(f"nets have no routed PCB_TRACK segments: {', '.join(sorted(unrouted))}")
+
+    target_mm = max(initial.values())
+    clearance_iu = pcbnew.FromMM(float(clearance_mm))
+    per_net = []
+    tuned = 0
+    for net in nets:
+        need_mm = target_mm - initial[net]
+        added_mm = 0.0
+        status = "kept"
+        if need_mm > 0 and need_mm * float(ps_per_mm) > float(budget_ps):
+            added_mm = _try_insert_serpentine(board, net, need_mm, clearance_iu)
+            if added_mm > 0:
+                tuned += 1; status = "tuned"
+            else:
+                status = "untuned-clearance"
+        per_net.append({"net": net, "initial_mm": round(initial[net], 3), "added_mm": round(added_mm, 3), "status": status})
+
+    final = _net_track_lengths(board, netset)
+    spread_mm = max(final.values()) - min(final.values())
+    spread_ps = spread_mm * float(ps_per_mm)
+    by_net = {entry["net"]: entry for entry in per_net}
+    for net in nets:
+        by_net[net]["length_mm"] = round(final[net], 3)
+    result = {"board": out_path, "lengths": per_net, "spread_mm": round(spread_mm, 3),
+              "spread_ps": round(spread_ps, 3), "within_budget": spread_ps <= float(budget_ps),
+              "tuned": tuned, "total": len(nets)}
+    pcbnew.SaveBoard(out_path, board)
+    if report_path:
+        with open(report_path, "w") as report:
+            json.dump(result, report, indent=2)
+    return result
+
+
 # ------------------------------------------------------------------------------ drc gate (honest)
 def drc_gate(board_path: str) -> dict:
     """Run DRC and split copper/unconnected (hard) from silk (cosmetic)."""

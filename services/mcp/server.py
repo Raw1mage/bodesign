@@ -398,6 +398,11 @@ def _h_mcp_call(a: dict) -> Any:
     return call_external_mcp_tool(a["server"], a["tool"], a.get("arguments"))
 
 
+def _h_impedance_solve(a: dict) -> Any:
+    from bodesign_eda_bridge import solve_impedance
+    return solve_impedance(a["stackup"], a["targets"])
+
+
 def _h_route_net2pcb(a: dict) -> Any:
     from bodesign_eda_bridge import net2pcb_board
     return net2pcb_board(a["netlist_path"], a["out_path"], layers=a.get("layers", 2),
@@ -417,6 +422,18 @@ def _h_pour_planes(a: dict) -> Any:
     return pour_planes(a["in_path"], a["out_path"], a["planes"], stitch=a.get("stitch", True))
 
 
+def _h_widen_bus_tracks(a: dict) -> Any:
+    from bodesign_eda_bridge import widen_bus_tracks
+    return widen_bus_tracks(a["in_path"], a["out_path"], a["nets"], a["target_mm"],
+                            clearance_mm=a.get("clearance_mm", 0.13))
+
+
+def _h_length_match_bus(a: dict) -> Any:
+    from bodesign_eda_bridge import length_match_bus
+    return length_match_bus(a["in_path"], a["out_path"], a["nets"], a["budget_ps"], a["ps_per_mm"],
+                            report_path=a.get("report_path"), clearance_mm=a.get("clearance_mm", 0.13))
+
+
 def _h_layout_drc_gate(a: dict) -> Any:
     from bodesign_eda_bridge import drc_gate
     return drc_gate(a["board_path"])
@@ -433,8 +450,17 @@ def _h_autoroute(a: dict) -> Any:
     return autoroute(a["board_path"], a["out_path"], passes=a.get("passes", 40))
 
 
+def _h_render_gerber_preview(a: dict) -> Any:
+    from bodesign_gerber_core import render_gerber_preview
+    return render_gerber_preview(a["gerber_dir"], a["out_path"], a["mode"],
+                                 drill_dir=a.get("drill_dir"), layer_glob=a.get("layer_glob"))
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
+    {"name": "bodesign_impedance_solve", "handler": _h_impedance_solve,
+     "description": "Pure-python C04 impedance estimate: solve microstrip class widths and delay constants from explicit stackup and target impedances. Differential targets require gap_mm or width_mm; outputs are guidance only and require fab field-solver confirmation.",
+     "schema": {"type": "object", "properties": {"stackup": {"type": "object"}, "targets": {}}, "required": ["stackup", "targets"]}},
     {"name": "bodesign_route_net2pcb", "handler": _h_route_net2pcb,
      "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Returns placed/nets/pads_assigned/unmapped; unmapped>0 means a footprint's pad names don't match the symbol (floating part).",
      "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}}, "required": ["netlist_path", "out_path"]}},
@@ -444,6 +470,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_pour_planes", "handler": _h_pour_planes,
      "description": "Pour filled copper plane zones (e.g. ['In1.Cu:GND','In4.Cu:V3V3']) + optional GND stitching vias, giving high-speed nets a solid impedance reference plane.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR}, "stitch": {"type": "boolean"}}, "required": ["in_path", "out_path", "planes"]}},
+    {"name": "bodesign_widen_bus_tracks", "handler": _h_widen_bus_tracks,
+     "description": "Clearance-safe C04 bus finishing: widen selected routed bus tracks to target_mm only where foreign copper/pads keep clearance_mm; writes a new .kicad_pcb and returns widened/kept counts.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "target_mm": {"type": "number"}, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "target_mm"]}},
+    {"name": "bodesign_length_match_bus", "handler": _h_length_match_bus,
+     "description": "Clearance-aware C04 bus length matching: add safe serpentine detours to short routed nets when possible; writes a new .kicad_pcb and returns per-net lengths, skew, budget status, tuned count, and explicit untuned statuses.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "budget_ps": {"type": "number"}, "ps_per_mm": {"type": "number"}, "report_path": _STR, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "budget_ps", "ps_per_mm"]}},
     {"name": "bodesign_layout_drc_gate", "handler": _h_layout_drc_gate,
      "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool.",
      "schema": {"type": "object", "properties": {"board_path": _STR}, "required": ["board_path"]}},
@@ -453,6 +485,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_autoroute", "handler": _h_autoroute,
      "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}}, "required": ["board_path", "out_path"]}},
+    {"name": "bodesign_render_gerber_preview", "handler": _h_render_gerber_preview,
+     "description": "C04 Gerber preview evidence: render a real Gerber layer through the gerber-core pygerber raster path. Unsupported composite modes return render-unavailable instead of drawing a decorative fallback.",
+     "schema": {"type": "object", "properties": {"gerber_dir": _STR, "out_path": _STR, "mode": _STR, "drill_dir": _STR, "layer_glob": _STR}, "required": ["gerber_dir", "out_path", "mode"]}},
     {"name": "bodesign_mcp_call", "handler": _h_mcp_call,
      "description": "MCP-to-MCP delegation: call a tool on an external MCP server registered by name (via BODESIGN_MCP_SERVERS or BODESIGN_MCP_<NAME>_URL) and return its result. Use to drive docxmcp/drawmiat/other MCP servers through bodesign. Degrades cleanly: an unconfigured server is worker_unavailable, a configured-but-unreachable one is worker_starting (retryable); never fabricates a result.",
      "schema": {"type": "object", "properties": {"server": _STR, "tool": _STR, "arguments": {"type": "object"}},
@@ -688,6 +723,8 @@ _EE_GROUP_TOOLS = {
     "bodesign_route_net2pcb",
     "bodesign_via_in_pad",
     "bodesign_pour_planes",
+    "bodesign_widen_bus_tracks",
+    "bodesign_length_match_bus",
     "bodesign_layout_drc_gate",
     "bodesign_si_check",
     "bodesign_autoroute",
@@ -766,7 +803,7 @@ def _forward_to_worker(url: str, name: str, arguments: dict, group: str = "?") -
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
 # local same-host UDS mode).
-PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "output_path", "corpus_dir", "schematic_path", "pcb_path")
+PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "in_path", "out_path", "output_path", "report_path", "corpus_dir", "schematic_path", "pcb_path", "gerber_dir", "drill_dir")
 
 
 def _snapshot(doc_dir: Path) -> dict:

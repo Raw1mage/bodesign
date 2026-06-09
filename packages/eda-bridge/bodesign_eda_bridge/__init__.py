@@ -14,6 +14,7 @@ from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
 from .layout import LayoutResult, PCBNEW_AVAILABLE, emit_layout
 from .model_render import ModelRenderResult, render_board_model
+from .impedance import solve_impedance
 from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocation, render_pin_allocation_csv, render_pin_allocation_md
 from .simulate import SimResult, simulate_schematic
 from .pcb_verify import PcbVerifyResult, analyze_emc, analyze_thermal
@@ -21,19 +22,23 @@ from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map
 from .routing import (
     autoroute,
     drc_gate,
+    length_match_bus,
     net2pcb_board,
     pour_planes,
     si_check,
     via_in_pad,
+    widen_bus_tracks,
 )
 
 __all__ = [
     "autoroute",
     "drc_gate",
+    "length_match_bus",
     "net2pcb_board",
     "pour_planes",
     "si_check",
     "via_in_pad",
+    "widen_bus_tracks",
     "BomResult",
     "ComposeResult",
     "EmitComponent",
@@ -55,6 +60,7 @@ __all__ = [
     "SimResult",
     "analyze_emc",
     "analyze_thermal",
+    "solve_impedance",
     "simulate_schematic",
     "build_pin_allocation",
     "render_pin_allocation_csv",
