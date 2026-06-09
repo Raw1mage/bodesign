@@ -12,8 +12,6 @@ from .vault import (
     audit_claims,
     list_entries,
     lookup,
-    propose_vcc_from_text,
-    register,
     spec_check,
     vault_root,
 )
@@ -27,12 +25,10 @@ __all__ = [
     "component_knowledge_key",
     "ingest_datasheet_knowledge",
     "reuse_component_knowledge",
-    # datasheet vault (lazy, MPN-keyed, provenance-tracked)
+    # RCA spec gate over the `datasheets` skill's per-project extraction cache
     "vault_root",
     "lookup",
-    "register",
     "spec_check",
     "audit_claims",
     "list_entries",
-    "propose_vcc_from_text",
 ]
