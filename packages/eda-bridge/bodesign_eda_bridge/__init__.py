@@ -18,8 +18,22 @@ from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocatio
 from .simulate import SimResult, simulate_schematic
 from .pcb_verify import PcbVerifyResult, analyze_emc, analyze_thermal
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints
+from .routing import (
+    autoroute,
+    drc_gate,
+    net2pcb_board,
+    pour_planes,
+    si_check,
+    via_in_pad,
+)
 
 __all__ = [
+    "autoroute",
+    "drc_gate",
+    "net2pcb_board",
+    "pour_planes",
+    "si_check",
+    "via_in_pad",
     "BomResult",
     "ComposeResult",
     "EmitComponent",

@@ -398,8 +398,61 @@ def _h_mcp_call(a: dict) -> Any:
     return call_external_mcp_tool(a["server"], a["tool"], a.get("arguments"))
 
 
+def _h_route_net2pcb(a: dict) -> Any:
+    from bodesign_eda_bridge import net2pcb_board
+    return net2pcb_board(a["netlist_path"], a["out_path"], layers=a.get("layers", 2),
+                         plane_layers=a.get("plane_layers"), track_mm=a.get("track_mm"),
+                         placement=a.get("placement"), fpdir=a.get("fpdir"),
+                         clearance_mm=a.get("clearance_mm", 0.13))
+
+
+def _h_via_in_pad(a: dict) -> Any:
+    from bodesign_eda_bridge import via_in_pad
+    return via_in_pad(a["in_path"], a["out_path"], a["refs"], drill_mm=a.get("drill_mm", 0.2),
+                      pad_mm=a.get("pad_mm", 0.3), keep_rings=a.get("keep_rings", 2))
+
+
+def _h_pour_planes(a: dict) -> Any:
+    from bodesign_eda_bridge import pour_planes
+    return pour_planes(a["in_path"], a["out_path"], a["planes"], stitch=a.get("stitch", True))
+
+
+def _h_layout_drc_gate(a: dict) -> Any:
+    from bodesign_eda_bridge import drc_gate
+    return drc_gate(a["board_path"])
+
+
+def _h_si_check(a: dict) -> Any:
+    from bodesign_eda_bridge import si_check
+    return si_check(a["board_path"], a["nets"], z0=a.get("z0", 50.0), rs=a.get("rs", 22.0),
+                    vdd=a.get("vdd", 1.8))
+
+
+def _h_autoroute(a: dict) -> Any:
+    from bodesign_eda_bridge import autoroute
+    return autoroute(a["board_path"], a["out_path"], passes=a.get("passes", 40))
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
+    {"name": "bodesign_route_net2pcb", "handler": _h_route_net2pcb,
+     "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Returns placed/nets/pads_assigned/unmapped; unmapped>0 means a footprint's pad names don't match the symbol (floating part).",
+     "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}}, "required": ["netlist_path", "out_path"]}},
+    {"name": "bodesign_via_in_pad", "handler": _h_via_in_pad,
+     "description": "Fine-pitch BGA via-in-pad fanout: drop a through-via through each netted ball pad of the given refs (except the outer keep_rings rings, which escape on the surface) so inner balls reach inner signal layers. Needs a filled+capped (POFV) process — JLCPCB advanced.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "refs": {"type": "array", "items": _STR}, "drill_mm": {"type": "number"}, "pad_mm": {"type": "number"}, "keep_rings": {"type": "integer"}}, "required": ["in_path", "out_path", "refs"]}},
+    {"name": "bodesign_pour_planes", "handler": _h_pour_planes,
+     "description": "Pour filled copper plane zones (e.g. ['In1.Cu:GND','In4.Cu:V3V3']) + optional GND stitching vias, giving high-speed nets a solid impedance reference plane.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR}, "stitch": {"type": "boolean"}}, "required": ["in_path", "out_path", "planes"]}},
+    {"name": "bodesign_layout_drc_gate", "handler": _h_layout_drc_gate,
+     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool.",
+     "schema": {"type": "object", "properties": {"board_path": _STR}, "required": ["board_path"]}},
+    {"name": "bodesign_si_check", "handler": _h_si_check,
+     "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "nets": {"type": "array", "items": _STR}, "z0": {"type": "number"}, "rs": {"type": "number"}, "vdd": {"type": "number"}}, "required": ["board_path", "nets"]}},
+    {"name": "bodesign_autoroute", "handler": _h_autoroute,
+     "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}}, "required": ["board_path", "out_path"]}},
     {"name": "bodesign_mcp_call", "handler": _h_mcp_call,
      "description": "MCP-to-MCP delegation: call a tool on an external MCP server registered by name (via BODESIGN_MCP_SERVERS or BODESIGN_MCP_<NAME>_URL) and return its result. Use to drive docxmcp/drawmiat/other MCP servers through bodesign. Degrades cleanly: an unconfigured server is worker_unavailable, a configured-but-unreachable one is worker_starting (retryable); never fabricates a result.",
      "schema": {"type": "object", "properties": {"server": _STR, "tool": _STR, "arguments": {"type": "object"}},
@@ -631,6 +684,13 @@ _EE_GROUP_TOOLS = {
     "bodesign_export_bom",
     "bodesign_export_netlist",
     "bodesign_render_companion",
+    # C04 routing / layout-finishing (pcbnew + ngspice; autoroute needs freerouting in the worker)
+    "bodesign_route_net2pcb",
+    "bodesign_via_in_pad",
+    "bodesign_pour_planes",
+    "bodesign_layout_drc_gate",
+    "bodesign_si_check",
+    "bodesign_autoroute",
 }
 
 
