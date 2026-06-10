@@ -1,0 +1,63 @@
+[
+  {
+    "id": "SC1",
+    "diagram_title": "Datasheet ingest (user-provided PDF)",
+    "name": "Datasheet ingest (user-provided PDF)",
+    "traceability": { "idef0": ["A1", "A2", "A3", "A4"], "grafcet_steps": [0, 1, 2, 3, 4], "requirements": ["R1", "R2", "R3", "R4"] },
+    "participants": [
+      { "id": "P1", "name": "MCP client (IDE/agent)", "componentRef": "CT2" },
+      { "id": "P2", "name": "vault repository", "componentRef": "C2" },
+      { "id": "P3", "name": "doc-core extractor", "componentRef": "CT6" },
+      { "id": "P4", "name": "vault.db", "componentRef": "CT4" },
+      { "id": "P5", "name": "blob store", "componentRef": "CT5" }
+    ],
+    "messages": [
+      { "id": "MSG1", "from": "P1", "to": "P2", "label": "vault_ingest(mpn, pdf_path, provenance=user-provided)" },
+      { "id": "MSG2", "from": "P2", "to": "P4", "label": "upsert component identity (canonical_key, aliases)" },
+      { "id": "MSG3", "from": "P2", "to": "P5", "label": "write blob (sha256-addressed) — BEFORE DB commit" },
+      { "id": "MSG4", "from": "P2", "to": "P4", "label": "insert document row (sha256 dedup; on hit: link only)" },
+      { "id": "MSG5", "from": "P2", "to": "P3", "label": "decompose(document) → chunks with page/table anchors" },
+      { "id": "MSG6", "from": "P2", "to": "P4", "label": "insert chunks + FTS5 index; mark superseded stale" },
+      { "id": "MSG7", "from": "P2", "to": "P4", "label": "insert spec_values/pins/packages (trigger: verified requires evidence)" },
+      { "id": "MSG8", "from": "P2", "to": "P4", "label": "append audit_log + refresh knowledge_gaps" },
+      { "id": "MSG9", "from": "P2", "to": "P1", "label": "ingest summary {written, confidence, gaps[]}" }
+    ]
+  },
+  {
+    "id": "SC2",
+    "diagram_title": "RCA spec_check (grounded answer)",
+    "name": "RCA spec_check (grounded answer)",
+    "traceability": { "idef0": ["A5"], "grafcet_steps": [5], "requirements": ["R7", "R9"] },
+    "participants": [
+      { "id": "P1", "name": "MCP client (RCA agent)", "componentRef": "CT2" },
+      { "id": "P2", "name": "vault.py gate", "componentRef": "C5" },
+      { "id": "P4", "name": "vault.db", "componentRef": "CT4" },
+      { "id": "P6", "name": "client datasheets/ cache", "componentRef": "SYS2" }
+    ],
+    "messages": [
+      { "id": "MSG1", "from": "P1", "to": "P2", "label": "spec_check(mpn, field, claimed_value)" },
+      { "id": "MSG2", "from": "P2", "to": "P4", "label": "query spec_values by canonical_key + field_path" },
+      { "id": "MSG3", "from": "P2", "to": "P6", "label": "parallel check: client cache extraction (source labeled, no silent fallback)" },
+      { "id": "MSG4", "from": "P2", "to": "P1", "label": "verdict {verified|unverified|no-field|absent, value, source, origin: server-vault|client-cache}" }
+    ]
+  },
+  {
+    "id": "SC3",
+    "diagram_title": "Client cache import",
+    "name": "Client cache import",
+    "traceability": { "idef0": ["A1", "A4", "A5"], "grafcet_steps": [1, 4, 5], "requirements": ["R9"] },
+    "participants": [
+      { "id": "P1", "name": "MCP client", "componentRef": "CT2" },
+      { "id": "P2", "name": "vault repository", "componentRef": "C2" },
+      { "id": "P4", "name": "vault.db", "componentRef": "CT4" },
+      { "id": "P6", "name": "client datasheets/extracted/", "componentRef": "SYS2" }
+    ],
+    "messages": [
+      { "id": "MSG1", "from": "P1", "to": "P2", "label": "vault_import(manifest.json entries)" },
+      { "id": "MSG2", "from": "P2", "to": "P6", "label": "read extraction JSONs (client-granted)" },
+      { "id": "MSG3", "from": "P2", "to": "P4", "label": "upsert specs (provenance=client-cache-import; no real source → unverified)" },
+      { "id": "MSG4", "from": "P2", "to": "P4", "label": "conflict: keep both rows, distinct conditions/provenance — never silent overwrite" },
+      { "id": "MSG5", "from": "P2", "to": "P1", "label": "import report {imported, conflicts[], gaps[]}" }
+    ]
+  }
+]

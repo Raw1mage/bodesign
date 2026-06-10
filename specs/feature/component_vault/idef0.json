@@ -1,0 +1,54 @@
+{
+  "diagram_title": "Cultivate Component Knowledge Vault",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Resolve Component Identity",
+      "description": "Normalize MPN to canonical key, resolve aliases/family variants/distributor PNs, upsert components and manufacturers (L1).",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Ingest Source Documents",
+      "description": "Dedup by sha256, store blobs, record provenance and revision chain, link documents to MPNs (L2).",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Extract Source Chunks",
+      "description": "Decompose documents into page/table chunks with evidence anchors, index into FTS5, mark stale on extractor upgrade (L3).",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Normalize Component Specs",
+      "description": "Write EAV spec values, pinout, packages with evidence refs and confidence; enforce verified-needs-evidence trigger (L4).",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Serve Knowledge Queries",
+      "description": "Answer spec_check/query/queue/completeness requests; record EDA asset mappings, app knowledge, usage footprints, sourcing snapshots; expose gaps and audit trail (L5-L8).",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "MPN / alias / BOM part references", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A2:input", "label": "Datasheet PDFs / app notes / client-cache extractions", "type": "input" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:control", "label": "canonical key normalization rules", "type": "control" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:control", "label": "external-fetch policy gate (approval-required)", "type": "control" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A4:control", "label": "field_path registry + evidence-required rule", "type": "control" },
+    { "id": "AR6", "source": "A1:output", "target": "A2:input", "label": "resolved component identity", "type": "output" },
+    { "id": "AR7", "source": "A2:output", "target": "A3:input", "label": "deduped document records", "type": "output" },
+    { "id": "AR8", "source": "A3:output", "target": "A4:input", "label": "evidence-anchored chunks", "type": "output" },
+    { "id": "AR9", "source": "A4:output", "target": "A5:input", "label": "normalized specs with confidence", "type": "output" },
+    { "id": "AR10", "source": "A5:output", "target": "EXTERNAL", "label": "grounded answers / gaps / knowledge queue", "type": "output" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A5:input", "label": "workflow usage events / sourcing snapshots / EDA mappings", "type": "input" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A1:mechanism", "label": "SQLite vault.db (WAL)", "type": "mechanism" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A3:mechanism", "label": "docxmcp-style extractor + FTS5", "type": "mechanism" },
+    { "id": "AR14", "source": "EXTERNAL", "target": "A5:mechanism", "label": "MCP tools + HTTP API (services/mcp, services/api)", "type": "mechanism" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A2:mechanism", "label": "blob store (sha256 dirs on docker volume)", "type": "mechanism" },
+    { "id": "AR16", "source": "EXTERNAL", "target": "A5:control", "label": "spec_check 4-state contract (verified/unverified/no-field/absent)", "type": "control" }
+  ]
+}

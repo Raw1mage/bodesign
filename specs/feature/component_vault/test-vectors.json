@@ -1,0 +1,482 @@
+[
+  {
+    "id": "TV-R1-1",
+    "requirement": "R1",
+    "name": "MPN upsert idempotent",
+    "input": {
+      "op": "upsert_component",
+      "mpn": "STM32F405RGT6"
+    },
+    "repeat": 2,
+    "expect": {
+      "canonical_key": "component:stm32f405rgt6",
+      "row_count_components": 1
+    }
+  },
+  {
+    "id": "TV-R1-2",
+    "requirement": "R1",
+    "name": "alias resolves to canonical record",
+    "setup": [
+      {
+        "op": "upsert_component",
+        "mpn": "W25Q128JVSIQ"
+      },
+      {
+        "op": "add_alias",
+        "mpn": "W25Q128JVSIQ",
+        "alias": "C97521",
+        "alias_type": "distributor",
+        "distributor": "lcsc"
+      }
+    ],
+    "input": {
+      "op": "resolve",
+      "query": "C97521"
+    },
+    "expect": {
+      "canonical_key": "component:w25q128jvsiq",
+      "hit_alias_type": "distributor"
+    }
+  },
+  {
+    "id": "TV-R1-3",
+    "requirement": "R1",
+    "name": "unknown MPN returns explicit absent",
+    "input": {
+      "op": "resolve",
+      "query": "NOTAPART-9999"
+    },
+    "expect": {
+      "status": "absent",
+      "no_empty_shell_record": true
+    }
+  },
+  {
+    "id": "TV-R2-1",
+    "requirement": "R2",
+    "name": "duplicate document dedup by sha256",
+    "setup": [
+      {
+        "op": "ingest_document",
+        "file": "fixtures/ds_ap2112k.pdf",
+        "doc_type": "datasheet",
+        "provenance": "user-provided",
+        "mpns": [
+          "AP2112K-3.3"
+        ]
+      }
+    ],
+    "input": {
+      "op": "ingest_document",
+      "file": "fixtures/ds_ap2112k.pdf",
+      "doc_type": "datasheet",
+      "provenance": "user-provided",
+      "mpns": [
+        "AP2112K-1.8"
+      ]
+    },
+    "expect": {
+      "blob_count": 1,
+      "document_row_count": 1,
+      "component_documents_links": 2
+    }
+  },
+  {
+    "id": "TV-R2-2",
+    "requirement": "R2",
+    "name": "revision chain keeps both revs, latest first",
+    "setup": [
+      {
+        "op": "ingest_document",
+        "file": "fixtures/ds_w25q128_rev4.pdf",
+        "revision": "Rev. 4",
+        "mpns": [
+          "W25Q128JVSIQ"
+        ],
+        "doc_type": "datasheet",
+        "provenance": "user-provided"
+      }
+    ],
+    "input": {
+      "op": "ingest_document",
+      "file": "fixtures/ds_w25q128_rev5.pdf",
+      "revision": "Rev. 5",
+      "mpns": [
+        "W25Q128JVSIQ"
+      ],
+      "doc_type": "datasheet",
+      "provenance": "user-provided"
+    },
+    "expect": {
+      "document_count_for_mpn": 2,
+      "default_query_returns_revision": "Rev. 5",
+      "history_listable": true
+    }
+  },
+  {
+    "id": "TV-R2-3",
+    "requirement": "R2",
+    "name": "provenance is mandatory",
+    "input": {
+      "op": "ingest_document",
+      "file": "fixtures/ds_ap2112k.pdf",
+      "doc_type": "datasheet",
+      "provenance": null,
+      "mpns": [
+        "AP2112K-3.3"
+      ]
+    },
+    "expect": {
+      "error_code": "VAULT-E201"
+    }
+  },
+  {
+    "id": "TV-R3-1",
+    "requirement": "R3",
+    "name": "chunk ingest carries anchor + extractor",
+    "input": {
+      "op": "ingest_chunks",
+      "document": "ds_ap2112k.pdf",
+      "chunks": [
+        {
+          "chunk_kind": "table",
+          "page_number": 5,
+          "anchor": {
+            "bbox": [
+              40,
+              120,
+              520,
+              380
+            ]
+          },
+          "content": "Dropout Voltage 250 mV @ 300mA",
+          "extractor": "docxmcp@1.4"
+        }
+      ]
+    },
+    "expect": {
+      "chunk_count": 1,
+      "fts_indexed": true
+    }
+  },
+  {
+    "id": "TV-R3-2",
+    "requirement": "R3",
+    "name": "FTS search returns BM25-ranked hit with page anchor",
+    "input": {
+      "op": "search_chunks",
+      "query": "dropout voltage"
+    },
+    "expect": {
+      "min_hits": 1,
+      "first_hit_fields": [
+        "mpn",
+        "document",
+        "page_number"
+      ]
+    }
+  },
+  {
+    "id": "TV-R3-3",
+    "requirement": "R3",
+    "name": "extractor upgrade marks old chunks stale, keeps them",
+    "setup": [
+      {
+        "op": "ingest_chunks",
+        "document": "ds_ap2112k.pdf",
+        "extractor": "docxmcp@1.4",
+        "chunk_count": 3
+      }
+    ],
+    "input": {
+      "op": "ingest_chunks",
+      "document": "ds_ap2112k.pdf",
+      "extractor": "docxmcp@1.5",
+      "chunk_count": 3
+    },
+    "expect": {
+      "stale_chunks": 3,
+      "active_chunks": 3,
+      "deleted_chunks": 0
+    }
+  },
+  {
+    "id": "TV-R4-1",
+    "requirement": "R4",
+    "name": "spec write without evidence is forced unverified",
+    "input": {
+      "op": "write_spec",
+      "mpn": "AP2112K-3.3",
+      "field_path": "electrical_characteristics.dropout_mv",
+      "value_num": 250,
+      "unit": "mV",
+      "evidence_chunk_id": null,
+      "source_note": null,
+      "confidence": "unverified"
+    },
+    "expect": {
+      "stored_confidence": "unverified"
+    }
+  },
+  {
+    "id": "TV-R4-2",
+    "requirement": "R4",
+    "name": "verified write without evidence is rejected by trigger",
+    "input": {
+      "op": "write_spec_raw_sql",
+      "mpn": "AP2112K-3.3",
+      "field_path": "electrical_characteristics.dropout_mv",
+      "value_num": 250,
+      "confidence": "verified",
+      "evidence_chunk_id": null,
+      "source_note": null
+    },
+    "expect": {
+      "sqlite_abort": true,
+      "error_contains": "verified spec requires evidence"
+    }
+  },
+  {
+    "id": "TV-R4-3",
+    "requirement": "R4",
+    "name": "unknown field_path rejected explicitly",
+    "input": {
+      "op": "write_spec",
+      "mpn": "AP2112K-3.3",
+      "field_path": "made_up.nonsense_v",
+      "value_num": 1
+    },
+    "expect": {
+      "error_code": "VAULT-E401"
+    }
+  },
+  {
+    "id": "TV-R4-4",
+    "requirement": "R4",
+    "name": "same field multiple conditions coexist",
+    "setup": [
+      {
+        "op": "write_spec",
+        "mpn": "AP2112K-3.3",
+        "field_path": "electrical_characteristics.dropout_mv",
+        "value_num": 250,
+        "condition": "Iout=300mA, Tj=25C",
+        "evidence_chunk_id": 1,
+        "confidence": "verified"
+      }
+    ],
+    "input": {
+      "op": "write_spec",
+      "mpn": "AP2112K-3.3",
+      "field_path": "electrical_characteristics.dropout_mv",
+      "value_num": 400,
+      "condition": "Iout=600mA, Tj=85C",
+      "evidence_chunk_id": 1,
+      "confidence": "verified"
+    },
+    "expect": {
+      "rows_for_field": 2,
+      "query_by_condition_works": true
+    }
+  },
+  {
+    "id": "TV-R4-5",
+    "requirement": "R4",
+    "name": "friendly alias resolves to canonical path at API layer",
+    "input": {
+      "op": "read_spec",
+      "mpn": "AP2112K-3.3",
+      "field": "dropout_mv"
+    },
+    "expect": {
+      "resolved_path": "electrical_characteristics.dropout_mv"
+    }
+  },
+  {
+    "id": "TV-R5-1",
+    "requirement": "R5",
+    "name": "eda asset mapping with verification provenance",
+    "input": {
+      "op": "register_eda_asset",
+      "mpn": "AP2112K-3.3",
+      "asset_kind": "kicad-symbol",
+      "library_ref": "Regulator_Linear:AP2112K-3.3",
+      "verification_status": "pin-checked",
+      "verified_in": {
+        "project_id": "rockbox-fixture",
+        "date": "2026-06-11"
+      }
+    },
+    "expect": {
+      "stored": true,
+      "verification_status": "pin-checked"
+    }
+  },
+  {
+    "id": "TV-R5-2",
+    "requirement": "R5",
+    "name": "missing mapping returns absent, never guessed",
+    "input": {
+      "op": "query_eda_asset",
+      "mpn": "NOTMAPPED-1",
+      "asset_kind": "kicad-footprint"
+    },
+    "expect": {
+      "status": "absent"
+    }
+  },
+  {
+    "id": "TV-R6-1",
+    "requirement": "R6",
+    "name": "companion-part knowledge round-trip",
+    "input": {
+      "op": "write_app_knowledge",
+      "mpn": "ABM8-25.000MHZ",
+      "knowledge_type": "companion-part",
+      "title": "Load capacitors",
+      "payload": {
+        "companion_mpn": "GRM1555C1H180JA01",
+        "qty": 2,
+        "rule": "CL=(C1*C2)/(C1+C2)+Cstray"
+      },
+      "evidence_chunk_id": 7,
+      "confidence": "verified"
+    },
+    "expect": {
+      "stored": true,
+      "queryable_by_type": "companion-part"
+    }
+  },
+  {
+    "id": "TV-R7-1",
+    "requirement": "R7",
+    "name": "spec_check four states + origin labeling",
+    "cases": [
+      {
+        "query": {
+          "mpn": "AP2112K-3.3",
+          "field": "dropout_mv"
+        },
+        "expect_status": "verified",
+        "expect_origin": "server-vault"
+      },
+      {
+        "query": {
+          "mpn": "AP2112K-3.3",
+          "field": "iout_max_ma"
+        },
+        "expect_status": "no-field"
+      },
+      {
+        "query": {
+          "mpn": "UNKNOWN-1",
+          "field": "vin_max_v"
+        },
+        "expect_status": "absent"
+      }
+    ]
+  },
+  {
+    "id": "TV-R7-2",
+    "requirement": "R7",
+    "name": "audit_log is append-only (UPDATE/DELETE abort)",
+    "input": {
+      "op": "raw_sql",
+      "sql": "UPDATE audit_log SET actor='x' WHERE id=1"
+    },
+    "expect": {
+      "sqlite_abort": true,
+      "error_contains": "append-only"
+    }
+  },
+  {
+    "id": "TV-R8-1",
+    "requirement": "R8",
+    "name": "usage recording aggregates across projects",
+    "setup": [
+      {
+        "op": "record_usage",
+        "mpn": "GRM1555C1H180JA01",
+        "project_id": "proj-a",
+        "refdes": [
+          "C1",
+          "C2"
+        ],
+        "workflow": "forward"
+      }
+    ],
+    "input": {
+      "op": "record_usage",
+      "mpn": "GRM1555C1H180JA01",
+      "project_id": "proj-b",
+      "refdes": [
+        "C7"
+      ],
+      "workflow": "reverse"
+    },
+    "expect": {
+      "total_occurrences": 3,
+      "project_count": 2
+    }
+  },
+  {
+    "id": "TV-R8-2",
+    "requirement": "R8",
+    "name": "knowledge queue ranks by usage x gaps x priority rules",
+    "expect": {
+      "queue_ordering": "high-priority-prefix (MDBT/W25Q/STM/NRF) then occurrence desc",
+      "consistent_with": "build_component_knowledge_queue"
+    }
+  },
+  {
+    "id": "TV-R9-1",
+    "requirement": "R9",
+    "name": "client cache import: no real source => unverified + conflict kept",
+    "setup": [
+      {
+        "op": "write_spec",
+        "mpn": "W25Q128JVSIQ",
+        "field_path": "recommended_operating_conditions.vin_min_v",
+        "value_num": 2.7,
+        "evidence_chunk_id": 3,
+        "confidence": "verified"
+      }
+    ],
+    "input": {
+      "op": "vault_import",
+      "manifest": "fixtures/client_cache/manifest.json",
+      "entry_mpn": "W25Q128JVSIQ",
+      "entry_field": "recommended_operating_conditions.vin_min_v",
+      "entry_value": 2.5,
+      "entry_source": null
+    },
+    "expect": {
+      "imported_confidence": "unverified",
+      "provenance": "client-cache-import",
+      "existing_row_untouched": true,
+      "conflict_reported": true
+    }
+  },
+  {
+    "id": "TV-R10-1",
+    "requirement": "R10",
+    "name": "volume restart keeps data; corrupt DB fails fast",
+    "cases": [
+      {
+        "scenario": "reopen after container restart",
+        "expect": {
+          "components_intact": true,
+          "blobs_intact": true
+        }
+      },
+      {
+        "scenario": "vault.db corrupted",
+        "expect": {
+          "error_code": "VAULT-E001",
+          "no_silent_recreate": true
+        }
+      }
+    ]
+  }
+]

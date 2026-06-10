@@ -132,10 +132,46 @@ def _source_of(extraction: dict) -> str:
     return (meta.get("source_pdf") or meta.get("source_note") or "").strip()
 
 
+def _match_claim(out: dict, claimed_value: Any, value: Any) -> None:
+    out["claimed_value"] = claimed_value
+    try:
+        out["matches"] = float(claimed_value) == float(value)
+    except (TypeError, ValueError):
+        out["matches"] = str(claimed_value).strip().lower() == str(value).strip().lower()
+
+
+def _server_spec_check(repository: Any, mpn: str, field: str, claimed_value: Any) -> dict | None:
+    """Check the server vault (Phase 3, R7). Returns a verdict dict for
+    found rows (origin=server-vault), a no-field/absent marker dict, or
+    None when the field is outside the vault registry (client cache may
+    still know it — fall through, never block on registry coverage)."""
+    try:
+        server = repository.read_spec(mpn, field)
+    except Exception as error:  # VAULT-E401 unknown registry path — client cache may still resolve it
+        if getattr(error, "code", None) == "VAULT-E401":
+            return None
+        raise
+    if server["status"] != "found":
+        return {"status": server["status"], "mpn": mpn, "field": field,
+                "resolved_path": server["resolved_path"], "origin": "server-vault"}
+    row = server["values"][0]  # verified rows ordered first
+    value = row["value_num"] if row["value_num"] is not None else row["value_text"]
+    source = (f"chunk:{row['evidence_chunk_id']}" if row["evidence_chunk_id"] is not None
+              else (row["source_note"] or ""))
+    out = {"status": "verified" if row["confidence"] == "verified" else "unverified",
+           "mpn": mpn, "field": field, "resolved_path": server["resolved_path"],
+           "value": value, "unit": row["unit"], "condition": row["condition"],
+           "source": source, "origin": "server-vault"}
+    if claimed_value is not None:
+        _match_claim(out, claimed_value, value)
+    return out
+
+
 def spec_check(mpn: str, field: str, claimed_value: Any = None,
                root: str | os.PathLike | None = None,
-               work_dir: str | os.PathLike | None = None) -> dict:
-    """The RCA guard. Is ``field`` for ``mpn`` grounded in the project datasheet cache?
+               work_dir: str | os.PathLike | None = None,
+               repository: Any = None) -> dict:
+    """The RCA guard. Is ``field`` for ``mpn`` grounded in a real datasheet source?
 
     Status:
       * ``absent``     — no cached extraction (acquire the PDF + run the datasheets skill);
@@ -144,10 +180,27 @@ def spec_check(mpn: str, field: str, claimed_value: Any = None,
       * ``verified``   — value present and the extraction cites a real source (PDF or note).
     ``field`` accepts a friendly alias (vcc_min_v, vout_v, dropout_mv, iout_max_ma, …) or a
     raw dotted schema path. With ``claimed_value`` it also reports match/mismatch.
+
+    Verification sources (R7): when ``repository`` (a server-vault
+    VaultRepository) is given it is consulted FIRST; hits carry
+    ``origin='server-vault'``. The client cache path is unchanged and its
+    verdicts carry ``origin='client-cache'``. Four-state semantics hold
+    for both origins.
     """
+    server_marker: dict | None = None
+    if repository is not None:
+        server = _server_spec_check(repository, mpn, field, claimed_value)
+        if server is not None:
+            if server["status"] in ("verified", "unverified"):
+                return server
+            server_marker = server
     extraction = lookup(mpn, root=root, work_dir=work_dir)
     if extraction is None:
-        return {"status": "absent", "mpn": mpn, "field": field,
+        if server_marker is not None and server_marker["status"] == "no-field":
+            server_marker["advice"] = ("Part is in the server vault but this field is unrecorded; "
+                                       "extend the vault with an evidence-backed spec write.")
+            return server_marker
+        return {"status": "absent", "mpn": mpn, "field": field, "origin": "client-cache",
                 "advice": "No cached datasheet extraction. Acquire the datasheet PDF into "
                           "<project>/datasheets/ and run the `datasheets` skill before asserting "
                           "this spec; do not state the value from memory as if confirmed."}
@@ -156,16 +209,13 @@ def spec_check(mpn: str, field: str, claimed_value: Any = None,
     source = _source_of(extraction)
     if value is None:
         return {"status": "no-field", "mpn": mpn, "field": field, "resolved_path": path,
+                "origin": "client-cache",
                 "advice": "Part is extracted but this field is null; extend the extraction with a source."}
     out = {"status": "verified" if source else "unverified",
            "mpn": mpn, "field": field, "resolved_path": path, "value": value,
-           "source": source, "category": extraction.get("category")}
+           "source": source, "category": extraction.get("category"), "origin": "client-cache"}
     if claimed_value is not None:
-        out["claimed_value"] = claimed_value
-        try:
-            out["matches"] = float(claimed_value) == float(value)
-        except (TypeError, ValueError):
-            out["matches"] = str(claimed_value).strip().lower() == str(value).strip().lower()
+        _match_claim(out, claimed_value, value)
     return out
 
 

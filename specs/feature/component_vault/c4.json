@@ -1,0 +1,40 @@
+{
+  "diagram_title": "Component Vault — Container View",
+  "diagram_level": "container",
+  "diagram_layout": "top_down",
+  "scope": { "type": "software_system", "id": "SYS1" },
+  "persons": [
+    { "id": "P1", "name": "Design Engineer", "description": "Drives bodesign through MCP-capable IDE/agent or web dashboard", "external": true }
+  ],
+  "systems": [
+    { "id": "SYS1", "name": "bodesign Server", "description": "Host-agnostic MCP + HTTP server for PCB design lifecycle", "external": false },
+    { "id": "SYS2", "name": "Client Project Folder", "description": "Client-owned KiCad project with datasheets/ skill cache (datasheets/extracted/manifest.json)", "external": true },
+    { "id": "SYS3", "name": "Distributor Services", "description": "DigiKey/Mouser/LCSC/element14 — sourcing snapshots only, behind approval-gated policy", "external": true }
+  ],
+  "containers": [
+    { "id": "CT1", "type": "api", "name": "services/api", "technology": "FastAPI/Python", "description": "Vault HTTP endpoints: ingest, query, import, knowledge queue", "systemRef": "SYS1" },
+    { "id": "CT2", "type": "api", "name": "services/mcp", "technology": "MCP server (Unix socket/TCP)", "description": "Vault MCP tools for IDE/agent callers", "systemRef": "SYS1" },
+    { "id": "CT3", "type": "none", "name": "component-kb vault engine", "technology": "Python package (moduleRef A1-A5)", "description": "Identity resolution, document ingest, chunk extraction, spec normalization, knowledge serving; contains storage.py + repository.py + vault.py gate", "systemRef": "SYS1" },
+    { "id": "CT4", "type": "database", "name": "vault.db", "technology": "SQLite + FTS5 (WAL) on docker volume", "description": "8-layer schema: components/aliases, documents, chunks+FTS, spec_values EAV, eda_assets, app_knowledge, gaps/audit, usage/sourcing", "systemRef": "SYS1" },
+    { "id": "CT5", "type": "none", "name": "blob store", "technology": "sha256-addressed directory on docker volume", "description": "Datasheet PDFs, app notes, 3D models; DB keeps sha256 + relative path only", "systemRef": "SYS1" },
+    { "id": "CT6", "type": "none", "name": "doc-core chunk extractor", "technology": "Python package (docxmcp-style)", "description": "Decomposes documents into evidence-anchored source chunks", "systemRef": "SYS1" }
+  ],
+  "components": [
+    { "id": "C1", "type": "none", "name": "identity resolver", "technology": "Python", "description": "MPN canonicalization + alias resolution (moduleRef A1)", "containerRef": "CT3" },
+    { "id": "C2", "type": "none", "name": "document ingester", "technology": "Python", "description": "sha256 dedup, blob-then-commit ordering, provenance recording (moduleRef A2)", "containerRef": "CT3" },
+    { "id": "C3", "type": "none", "name": "chunk pipeline", "technology": "Python + FTS5", "description": "docxmcp-style decomposition, evidence anchors, stale marking (moduleRef A3)", "containerRef": "CT3" },
+    { "id": "C4", "type": "none", "name": "spec normalizer", "technology": "Python", "description": "EAV writes with field_path registry; verified-needs-evidence enforcement (moduleRef A4)", "containerRef": "CT3" },
+    { "id": "C5", "type": "none", "name": "knowledge service", "technology": "Python", "description": "spec_check 4-state gate, knowledge queue, completeness, audit, import (moduleRef A5)", "containerRef": "CT3" }
+  ],
+  "relationships": [
+    { "id": "R1", "source": "P1", "target": "CT2", "description": "Invokes vault MCP tools (ingest/query/spec_check)", "technology": "MCP", "position": "down" },
+    { "id": "R2", "source": "P1", "target": "CT1", "description": "Browses knowledge queue / completeness via web API", "technology": "HTTPS", "position": "down" },
+    { "id": "R3", "source": "CT1", "target": "CT3", "description": "Delegates vault operations", "technology": "in-process", "position": "down" },
+    { "id": "R4", "source": "CT2", "target": "CT3", "description": "Delegates vault operations", "technology": "in-process", "position": "down" },
+    { "id": "R5", "source": "CT3", "target": "CT4", "description": "Reads/writes 8-layer schema; triggers enforce evidence + append-only audit", "technology": "SQLite WAL", "position": "down" },
+    { "id": "R6", "source": "CT3", "target": "CT5", "description": "Writes blob before DB commit; reads for re-extraction", "technology": "filesystem", "position": "down" },
+    { "id": "R7", "source": "CT3", "target": "CT6", "description": "Requests chunk decomposition with provenance anchors", "technology": "in-process", "position": "right" },
+    { "id": "R8", "source": "SYS2", "target": "CT3", "description": "Client cache import (explicit, marked client-cache-import; conflicts kept, never silently overwritten)", "technology": "MCP import API", "position": "up" },
+    { "id": "R9", "source": "SYS3", "target": "CT3", "description": "Sourcing snapshots (timestamped, approval-gated; no live query)", "technology": "distributor skills", "position": "up" }
+  ]
+}

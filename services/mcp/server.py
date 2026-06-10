@@ -263,6 +263,48 @@ def _h_rca_spec_audit(a: dict) -> Any:
     return audit_claims(a["claims"], root=a.get("vault_root"))
 
 
+# ── Server-side Component Vault (R9) ───────────────────────────────────
+# Thin layer over vault_api (shared with the HTTP /vault/* endpoints): same
+# inputs/outputs/VAULT-Exxx codes on both surfaces. VaultError is returned as
+# a structured {status:'error', error_code, message} result — never swallowed,
+# never an empty-success.
+
+def _vault_api():
+    try:
+        import vault_api  # container / services-mcp-on-path case
+    except ImportError:  # repo-root namespace-package case (tests)
+        from services.mcp import vault_api
+    return vault_api
+
+
+def _vault_guard(fn) -> Any:
+    from bodesign_component_kb.storage import VaultError
+    try:
+        return fn()
+    except VaultError as error:
+        api = _vault_api()
+        return {"status": "error", **api.error_payload(error), "http_status": api.http_status(error.code)}
+
+
+def _h_vault_ingest(a: dict) -> Any:
+    return _vault_guard(lambda: _vault_api().vault_ingest(a))
+
+
+def _h_vault_query(a: dict) -> Any:
+    return _vault_guard(lambda: _vault_api().vault_query(a))
+
+
+def _h_vault_spec_check(a: dict) -> Any:
+    return _vault_guard(lambda: _vault_api().vault_spec_check(
+        a["mpn"], a["field"], claimed_value=a.get("claimed_value"),
+        vault_root=a.get("vault_root"), vault_dir=a.get("vault_dir")))
+
+
+def _h_vault_queue(a: dict) -> Any:
+    return _vault_guard(lambda: _vault_api().vault_queue(
+        limit=int(a.get("limit", 80)), vault_dir=a.get("vault_dir")))
+
+
 # ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
 def _h_agent_registry(a: dict) -> Any:
     from bodesign_workflow_core import load_agent_registry
@@ -626,6 +668,18 @@ TOOLS: list[dict] = [
     {"name": "bodesign_rca_spec_audit", "handler": _h_rca_spec_audit,
      "description": "Gate a whole RCA before publishing: pass the list of spec values the analysis asserts (claims=[{mpn, field, asserted_value}]) and get back which are datasheet-grounded and which are BLOCKING — absent (no cached extraction), unverified (extraction has no source), or contradicting the cached datasheet. Returns publishable=false if any blocker. Run before stating spec-dependent conclusions so RCA rides on real datasheets, not guesses. Pass vault_root = <project>/datasheets.",
      "schema": {"type": "object", "properties": {"claims": {"type": "array", "items": {"type": "object"}}, "vault_root": _STR}, "required": ["claims"]}},
+    {"name": "bodesign_vault_ingest", "handler": _h_vault_ingest,
+     "description": "Write into the server-side Component Vault (SQLite+FTS5, persistent across projects): upsert component identity, ingest a document (sha256 dedup + blob store), index chunks, and write evidence-backed spec values in one audited call. Every write needs `actor`; specs without evidence are stored unverified (never verified). Returns a write summary + the explicit knowledge-gap list per touched MPN. Contract identical to POST /vault/ingest.",
+     "schema": {"type": "object", "properties": {"actor": _STR, "component": {"type": "object"}, "mpns": {"type": "array", "items": _STR}, "document": {"type": "object"}, "document_id": {"type": "integer"}, "chunks": {"type": "array", "items": {"type": "object"}}, "specs": {"type": "array", "items": {"type": "object"}}, "vault_dir": _STR}, "required": ["actor"]}},
+    {"name": "bodesign_vault_query", "handler": _h_vault_query,
+     "description": "Query the server-side Component Vault: pass `mpn` for the canonical component view (record + alias hit + completeness/gaps + document revision chain) or `query` for FTS5 BM25 full-text search over datasheet chunks (hits carry MPN, document, page anchor). Unknown MPN returns explicit status 'absent' — never an empty success. Contract identical to GET /vault/components/{key} and /vault/search.",
+     "schema": {"type": "object", "properties": {"mpn": _STR, "query": _STR, "limit": {"type": "integer"}, "include_stale": {"type": "boolean"}, "vault_dir": _STR}}},
+    {"name": "bodesign_vault_spec_check", "handler": _h_vault_spec_check,
+     "description": "Trust-gate a spec field against the server vault FIRST (origin='server-vault'), falling back to the project's client datasheet cache (origin='client-cache', pass vault_root). Four-state verdict: verified / unverified / no-field / absent; optionally compares a claimed_value. Contract identical to GET /vault/spec-check.",
+     "schema": {"type": "object", "properties": {"mpn": _STR, "field": _STR, "claimed_value": {}, "vault_root": _STR, "vault_dir": _STR}, "required": ["mpn", "field"]}},
+    {"name": "bodesign_vault_queue", "handler": _h_vault_queue,
+     "description": "Server vault knowledge queue: components with open knowledge gaps ranked by DD-9 priority (usage frequency x gap severity). The 'what to research next' worklist. Contract identical to GET /vault/queue.",
+     "schema": {"type": "object", "properties": {"limit": {"type": "integer"}, "vault_dir": _STR}}},
     {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
      "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},
@@ -1318,6 +1372,47 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
             return JSONResponse({"error": "not_found"}, status_code=404)
         return FileResponse(str(target))
 
+    # ── Component Vault HTTP endpoints (R9) — same contract as the MCP
+    # bodesign_vault_* tools, via the shared vault_api thin layer.
+    # VAULT-Exxx -> HTTP status: storage fail-fast 503, absent 404, input 400.
+    def _vault_http(fn) -> Response:
+        from bodesign_component_kb.storage import VaultError
+        api = _vault_api()
+        try:
+            result = fn(api)
+        except VaultError as error:
+            return JSONResponse(api.error_payload(error), status_code=api.http_status(error.code))
+        if isinstance(result, dict) and result.get("status") == "absent":
+            return JSONResponse(result, status_code=404)
+        return JSONResponse(result)
+
+    async def vault_ingest_ep(request: Request) -> Response:
+        body = await request.json()
+        return await asyncio.to_thread(lambda: _vault_http(lambda api: api.vault_ingest(body)))
+
+    async def vault_component_ep(request: Request) -> Response:
+        key = request.path_params["key"]
+        return await asyncio.to_thread(lambda: _vault_http(lambda api: api.vault_component(key)))
+
+    async def vault_search_ep(request: Request) -> Response:
+        q = request.query_params.get("q", "")
+        limit = int(request.query_params.get("limit", "20"))
+        include_stale = request.query_params.get("include_stale", "") in ("1", "true", "yes")
+        return await asyncio.to_thread(lambda: _vault_http(
+            lambda api: api.vault_search(q, limit=limit, include_stale=include_stale)))
+
+    async def vault_queue_ep(request: Request) -> Response:
+        limit = int(request.query_params.get("limit", "80"))
+        return await asyncio.to_thread(lambda: _vault_http(lambda api: api.vault_queue(limit=limit)))
+
+    async def vault_spec_check_ep(request: Request) -> Response:
+        mpn = request.query_params.get("mpn", "")
+        spec_field = request.query_params.get("field", "")
+        claimed = request.query_params.get("claimed_value")
+        vault_root = request.query_params.get("vault_root")
+        return await asyncio.to_thread(lambda: _vault_http(
+            lambda api: api.vault_spec_check(mpn, spec_field, claimed_value=claimed, vault_root=vault_root)))
+
     app = Starlette(routes=[
         Route("/", landing),
         Route("/tools", tools_index),
@@ -1328,6 +1423,11 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         Route("/invoke", invoke, methods=["POST"]),
         Route("/files", upload_file, methods=["POST"]),
         Route("/files/{token}/blob/{rel:path}", get_blob),
+        Route("/vault/ingest", vault_ingest_ep, methods=["POST"]),
+        Route("/vault/components/{key}", vault_component_ep),
+        Route("/vault/search", vault_search_ep),
+        Route("/vault/queue", vault_queue_ep),
+        Route("/vault/spec-check", vault_spec_check_ep),
         Mount("/mcp", app=handle_mcp),
     ])
 

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-10T20:01:15.124Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-10T20:15:51.577Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "8-layer inventory + full design artifacts drafted (spec/design/data-schema/idef0/grafcet/c4/sequence), validated via drawmiat; blockers fixed (Goals/Non-Goals + Risks/Trade-offs headings, c4 components, sequence array)"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-10T20:22:24.611Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "planned artifacts complete; blockers fixed (Required Reads / Stop Gates In Force headings, test-vectors top-level array, Error Catalogue heading, Events/Metrics headings)"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-10T20:25:16.792Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user approved start of implementation; Phase 1 (storage foundation) begins"
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-06-10T20:37:12.912Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "Phase 1 complete: storage.py + repository.py + 18 tests (R1/R2/R7/R10) all pass; 9 existing tests unchanged"
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-06-10T20:45:17.656Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "Phase 2 complete: chunks + FTS5 (Migration v2), ingest_chunks/search_chunks/stale marking, 18 new tests + 27 regression all pass"
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-06-10T21:10:39.615Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "Phase 3 complete: spec EAV + trust gate (Migration v3), field_path registry, write_spec/pins/gaps/views, vault.py spec_check origin marker; 28 new tests, 73/73 total"
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-06-10T21:32:36.167Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "Phase 4 complete: vault_api.py thin layer + 4 MCP tools + 5 HTTP routes + docker volume; 12 new tests, 85/85 total"
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-06-10T21:45:42.957Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "Phase 5 complete: Migration v4 (usage/sourcing_snapshots/substitutions), import_client_cache, knowledge_queue view rebuilt with real occurrence_count; 20 new tests, 105/105 total"
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-06-10T21:57:20.261Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "Phase 6 complete + closeout: Migration v5 (eda_assets/app_knowledge, completeness view rebuilt), consumer wiring, architecture.md + CHANGELOG synced; 132/132 tests"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-10T21:57:46.055Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "All 6 phases complete: tasks.md fully checked, 132/132 tests green (verified by orchestrator re-run), architecture.md + CHANGELOG synced, closeout event recorded"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-10T22:01:20.988Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "User explicitly approved graduation after all 6 phases verified (132/132 tests, docs synced)"
+    }
+  ]
+}

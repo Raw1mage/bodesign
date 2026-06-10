@@ -6,6 +6,31 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
+### Added — persistent server-side Component Vault (SQLite + FTS5, 8 layers)
+- `packages/component-kb` gains `storage.py` + `repository.py`: a durable vault under
+  `BODESIGN_VAULT_DIR` (docker named volume `bodesign-vault`) with WAL SQLite,
+  `user_version` migrations v1–v5, content-addressed blob store, and fail-fast
+  startup (missing dir / corrupt DB → VAULT-E001/E002, never silently rebuilt).
+- Eight knowledge layers: identity (canonical MPN + aliases, explicit absent),
+  documents (sha256 dedup + version chains + mandatory provenance), chunks
+  (doc-core adapter + FTS5 BM25 search with page anchors; extractor upgrades mark
+  stale, never delete), spec EAV (field_path registry, min/typ/max + condition
+  coexistence, `verified`-needs-evidence enforced by trigger), EDA assets
+  (symbol/footprint verification ladder unverified→pin-checked→drc-passed with
+  provenance per rung), app knowledge (4 payload types, evidence-gated trust),
+  append-only audit log (trigger-enforced), usage/sourcing (cross-project
+  occurrence aggregation, point-in-time sourcing snapshots, substitutions).
+- API surface: 4 MCP tools (`bodesign_vault_ingest/query/spec_check/queue`) and
+  5 HTTP routes share the thin `services/mcp/vault_api.py` layer; `spec_check`
+  consults the server vault first and marks verdict origin
+  (`server-vault` | `client-cache`) while keeping four-state semantics.
+- Client-cache import (`import_client_cache`): always unverified with
+  `client-cache-import` provenance; conflicts keep both sides (VAULT-E903).
+- Consumers: `kicad_emit.vault_symbol` / `footprint_map.vault_footprint` query
+  the vault via duck-typed repository and return explicit absent — no guessing.
+- Tests: `tests/test_vault_{storage,chunks,specs,api,usage,eda}.py` — 105 new
+  vault tests; full suite 132/132 green. Spec: `plans/feature_component_vault/`.
+
 ### Fixed — workers topology silently reverted to monolith on rebuild
 - `mcpctl.sh` only knew `docker-compose.yml` (monolith), so any `rebuild`/`restart`
   dropped the opt-in `docker-compose.workers.yml` split (heavy CAD/EDA dep isolation,

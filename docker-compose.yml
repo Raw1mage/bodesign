@@ -20,10 +20,15 @@ services:
       - "./.run:/run/bodesign"
       # Token file store + analysis cache (host-invisible named volume).
       - "bodesign-sessions:/var/cache/bodesign/sessions"
+      # Component Vault (R10): vault.db + blobs/ persist across container
+      # restarts. Corrupt DB fails fast (VAULT-E001) — never recreated; restore
+      # from a volume backup instead.
+      - "bodesign-vault:/var/lib/bodesign/vault"
     environment:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
       BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
+      BODESIGN_VAULT_DIR: "/var/lib/bodesign/vault"
       # Gateway prefix for in-page links (gateway strips it for the UDS route).
       BODESIGN_HTTP_BASE: "/bodesign"
     restart: unless-stopped
@@ -36,4 +41,8 @@ services:
 
 volumes:
   bodesign-sessions:
+    driver: local
+  # Component Vault persistence (R10). The vault tools live in the `core`
+  # group, so in the workers overlay only the core front needs this mount.
+  bodesign-vault:
     driver: local

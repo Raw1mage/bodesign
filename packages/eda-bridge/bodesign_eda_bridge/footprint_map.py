@@ -48,6 +48,19 @@ class FootprintCandidate:
     is_match: bool
 
 
+def vault_footprint(repository, mpn: str) -> dict:
+    """Consult the component vault for a verified KiCad footprint mapping (R5).
+
+    `repository` is a component-kb VaultRepository (duck-typed; no import —
+    dependency direction stays eda-bridge-independent). Returns the vault
+    answer verbatim: {status: found, assets: [...]} carrying library_ref +
+    verification_status, or an explicit {status: absent}. The heuristic
+    candidate search below is a SEPARATE, clearly-labeled path — a vault
+    absent must never be silently replaced by a guessed candidate.
+    """
+    return repository.query_eda_asset(mpn, "kicad-footprint")
+
+
 def _parse_footprint(name: str) -> dict[str, object]:
     stem = name[:-len(".kicad_mod")] if name.endswith(".kicad_mod") else name
     ball = _BALL_RE.search(stem)

@@ -77,6 +77,18 @@ def _uid() -> str:
     return str(_uuid.uuid4())
 
 
+def vault_symbol(repository, mpn: str) -> dict:
+    """Consult the component vault for a verified KiCad symbol mapping (R5).
+
+    `repository` is a component-kb VaultRepository (duck-typed; this module
+    takes it as a parameter and never imports component-kb). Returns the
+    vault answer verbatim: {status: found, assets: [...]} with library_ref +
+    verification_status, or an explicit {status: absent} — the emitter must
+    NOT guess a lib_id when the vault has no mapping.
+    """
+    return repository.query_eda_asset(mpn, "kicad-symbol")
+
+
 def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR) -> tuple[str, dict[str, tuple[float, float]]]:
     """Return (embedded symbol definition text, {pin_number: (x, y)}).
 

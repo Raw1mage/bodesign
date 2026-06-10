@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="501" height="1040" viewBox="12.00 -2.00 25.04 52.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="12.00" y="-2.00" width="25.04" height="52.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1S1I1" data-segment-ids="S0O1S1I1:1S" d="M 20.00 7.00 L 20.00 11.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1S2I1" data-segment-ids="S1O1S2I1:1S" d="M 20.00 14.00 L 20.00 18.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1S3I1" data-segment-ids="S2O1S3I1:1S" d="M 20.00 21.00 L 20.00 25.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1S4I1" data-segment-ids="S3O1S4I1:1S" d="M 20.00 28.00 L 20.00 32.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1S5I1" data-segment-ids="S4O1S5I1:1S" d="M 20.00 35.00 L 20.00 39.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1S0I1" data-segment-ids="S5O1S0I1:1S S5O1S0I1:2W S5O1S0I1:3N S5O1S0I1:4E S5O1S0I1:5S" d="M 20.00 42.00 L 20.00 45.50 Q 20.00 46.00 19.50 46.00 L 16.50 46.00 Q 16.00 46.00 16.00 45.50 L 16.00 2.50 Q 16.00 2.00 16.50 2.00 L 19.50 2.00 Q 20.00 2.00 20.00 2.50 L 20.00 4.00"/>
+<rect class="step" x="18.00" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="18.25" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="20.00" y="5.50">0</text>
+<rect class="step" x="18.00" y="11.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="12.50">1</text>
+<rect class="step" x="18.00" y="18.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="19.50">2</text>
+<rect class="step" x="18.00" y="25.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="26.50">3</text>
+<rect class="step" x="18.00" y="32.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="33.50">4</text>
+<rect class="step" x="18.00" y="39.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="40.50">5</text>
+<line class="assoc" x1="22.00" y1="5.50" x2="23.00" y2="5.50"/>
+<rect class="action" x="23.00" y="4.07" width="10.04" height="2.86"/>
+<text class="action-label" x="28.02" y="5.09"><tspan x="28.02" dy="0">Await vault ingest request (MPN +</tspan><tspan x="28.02" dy="0.82">documents or workflow write-back)</tspan></text>
+<line class="assoc" x1="22.00" y1="12.50" x2="23.00" y2="12.50"/>
+<rect class="action" x="23.00" y="11.07" width="10.04" height="2.86"/>
+<text class="action-label" x="28.02" y="11.68"><tspan x="28.02" dy="0">Resolve component identity:</tspan><tspan x="28.02" dy="0.82">normalize MPN to canonical</tspan><tspan x="28.02" dy="0.82">key, upsert components/aliases</tspan></text>
+<line class="assoc" x1="22.00" y1="19.50" x2="23.00" y2="19.50"/>
+<rect class="action" x="23.00" y="18.07" width="10.04" height="2.86"/>
+<text class="action-label" x="28.02" y="18.68"><tspan x="28.02" dy="0">Ingest documents: sha256 dedup,</tspan><tspan x="28.02" dy="0.82">write blob then commit DB row,</tspan><tspan x="28.02" dy="0.82">record provenance and revision chain</tspan></text>
+<line class="assoc" x1="22.00" y1="26.50" x2="23.00" y2="26.50"/>
+<rect class="action" x="23.00" y="25.07" width="10.04" height="2.86"/>
+<text class="action-label" x="28.02" y="25.68"><tspan x="28.02" dy="0">Extract source chunks with page/</tspan><tspan x="28.02" dy="0.82">table anchors, index into FTS5,</tspan><tspan x="28.02" dy="0.82">mark superseded chunks stale</tspan></text>
+<line class="assoc" x1="22.00" y1="33.50" x2="23.00" y2="33.50"/>
+<rect class="action" x="23.00" y="32.07" width="10.04" height="2.86"/>
+<text class="action-label" x="28.02" y="32.68"><tspan x="28.02" dy="0">Normalize specs into EAV rows, pins,</tspan><tspan x="28.02" dy="0.82">packages; verified rows require evidence</tspan><tspan x="28.02" dy="0.82">(trigger-enforced), else unverified</tspan></text>
+<line class="assoc" x1="22.00" y1="40.50" x2="23.00" y2="40.50"/>
+<rect class="action" x="23.00" y="39.07" width="10.04" height="2.86"/>
+<text class="action-label" x="28.02" y="39.68"><tspan x="28.02" dy="0">Refresh knowledge gaps, completeness</tspan><tspan x="28.02" dy="0.82">view and queue; answer queries with</tspan><tspan x="28.02" dy="0.82">confidence + evidence provenance</tspan></text>
+<line class="gate" x1="19.00" y1="9.00" x2="21.00" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="21.40" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="21.40" dy="0">ingest_request_received</tspan></text>
+<line class="gate" x1="19.00" y1="16.00" x2="21.00" y2="16.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label" x="21.40" y="16.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="21.40" dy="0">identity_resolved AND canonical_key_written</tspan></text>
+<line class="gate" x1="19.00" y1="23.00" x2="21.00" y2="23.00" data-label-kind="condition-stub" data-edge-id="edge:S2O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label" x="21.40" y="23.00" data-label-kind="condition-stub" data-edge-id="edge:S2O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="21.40" dy="0">documents_committed OR dedup_hit_linked</tspan></text>
+<line class="gate" x1="19.00" y1="30.00" x2="21.00" y2="30.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label" x="21.40" y="30.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="21.40" dy="0">chunks_indexed</tspan></text>
+<line class="gate" x1="19.00" y1="37.00" x2="21.00" y2="37.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label" x="21.40" y="37.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="21.40" dy="0">spec_rows_written AND audit_log_appended</tspan></text>
+<line class="gate" x1="19.00" y1="44.00" x2="21.00" y2="44.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1S0I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="21.40" y="44.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1S0I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="21.40" dy="0">gaps_and_queue_refreshed</tspan></text>
+</svg>

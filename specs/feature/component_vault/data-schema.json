@@ -1,0 +1,290 @@
+{
+  "$schema": "https://bodesign.local/schemas/sqlite-data-schema/v1",
+  "title": "Component Vault — SQLite + FTS5 schema (8 layers)",
+  "engine": "sqlite",
+  "version": 1,
+  "pragmas": {
+    "journal_mode": "WAL",
+    "foreign_keys": "ON",
+    "user_version": 1
+  },
+  "storage_layout": {
+    "db_file": "<vault_volume>/vault.db",
+    "blob_dir": "<vault_volume>/blobs/<sha256[0:2]>/<sha256>.<ext>",
+    "note": "PDF/STEP 等大檔存 blob_dir，DB 只存 sha256 與相對路徑；docker volume 掛載整個 vault_volume。"
+  },
+  "tables": {
+    "components": {
+      "layer": "L1-identity",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "canonical_key": "TEXT NOT NULL UNIQUE -- component_knowledge_key() 正規化結果，如 component:stm32f405rgt6",
+        "mpn": "TEXT NOT NULL -- 原樣 canonical MPN",
+        "manufacturer_id": "INTEGER REFERENCES manufacturers(id)",
+        "category": "TEXT -- taxonomy path，如 ic/power/ldo",
+        "lifecycle_status": "TEXT CHECK(lifecycle_status IN ('active','nrnd','eol','obsolete','unknown')) DEFAULT 'unknown'",
+        "lifecycle_checked_at": "TEXT -- ISO-8601；status 查證日期",
+        "description": "TEXT",
+        "created_at": "TEXT NOT NULL DEFAULT (datetime('now'))",
+        "updated_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE INDEX idx_components_category ON components(category)"]
+    },
+    "manufacturers": {
+      "layer": "L1-identity",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "name": "TEXT NOT NULL UNIQUE -- 正規名",
+        "aliases": "TEXT -- JSON array of name variants"
+      }
+    },
+    "component_aliases": {
+      "layer": "L1-identity",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "alias": "TEXT NOT NULL",
+        "alias_key": "TEXT NOT NULL -- component_knowledge_key(alias)，查詢用",
+        "alias_type": "TEXT NOT NULL CHECK(alias_type IN ('family-variant','manufacturer-alias','distributor','legacy-pn'))",
+        "distributor": "TEXT -- alias_type=distributor 時必填：lcsc/digikey/mouser/element14",
+        "note": "TEXT"
+      },
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_alias_key ON component_aliases(alias_key, alias_type, COALESCE(distributor,''))",
+        "CREATE INDEX idx_alias_component ON component_aliases(component_id)"
+      ]
+    },
+    "documents": {
+      "layer": "L2-documents",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "sha256": "TEXT NOT NULL UNIQUE -- 去重鍵",
+        "blob_path": "TEXT NOT NULL -- 相對 vault_volume 的 blob 路徑",
+        "filename": "TEXT NOT NULL",
+        "doc_type": "TEXT NOT NULL CHECK(doc_type IN ('datasheet','app-note','reference-design','errata','package-drawing','other'))",
+        "revision": "TEXT -- datasheet rev 標記，如 'Rev. 5'",
+        "revision_date": "TEXT -- 文件自述日期",
+        "page_count": "INTEGER",
+        "provenance": "TEXT NOT NULL CHECK(provenance IN ('user-provided','distributor-api','docxmcp-chunk','client-cache-import'))",
+        "provenance_detail": "TEXT -- JSON：來源 URL/skill 名/policy gate 記錄",
+        "ingested_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      }
+    },
+    "component_documents": {
+      "layer": "L2-documents",
+      "comment": "document↔MPN 多對多；一份 datasheet 涵蓋整個料號家族",
+      "columns": {
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "document_id": "INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE",
+        "is_primary": "INTEGER NOT NULL DEFAULT 0 -- 該元件的主 datasheet"
+      },
+      "primary_key": ["component_id", "document_id"]
+    },
+    "chunks": {
+      "layer": "L3-source-chunks",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "document_id": "INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE",
+        "chunk_kind": "TEXT NOT NULL CHECK(chunk_kind IN ('text','table','figure-caption','section-heading'))",
+        "page_number": "INTEGER",
+        "anchor": "TEXT -- JSON：座標/bbox/section path（EvidenceRef 錨點）",
+        "content": "TEXT NOT NULL -- 抽取文字；table 為正規化 TSV/JSON",
+        "extractor": "TEXT NOT NULL -- 抽取器名+版本，如 docxmcp@1.4",
+        "stale": "INTEGER NOT NULL DEFAULT 0 -- 抽取器升級後舊 chunk 標 1，不刪除",
+        "created_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE INDEX idx_chunks_document ON chunks(document_id, stale)"]
+    },
+    "chunks_fts": {
+      "layer": "L3-source-chunks",
+      "comment": "FTS5 external-content 表，content 指向 chunks；BM25 排序",
+      "ddl": "CREATE VIRTUAL TABLE chunks_fts USING fts5(content, content='chunks', content_rowid='id', tokenize='unicode61')"
+    },
+    "spec_values": {
+      "layer": "L4-normalized-specs",
+      "comment": "EAV 長表：任意類別元件規格；field_path 沿用 FIELD_ALIASES dotted 命名空間",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "field_path": "TEXT NOT NULL -- canonical dotted path，如 recommended_operating_conditions.vin_max_v",
+        "value_num": "REAL -- 數值型規格",
+        "value_text": "TEXT -- 非數值規格；value_num/value_text 至少其一",
+        "unit": "TEXT -- V/mA/°C/ohm…",
+        "condition": "TEXT -- 量測條件，如 'Iout=300mA, Tj=25C'；同 field 多值靠此區分",
+        "min_val": "REAL",
+        "typ_val": "REAL",
+        "max_val": "REAL",
+        "evidence_chunk_id": "INTEGER REFERENCES chunks(id)",
+        "source_note": "TEXT -- 無 chunk 時的顯式來源說明",
+        "confidence": "TEXT NOT NULL CHECK(confidence IN ('verified','unverified')) DEFAULT 'unverified'",
+        "created_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "constraints": [
+        "CHECK(value_num IS NOT NULL OR value_text IS NOT NULL OR min_val IS NOT NULL OR typ_val IS NOT NULL OR max_val IS NOT NULL)",
+        "-- 寫入層強制：confidence='verified' 需要 evidence_chunk_id 或 source_note 非空（trigger 實作）"
+      ],
+      "triggers": [
+        "CREATE TRIGGER trg_spec_verified_needs_evidence BEFORE INSERT ON spec_values WHEN NEW.confidence='verified' AND NEW.evidence_chunk_id IS NULL AND (NEW.source_note IS NULL OR NEW.source_note='') BEGIN SELECT RAISE(ABORT, 'verified spec requires evidence_chunk_id or source_note'); END"
+      ],
+      "indexes": [
+        "CREATE INDEX idx_spec_component_field ON spec_values(component_id, field_path)",
+        "CREATE INDEX idx_spec_field ON spec_values(field_path)"
+      ]
+    },
+    "packages": {
+      "layer": "L4-normalized-specs",
+      "comment": "封裝定義；同元件多封裝變體",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "package_name": "TEXT NOT NULL -- QFN-32, SOT-23-5…",
+        "body_size_mm": "TEXT -- JSON {x,y,height}",
+        "pitch_mm": "REAL",
+        "pin_count": "INTEGER",
+        "exposed_pad": "INTEGER NOT NULL DEFAULT 0",
+        "land_pattern": "TEXT -- JSON IPC land pattern 參數",
+        "evidence_chunk_id": "INTEGER REFERENCES chunks(id)",
+        "confidence": "TEXT NOT NULL CHECK(confidence IN ('verified','unverified')) DEFAULT 'unverified'"
+      },
+      "indexes": ["CREATE UNIQUE INDEX idx_pkg ON packages(component_id, package_name)"]
+    },
+    "pins": {
+      "layer": "L4-normalized-specs",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "package_id": "INTEGER REFERENCES packages(id) ON DELETE CASCADE",
+        "pin_number": "TEXT NOT NULL",
+        "pin_name": "TEXT NOT NULL",
+        "role": "TEXT -- power/ground/io/analog/nc/clock…",
+        "electrical_type": "TEXT -- input/output/bidirectional/passive/power_in/power_out",
+        "interface_group": "TEXT -- SPI0/I2C1/USB/SWD…",
+        "evidence_chunk_id": "INTEGER REFERENCES chunks(id)",
+        "confidence": "TEXT NOT NULL CHECK(confidence IN ('verified','unverified')) DEFAULT 'unverified'"
+      },
+      "indexes": ["CREATE UNIQUE INDEX idx_pins ON pins(component_id, COALESCE(package_id,0), pin_number)"]
+    },
+    "eda_assets": {
+      "layer": "L5-eda-assets",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "asset_kind": "TEXT NOT NULL CHECK(asset_kind IN ('kicad-symbol','kicad-footprint','3d-model'))",
+        "library_ref": "TEXT NOT NULL -- 如 'Regulator_Linear:AP2112K-3.3' 或 footprint lib:name 或 STEP blob sha256",
+        "package_id": "INTEGER REFERENCES packages(id)",
+        "verification_status": "TEXT NOT NULL CHECK(verification_status IN ('unverified','pin-checked','drc-passed')) DEFAULT 'unverified'",
+        "verified_in": "TEXT -- JSON：{project_id, run_id, date} 驗證出處",
+        "pin_map": "TEXT -- JSON：symbol pin↔component pin 映射（需要時）",
+        "created_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE INDEX idx_eda_component ON eda_assets(component_id, asset_kind)"]
+    },
+    "app_knowledge": {
+      "layer": "L6-application-knowledge",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "knowledge_type": "TEXT NOT NULL CHECK(knowledge_type IN ('layout-rule','reference-circuit','companion-part','design-rule'))",
+        "title": "TEXT NOT NULL",
+        "payload": "TEXT NOT NULL -- JSON：結構化內容（規則參數/IR 片段/必配料關係）",
+        "companion_component_id": "INTEGER REFERENCES components(id) -- knowledge_type=companion-part 時指向必配料",
+        "evidence_chunk_id": "INTEGER REFERENCES chunks(id)",
+        "source_note": "TEXT",
+        "confidence": "TEXT NOT NULL CHECK(confidence IN ('verified','unverified')) DEFAULT 'unverified'",
+        "created_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE INDEX idx_appk_component ON app_knowledge(component_id, knowledge_type)"]
+    },
+    "knowledge_gaps": {
+      "layer": "L7-trust-gaps",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "gap_kind": "TEXT NOT NULL -- pinout/package/electrical/layout/eda-asset/document",
+        "description": "TEXT NOT NULL",
+        "resolved": "INTEGER NOT NULL DEFAULT 0",
+        "resolved_by": "TEXT -- 解掉此 gap 的寫入（audit_log id）",
+        "created_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE INDEX idx_gaps ON knowledge_gaps(component_id, resolved)"]
+    },
+    "audit_log": {
+      "layer": "L7-trust-gaps",
+      "comment": "append-only；無任何 UPDATE/DELETE 路徑（trigger 強制）",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "actor": "TEXT NOT NULL -- agent/user/pipeline 識別",
+        "action": "TEXT NOT NULL CHECK(action IN ('insert','update','import','resolve-gap'))",
+        "table_name": "TEXT NOT NULL",
+        "row_id": "INTEGER NOT NULL",
+        "field": "TEXT",
+        "old_value": "TEXT",
+        "new_value": "TEXT",
+        "evidence_ref": "TEXT -- chunk id 或 source note",
+        "at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "triggers": [
+        "CREATE TRIGGER trg_audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END",
+        "CREATE TRIGGER trg_audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END"
+      ]
+    },
+    "usage": {
+      "layer": "L8-usage-sourcing",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "project_id": "TEXT NOT NULL",
+        "refdes": "TEXT -- JSON array",
+        "occurrence_count": "INTEGER NOT NULL DEFAULT 0",
+        "workflow": "TEXT -- ingest/reverse/forward/rca/bom",
+        "recorded_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE UNIQUE INDEX idx_usage ON usage(component_id, project_id)"]
+    },
+    "sourcing_snapshots": {
+      "layer": "L8-usage-sourcing",
+      "comment": "時間戳快照，非即時；不做 live query",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "distributor": "TEXT NOT NULL -- lcsc/digikey/mouser/element14",
+        "distributor_pn": "TEXT",
+        "stock": "INTEGER",
+        "moq": "INTEGER",
+        "price_breaks": "TEXT -- JSON [{qty, unit_price, currency}]",
+        "lifecycle_note": "TEXT",
+        "snapshot_at": "TEXT NOT NULL DEFAULT (datetime('now'))"
+      },
+      "indexes": ["CREATE INDEX idx_sourcing ON sourcing_snapshots(component_id, distributor, snapshot_at DESC)"]
+    },
+    "substitutions": {
+      "layer": "L8-usage-sourcing",
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "substitute_component_id": "INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE",
+        "compatibility": "TEXT NOT NULL CHECK(compatibility IN ('drop-in','functional','partial'))",
+        "differences": "TEXT -- 差異備註",
+        "evidence_ref": "TEXT",
+        "confidence": "TEXT NOT NULL CHECK(confidence IN ('verified','unverified')) DEFAULT 'unverified'"
+      },
+      "indexes": ["CREATE UNIQUE INDEX idx_subst ON substitutions(component_id, substitute_component_id)"]
+    }
+  },
+  "derived_views": {
+    "component_completeness": "VIEW：per-component extraction score = 各層覆蓋度聚合（有 pinout? 有 package? 有 key electrical? 有 EDA asset? 有未解 gap?）",
+    "knowledge_queue": "VIEW：未解 gaps × 跨專案 occurrence 聚合 × priority 規則（取代 in-memory build_component_knowledge_queue）"
+  },
+  "field_path_namespace": {
+    "comment": "L4 field_path 的 canonical 命名空間，沿用既有 vault.py FIELD_ALIASES",
+    "roots": [
+      "absolute_maximum_ratings.*",
+      "recommended_operating_conditions.*",
+      "electrical_characteristics.*",
+      "thermal_characteristics.*",
+      "timing_characteristics.*",
+      "power_topology.*"
+    ],
+    "alias_resolution": "API 層解析 friendly alias（vcc_min_v→recommended_operating_conditions.vin_min_v）；DB 只存 canonical path"
+  }
+}
