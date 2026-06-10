@@ -14,7 +14,9 @@ Run:  BODESIGN_VAULT_DIR=.run/vault PYTHONPATH=packages/shared:packages/componen
 from __future__ import annotations
 
 import sys
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from bodesign_component_kb.repository import VaultRepository
 from bodesign_component_kb.storage import open_vault
@@ -22,9 +24,49 @@ from bodesign_component_kb.storage import open_vault
 ACTOR = "ingest-thesmart-products"
 SRC = Path("/home/pkcs12/projects/thesmart_products")
 ROCKBOX_DS = SRC / "rockbox/c03-ee/01_refs/datasheets"
+ROCKBOX_BOM = SRC / "rockbox/c03-ee/03_output/ROCKBOX_DVT_20250502A_check.BOM.xlsx"
 OPENMV = SRC / "refs/02.OpenMV"
 OPENMV_TXT = OPENMV / "src/datasheets_text"
 EXTRACTOR = "openmv-datasheets-text-v1"
+
+_SSML = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+
+
+def read_rockbox_bom(path: Path) -> list[tuple[str, str, str, list[str]]]:
+    """Parse the DVT check-BOM xlsx (sheet1) -> [(mpn, vendor, description, refdes)].
+
+    Stdlib-only (zipfile + ElementTree); skips the trailing 'Total' row and
+    rows without an MPN. Columns: Item, Quantity, MPN, Value, Vendor,
+    Description, Location.
+    """
+    with zipfile.ZipFile(path) as z:
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in z.namelist():
+            root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+            for si in root.iter(f"{_SSML}si"):
+                shared.append("".join(t.text or "" for t in si.iter(f"{_SSML}t")))
+        root = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+        rows: list[list[str]] = []
+        for row in root.iter(f"{_SSML}row"):
+            vals: list[str] = []
+            for cell in row.findall(f"{_SSML}c"):
+                v = cell.find(f"{_SSML}v")
+                if v is None or v.text is None:
+                    vals.append("")
+                elif cell.get("t") == "s":
+                    vals.append(shared[int(v.text)])
+                else:
+                    vals.append(v.text)
+            rows.append(vals)
+    parts: list[tuple[str, str, str, list[str]]] = []
+    for r in rows[1:]:
+        r = (r + [""] * 7)[:7]
+        item, _qty, mpn, _value, vendor, desc, location = (c.strip() for c in r)
+        if not mpn or item.lower() == "total":
+            continue
+        refdes = [x.strip() for x in location.split(",") if x.strip()]
+        parts.append((mpn, vendor, desc, refdes))
+    return parts
 
 # C. Architecture_and_BOM.md key-part table (mpn, manufacturer, refdes, role).
 # refdes "—" in the table => no refdes recorded (never fabricated).
@@ -92,11 +134,38 @@ def ingest(repo: VaultRepository) -> dict:
         )
         stats["documents_dedup" if result.dedup_hit else "documents_new"] += 1
 
-    # -- C. Rockbox key parts + usage ------------------------------------
+    # -- C. Rockbox full BOM (82 MPN rows) + curated key-part roles -------
+    # BOM xlsx is the authority for vendor/refdes; ROCKBOX_PARTS overlays
+    # curated role descriptions (catalog text is noisier than a role line).
+    merged: dict[str, dict] = {}
+    for mpn, vendor, desc, refdes in read_rockbox_bom(ROCKBOX_BOM):
+        merged[mpn] = {
+            "manufacturer": vendor or None,
+            "description": desc or None,
+            "refdes": set(refdes),
+        }
     for mpn, manufacturer, refdes, role in ROCKBOX_PARTS:
-        repo.upsert_component(mpn, manufacturer=manufacturer, description=role, actor=ACTOR)
+        hit = next((k for k in merged if k == mpn or k.startswith(mpn)), None)
+        if hit is not None:
+            merged[hit]["description"] = role
+            merged[hit]["refdes"] |= set(refdes)
+            if merged[hit]["manufacturer"] is None:
+                merged[hit]["manufacturer"] = manufacturer
+        else:
+            merged[mpn] = {
+                "manufacturer": manufacturer,
+                "description": role,
+                "refdes": set(refdes),
+            }
+    for mpn, info in merged.items():
+        repo.upsert_component(
+            mpn, manufacturer=info["manufacturer"], description=info["description"], actor=ACTOR
+        )
         stats["components"] += 1
-        repo.record_usage(mpn, project_id="rockbox", refdes=refdes, workflow="reverse-bom", actor=ACTOR)
+        repo.record_usage(
+            mpn, project_id="rockbox", refdes=sorted(info["refdes"]),
+            workflow="reverse-bom", actor=ACTOR,
+        )
         stats["usage"] += 1
 
     # -- D. OpenMV reference design --------------------------------------
