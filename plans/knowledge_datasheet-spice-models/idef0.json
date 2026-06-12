@@ -1,0 +1,56 @@
+{
+  "diagram_title": "Ground SPICE Models In Datasheets",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Register Spice Parameter Namespace",
+      "description": "R1/DD-3: add spice_model.{diode,ldo,passive}.* roots to the L4 field_path registry (closed v1 list); unknown paths keep failing fast with nearby candidates; verified-needs-evidence trigger untouched.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Ingest Extraction Evidence",
+      "description": "R2/DD-4: ingest_spice_extraction validates each row (registry membership, document sha256 + page evidence, numeric value); rejects rows per-row with SPX_EVIDENCE_MISSING; not_found rows reported, never written; all writes trust=unverified.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Generate Model Card",
+      "description": "R3/DD-5: deterministic f-string templates per category (.model diode / .subckt ldo / .subckt passive); typ-value selection rule (DD-3); missing required params -> SPX_PARAMS_MISSING with repair guidance; provenance comment header; byte-identical output.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Materialize Project Cards",
+      "description": "R4+R5/DD-2,DD-7: run ngspice DC-op smoke; pass (or explicit skipped-no-simulator) -> write card file + manifest entry (source=vault-grounded) into <project>/spice/models/ so the spice skill cascade tier 1 hits it; fail -> SPX_SMOKE_FAILED, card excluded.",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Annotate Simulation Source",
+      "description": "R4+R5/DD-8: simulate_schematic marks each subcircuit result model_source=vault-grounded|generic-default by deterministic manifest lookup; result wrappable as ValidationEvidence(tool=spice) returned to the orchestration spine.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "v1 SPICE parameter field list (diode/ldo/passive)", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "Fail-fast registry policy (no silent field creation)", "type": "control" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:control", "label": "Registered spice_model.* field paths", "type": "control" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:input", "label": "Extraction batch (rows with evidence / not_found)", "type": "input" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:control", "label": "Evidence contract (sha256 + page mandatory)", "type": "control" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:mechanism", "label": "Vault L4 spec_values (sqlite EAV)", "type": "mechanism" },
+    { "id": "AR7", "source": "A2:output", "target": "A3:input", "label": "L4 spice_model.* rows (unverified, evidence-backed)", "type": "input" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A3:control", "label": "Deterministic template per category; typ-selection rule", "type": "control" },
+    { "id": "AR9", "source": "A3:output", "target": "A4:input", "label": "ModelCard (card_text + provenance + missing[])", "type": "input" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A4:mechanism", "label": "ngspice (batch DC operating point)", "type": "mechanism" },
+    { "id": "AR11", "source": "A4:output", "target": "A5:input", "label": "Project spice/models/ manifest (vault-grounded entries)", "type": "input" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A5:input", "label": "KiCad schematic + detected subcircuits", "type": "input" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A5:mechanism", "label": "kicad + spice skills (analyze + simulate)", "type": "mechanism" },
+    { "id": "AR14", "source": "A5:output", "target": "EXTERNAL", "label": "SimResult with model_source annotation + ValidationEvidence(tool=spice)", "type": "output" },
+    { "id": "AR15", "source": "A2:output", "target": "EXTERNAL", "label": "IngestReport (written / rejected / not_found)", "type": "output" },
+    { "id": "AR16", "source": "A3:output", "target": "EXTERNAL", "label": "SPX_PARAMS_MISSING repair guidance (when incomplete)", "type": "output" },
+    { "id": "AR17", "source": "A4:output", "target": "EXTERNAL", "label": "SPX_SMOKE_FAILED report (rejected cards)", "type": "output" },
+    { "id": "AR18", "source": "A1:output", "target": "EXTERNAL", "label": "Extended field_path registry", "type": "output" }
+  ]
+}

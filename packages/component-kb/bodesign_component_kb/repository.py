@@ -34,7 +34,42 @@ FIELD_PATH_ROOTS = (
     "thermal_characteristics",
     "timing_characteristics",
     "power_topology",
+    # spice_model.* (knowledge/datasheet-spice-models, DD-3) — closed v1 list.
+    # Derived L4 namespace for datasheet-grounded SPICE model parameters.
+    "spice_model.diode",
+    "spice_model.ldo",
+    "spice_model.passive",
 )
+
+# Closed v1 field registry per spice_model category (DD-3). Used by spice_card
+# ingest (SPX_FIELD_UNKNOWN) and model-card generation (SPX_PARAMS_MISSING).
+# required flag mirrors data-schema.json field_path_namespace.roots.
+SPICE_MODEL_FIELDS: dict[str, dict[str, dict[str, object]]] = {
+    "diode": {
+        "is_a": {"required": True, "unit": "A"},
+        "n": {"required": True, "unit": "1"},
+        "rs_ohm": {"required": False, "unit": "ohm"},
+        "cj0_f": {"required": False, "unit": "F"},
+        "bv_v": {"required": False, "unit": "V"},
+        "ibv_a": {"required": False, "unit": "A"},
+    },
+    "ldo": {
+        "vout_v": {"required": True, "unit": "V"},
+        "dropout_v": {"required": True, "unit": "V"},
+        "iout_max_a": {"required": True, "unit": "A"},
+        "iq_a": {"required": False, "unit": "A"},
+        "psrr_db": {"required": False, "unit": "dB"},
+    },
+    "passive": {
+        # required is conditional on passive sub-category (resistor/capacitor/
+        # inductor); enforced at card-generation, not ingest.
+        "c_f": {"required": False, "unit": "F"},
+        "l_h": {"required": False, "unit": "H"},
+        "r_ohm": {"required": False, "unit": "ohm"},
+        "esr_ohm": {"required": False, "unit": "ohm"},
+        "esl_h": {"required": False, "unit": "H"},
+    },
+}
 
 
 def resolve_field_path(field: str) -> str:
@@ -45,9 +80,14 @@ def resolve_field_path(field: str) -> str:
     """
     field = (field or "").strip()
     resolved = FIELD_ALIASES.get(field, field)
-    root, _, rest = resolved.partition(".")
-    if root in FIELD_PATH_ROOTS and rest:
-        return resolved
+    # Longest-prefix root match: roots may be single-segment
+    # ("electrical_characteristics") or multi-segment ("spice_model.diode").
+    # A valid path is "<root>.<leaf...>" with a non-empty leaf.
+    for root in sorted(FIELD_PATH_ROOTS, key=len, reverse=True):
+        if resolved == root:
+            break  # root with no leaf is invalid -> fall through to error
+        if resolved.startswith(root + ".") and len(resolved) > len(root) + 1:
+            return resolved
     candidates = sorted(set(list(FIELD_ALIASES)[:6]) | set(FIELD_PATH_ROOTS))
     raise VaultRepositoryError(
         "VAULT-E401",

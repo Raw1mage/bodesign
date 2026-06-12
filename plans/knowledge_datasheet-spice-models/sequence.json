@@ -1,0 +1,62 @@
+[
+  {
+    "id": "SEQ1",
+    "name": "Extraction ingest with per-row evidence validation",
+    "requirementRefs": ["R1", "R2"],
+    "participants": [
+      { "id": "P1", "name": "Design Engineer / Extractor", "componentRef": null },
+      { "id": "P2", "name": "Extraction Ingester", "componentRef": "C2" },
+      { "id": "P3", "name": "Field Path Registry", "componentRef": "C1" },
+      { "id": "P4", "name": "Vault L4 (spec_values)", "componentRef": null }
+    ],
+    "messages": [
+      { "id": "MSG1", "from": "P1", "to": "P2", "label": "ingest_spice_extraction(mpn, rows[])", "kind": "sync" },
+      { "id": "MSG2", "from": "P2", "to": "P3", "label": "resolve_field_path(row.field_path)", "kind": "sync" },
+      { "id": "MSG3", "from": "P3", "to": "P2", "label": "canonical path | SPX_FIELD_UNKNOWN (row rejected)", "kind": "sync" },
+      { "id": "MSG4", "from": "P2", "to": "P2", "label": "validate evidence (sha256 + page) -> SPX_EVIDENCE_MISSING per-row reject; not_found rows never written", "kind": "self" },
+      { "id": "MSG5", "from": "P2", "to": "P4", "label": "insert valid rows trust=unverified + evidence_ref", "kind": "sync" },
+      { "id": "MSG6", "from": "P2", "to": "P1", "label": "IngestReport {written, rejected, not_found}", "kind": "sync" }
+    ]
+  },
+  {
+    "id": "SEQ2",
+    "name": "Model card generation, smoke, and materialization",
+    "requirementRefs": ["R3", "R5"],
+    "participants": [
+      { "id": "P1", "name": "Design Engineer", "componentRef": null },
+      { "id": "P2", "name": "Spice Card MCP Tool", "componentRef": "C7" },
+      { "id": "P3", "name": "Model Card Generator", "componentRef": "C3" },
+      { "id": "P4", "name": "Card Materializer", "componentRef": "C4" },
+      { "id": "P5", "name": "ngspice", "componentRef": null }
+    ],
+    "messages": [
+      { "id": "MSG1", "from": "P1", "to": "P2", "label": "bodesign_spice_model_card {folder, mpn, category, materialize}", "kind": "sync" },
+      { "id": "MSG2", "from": "P2", "to": "P3", "label": "generate_model_card(mpn, category)", "kind": "sync" },
+      { "id": "MSG3", "from": "P3", "to": "P3", "label": "query L4; typ-selection; SPX_PARAMS_MISSING/AMBIGUOUS if incomplete", "kind": "self" },
+      { "id": "MSG4", "from": "P3", "to": "P4", "label": "ModelCard (card_text + provenance)", "kind": "sync" },
+      { "id": "MSG5", "from": "P4", "to": "P5", "label": "DC-op smoke testbench (ngspice -b)", "kind": "sync" },
+      { "id": "MSG6", "from": "P5", "to": "P4", "label": "exit code + stderr (pass | fail | unavailable)", "kind": "sync" },
+      { "id": "MSG7", "from": "P4", "to": "P4", "label": "pass/skipped -> write card + manifest(source=vault-grounded); fail -> SPX_SMOKE_FAILED, exclude", "kind": "self" },
+      { "id": "MSG8", "from": "P2", "to": "P1", "label": "ModelCard JSON (card_text, provenance, smoke) | SPX_* error", "kind": "sync" }
+    ]
+  },
+  {
+    "id": "SEQ3",
+    "name": "Simulation with model source annotation and evidence return",
+    "requirementRefs": ["R4", "R5"],
+    "participants": [
+      { "id": "P1", "name": "Design Engineer", "componentRef": null },
+      { "id": "P2", "name": "Simulation Annotator", "componentRef": "C5" },
+      { "id": "P3", "name": "SPICE Toolchain (skills)", "componentRef": null },
+      { "id": "P4", "name": "Evidence Adapter", "componentRef": "C6" }
+    ],
+    "messages": [
+      { "id": "MSG1", "from": "P1", "to": "P2", "label": "simulate_schematic(schematic, out_dir)", "kind": "sync" },
+      { "id": "MSG2", "from": "P2", "to": "P3", "label": "analyze + simulate_subcircuits (cascade tier 1 hits project manifest)", "kind": "sync" },
+      { "id": "MSG3", "from": "P3", "to": "P2", "label": "spice.json (per-subcircuit pass/warn/fail)", "kind": "sync" },
+      { "id": "MSG4", "from": "P2", "to": "P2", "label": "deterministic manifest lookup -> model_source=vault-grounded|generic-default per result", "kind": "self" },
+      { "id": "MSG5", "from": "P2", "to": "P4", "label": "SimResult with model_source annotations", "kind": "sync" },
+      { "id": "MSG6", "from": "P4", "to": "P1", "label": "ValidationEvidence(tool=spice) -> spine evidence_returns/", "kind": "async" }
+    ]
+  }
+]

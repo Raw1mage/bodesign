@@ -73,11 +73,68 @@ def simulate_schematic(
 
     data = json.loads(report.read_text(encoding="utf-8"))
     summ = data.get("summary", {})
+    grounded = _vault_grounded_components(sch, analysis)
     results = [{
         "type": r.get("subcircuit_type"), "components": r.get("components"),
         "expected": r.get("expected"), "simulated": r.get("simulated"), "status": r.get("status"),
+        "model_source": _model_source_for(r, grounded),
     } for r in data.get("simulation_results", [])]
     return SimResult(
         status="ok", passed=summ.get("pass", 0), warned=summ.get("warn", 0), failed=summ.get("fail", 0),
         results=results, report_path=str(report),
     )
+
+
+def _vault_grounded_components(schematic_path: Path, analysis_path: Path) -> set[str]:
+    """Return the set of component refs whose model is vault-grounded (DD-8).
+
+    Deterministic: reads <project>/spice/models/manifest.json (the cascade
+    tier-1 cache populated by component-kb's materialize step), collects the
+    MPNs flagged source=vault-grounded, then maps them to schematic refs via
+    the analyzer JSON's ref->value mapping. No fallback: a ref is grounded iff
+    its value (MPN) is present in the manifest with source=vault-grounded.
+    """
+    project_dir = Path(schematic_path).parent
+    manifest_path = project_dir / "spice" / "models" / "manifest.json"
+    if not manifest_path.exists():
+        return set()
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+    grounded_mpns = {
+        str(entry.get("mpn", "")).strip()
+        for entry in manifest.values()
+        if isinstance(entry, dict) and entry.get("source") == "vault-grounded"
+    }
+    grounded_mpns.discard("")
+    if not grounded_mpns:
+        return set()
+
+    try:
+        adata = json.loads(analysis_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+
+    grounded_refs: set[str] = set()
+    for comp in adata.get("components", []) or []:
+        if not isinstance(comp, dict):
+            continue
+        ref = str(comp.get("reference") or comp.get("ref") or "").strip()
+        value = str(comp.get("value") or comp.get("mpn") or "").strip()
+        if ref and value in grounded_mpns:
+            grounded_refs.add(ref)
+    return grounded_refs
+
+
+def _model_source_for(result: dict, grounded_refs: set[str]) -> str:
+    """Annotate one simulation result with its model provenance (DD-8).
+
+    vault-grounded iff any component ref in this subcircuit hits a grounded
+    ref; otherwise generic-default. Deterministic table lookup, no inference.
+    """
+    comps = result.get("components") or []
+    refs = {str(c).strip() for c in comps if c}
+    if refs & grounded_refs:
+        return "vault-grounded"
+    return "generic-default"

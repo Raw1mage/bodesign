@@ -1,4 +1,4 @@
-from .contracts import CandidateDiffItem, GeneratedDesignCandidateWorkspace, ReferenceBoardWorkflowPlan, WorkflowStage, build_generated_design_candidate_workspace, plan_reference_board_workflow
+from .contracts import CandidateDiffItem, GeneratedDesignCandidateWorkspace, ReferenceBoardWorkflowPlan, WorkflowStage, build_generated_design_candidate_workspace, derive_workflow_plan, plan_reference_board_workflow
 from .agent_registry import (
     AgentRegistry,
     AgentRegistryError,
@@ -56,12 +56,54 @@ from .gap_report import (
     collect_source_gap_report,
     render_gap_report_markdown,
 )
+from .orchestration import (
+    EVIDENCE_RETURN_SCHEMA,
+    EvidenceReturn,
+    get_evidence_return,
+    ingest_evidence,
+    list_evidence_returns,
+    return_evidence,
+)
+from .validation_evidence import (
+    VALIDATION_EVIDENCE_SCHEMA,
+    ValidationEvidence,
+    ValidationEvidenceError,
+    ValidationFinding,
+    wrap_validation_evidence,
+)
+from .root_cause import (
+    ROOT_CAUSE_SCHEMA,
+    RootCauseError,
+    RootCauseReport,
+    load_root_cause_reports,
+    record_root_cause,
+)
+from .reference_crosscheck import (
+    DIFF_DIMENSIONS,
+    CrossCheckDiff,
+    CrossCheckDiffItem,
+    CrossCheckError,
+    crosscheck_diff,
+)
+from .design_review import (
+    DESIGN_REVIEW_SCHEMA,
+    REVIEW_VERDICTS,
+    DesignReviewError,
+    DesignReviewRecord,
+    ReviewScenario,
+    load_design_review,
+    record_design_review,
+    review_gate_status,
+)
 from .requirement_planning import (
+    ORACLE_TOOLS,
+    VERIFICATION_STATUSES,
     ClarifyingQuestion,
     DesignIntentPlan,
     ExtractedRequirement,
     SubsystemPlan,
     plan_design_intent,
+    requirement_passfail_table,
 )
 from .evidence_sourcing import (
     MatchedDocument,

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "state": "verified",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-12T13:32:50.721Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-12T13:56:08.106Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "design artifacts 完成（headings 修正後重試）：spec.md、design.md（DD-1..DD-9）、data-schema.json、idef0/grafcet/c4 通過 drawmiat 驗證、sequence.json"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-12T14:07:37.404Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "planned artifacts 完成（格式修正後重試）：tasks.md（5 phases / 17 tasks）、handoff.md（Required Reads + Stop Gates In Force）、test-vectors.json（頂層 array，22 vectors）、errors.md（Error Catalogue）、observability.md（Events + Metrics）"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-12T14:31:59.990Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "first task checked; implementation in progress"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-12T14:33:52.070Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "全 17 tasks 完成；新增 46 tests 全綠；全 suite 530 tests OK 無回歸；architecture.md 同步"
+    }
+  ]
+}

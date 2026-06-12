@@ -15,6 +15,15 @@ from .vault import (
     spec_check,
     vault_root,
 )
+from .spice_card import (
+    IngestReport,
+    ModelCard,
+    SpiceCardError,
+    generate_model_card,
+    ingest_spice_extraction,
+    materialize_model_cards,
+    run_smoke,
+)
 
 __all__ = [
     "ComponentKnowledge",

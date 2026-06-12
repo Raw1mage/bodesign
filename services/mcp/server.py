@@ -333,6 +333,42 @@ def _h_return_blocker(a: dict) -> Any:
         affected_c00_fields=a.get("affected_c00_fields"), affected_downstream_layers=a.get("affected_downstream_layers"),
         options=a.get("options"), recommended_owner=a.get("recommended_owner", "user"),
         proposed_state=a.get("proposed_state", "blocked"), evidence=a.get("evidence"),
+        simple_fix_candidates=a.get("simple_fix_candidates"),
+    ).to_dict()
+
+
+def _h_wrap_validation_evidence(a: dict) -> Any:
+    from bodesign_workflow_core import wrap_validation_evidence
+    return wrap_validation_evidence(
+        a["tool"], a["raw_result"],
+        inputs=a.get("inputs"), requirement_refs=a.get("requirement_refs"),
+    ).to_dict()
+
+
+def _h_return_evidence(a: dict) -> Any:
+    from bodesign_workflow_core import return_evidence
+    return return_evidence(
+        a["folder"], a["packet_id"],
+        envelope=a["envelope"], requirement_verdicts=a.get("requirement_verdicts"),
+    ).to_dict()
+
+
+def _h_list_evidence_returns(a: dict) -> Any:
+    from bodesign_workflow_core import list_evidence_returns
+    return {"evidence_returns": [e.to_dict() for e in list_evidence_returns(a["folder"], unresolved_only=a.get("unresolved_only", False))]}
+
+
+def _h_ingest_evidence(a: dict) -> Any:
+    from bodesign_workflow_core import ingest_evidence
+    return ingest_evidence(a["folder"], a["evidence_id"])
+
+
+def _h_reference_board_workflow(a: dict) -> Any:
+    from bodesign_workflow_core import derive_workflow_plan
+    return derive_workflow_plan(
+        a["project_id"], a["board_design_id"], a["folder"],
+        artifact_count=a.get("artifact_count", 0), component_count=a.get("component_count", 0),
+        net_count=a.get("net_count", 0), knowledge_queue_count=a.get("knowledge_queue_count", 0),
     ).to_dict()
 
 
@@ -403,6 +439,50 @@ def _h_crosscheck(a: dict) -> Any:
 def _h_simulate(a: dict) -> Any:
     from bodesign_eda_bridge import simulate_schematic
     return asdict(simulate_schematic(a["schematic_path"], a["out_dir"], simulator=a.get("simulator", "ngspice"), types=a.get("types")))
+
+
+def _h_spice_model_card(a: dict) -> Any:
+    """Generate a datasheet-grounded SPICE model card from vault L4 state.
+
+    SpiceCardError (SPX_*) is passed through as a structured error result —
+    never swallowed, never an empty success (DD-6/DD-9). When materialize is
+    requested, the card is smoke-tested and written into the project's
+    spice/models/ cascade tier-1 cache.
+    """
+    from dataclasses import asdict as _asdict
+    from bodesign_component_kb import (
+        SpiceCardError,
+        generate_model_card,
+        materialize_model_cards,
+    )
+    from bodesign_component_kb.storage import open_vault
+    from bodesign_component_kb.repository import VaultRepository
+
+    mpn = a["mpn"]
+    category = a["category"]
+    vault_dir = a.get("vault_dir")
+    storage = open_vault(vault_dir) if vault_dir else open_vault()
+    try:
+        repo = VaultRepository(storage)
+        try:
+            card = generate_model_card(repo, mpn, category)
+        except SpiceCardError as error:
+            return {"status": "error", "error_code": error.code,
+                    "message": error.message, "payload": error.payload}
+
+        result: dict[str, Any] = {"status": "ok", "card": card.to_dict()}
+        if a.get("materialize") and a.get("project_dir"):
+            try:
+                mat = materialize_model_cards(
+                    a["project_dir"], [mpn], repo, category_of={mpn: category}
+                )
+                result["materialize"] = _asdict(mat)
+            except SpiceCardError as error:
+                return {"status": "error", "error_code": error.code,
+                        "message": error.message, "payload": error.payload}
+        return result
+    finally:
+        storage.close()
 
 
 def _h_analyze_emc(a: dict) -> Any:
@@ -570,6 +650,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_simulate", "handler": _h_simulate,
      "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "simulator": _STR, "types": _STR}, "required": ["schematic_path", "out_dir"]}},
+    {"name": "bodesign_spice_model_card", "handler": _h_spice_model_card,
+     "description": "Generate a datasheet-grounded SPICE model card (diode/ldo/passive) from vault L4 spice_model.* params — deterministic, byte-identical, provenance-stamped. Optional materialize writes the smoke-tested card into <project>/spice/models/ (cascade tier-1, source=vault-grounded). SPX_* errors (missing/ambiguous params, unsupported category) pass through structured; never fabricates parameters.",
+     "schema": {"type": "object", "properties": {"mpn": _STR, "category": _STR, "vault_dir": _STR, "materialize": {"type": "boolean"}, "project_dir": _STR}, "required": ["mpn", "category"]}},
     {"name": "bodesign_analyze_emc", "handler": _h_analyze_emc,
      "description": "EMC pre-compliance risk analysis on a schematic + .kicad_pcb (via kicad analyzers + emc skill): severity-bucketed findings (ground plane, decoupling, return paths, stitching, …). Pre-silicon risk, not certification.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "pcb_path": _STR, "out_dir": _STR, "standard": _STR}, "required": ["schematic_path", "pcb_path", "out_dir"]}},
@@ -723,7 +806,8 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"folder": _STR, "packet_id": _STR, "severity": _STR,
                 "summary": _STR, "question_for_user": _STR, "affected_c00_fields": {"type": "array", "items": _STR},
                 "affected_downstream_layers": {"type": "array", "items": _STR}, "options": {"type": "array"},
-                "recommended_owner": _STR, "proposed_state": _STR, "evidence": {"type": "object"}},
+                "recommended_owner": _STR, "proposed_state": _STR, "evidence": {"type": "object"},
+                "simple_fix_candidates": {"type": "array", "items": {"type": "object"}}},
                 "required": ["folder", "packet_id", "severity", "summary", "question_for_user"]}},
     {"name": "bodesign_list_blockers", "handler": _h_list_blockers,
      "description": "List blockers returned to C00 in a project folder; set unresolved_only=true for the open ones C00 still owes the user a decision on.",
@@ -732,6 +816,28 @@ TOOLS: list[dict] = [
      "description": "C00 records the human/owner resolution of a blocker and closes it. Does NOT silently mutate the PRD — it records the decision and the C00 field-state to apply via the C00 update/emit step. Requires a non-empty decision (no auto-resolution).",
      "schema": {"type": "object", "properties": {"folder": _STR, "blocker_id": _STR, "resolved_state": _STR,
                 "decision": _STR, "decided_by": _STR}, "required": ["folder", "blocker_id", "resolved_state", "decision"]}},
+    {"name": "bodesign_reference_board_workflow", "handler": _h_reference_board_workflow,
+     "description": "Reference-board workflow plan with stage status/blockers DERIVED from the orchestration spine (_orchestration/ work packets + blockers + evidence returns) plus the design-review gate — the single source of truth (A1/DD-8). A missing spine reports SPINE_NOT_INITIALIZED blockers explicitly; it never falls back to parameter-snapshot status.",
+     "schema": {"type": "object", "properties": {"project_id": _STR, "board_design_id": _STR, "folder": _STR,
+                "artifact_count": {"type": "integer"}, "component_count": {"type": "integer"},
+                "net_count": {"type": "integer"}, "knowledge_queue_count": {"type": "integer"}},
+                "required": ["project_id", "board_design_id", "folder"]}},
+    {"name": "bodesign_wrap_validation_evidence", "handler": _h_wrap_validation_evidence,
+     "description": "Wrap a native validation tool result (drc_gate / si_check / crosscheck) into the unified ValidationEvidence envelope (bodesign.validation_evidence.v1): {tool, inputs, findings[], severity, anchors[], requirement_refs[], raw_result}. Native fields are preserved untouched under raw_result, never reinterpreted. Unknown tools / empty results fail fast (ENV_TOOL_UNKNOWN / ENV_RAW_RESULT_MISSING).",
+     "schema": {"type": "object", "properties": {"tool": _STR, "raw_result": {"type": "object"},
+                "inputs": {"type": "object"}, "requirement_refs": {"type": "array", "items": _STR}},
+                "required": ["tool", "raw_result"]}},
+    {"name": "bodesign_return_evidence", "handler": _h_return_evidence,
+     "description": "A downstream layer returns measured validation evidence (bodesign.c00.evidence_return.v1) against its work packet to C00. envelope must be a ValidationEvidence dict; requirement_verdicts rows are {requirement_key, verdict: pass|fail, measured_value?, anchors?}. Persists under <folder>/_orchestration/evidence_returns/ with count-based IDs (<LAYER>-EV-0001); malformed payloads fail fast and persist nothing.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "packet_id": _STR, "envelope": {"type": "object"},
+                "requirement_verdicts": {"type": "array", "items": {"type": "object"}}},
+                "required": ["folder", "packet_id", "envelope"]}},
+    {"name": "bodesign_list_evidence_returns", "handler": _h_list_evidence_returns,
+     "description": "List validation evidence returns in a project folder's orchestration spine; set unresolved_only=true for ones C00 has not ingested yet.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "unresolved_only": {"type": "boolean"}}, "required": ["folder"]}},
+    {"name": "bodesign_ingest_evidence", "handler": _h_ingest_evidence,
+     "description": "C00 consumes an evidence return: records per-requirement verification-status updates (pass/fail from oracle execution) and lists failed requirements for follow-up dispatch. Never auto-executes fixes — opening a new work packet remains C00's explicit dispatch step.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "evidence_id": _STR}, "required": ["folder", "evidence_id"]}},
     {"name": "bodesign_enter_c01_mode", "handler": _h_enter_c01_mode,
      "description": "C00 → C01 mode contract (C01-I3): dispatch a C01 work packet scoped to the PRD sections that hand off to C01, emit the Rockbox-like C01 package, and return the next C01 preference question. C01 may ask preference questions directly; product-level decisions return to C00 as blockers. C01 does not mutate the PRD or claim ID approval.",
      "schema": {"type": "object", "properties": {"folder": _STR, "c00": {}, "answers": {"type": "object"}, "objective": _STR},

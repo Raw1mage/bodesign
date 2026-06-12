@@ -1,0 +1,41 @@
+{
+  "diagram_title": "Datasheet-Grounded SPICE Models — Component View",
+  "diagram_level": "component",
+  "diagram_layout": "top_down",
+  "scope": { "type": "container", "id": "CT1" },
+  "persons": [
+    { "id": "P1", "name": "Design Engineer", "description": "Requests model cards, provides datasheets, reviews repair guidance for missing parameters", "external": true }
+  ],
+  "systems": [
+    { "id": "SYS1", "name": "bodesign MCP Server", "description": "AI PCB design copilot delivered as a standalone MCP server", "external": false },
+    { "id": "SYS2", "name": "SPICE Toolchain", "description": "ngspice + spice skill scripts (host-side, unmodified): model resolution cascade, subcircuit simulation", "external": true }
+  ],
+  "containers": [
+    { "id": "CT1", "type": "api", "name": "component-kb", "technology": "Python package", "description": "Vault L4 spec_values EAV + field_path registry + spice model card generation (new)", "systemRef": "SYS1" },
+    { "id": "CT2", "type": "api", "name": "eda-bridge", "technology": "Python package", "description": "Thin orchestration over kicad/spice skills; simulate_schematic", "systemRef": "SYS1" },
+    { "id": "CT3", "type": "api", "name": "workflow-core", "technology": "Python package", "description": "ValidationEvidence envelope + orchestration spine evidence_returns/", "systemRef": "SYS1" }
+  ],
+  "components": [
+    { "id": "C1", "type": "none", "name": "Field Path Registry", "technology": "repository.py FIELD_PATH_ROOTS", "description": "A1/DD-3: spice_model.{diode,ldo,passive}.* closed v1 roots; unknown path fails fast with nearby candidates; verified-needs-evidence trigger preserved", "containerRef": "CT1" },
+    { "id": "C2", "type": "none", "name": "Extraction Ingester", "technology": "spice_card.py ingest_spice_extraction (new)", "description": "A2/DD-4: per-row validation (registry + sha256/page evidence + numeric value); SPX_EVIDENCE_MISSING rejects rows; not_found reported, never written; trust=unverified", "containerRef": "CT1" },
+    { "id": "C3", "type": "none", "name": "Model Card Generator", "technology": "spice_card.py generate_model_card (new)", "description": "A3/DD-5: deterministic f-string templates (.model diode / .subckt ldo / .subckt passive); typ-selection rule; SPX_PARAMS_MISSING with repair guidance; byte-identical output with provenance header", "containerRef": "CT1" },
+    { "id": "C4", "type": "none", "name": "Card Materializer", "technology": "spice_card.py materialize_model_cards (new)", "description": "A4/DD-2,DD-7: ngspice DC-op smoke; pass/skipped -> write card + manifest entry (source=vault-grounded) into <project>/spice/models/; fail -> SPX_SMOKE_FAILED, card excluded", "containerRef": "CT1" },
+    { "id": "C5", "type": "none", "name": "Simulation Annotator", "technology": "simulate.py (extended)", "description": "A5/DD-8: deterministic manifest lookup marks each subcircuit result model_source=vault-grounded|generic-default", "containerRef": "CT2" },
+    { "id": "C6", "type": "none", "name": "Evidence Adapter", "technology": "validation_evidence.py (existing)", "description": "A5/R5: wraps simulation results as ValidationEvidence(tool=spice) for spine return", "containerRef": "CT3" },
+    { "id": "C7", "type": "none", "name": "Spice Card MCP Tool", "technology": "server.py bodesign_spice_model_card (new)", "description": "DD-9: MCP surface — args {folder, mpn, category, materialize?}; returns ModelCard JSON; SPX_* error codes pass through run_tool wrapper", "containerRef": "CT1" }
+  ],
+  "relationships": [
+    { "id": "R1", "source": "P1", "target": "C7", "description": "Requests model card generation / materialization", "technology": "MCP tool call", "position": "down" },
+    { "id": "R2", "source": "C7", "target": "C3", "description": "Delegates generation for MPN + category", "technology": "generate_model_card()", "position": "down" },
+    { "id": "R3", "source": "C2", "target": "C1", "description": "Resolves field_path per row (fail-fast on unknown)", "technology": "resolve_field_path()", "position": "down" },
+    { "id": "R4", "source": "C3", "target": "C1", "description": "Queries L4 spice_model.* rows; applies typ-selection", "technology": "spec_values query", "position": "down" },
+    { "id": "R5", "source": "C3", "target": "C4", "description": "Hands rendered card for smoke + materialization", "technology": "ModelCard", "position": "down" },
+    { "id": "R6", "source": "C4", "target": "SYS2", "description": "Runs DC-op smoke testbench", "technology": "ngspice -b", "position": "down" },
+    { "id": "R7", "source": "C4", "target": "C5", "description": "Project manifest (vault-grounded entries) consumed by cascade tier 1", "technology": "spice/models/manifest.json", "position": "right" },
+    { "id": "R8", "source": "C5", "target": "SYS2", "description": "Runs subcircuit simulation (cascade resolves models)", "technology": "simulate_subcircuits.py", "position": "down" },
+    { "id": "R9", "source": "C5", "target": "C6", "description": "SimResult with model_source annotations", "technology": "SimResult", "position": "right" },
+    { "id": "R10", "source": "C6", "target": "P1", "description": "ValidationEvidence(tool=spice) returned to spine / engineer", "technology": "bodesign.c00.evidence_return.v1", "position": "up" },
+    { "id": "R11", "source": "C3", "target": "P1", "description": "SPX_PARAMS_MISSING repair guidance (missing field_paths)", "technology": "structured error payload", "position": "up" },
+    { "id": "R12", "source": "P1", "target": "C2", "description": "Submits extraction batch (AI/skill-driven, evidence per row)", "technology": "ingest API / MCP", "position": "down" }
+  ]
+}

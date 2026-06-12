@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "knowledge_datasheet-spice-models data contracts",
+  "description": "Contracts for vault L4 spice_model.* namespace, extraction ingest batch, model card output, and simulate model_source annotation. All fail-fast: no silent defaults.",
+  "definitions": {
+    "field_path_namespace": {
+      "description": "New L4 field_path roots (closed list, v1). EAV rows reuse existing spec_values schema (min/typ/max via value_kind + condition).",
+      "roots": {
+        "spice_model.diode": {
+          "fields": {
+            "is_a": { "type": "number", "unit": "A", "required": true, "description": "Saturation current (IS)" },
+            "n": { "type": "number", "unit": "1", "required": true, "description": "Emission coefficient (N)" },
+            "rs_ohm": { "type": "number", "unit": "ohm", "required": false, "description": "Series resistance (RS)" },
+            "cj0_f": { "type": "number", "unit": "F", "required": false, "description": "Zero-bias junction capacitance (CJO)" },
+            "bv_v": { "type": "number", "unit": "V", "required": false, "description": "Reverse breakdown voltage (BV)" },
+            "ibv_a": { "type": "number", "unit": "A", "required": false, "description": "Current at breakdown (IBV)" }
+          }
+        },
+        "spice_model.ldo": {
+          "fields": {
+            "vout_v": { "type": "number", "unit": "V", "required": true, "description": "Nominal output voltage" },
+            "dropout_v": { "type": "number", "unit": "V", "required": true, "description": "Dropout voltage at rated load" },
+            "iout_max_a": { "type": "number", "unit": "A", "required": true, "description": "Maximum output current" },
+            "iq_a": { "type": "number", "unit": "A", "required": false, "description": "Quiescent current" },
+            "psrr_db": { "type": "number", "unit": "dB", "required": false, "description": "PSRR at reference frequency (condition row)" }
+          }
+        },
+        "spice_model.passive": {
+          "fields": {
+            "c_f": { "type": "number", "unit": "F", "required": "category==capacitor", "description": "Nominal capacitance" },
+            "l_h": { "type": "number", "unit": "H", "required": "category==inductor", "description": "Nominal inductance" },
+            "r_ohm": { "type": "number", "unit": "ohm", "required": "category==resistor", "description": "Nominal resistance" },
+            "esr_ohm": { "type": "number", "unit": "ohm", "required": false, "description": "Equivalent series resistance" },
+            "esl_h": { "type": "number", "unit": "H", "required": false, "description": "Equivalent series inductance" }
+          }
+        }
+      },
+      "value_selection_rule": "Model card generation picks value_kind='typ'; if absent and exactly one row exists use it; multiple rows without typ -> SPX_PARAMS_AMBIGUOUS (no averaging)."
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["document_sha256", "page"],
+      "properties": {
+        "document_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "page": { "type": "integer", "minimum": 1 },
+        "anchor_text": { "type": "string", "description": "Optional verbatim snippet from the datasheet" }
+      },
+      "additionalProperties": false
+    },
+    "extraction_row": {
+      "type": "object",
+      "required": ["field_path", "status"],
+      "properties": {
+        "field_path": { "type": "string", "pattern": "^spice_model\\.(diode|ldo|passive)\\.[a-z0-9_]+$" },
+        "status": { "type": "string", "enum": ["found", "not_found"] },
+        "value_num": { "type": "number", "description": "Required when status=found" },
+        "value_kind": { "type": "string", "enum": ["min", "typ", "max"], "default": "typ" },
+        "unit": { "type": "string" },
+        "condition": { "type": "string", "description": "Measurement condition, e.g. 'Iout=1A, Tj=25C'" },
+        "evidence": { "$ref": "#/definitions/evidence", "description": "Required when status=found; missing -> SPX_EVIDENCE_MISSING (row rejected)" }
+      },
+      "additionalProperties": false
+    },
+    "ingest_batch": {
+      "type": "object",
+      "required": ["mpn", "rows"],
+      "properties": {
+        "mpn": { "type": "string", "minLength": 1 },
+        "rows": { "type": "array", "items": { "$ref": "#/definitions/extraction_row" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+    "ingest_report": {
+      "type": "object",
+      "required": ["mpn", "written", "rejected", "not_found"],
+      "properties": {
+        "mpn": { "type": "string" },
+        "written": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field_path", "spec_value_id"],
+            "properties": {
+              "field_path": { "type": "string" },
+              "spec_value_id": { "type": "integer" },
+              "trust": { "type": "string", "const": "unverified" }
+            }
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field_path", "error_code", "detail"],
+            "properties": {
+              "field_path": { "type": "string" },
+              "error_code": { "type": "string", "enum": ["SPX_EVIDENCE_MISSING", "SPX_FIELD_UNKNOWN", "SPX_VALUE_INVALID"] },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "not_found": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "field_paths the extractor explicitly reported unavailable in the datasheet; never written to DB"
+        }
+      },
+      "additionalProperties": false
+    },
+    "model_card": {
+      "type": "object",
+      "required": ["mpn", "category", "card_text", "card_name", "provenance", "smoke"],
+      "properties": {
+        "mpn": { "type": "string" },
+        "category": { "type": "string", "enum": ["diode", "ldo", "passive"] },
+        "card_name": { "type": "string", "description": "SPICE symbol name, e.g. D_1N4148W or LDO_AMS1117_3_3" },
+        "card_text": { "type": "string", "description": "Deterministic .model/.subckt text incl. provenance comment header; byte-identical for identical L4 state (no timestamps)" },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field_path", "document_sha256", "page", "trust"],
+            "properties": {
+              "field_path": { "type": "string" },
+              "document_sha256": { "type": "string" },
+              "page": { "type": "integer" },
+              "trust": { "type": "string", "enum": ["unverified", "verified"] },
+              "value_num": { "type": "number" },
+              "value_kind": { "type": "string", "enum": ["min", "typ", "max"] }
+            }
+          }
+        },
+        "smoke": { "type": "string", "enum": ["pass", "fail", "skipped-no-simulator", "not-run"] },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Honest scope statements, e.g. 'first-order behavioral approximation; no transient response modeling' (LDO)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "manifest_entry": {
+      "description": "Entry written into <project>/spice/models/manifest.json (spice skill cascade tier 1). Keys mirror the skill's existing manifest format; vault adds source + provenance.",
+      "type": "object",
+      "required": ["mpn", "file", "source", "smoke"],
+      "properties": {
+        "mpn": { "type": "string" },
+        "file": { "type": "string", "description": "Relative card filename, e.g. AMS1117_3_3.sub" },
+        "source": { "type": "string", "const": "vault-grounded" },
+        "smoke": { "type": "string", "enum": ["pass", "skipped-no-simulator"], "description": "fail cards are never written to the manifest (SPX_SMOKE_FAILED)" },
+        "provenance_summary": { "type": "string", "description": "e.g. '5 params from sha=ab12cd34 p.3-7, trust=unverified'" }
+      }
+    },
+    "sim_result_annotation": {
+      "description": "Extension to eda-bridge SimResult.results[] entries.",
+      "type": "object",
+      "properties": {
+        "model_source": {
+          "type": "string",
+          "enum": ["vault-grounded", "generic-default"],
+          "description": "Deterministic: vault-grounded iff the subcircuit's component MPN hits a manifest entry with source=vault-grounded; otherwise generic-default"
+        }
+      }
+    },
+    "error_codes": {
+      "description": "SPX_* namespace; all carry structured payload, no silent fallback.",
+      "enum_detail": {
+        "SPX_EVIDENCE_MISSING": "Extraction row lacks document_sha256/page; row rejected (per-row, batch continues)",
+        "SPX_FIELD_UNKNOWN": "field_path not in registry; row rejected (registry fail-fast preserved)",
+        "SPX_VALUE_INVALID": "value_num absent/non-numeric for status=found",
+        "SPX_PARAMS_MISSING": "Model card generation: required fields absent in L4; payload lists missing field_paths + repair guidance ('extract these parameters')",
+        "SPX_PARAMS_AMBIGUOUS": "Multiple L4 rows for a field without a typ value; payload lists candidate rows; no averaging",
+        "SPX_SMOKE_FAILED": "ngspice smoke failed; payload carries stderr excerpt; card excluded from manifest",
+        "SPX_CATEGORY_UNSUPPORTED": "Requested category outside v1 closed list (diode|ldo|passive)"
+      }
+    }
+  }
+}

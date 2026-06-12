@@ -1,0 +1,167 @@
+{
+  "Steps": [
+    {
+      "StepNumber": 0,
+      "ModuleRef": "A1",
+      "StepType": "initial",
+      "StepAction": "Await target MPN and extraction batch",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 1,
+      "ModuleRef": "A2",
+      "StepType": "normal",
+      "StepAction": "Validate extraction rows (registry + evidence + value)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 2,
+      "ModuleRef": "A2",
+      "StepType": "normal",
+      "StepAction": "Write valid rows to L4 (trust=unverified); report rejected + not_found",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 3,
+      "ModuleRef": "A3",
+      "StepType": "normal",
+      "StepAction": "Query L4 params for MPN; apply typ-selection rule",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 4,
+      "ModuleRef": "A3",
+      "StepType": "normal",
+      "StepAction": "Render deterministic model card with provenance header",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 5,
+      "ModuleRef": "A3",
+      "StepType": "normal",
+      "StepAction": "Emit SPX_PARAMS_MISSING / SPX_PARAMS_AMBIGUOUS with repair guidance",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 6,
+      "ModuleRef": "A4",
+      "StepType": "normal",
+      "StepAction": "Run ngspice DC-op smoke testbench",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 7,
+      "ModuleRef": "A4",
+      "StepType": "normal",
+      "StepAction": "Write card file + manifest entry (source=vault-grounded)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 8,
+      "ModuleRef": "A4",
+      "StepType": "normal",
+      "StepAction": "Emit SPX_SMOKE_FAILED; exclude card from manifest",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 9,
+      "ModuleRef": "A5",
+      "StepType": "normal",
+      "StepAction": "Simulate schematic; annotate model_source per subcircuit; wrap ValidationEvidence",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    }
+  ],
+  "Gates": [
+    {
+      "GateId": "G1",
+      "GateNumber": 1,
+      "GateType": "divergence_or",
+      "Owner": { "Kind": "source", "StepNumber": 3 },
+      "Inputs": [ { "Port": "I1", "From": "S3O1" } ],
+      "Outputs": [ { "Port": "O1", "To": "S4I1" }, { "Port": "O2", "To": "S5I1" } ]
+    },
+    {
+      "GateId": "G2",
+      "GateNumber": 2,
+      "GateType": "divergence_or",
+      "Owner": { "Kind": "source", "StepNumber": 6 },
+      "Inputs": [ { "Port": "I1", "From": "S6O1" } ],
+      "Outputs": [ { "Port": "O1", "To": "S7I1" }, { "Port": "O2", "To": "S8I1" } ]
+    },
+    {
+      "GateId": "G3",
+      "GateNumber": 3,
+      "GateType": "convergence_or",
+      "Owner": { "Kind": "target", "StepNumber": 0 },
+      "Inputs": [ { "Port": "I1", "From": "S5O1" }, { "Port": "I2", "From": "S8O1" } ],
+      "Outputs": [ { "Port": "O1", "To": "S0I2" } ]
+    }
+  ],
+  "Edges": [
+    { "EdgeId": "S0O1S1I1", "From": "S0O1", "To": "S1I1", "Condition": "ingest_batch_received" },
+    { "EdgeId": "S1O1S2I1", "From": "S1O1", "To": "S2I1", "Condition": "rows_classified" },
+    { "EdgeId": "S2O1S3I1", "From": "S2O1", "To": "S3I1", "Condition": "card_generation_requested" },
+    { "EdgeId": "S3O1G1I1", "From": "S3O1", "To": "G1I1", "Condition": "params_queried" },
+    { "EdgeId": "G1O1S4I1", "From": "G1O1", "To": "S4I1", "Condition": "required_params_complete_and_unambiguous" },
+    { "EdgeId": "G1O2S5I1", "From": "G1O2", "To": "S5I1", "Condition": "params_missing_or_ambiguous" },
+    { "EdgeId": "S4O1S6I1", "From": "S4O1", "To": "S6I1", "Condition": "card_rendered" },
+    { "EdgeId": "S6O1G2I1", "From": "S6O1", "To": "G2I1", "Condition": "smoke_finished_or_skipped" },
+    { "EdgeId": "G2O1S7I1", "From": "G2O1", "To": "S7I1", "Condition": "smoke_pass_or_skipped_no_simulator" },
+    { "EdgeId": "G2O2S8I1", "From": "G2O2", "To": "S8I1", "Condition": "smoke_failed" },
+    { "EdgeId": "S7O1S9I1", "From": "S7O1", "To": "S9I1", "Condition": "simulation_requested" },
+    { "EdgeId": "S5O1G3I1", "From": "S5O1", "To": "G3I1", "Condition": "repair_guidance_emitted" },
+    { "EdgeId": "S8O1G3I2", "From": "S8O1", "To": "G3I2", "Condition": "smoke_failure_reported" },
+    { "EdgeId": "G3O1S0I2", "From": "G3O1", "To": "S0I2", "Condition": "awaiting_corrected_input" },
+    { "EdgeId": "S9O1S0I1", "From": "S9O1", "To": "S0I1", "Condition": "evidence_returned_to_spine" }
+  ]
+}

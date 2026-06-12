@@ -1,0 +1,433 @@
+[
+  {
+    "id": "TV-R1-01",
+    "requirement": "R1",
+    "name": "registered spice_model field writes successfully",
+    "input": {
+      "call": "upsert_spec_value",
+      "component_mpn": "D-TEST-1N4148",
+      "field_path": "spice_model.diode.is_a",
+      "value_num": 2.52e-09,
+      "unit": "A",
+      "evidence_ref": "sha256:aa..aa p.2"
+    },
+    "expected": {
+      "row_written": true,
+      "canonical_field_path": "spice_model.diode.is_a",
+      "trust": "unverified"
+    }
+  },
+  {
+    "id": "TV-R1-02",
+    "requirement": "R1",
+    "name": "unregistered field fails fast with candidates",
+    "input": {
+      "call": "upsert_spec_value",
+      "field_path": "spice_model.mosfet.vth_v"
+    },
+    "expected": {
+      "raises": "Unknown field_path",
+      "message_contains": [
+        "spice_model.mosfet.vth_v",
+        "nearby candidates"
+      ]
+    }
+  },
+  {
+    "id": "TV-R1-03",
+    "requirement": "R1",
+    "name": "verified without evidence rejected by trigger (regression)",
+    "input": {
+      "call": "upsert_spec_value",
+      "field_path": "spice_model.diode.n",
+      "value_num": 1.752,
+      "trust": "verified",
+      "evidence_ref": null
+    },
+    "expected": {
+      "raises": "IntegrityError",
+      "reason": "trg_spec_verified_needs_evidence"
+    }
+  },
+  {
+    "id": "TV-R2-01",
+    "requirement": "R2",
+    "name": "valid extraction batch fully written",
+    "input": {
+      "call": "ingest_spice_extraction",
+      "mpn": "D-TEST-1N4148",
+      "rows": [
+        {
+          "field_path": "spice_model.diode.is_a",
+          "status": "found",
+          "value_num": 2.52e-09,
+          "value_kind": "typ",
+          "unit": "A",
+          "evidence": {
+            "document_sha256": "<64hex>",
+            "page": 2
+          }
+        },
+        {
+          "field_path": "spice_model.diode.n",
+          "status": "found",
+          "value_num": 1.752,
+          "value_kind": "typ",
+          "unit": "1",
+          "evidence": {
+            "document_sha256": "<64hex>",
+            "page": 2
+          }
+        }
+      ]
+    },
+    "expected": {
+      "written_count": 2,
+      "rejected_count": 0,
+      "not_found_count": 0,
+      "all_trust": "unverified"
+    }
+  },
+  {
+    "id": "TV-R2-02",
+    "requirement": "R2",
+    "name": "row missing evidence rejected per-row; rest written",
+    "input": {
+      "call": "ingest_spice_extraction",
+      "mpn": "D-TEST-1N4148",
+      "rows": [
+        {
+          "field_path": "spice_model.diode.is_a",
+          "status": "found",
+          "value_num": 2.52e-09,
+          "value_kind": "typ",
+          "evidence": {
+            "document_sha256": "<64hex>",
+            "page": 2
+          }
+        },
+        {
+          "field_path": "spice_model.diode.n",
+          "status": "found",
+          "value_num": 1.752,
+          "value_kind": "typ",
+          "evidence": null
+        }
+      ]
+    },
+    "expected": {
+      "written_count": 1,
+      "rejected": [
+        {
+          "field_path": "spice_model.diode.n",
+          "error_code": "SPX_EVIDENCE_MISSING"
+        }
+      ]
+    }
+  },
+  {
+    "id": "TV-R2-03",
+    "requirement": "R2",
+    "name": "not_found reported, never written to DB",
+    "input": {
+      "call": "ingest_spice_extraction",
+      "mpn": "D-TEST-1N4148",
+      "rows": [
+        {
+          "field_path": "spice_model.diode.bv_v",
+          "status": "not_found"
+        }
+      ]
+    },
+    "expected": {
+      "written_count": 0,
+      "not_found": [
+        "spice_model.diode.bv_v"
+      ],
+      "db_rows_for_field": 0
+    }
+  },
+  {
+    "id": "TV-R2-04",
+    "requirement": "R2",
+    "name": "unknown field_path rejected per-row with SPX_FIELD_UNKNOWN",
+    "input": {
+      "call": "ingest_spice_extraction",
+      "mpn": "D-TEST-1N4148",
+      "rows": [
+        {
+          "field_path": "spice_model.diode.nonexistent",
+          "status": "found",
+          "value_num": 1.0,
+          "evidence": {
+            "document_sha256": "<64hex>",
+            "page": 3
+          }
+        }
+      ]
+    },
+    "expected": {
+      "rejected": [
+        {
+          "field_path": "spice_model.diode.nonexistent",
+          "error_code": "SPX_FIELD_UNKNOWN"
+        }
+      ]
+    }
+  },
+  {
+    "id": "TV-R3-01",
+    "requirement": "R3",
+    "name": "diode .model card generated with provenance",
+    "input": {
+      "call": "generate_model_card",
+      "mpn": "D-TEST-1N4148",
+      "category": "diode",
+      "l4_state": "is_a=2.52e-9(typ), n=1.752(typ), rs_ohm=0.568(typ); evidence sha=<64hex> p.2"
+    },
+    "expected": {
+      "card_name": "D_D_TEST_1N4148",
+      "card_text_contains": [
+        ".model D_D_TEST_1N4148 D(",
+        "IS=2.52e-09",
+        "N=1.752",
+        "RS=0.568",
+        "* source:",
+        "p.2",
+        "trust=unverified"
+      ],
+      "card_text_not_contains": [
+        "timestamp",
+        "generated at"
+      ]
+    }
+  },
+  {
+    "id": "TV-R3-02",
+    "requirement": "R3",
+    "name": "LDO behavioral subckt with limitation statement",
+    "input": {
+      "call": "generate_model_card",
+      "mpn": "L-TEST-AMS1117",
+      "category": "ldo",
+      "l4_state": "vout_v=3.3(typ), dropout_v=1.1(typ), iout_max_a=1.0(typ)"
+    },
+    "expected": {
+      "card_name": "LDO_L_TEST_AMS1117",
+      "card_text_contains": [
+        ".subckt LDO_L_TEST_AMS1117",
+        "first-order behavioral approximation"
+      ]
+    }
+  },
+  {
+    "id": "TV-R3-03",
+    "requirement": "R3",
+    "name": "passive capacitor parasitic network card",
+    "input": {
+      "call": "generate_model_card",
+      "mpn": "P-TEST-CAP100N",
+      "category": "passive",
+      "l4_state": "c_f=1e-7(typ), esr_ohm=0.02(typ), esl_h=1e-9(typ)"
+    },
+    "expected": {
+      "card_text_contains": [
+        ".subckt",
+        "1e-07",
+        "0.02",
+        "1e-09"
+      ]
+    }
+  },
+  {
+    "id": "TV-R3-04",
+    "requirement": "R3",
+    "name": "missing required param fails fast with repair guidance",
+    "input": {
+      "call": "generate_model_card",
+      "mpn": "D-TEST-1N4148",
+      "category": "diode",
+      "l4_state": "is_a=2.52e-9(typ) only; n absent"
+    },
+    "expected": {
+      "raises": "SPX_PARAMS_MISSING",
+      "payload_missing": [
+        "spice_model.diode.n"
+      ],
+      "payload_contains_repair_guidance": true
+    }
+  },
+  {
+    "id": "TV-R3-05",
+    "requirement": "R3",
+    "name": "multiple rows without typ fails fast (no averaging)",
+    "input": {
+      "call": "generate_model_card",
+      "mpn": "D-TEST-1N4148",
+      "category": "diode",
+      "l4_state": "is_a has min=1e-9 and max=5e-9 rows, no typ; n=1.752(typ)"
+    },
+    "expected": {
+      "raises": "SPX_PARAMS_AMBIGUOUS",
+      "payload_field": "spice_model.diode.is_a",
+      "payload_lists_candidate_rows": true
+    }
+  },
+  {
+    "id": "TV-R3-06",
+    "requirement": "R3",
+    "name": "byte-identical determinism",
+    "input": {
+      "call": "generate_model_card twice on same L4 state",
+      "mpn": "D-TEST-1N4148",
+      "category": "diode"
+    },
+    "expected": {
+      "card_text_run1_equals_run2_bytes": true
+    }
+  },
+  {
+    "id": "TV-R3-07",
+    "requirement": "R3",
+    "name": "unsupported category fails fast",
+    "input": {
+      "call": "generate_model_card",
+      "mpn": "D-TEST-1N4148",
+      "category": "opamp"
+    },
+    "expected": {
+      "raises": "SPX_CATEGORY_UNSUPPORTED",
+      "payload_supported": [
+        "diode",
+        "ldo",
+        "passive"
+      ]
+    }
+  },
+  {
+    "id": "TV-R4-01",
+    "requirement": "R4",
+    "name": "vault-grounded model source annotated",
+    "input": {
+      "call": "simulate_schematic",
+      "project_state": "spice/models/manifest.json has D-TEST-1N4148 entry source=vault-grounded; schematic subcircuit uses that MPN"
+    },
+    "expected": {
+      "result_model_source": "vault-grounded"
+    }
+  },
+  {
+    "id": "TV-R4-02",
+    "requirement": "R4",
+    "name": "no vault model annotated generic-default",
+    "input": {
+      "call": "simulate_schematic",
+      "project_state": "no spice/models/ dir (or MPN not in manifest)"
+    },
+    "expected": {
+      "result_model_source": "generic-default",
+      "behavior": "identical to current simulate flow otherwise"
+    }
+  },
+  {
+    "id": "TV-R4-03",
+    "requirement": "R4",
+    "name": "MCP tool happy path returns ModelCard JSON",
+    "input": {
+      "call": "bodesign_spice_model_card",
+      "args": {
+        "folder": "<fixture project>",
+        "mpn": "D-TEST-1N4148",
+        "category": "diode",
+        "materialize": false
+      }
+    },
+    "expected": {
+      "response_contains": [
+        "card_text",
+        "provenance",
+        "smoke"
+      ],
+      "no_materialized_files": true
+    }
+  },
+  {
+    "id": "TV-R4-04",
+    "requirement": "R4",
+    "name": "MCP tool passes SPX error through run_tool wrapper",
+    "input": {
+      "call": "bodesign_spice_model_card",
+      "args": {
+        "folder": "<fixture project>",
+        "mpn": "MPN-WITH-NO-L4-DATA",
+        "category": "diode"
+      }
+    },
+    "expected": {
+      "error_code": "SPX_PARAMS_MISSING",
+      "error_payload_lists_missing_fields": true
+    }
+  },
+  {
+    "id": "TV-R5-01",
+    "requirement": "R5",
+    "name": "smoke pass writes card + manifest entry",
+    "input": {
+      "call": "materialize_model_cards",
+      "precondition": "ngspice available; valid diode card"
+    },
+    "expected": {
+      "card_file_written": true,
+      "manifest_entry": {
+        "source": "vault-grounded",
+        "smoke": "pass"
+      }
+    }
+  },
+  {
+    "id": "TV-R5-02",
+    "requirement": "R5",
+    "name": "smoke fail excludes card from manifest",
+    "input": {
+      "call": "materialize_model_cards",
+      "precondition": "card with injected syntax error (fixture)"
+    },
+    "expected": {
+      "raises_or_reports": "SPX_SMOKE_FAILED",
+      "payload_contains_stderr_excerpt": true,
+      "manifest_has_no_entry": true
+    }
+  },
+  {
+    "id": "TV-R5-03",
+    "requirement": "R5",
+    "name": "no ngspice -> explicit skipped status",
+    "input": {
+      "call": "materialize_model_cards",
+      "precondition": "ngspice absent from PATH (mocked)"
+    },
+    "expected": {
+      "manifest_entry": {
+        "smoke": "skipped-no-simulator"
+      },
+      "card_file_written": true,
+      "not_reported_as_pass": true
+    }
+  },
+  {
+    "id": "TV-R5-04",
+    "requirement": "R5",
+    "name": "smoke result wraps as ValidationEvidence",
+    "input": {
+      "call": "wrap_validation_evidence",
+      "args": {
+        "tool": "spice",
+        "raw_result": "<smoke report dict>"
+      }
+    },
+    "expected": {
+      "envelope_valid": true,
+      "envelope_tool": "spice"
+    }
+  }
+]
