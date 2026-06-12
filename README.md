@@ -16,8 +16,11 @@ _語言：**繁體中文** · [English](./README.en.md)_
 - **規劃**需求：把自然語言規格轉成結構化計畫（並反問釐清）。
 - **生成** KiCad 符號與經 `kicad-cli` 驗證的原理圖（以參考設計為依據）。
 - **佈局**（`pcbnew` 擺件＋DRC）並**匯出製造輸出**（gerber／鑽孔／pos／STEP）。
-- **驗證**四層：ERC/DRC · 對照組交叉檢核 · SPICE · EMC/熱分析。
-- **追蹤就緒度**，並為每個工程檔產出可讀伴隨檔（docx/pdf）與分享文件。
+- **驗證**四層：ERC/DRC · 對照組交叉檢核 · SPICE · EMC/熱分析；其中對照組交叉檢核由
+  **確定性參考比對器**（G7：純 Python Hungarian 配對＋Dice/屬性/連接性加權）執行，SPICE 以
+  **datasheet 接地的 model 卡**（每筆參數帶 page-anchor 證據）取代泛用預設模型。
+- **追蹤就緒度**，並為每個工程檔產出可讀伴隨檔（docx/pdf）與分享文件。所有「可靠度」皆以
+  **可重現的確定性證據展示**（LLM 只負責上游抽取／裁決，驗證與比對全程不參與）。
 
 ## 架構圖
 
@@ -104,21 +107,28 @@ bodesign/
 │   └── assets/skills/            EDA skill 套件（13 個 tarball ＋整包 bundle ＋ MANIFEST.md）
 ├── packages/                     通用能力函式庫（無產品專屬碼）
 │   ├── shared/                   共用契約 ＋ data_root()（程式↔工作資料隔離邊界）
-│   ├── design-ir/                DesignIntent 等中介表示（IR）
-│   ├── component-kb/             可重用零件知識（datasheet 萃取）
+│   ├── design-ir/                DesignIntent 等中介表示（IR）；compare/ 子模組＝確定性
+│   │                             參考比對器（G7：純 Python Hungarian＋Dice/屬性/連接性加權＋FlexiblePin）
+│   ├── component-kb/             可重用零件知識（datasheet 萃取）；spice_card.py＝datasheet 接地
+│   │                             SPICE model 卡（vault L4 → cascade tier-1，確定性、byte-identical）
 │   ├── doc-core/                 pin-table／文件產生工具
 │   ├── source-core/              來源／證據契約
 │   ├── reverse-core/             專案匯入、伴隨檔渲染、文件輸出、board 重建
 │   ├── gerber-core/              Gerber／鑽孔解析 ＋ 預覽
-│   ├── eda-bridge/               KiCad 橋接：符號／原理圖／佈局／製造／BOM／SPICE／EMC
+│   ├── eda-bridge/               KiCad 橋接：符號／原理圖／佈局／製造／BOM／SPICE／EMC；
+│   │                             simulate 標注 model_source（vault-grounded｜generic-default）
 │   ├── workflow-core/            需求規劃、證據蒐集、就緒度羅盤、對照組交叉檢核、
-│   │                             可行性 triage（C04 交付分級）、跨站對帳閘、SI 約束交接
+│   │                             可行性 triage（C04 交付分級）、跨站對帳閘、SI 約束交接；
+│   │                             驗證紀律 G1–G7（需求契約／設計審查閘／crosscheck＋root-cause／
+│   │                             ValidationEvidence 回流／workflow plan 衍生）
 │   ├── storage-core/             客戶自有專案登錄
 │   └── kicad-plugin/             in-KiCad Action Plugin 契約（roadmap）
 ├── specs/                        規格／知識庫（plan-builder）
 │   ├── architecture.md           跨領域架構索引
 │   ├── product/pcb_ai_viewer/    已上線（living）產品設計規格 ＋ IDEF0/GRAFCET SVG ＋ 中文 README
-│   └── feature/eda-mcp-toolchain/  已上線（living）C04 EDA 工具鏈規格（routing/finishing MCP 工具）
+│   ├── feature/eda-mcp-toolchain/  已上線（living）C04 EDA 工具鏈規格（routing/finishing MCP 工具）
+│   ├── workflow/verification-discipline/  已上線（living）參考優先驗證紀律規格（G1–G7）
+│   └── knowledge/datasheet-spice-models/  已上線（living）datasheet 接地 SPICE model 卡規格
 ├── tests/                        測試（乾淨 clone 全綠；資料相依測試自動跳過）
 ├── Dockerfile · docker-compose.yml · mcpctl.sh   容器封裝 ＋ 操作
 ├── mcp.json                      MCP 註冊資訊

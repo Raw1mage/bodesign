@@ -18,8 +18,13 @@ shell or gateway is required.
 - **Plan** requirements from a natural-language spec (with clarifying questions).
 - **Generate** KiCad symbols + a `kicad-cli`-validated schematic from reference-grounded evidence.
 - **Lay out** (footprint placement + DRC via `pcbnew`) and **export fab** outputs (gerbers/drill/pos/STEP).
-- **Verify** in four layers: ERC/DRC · reference cross-check (control group) · SPICE · EMC/thermal.
+- **Verify** in four layers: ERC/DRC · reference cross-check (control group) · SPICE · EMC/thermal —
+  the cross-check runs through a **deterministic reference comparator** (G7: pure-Python Hungarian
+  matching + Dice/attr/connectivity weighting), and SPICE uses **datasheet-grounded model cards**
+  (every parameter carries a page-anchor evidence) in place of generic defaults.
 - **Track readiness** and emit shareable docs (docx/pdf) + readable companions for every engineering file.
+  All "reliability" is **demonstrated through reproducible deterministic evidence** (the LLM only does
+  upstream extraction/judgment; it never participates in validation or comparison).
 
 ## Architecture diagrams
 
@@ -112,21 +117,28 @@ bodesign/
 │   └── assets/skills/            EDA skill suite (13 tarballs + bundle + MANIFEST.md)
 ├── packages/                     generic capability libraries (no product-specific code)
 │   ├── shared/                   shared contracts + data_root() (program↔working-data isolation boundary)
-│   ├── design-ir/                DesignIntent and other intermediate representations (IR)
-│   ├── component-kb/             reusable component knowledge (datasheet harvest)
+│   ├── design-ir/                DesignIntent and other intermediate representations (IR); the compare/
+│   │                             submodule = deterministic reference comparator (G7: pure-Python Hungarian + Dice/attr/connectivity weighting + FlexiblePin)
+│   ├── component-kb/             reusable component knowledge (datasheet harvest); spice_card.py = datasheet-grounded
+│   │                             SPICE model cards (vault L4 → cascade tier-1, deterministic, byte-identical)
 │   ├── doc-core/                 pin-table / document generation
 │   ├── source-core/              source / evidence contracts
 │   ├── reverse-core/             project ingest, companion render, doc emit, board reconstruct
 │   ├── gerber-core/              Gerber / drill parsing + preview
-│   ├── eda-bridge/               KiCad bridge: symbol / schematic / layout / fab / BOM / SPICE / EMC
+│   ├── eda-bridge/               KiCad bridge: symbol / schematic / layout / fab / BOM / SPICE / EMC;
+│   │                             simulate labels model_source (vault-grounded | generic-default)
 │   ├── workflow-core/            requirement planning, evidence sourcing, readiness compass, cross-check,
-│   │                             feasibility triage (C04 delivery tier), cross-stage reconciliation gate, SI handoff
+│   │                             feasibility triage (C04 delivery tier), cross-stage reconciliation gate, SI handoff;
+│   │                             verification discipline G1–G7 (requirement contract / design-review gate /
+│   │                             crosscheck + root-cause / ValidationEvidence backflow / workflow plan derivation)
 │   ├── storage-core/             client-owned project registry
 │   └── kicad-plugin/             in-KiCad Action Plugin contract (roadmap)
 ├── specs/                        spec / knowledge base (plan-builder)
 │   ├── architecture.md           cross-cutting architecture index
 │   ├── product/pcb_ai_viewer/    living product design spec + IDEF0/GRAFCET SVGs + Chinese README
-│   └── feature/eda-mcp-toolchain/  living C04 EDA toolchain spec (routing/finishing MCP tools)
+│   ├── feature/eda-mcp-toolchain/  living C04 EDA toolchain spec (routing/finishing MCP tools)
+│   ├── workflow/verification-discipline/  living reference-first verification discipline spec (G1–G7)
+│   └── knowledge/datasheet-spice-models/  living datasheet-grounded SPICE model card spec
 ├── tests/                        test suite (green on a clean clone; data-dependent tests skip)
 ├── Dockerfile · docker-compose.yml · mcpctl.sh   container packaging + ops
 ├── mcp.json                      MCP registration manifest

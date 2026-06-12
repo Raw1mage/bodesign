@@ -6,6 +6,75 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
+### Added — datasheet-grounded SPICE model cards (vault L4 → cascade tier-1)
+- `packages/component-kb/spice_card.py` — a fully deterministic pipeline that grounds
+  SPICE simulation in datasheet evidence so model accuracy is *demonstrated*, not assumed.
+  LLM participates only in upstream extraction; ingest/generate/materialize are deterministic.
+- **Vault L4 namespace** `spice_model.{diode,ldo,passive}` — a closed v1 `SPICE_MODEL_FIELDS`
+  registry. `repository.py resolve_field_path` now does **longest-prefix root matching** so
+  multi-segment roots (`spice_model.diode`) resolve alongside single-segment ones (a real
+  contract bug surfaced + fixed by the P1 tests).
+- **Per-row evidence ingest contract** (`ingest_spice_extraction`): every parameter row is
+  validated for registry leaf / `sha256`+page evidence / numeric value; bad rows are rejected
+  per-row (`SPX_FIELD_UNKNOWN`/`SPX_EVIDENCE_MISSING`/`SPX_VALUE_INVALID`); `not_found` is
+  reported but never written; all writes are `trust=unverified`.
+- **Deterministic card generation** (`generate_model_card`): byte-identical `.model`/`.subckt`
+  cards from L4, typ-selection (typ→single→`SPX_PARAMS_AMBIGUOUS`, never averaged), provenance
+  comment header with no timestamps; `SPX_PARAMS_MISSING`/`SPX_CATEGORY_UNSUPPORTED` fail fast.
+- **Materialize + smoke** (`materialize_model_cards`): ngspice DC-op smoke (pass / fail /
+  `skipped-no-simulator`; **fail cards excluded from the manifest**), then writes cards +
+  `manifest.json` (`source=vault-grounded`) into `<project>/spice/models/` — the `spice` skill's
+  model-resolution **cascade tier-1 cache**, so vault-grounded models win with **zero skill change**
+  (manifest format round-trip locked against the skill before writing — R-A risk retired).
+- **Simulate provenance**: `eda-bridge/simulate.py` labels each result's `model_source`
+  (`vault-grounded` | `generic-default`) via deterministic manifest lookup — a generic-default
+  model behind a result stays visible. A new `spice` ValidationEvidence adapter maps simulate
+  warn/fail subcircuits and failed model-card smoke into evidence findings.
+- **MCP tool** `bodesign_spice_model_card` (core group); `SPX_*` error catalogue with
+  structured payloads + repair hints.
+- Tests: `tests/test_spice_card_{ingest,generate,materialize,mcp}.py` — 46 new tests
+  (incl. real ngspice DC-op pass + cascade round-trip); full suite 530/530 green.
+  Graduated spec: [`specs/knowledge/datasheet-spice-models/`](specs/knowledge/datasheet-spice-models/README.md).
+
+### Added — reference-first verification discipline (G1–G7)
+- A deterministic verification spine so reliability is demonstrated against reference designs
+  rather than asserted by the LLM. Lives in `packages/workflow-core` + `packages/design-ir/compare`.
+- **G1 requirement contract** — `ExtractedRequirement` is contractualizable
+  (`metric`/`threshold`/`measurement_method`/`oracle_tool` closed enum/`verification_status`);
+  `oracle_tool="none"` forces `unverifiable` + open-question escalation;
+  `requirement_passfail_table()` never infers a pass without an oracle execution record.
+- **G2 pre-implementation design review** — `record_design_review` / `review_gate_status`
+  validate a persisted `DesignReviewRecord` (subject, scenario walkthroughs with severities,
+  APPROVE/APPROVE_WITH_CONCERNS/REJECT verdict); a missing record (`REVIEW_MISSING`) or
+  `REJECT` (`REVIEW_REJECTED`) keeps deterministic validation blocked.
+- **G3 crosscheck + root cause** — `crosscheck_diff()` generalizes net crosscheck into a
+  multi-dimension `CrossCheckDiff` (net/pad/component/pin/component_value/layout_rule items
+  with severity + `first_divergence`; missing-evidence dimensions reported as
+  `dimensions_unavailable`, never faked as matched). `record_root_cause()` persists four-part
+  reports (methodology/findings/anchored evidence/fix). `BlockerReturn.simple_fix_candidates[]`
+  gates structural proposals until every cheap hypothesis is ruled out with evidence.
+- **A3/A5 evidence backflow** — `ValidationEvidence` envelopes flow back to C00 as the spine's
+  third artifact class `evidence_returns/` (`bodesign.c00.evidence_return.v1`, count-based
+  `<LAYER>-EV-NNNN` IDs; malformed payloads fail fast and persist nothing); `ingest_evidence`
+  records per-requirement verdicts and never auto-executes fixes.
+- **A1 workflow plan derivation** — stage status is **derived from the orchestration spine**
+  (`derive_workflow_plan(folder)`: `_orchestration/` work packets + blockers + evidence returns
+  are the single source of truth); a missing `_orchestration/` reports explicit
+  `SPINE_NOT_INITIALIZED` — never a silent fallback to parameter-snapshot status.
+- **G7 reference comparator** — `packages/design-ir/compare/` is a deterministic reference
+  comparator: two-stage component matching (required first; optional reference parts free),
+  pin-neighborhood signatures, **pure-Python Hungarian assignment** (scipy kept out of deploy
+  deps), symmetric-passive pin normalization, FlexiblePin groups, and weighted score
+  `S = 0.4·S_comp(Dice) + 0.2·S_attr + 0.4·S_conn` (weights centralized in `ScoringConfig`).
+  `ComponentInstance` gains optional `value`/`optional`/`flexible_pin_groups` fields.
+  Invalid input fails fast (`CMP_IR_INVALID`/`CMP_CONFIG_INVALID`, no partial comparison);
+  same input → byte-identical output, no LLM involvement.
+- MCP surface adds `bodesign_reference_board_workflow`, `bodesign_wrap_validation_evidence`,
+  `bodesign_return_evidence`, `bodesign_list_evidence_returns`, `bodesign_ingest_evidence`.
+- Tests: `tests/test_requirement_contract.py` + `tests/test_verification_discipline_p{2,3,4,5}.py`.
+  Graduated spec: [`specs/workflow/verification-discipline/`](specs/workflow/verification-discipline/README.md).
+  Includes an arXiv workflow analysis under `docs/research/` (analysis `.md`; paper sources gitignored).
+
 ### Added — persistent server-side Component Vault (SQLite + FTS5, 8 layers)
 - `packages/component-kb` gains `storage.py` + `repository.py`: a durable vault under
   `BODESIGN_VAULT_DIR` (docker named volume `bodesign-vault`) with WAL SQLite,
