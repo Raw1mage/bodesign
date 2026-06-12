@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "verified",
+  "state": "living",
   "profile": [],
   "history": [
     {
@@ -42,6 +42,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "全 17 tasks 完成；新增 46 tests 全綠；全 suite 530 tests OK 無回歸；architecture.md 同步"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-12T14:44:56.617Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "verified — datasheet-grounded SPICE model cards 全 5 phase 完成、新增 46 tests + 全 suite 530 綠、architecture 同步、已 commit+push；user 明確指示 graduate"
     }
   ]
 }

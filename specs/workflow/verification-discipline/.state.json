@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "verified",
+  "state": "living",
   "profile": [],
   "history": [
     {
@@ -42,6 +42,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "五 phase 全部完成（tasks.md 全 [x]）；484 tests 全綠（新增 92 tests 覆蓋 19 條 TV）；architecture.md 已全貌同步；handoff.md 附 Validation Evidence"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-12T14:44:48.763Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "verified — G1-G7 verification discipline 全 phase 完成、tests 綠、architecture 同步、已 commit+push；user 明確指示 graduate"
     }
   ]
 }
