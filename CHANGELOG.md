@@ -6,74 +6,69 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
-### Added — datasheet-grounded SPICE model cards (vault L4 → cascade tier-1)
-- `packages/component-kb/spice_card.py` — a fully deterministic pipeline that grounds
-  SPICE simulation in datasheet evidence so model accuracy is *demonstrated*, not assumed.
-  LLM participates only in upstream extraction; ingest/generate/materialize are deterministic.
-- **Vault L4 namespace** `spice_model.{diode,ldo,passive}` — a closed v1 `SPICE_MODEL_FIELDS`
-  registry. `repository.py resolve_field_path` now does **longest-prefix root matching** so
-  multi-segment roots (`spice_model.diode`) resolve alongside single-segment ones (a real
-  contract bug surfaced + fixed by the P1 tests).
-- **Per-row evidence ingest contract** (`ingest_spice_extraction`): every parameter row is
-  validated for registry leaf / `sha256`+page evidence / numeric value; bad rows are rejected
-  per-row (`SPX_FIELD_UNKNOWN`/`SPX_EVIDENCE_MISSING`/`SPX_VALUE_INVALID`); `not_found` is
-  reported but never written; all writes are `trust=unverified`.
-- **Deterministic card generation** (`generate_model_card`): byte-identical `.model`/`.subckt`
-  cards from L4, typ-selection (typ→single→`SPX_PARAMS_AMBIGUOUS`, never averaged), provenance
-  comment header with no timestamps; `SPX_PARAMS_MISSING`/`SPX_CATEGORY_UNSUPPORTED` fail fast.
-- **Materialize + smoke** (`materialize_model_cards`): ngspice DC-op smoke (pass / fail /
-  `skipped-no-simulator`; **fail cards excluded from the manifest**), then writes cards +
-  `manifest.json` (`source=vault-grounded`) into `<project>/spice/models/` — the `spice` skill's
-  model-resolution **cascade tier-1 cache**, so vault-grounded models win with **zero skill change**
-  (manifest format round-trip locked against the skill before writing — R-A risk retired).
-- **Simulate provenance**: `eda-bridge/simulate.py` labels each result's `model_source`
-  (`vault-grounded` | `generic-default`) via deterministic manifest lookup — a generic-default
-  model behind a result stays visible. A new `spice` ValidationEvidence adapter maps simulate
-  warn/fail subcircuits and failed model-card smoke into evidence findings.
-- **MCP tool** `bodesign_spice_model_card` (core group); `SPX_*` error catalogue with
-  structured payloads + repair hints.
-- Tests: `tests/test_spice_card_{ingest,generate,materialize,mcp}.py` — 46 new tests
-  (incl. real ngspice DC-op pass + cascade round-trip); full suite 530/530 green.
-  Graduated spec: [`specs/knowledge/datasheet-spice-models/`](specs/knowledge/datasheet-spice-models/README.md).
+### 新增 — datasheet 接地的 SPICE model 卡（vault L4 → cascade tier-1）
+- `packages/component-kb/spice_card.py` — 一條完全確定性的管線，把 SPICE 模擬接地到 datasheet
+  證據，使 model 準確度是被**展示**而非假設。LLM 只參與上游抽取；ingest／generate／materialize
+  全程確定性。
+- **Vault L4 命名空間** `spice_model.{diode,ldo,passive}` — 封閉的 v1 `SPICE_MODEL_FIELDS`
+  registry。`repository.py resolve_field_path` 改為 **longest-prefix root 匹配**，讓多段 root
+  （`spice_model.diode`）能與單段 root 並存解析（P1 測試揭露並修復的一個真實合約 bug）。
+- **逐筆 evidence ingest 契約**（`ingest_spice_extraction`）：每筆參數都驗證 registry leaf／
+  `sha256`+page 證據／數值；不合格的列**逐筆拒絕**
+  （`SPX_FIELD_UNKNOWN`／`SPX_EVIDENCE_MISSING`／`SPX_VALUE_INVALID`）；`not_found` 會回報但
+  絕不寫入；所有寫入皆 `trust=unverified`。
+- **確定性卡生成**（`generate_model_card`）：從 L4 產出 byte-identical 的 `.model`／`.subckt`
+  卡，typ-selection（typ→唯一值→`SPX_PARAMS_AMBIGUOUS`，絕不自行平均），provenance 註解卡頭、
+  無時間戳；`SPX_PARAMS_MISSING`／`SPX_CATEGORY_UNSUPPORTED` fail-fast。
+- **物化 + smoke**（`materialize_model_cards`）：ngspice DC-op smoke（pass／fail／
+  `skipped-no-simulator`；**fail 的卡排除於 manifest 之外**），再把卡檔 +
+  `manifest.json`（`source=vault-grounded`）寫入 `<project>/spice/models/` —— 即 `spice` skill 的
+  model-resolution **cascade tier-1 快取**，因此 vault-grounded model 自然優先命中且 **零 skill 改動**
+  （寫入前已對 skill 鎖定 manifest 格式 round-trip —— R-A 風險解除）。
+- **Simulate provenance**：`eda-bridge/simulate.py` 透過確定性 manifest 查表為每筆結果標注
+  `model_source`（`vault-grounded` | `generic-default`）—— 讓結果背後的 generic-default model 保持
+  可見。新增的 `spice` ValidationEvidence adapter 把 simulate 的 warn／fail subcircuit 與失敗的
+  model-card smoke 映成 evidence findings。
+- **MCP 工具** `bodesign_spice_model_card`（core group）；`SPX_*` 錯誤碼型錄，皆帶結構化 payload
+  與修復指引。
+- 測試：`tests/test_spice_card_{ingest,generate,materialize,mcp}.py` —— 新增 46 tests
+  （含真 ngspice DC-op pass + cascade round-trip）；全 suite 530/530 綠。
+  Graduated spec：[`specs/knowledge/datasheet-spice-models/`](specs/knowledge/datasheet-spice-models/README.md)。
 
-### Added — reference-first verification discipline (G1–G7)
-- A deterministic verification spine so reliability is demonstrated against reference designs
-  rather than asserted by the LLM. Lives in `packages/workflow-core` + `packages/design-ir/compare`.
-- **G1 requirement contract** — `ExtractedRequirement` is contractualizable
-  (`metric`/`threshold`/`measurement_method`/`oracle_tool` closed enum/`verification_status`);
-  `oracle_tool="none"` forces `unverifiable` + open-question escalation;
-  `requirement_passfail_table()` never infers a pass without an oracle execution record.
-- **G2 pre-implementation design review** — `record_design_review` / `review_gate_status`
-  validate a persisted `DesignReviewRecord` (subject, scenario walkthroughs with severities,
-  APPROVE/APPROVE_WITH_CONCERNS/REJECT verdict); a missing record (`REVIEW_MISSING`) or
-  `REJECT` (`REVIEW_REJECTED`) keeps deterministic validation blocked.
-- **G3 crosscheck + root cause** — `crosscheck_diff()` generalizes net crosscheck into a
-  multi-dimension `CrossCheckDiff` (net/pad/component/pin/component_value/layout_rule items
-  with severity + `first_divergence`; missing-evidence dimensions reported as
-  `dimensions_unavailable`, never faked as matched). `record_root_cause()` persists four-part
-  reports (methodology/findings/anchored evidence/fix). `BlockerReturn.simple_fix_candidates[]`
-  gates structural proposals until every cheap hypothesis is ruled out with evidence.
-- **A3/A5 evidence backflow** — `ValidationEvidence` envelopes flow back to C00 as the spine's
-  third artifact class `evidence_returns/` (`bodesign.c00.evidence_return.v1`, count-based
-  `<LAYER>-EV-NNNN` IDs; malformed payloads fail fast and persist nothing); `ingest_evidence`
-  records per-requirement verdicts and never auto-executes fixes.
-- **A1 workflow plan derivation** — stage status is **derived from the orchestration spine**
-  (`derive_workflow_plan(folder)`: `_orchestration/` work packets + blockers + evidence returns
-  are the single source of truth); a missing `_orchestration/` reports explicit
-  `SPINE_NOT_INITIALIZED` — never a silent fallback to parameter-snapshot status.
-- **G7 reference comparator** — `packages/design-ir/compare/` is a deterministic reference
-  comparator: two-stage component matching (required first; optional reference parts free),
-  pin-neighborhood signatures, **pure-Python Hungarian assignment** (scipy kept out of deploy
-  deps), symmetric-passive pin normalization, FlexiblePin groups, and weighted score
-  `S = 0.4·S_comp(Dice) + 0.2·S_attr + 0.4·S_conn` (weights centralized in `ScoringConfig`).
-  `ComponentInstance` gains optional `value`/`optional`/`flexible_pin_groups` fields.
-  Invalid input fails fast (`CMP_IR_INVALID`/`CMP_CONFIG_INVALID`, no partial comparison);
-  same input → byte-identical output, no LLM involvement.
-- MCP surface adds `bodesign_reference_board_workflow`, `bodesign_wrap_validation_evidence`,
-  `bodesign_return_evidence`, `bodesign_list_evidence_returns`, `bodesign_ingest_evidence`.
-- Tests: `tests/test_requirement_contract.py` + `tests/test_verification_discipline_p{2,3,4,5}.py`.
-  Graduated spec: [`specs/workflow/verification-discipline/`](specs/workflow/verification-discipline/README.md).
-  Includes an arXiv workflow analysis under `docs/research/` (analysis `.md`; paper sources gitignored).
+### 新增 — 參考優先的驗證紀律（G1–G7）
+- 一條確定性的驗證骨幹，使可靠度是對照參考設計被**展示**，而非由 LLM 宣稱。落於
+  `packages/workflow-core` + `packages/design-ir/compare`。
+- **G1 需求契約** — `ExtractedRequirement` 可契約化
+  （`metric`／`threshold`／`measurement_method`／`oracle_tool` 封閉 enum／`verification_status`）；
+  `oracle_tool="none"` 強制 `unverifiable` + open-question 升級；`requirement_passfail_table()` 在
+  沒有 oracle 執行紀錄前絕不推斷 pass。
+- **G2 實作前設計審查** — `record_design_review`／`review_gate_status` 驗證一份持久化的
+  `DesignReviewRecord`（subject、帶嚴重度的情境走查、APPROVE／APPROVE_WITH_CONCERNS／REJECT
+  裁決）；缺紀錄（`REVIEW_MISSING`）或 `REJECT`（`REVIEW_REJECTED`）即擋住確定性驗證。
+- **G3 crosscheck + root cause** — `crosscheck_diff()` 把 net crosscheck 一般化為多維度
+  `CrossCheckDiff`（net／pad／component／pin／component_value／layout_rule 項目，帶嚴重度 +
+  `first_divergence`；缺證據的維度回報 `dimensions_unavailable`，絕不偽裝成 matched）。
+  `record_root_cause()` 持久化四段式 root-cause 報告（方法論／發現／錨定證據／修復）。
+  `BlockerReturn.simple_fix_candidates[]` 在每個廉價假設都以證據排除前，擋住結構性提案。
+- **A3/A5 證據回流** — `ValidationEvidence` 信封作為骨幹第三類產物 `evidence_returns/` 回流到 C00
+  （`bodesign.c00.evidence_return.v1`，計數式 `<LAYER>-EV-NNNN` ID；格式錯誤的 payload fail-fast 且
+  不落任何資料）；`ingest_evidence` 記錄逐需求裁決，且絕不自動執行修復。
+- **A1 workflow plan 衍生** — stage 狀態**由 orchestration 骨幹衍生**
+  （`derive_workflow_plan(folder)`：`_orchestration/` work packet + blockers + evidence returns 為單一
+  真實來源）；缺 `_orchestration/` 即顯式回報 `SPINE_NOT_INITIALIZED` —— 絕不 silent fallback 回
+  參數快照狀態。
+- **G7 參考比對器** — `packages/design-ir/compare/` 是確定性參考比對器：兩階段元件配對
+  （必要件優先；參考設計的選用件免罰）、pin-neighborhood 簽章、**純 Python Hungarian 指派**
+  （scipy 不在部署依賴）、對稱被動件 pin 正規化、FlexiblePin 群組，以及加權分數
+  `S = 0.4·S_comp(Dice) + 0.2·S_attr + 0.4·S_conn`（權重集中於 `ScoringConfig`）。
+  `ComponentInstance` 新增選用欄位 `value`／`optional`／`flexible_pin_groups`。
+  輸入不合法即 fail-fast（`CMP_IR_INVALID`／`CMP_CONFIG_INVALID`，無部分比對）；相同輸入 →
+  byte-identical 輸出，LLM 全程不參與。
+- MCP 介面新增 `bodesign_reference_board_workflow`、`bodesign_wrap_validation_evidence`、
+  `bodesign_return_evidence`、`bodesign_list_evidence_returns`、`bodesign_ingest_evidence`。
+- 測試：`tests/test_requirement_contract.py` + `tests/test_verification_discipline_p{2,3,4,5}.py`。
+  Graduated spec：[`specs/workflow/verification-discipline/`](specs/workflow/verification-discipline/README.md)。
+  含 `docs/research/` 下的 arXiv workflow 分析（分析 `.md`；論文原始碼已 gitignore）。
 
 ### Added — persistent server-side Component Vault (SQLite + FTS5, 8 layers)
 - `packages/component-kb` gains `storage.py` + `repository.py`: a durable vault under
