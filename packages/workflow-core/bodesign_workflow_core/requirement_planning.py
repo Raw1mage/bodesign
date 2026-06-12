@@ -12,6 +12,7 @@ need (datasheet / dev-board reference design), and the plan stays in
 `needs-clarification` until the required fields are answered.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,6 +27,16 @@ class RequirementFieldBinding:
     keywords: tuple[str, ...]
     question: str
     binding_note: str = ""
+    # DD-1 contract hints: when a binding declares a metric, an answered
+    # requirement is converged into a verifiable contract (metric/threshold/
+    # oracle). Bindings without a metric stay un-contractualized — that is the
+    # honest state, never auto-assigned (DD-2).
+    metric: str = ""
+    oracle_tool: str = ""
+    measurement_method: str = ""
+    # Threshold template applied to the first numeric value found in the
+    # answer, e.g. "<={value}". Empty => no deterministic threshold derivation.
+    threshold_template: str = ""
 
 
 C00_REQUIREMENT_FIELD_BINDINGS: tuple[RequirementFieldBinding, ...] = (
@@ -35,7 +46,10 @@ C00_REQUIREMENT_FIELD_BINDINGS: tuple[RequirementFieldBinding, ...] = (
     RequirementFieldBinding("power_input", "s06_electrical_requirements", "power_input", "Power input", ("usb-c", "usb type-c", "type-c", "typec", "type c", "usb c", "dc jack", "barrel", "power input", "vbus", "pd", "供電", "供电", "電源", "电源", "輸入電"), "Power input connector and voltage range? (USB-C PD profile? DC input?)"),
     RequirementFieldBinding("charging", "s06_electrical_requirements", "battery_or_charging", "Charging", ("charge", "charging", "charger", "power delivery", "充電", "充电", "充放電"), "Charging current and charger IC preference? cell chemistry to charge?"),
     RequirementFieldBinding("battery", "s06_electrical_requirements", "battery_or_charging", "Battery", ("18650", "battery", "li-ion", "lithium", "lipo", "lifepo4", "cell", "coin cell", "電池", "电池", "鋰電", "锂电"), "Battery: cell count/config, capacity, and protection/fuel-gauge needs?"),
-    RequirementFieldBinding("dimensions", "s05_id_me_requirements", "dimensions", "Form factor / dimensions", ("mm", "dimension", "form factor", "board size", "outline", "footprint size", "enclosure", "尺寸", "外形", "板框", "大小"), "Target board dimensions / form-factor or enclosure constraints?"),
+    RequirementFieldBinding("dimensions", "s05_id_me_requirements", "dimensions", "Form factor / dimensions", ("mm", "dimension", "form factor", "board size", "outline", "footprint size", "enclosure", "尺寸", "外形", "板框", "大小"), "Target board dimensions / form-factor or enclosure constraints?",
+                            metric="board_length_mm", oracle_tool="drc_gate",
+                            measurement_method="board outline bounding box from the DRC gate report",
+                            threshold_template="<={value}"),
     RequirementFieldBinding("certification", "s06_electrical_requirements", "compliance_targets", "Compliance targets", ("fcc", "ce mark", "ce ", "emc", "certif", "compliance", "rohs", "iec", "認證", "认证", "法規", "法规"), "Any compliance targets (FCC / CE / EMC / safety)?"),
     RequirementFieldBinding("volume", "s10_project_management", "milestones", "Build volume", ("prototype", "production", "quantity", "qty", "units", "volume", "mass production", "原型", "樣品", "样品", "量產", "量产", "數量", "数量"), "Prototype or production volume? (affects part sourcing and DFM)", "C00 template has no dedicated production-volume field; volume currently gates milestone/phase planning."),
 )
@@ -80,12 +94,95 @@ INTERFACE_KEYWORDS = {
 }
 
 
+# DD-2 (workflow_verification-discipline): closed oracle enum. `none` means the
+# requirement is unverifiable and MUST be escalated to open_questions — never
+# silently skipped, never auto-assigned an oracle.
+ORACLE_TOOLS: tuple[str, ...] = (
+    "drc_gate", "erc", "crosscheck", "si_check", "gerber_compare", "spice", "user_judgment", "none",
+)
+
+# DD-9: pass verdicts only via oracle execution records; default is unverified.
+VERIFICATION_STATUSES: tuple[str, ...] = ("unverified", "pass", "fail", "unverifiable")
+
+
 @dataclass(slots=True)
 class ExtractedRequirement:
     key: str
     label: str
     state: str  # "stated" | "answered" | "missing"
     evidence: str = ""
+    # DD-1: optional contract fields; absent metric => not yet contractualized.
+    metric: str = ""
+    threshold: str = ""
+    measurement_method: str = ""
+    oracle_tool: str = ""
+    verification_status: str = "unverified"
+
+    def __post_init__(self) -> None:
+        if self.oracle_tool and self.oracle_tool not in ORACLE_TOOLS:
+            raise ValueError(
+                f"REQ_ORACLE_INVALID: oracle_tool '{self.oracle_tool}' is not a recognized oracle; "
+                f"allowed: {', '.join(ORACLE_TOOLS)}"
+            )
+        if self.verification_status not in VERIFICATION_STATUSES:
+            raise ValueError(
+                f"REQ_ORACLE_INVALID: verification_status '{self.verification_status}' invalid; "
+                f"allowed: {', '.join(VERIFICATION_STATUSES)}"
+            )
+        if self.oracle_tool == "none" and self.verification_status != "unverifiable":
+            # DD-2: oracle none forces unverifiable, never silently verified.
+            self.verification_status = "unverifiable"
+        if self.verification_status == "pass" and self.oracle_tool in ("", "none"):
+            raise ValueError(
+                f"REQ_VERDICT_NO_EVIDENCE: requirement '{self.key}' cannot be marked pass "
+                "without an oracle tool backing the verdict"
+            )
+
+    @property
+    def contractualized(self) -> bool:
+        return bool(self.metric and self.threshold and self.oracle_tool and self.oracle_tool != "none")
+
+
+def requirement_passfail_table(
+    requirements: list[ExtractedRequirement],
+    verdicts: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """DD-9 per-requirement pass/fail table.
+
+    `verdicts` rows come from oracle execution records (evidence returns):
+    {requirement_key, verdict, measured_value?, anchors?}. A requirement with
+    no oracle execution record stays `unverified` — pass is NEVER inferred.
+    Unverifiable contracts stay `unverifiable` regardless of verdicts.
+    """
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in verdicts or []:
+        key = row.get("requirement_key")
+        verdict = row.get("verdict")
+        if not isinstance(key, str) or not key:
+            raise ValueError("REQ_VERDICT_NO_EVIDENCE: verdict row missing `requirement_key`")
+        if verdict not in ("pass", "fail"):
+            raise ValueError(
+                f"REQ_VERDICT_NO_EVIDENCE: verdict for '{key}' must be 'pass' or 'fail' "
+                f"(an oracle execution outcome), got {verdict!r}"
+            )
+        by_key[key] = row
+
+    table: list[dict[str, Any]] = []
+    for r in requirements:
+        if r.verification_status == "unverifiable":
+            entry: dict[str, Any] = {"requirement_key": r.key, "verdict": "unverifiable"}
+        elif r.key in by_key:
+            row = by_key[r.key]
+            entry = {"requirement_key": r.key, "verdict": row["verdict"]}
+            if row.get("measured_value") is not None:
+                entry["measured_value"] = row["measured_value"]
+            if row.get("anchors"):
+                entry["anchors"] = list(row["anchors"])
+        else:
+            # DD-9: no oracle execution record => unverified, never inferred pass.
+            entry = {"requirement_key": r.key, "verdict": "unverified"}
+        table.append(entry)
+    return table
 
 
 @dataclass(slots=True)
@@ -117,12 +214,38 @@ class DesignIntentPlan:
         return {
             "spec_summary": self.spec_summary,
             "status": self.status,
-            "requirements": [{"key": r.key, "label": r.label, "state": r.state, "evidence": r.evidence} for r in self.requirements],
+            "requirements": [
+                {
+                    "key": r.key, "label": r.label, "state": r.state, "evidence": r.evidence,
+                    "metric": r.metric, "threshold": r.threshold,
+                    "measurement_method": r.measurement_method, "oracle_tool": r.oracle_tool,
+                    "verification_status": r.verification_status,
+                }
+                for r in self.requirements
+            ],
             "open_questions": [{"key": q.key, "label": q.label, "question": q.question} for q in self.open_questions],
             "subsystems": [{"id": s.id, "role": s.role, "rationale": s.rationale, "needs_evidence": s.needs_evidence} for s in self.subsystems],
             "interfaces": self.interfaces,
             "assumptions": self.assumptions,
         }
+
+
+def _converge_contract(binding: RequirementFieldBinding, answer_text: str) -> dict[str, str]:
+    """DD-1 contract convergence: derive metric/threshold/oracle from a binding's
+    declared hints. Returns {} when the binding declares no metric — the honest
+    un-contractualized state; an oracle is never auto-assigned (DD-2)."""
+    if not binding.metric:
+        return {}
+    fields = {
+        "metric": binding.metric,
+        "oracle_tool": binding.oracle_tool,
+        "measurement_method": binding.measurement_method,
+    }
+    if binding.threshold_template:
+        match = re.search(r"\d+(?:\.\d+)?", answer_text)
+        if match:
+            fields["threshold"] = binding.threshold_template.format(value=match.group(0))
+    return fields
 
 
 def plan_design_intent(spec_text: str, answers: dict[str, str] | None = None) -> DesignIntentPlan:
@@ -132,18 +255,30 @@ def plan_design_intent(spec_text: str, answers: dict[str, str] | None = None) ->
     requirements: list[ExtractedRequirement] = []
     open_questions: list[ClarifyingQuestion] = []
     present: set[str] = set()
-    for key, label, keywords, question in REQUIREMENT_FIELDS:
+    for binding in c00_bound_requirement_fields():
+        key, label, keywords, question = binding.key, binding.label, binding.keywords, binding.question
         if key in answers and answers[key].strip():
-            requirements.append(ExtractedRequirement(key, label, "answered", answers[key].strip()))
+            answer = answers[key].strip()
+            requirements.append(ExtractedRequirement(key, label, "answered", answer, **_converge_contract(binding, answer)))
             present.add(key)
             continue
         matched = [kw for kw in keywords if kw in lowered]
         if matched:
-            requirements.append(ExtractedRequirement(key, label, "stated", _evidence_phrase(lowered, matched[0])))
+            evidence = _evidence_phrase(lowered, matched[0])
+            requirements.append(ExtractedRequirement(key, label, "stated", evidence, **_converge_contract(binding, evidence)))
             present.add(key)
         else:
             requirements.append(ExtractedRequirement(key, label, "missing"))
             open_questions.append(ClarifyingQuestion(key, label, question))
+
+    # DD-2: unverifiable contracts (oracle explicitly `none`) must surface as
+    # open questions for a user decision — never silently skipped.
+    for r in requirements:
+        if r.verification_status == "unverifiable" and not any(q.key == r.key for q in open_questions):
+            open_questions.append(ClarifyingQuestion(
+                r.key, r.label,
+                f"Requirement '{r.label}' has no measurable oracle; accept user_judgment as the oracle or restate it measurably?",
+            ))
 
     interfaces = [name for name, keywords in INTERFACE_KEYWORDS.items() if any(kw in lowered for kw in keywords)]
     subsystems = _decompose(present, interfaces)

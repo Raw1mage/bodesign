@@ -1,0 +1,73 @@
+{
+  "diagram_title": "Enforce Verification Discipline",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Contractualize Requirements",
+      "description": "G1/DD-1: extend ExtractedRequirement with metric/threshold/measurement_method/oracle_tool; unverifiable items escalate to open_questions (fail fast).",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Review Design Intent",
+      "description": "G2/DD-4: pre-implementation scenario walkthrough (power sequencing, reset chain, address conflicts, level compatibility, diff-pair topology) producing a graded verdict record.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Crosscheck Against Reference",
+      "description": "G3/DD-5: generalize ReferenceCheck to CrossCheckDiff — multi-dimension items with severity and first_divergence; unavailable dimensions reported explicitly.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Wrap Validation Evidence",
+      "description": "A5/DD-6: adapter layer wrapping native tool results (si_check / DRC gate / crosscheck) into the unified ValidationEvidence envelope; raw_result preserved.",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Return Evidence To Spine",
+      "description": "A3/DD-7: persist evidence_returns/ records (bodesign.c00.evidence_return.v1) into _orchestration/, update requirement verification_status; malformed payload fails fast.",
+      "decomposition": null
+    },
+    {
+      "id": "A6",
+      "title": "Derive Workflow Plan",
+      "description": "A1/DD-8: compute ReferenceBoardWorkflowPlan stage status/blockers from spine state (packets + blockers + evidence returns); static plan function demoted to template; no fallback when spine uninitialized.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "Natural-language spec + user answers", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "C00 PRD field bindings + oracle enum (DD-2)", "type": "control" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "Requirement contracts", "type": "output" },
+    { "id": "AR4", "source": "A1:output", "target": "EXTERNAL", "label": "Open questions (unverifiable escalation)", "type": "output" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A1:mechanism", "label": "requirement_planning.py", "type": "mechanism" },
+
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:input", "label": "Layout intent proposal", "type": "input" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A2:control", "label": "Scenario checklist (skills/bodesign review methodology)", "type": "control" },
+    { "id": "AR8", "source": "A2:output", "target": "EXTERNAL", "label": "DesignReviewRecord (APPROVE / APPROVE_WITH_CONCERNS / REJECT)", "type": "output" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A2:mechanism", "label": "AI reviewer driven by skill methodology", "type": "mechanism" },
+
+    { "id": "AR10", "source": "EXTERNAL", "target": "A3:input", "label": "Generated design + reference board evidence", "type": "input" },
+    { "id": "AR11", "source": "A1:output", "target": "A3:control", "label": "Severity rules + requirement refs", "type": "control" },
+    { "id": "AR12", "source": "A3:output", "target": "A4:input", "label": "CrossCheckDiff + root-cause report", "type": "output" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A3:mechanism", "label": "reference_crosscheck.py", "type": "mechanism" },
+
+    { "id": "AR14", "source": "EXTERNAL", "target": "A4:input", "label": "Native tool results (si_check / DRC gate / ERC)", "type": "input" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A4:control", "label": "ValidationEvidence schema (data-schema.json)", "type": "control" },
+    { "id": "AR16", "source": "A4:output", "target": "A5:input", "label": "ValidationEvidence envelopes + requirement verdicts", "type": "output" },
+    { "id": "AR17", "source": "EXTERNAL", "target": "A4:mechanism", "label": "validation_evidence.py adapters", "type": "mechanism" },
+
+    { "id": "AR18", "source": "EXTERNAL", "target": "A5:control", "label": "Agent registry authorization + spine fail-fast rules", "type": "control" },
+    { "id": "AR19", "source": "A5:output", "target": "A6:input", "label": "evidence_returns/ records + updated verification status", "type": "output" },
+    { "id": "AR20", "source": "EXTERNAL", "target": "A5:mechanism", "label": "orchestration.py spine", "type": "mechanism" },
+
+    { "id": "AR21", "source": "EXTERNAL", "target": "A6:input", "label": "Work packets + blockers (existing spine state)", "type": "input" },
+    { "id": "AR22", "source": "EXTERNAL", "target": "A6:control", "label": "Stage template + approval gates", "type": "control" },
+    { "id": "AR23", "source": "A6:output", "target": "EXTERNAL", "label": "ReferenceBoardWorkflowPlan (spine-derived)", "type": "output" },
+    { "id": "AR24", "source": "EXTERNAL", "target": "A6:mechanism", "label": "contracts.py derive_workflow_plan", "type": "mechanism" }
+  ]
+}

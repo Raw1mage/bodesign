@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1354" height="1620" viewBox="-20.00 -2.00 67.68 81.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="-20.00" y="-2.00" width="67.68" height="81.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1G1I1" data-segment-ids="S0O1G1I1:1S" d="M 28.76 7.00 L 28.76 13.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1S1I1" data-segment-ids="G1O1S1I1:1S" d="M 28.76 13.00 L 28.76 15.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1G2I1" data-segment-ids="S1O1G2I1:1S" d="M 28.76 18.00 L 28.76 20.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1G3I1" data-segment-ids="G2O1G3I1:1S G2O1G3I1:2W G2O1G3I1:3S" d="M 28.76 20.00 L 28.76 21.50 Q 28.76 22.00 28.26 22.00 L 16.34 22.00 Q 15.84 22.00 15.84 22.50 L 15.84 26.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O2S2I1" data-segment-ids="G2O2S2I1:1S" d="M 28.76 22.00 L 28.76 28.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1G1I2" data-segment-ids="S2O1G1I2:1S S2O1G1I2:2W S2O1G1I2:3N S2O1G1I2:4E S2O1G1I2:5S" d="M 28.76 31.00 L 28.76 34.50 Q 28.76 35.00 28.26 35.00 L 12.34 35.00 Q 11.84 35.00 11.84 34.50 L 11.84 9.50 Q 11.84 9.00 12.34 9.00 L 24.26 9.00 Q 24.76 9.00 24.76 9.50 L 24.76 13.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1G4I1" data-segment-ids="S3O1G4I1:1S" d="M 15.84 31.00 L 15.84 33.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G4O1G5I1" data-segment-ids="G4O1G5I1:1S G4O1G5I1:2W G4O1G5I1:3S" d="M 15.84 33.00 L 15.84 36.50 Q 15.84 37.00 15.34 37.00 L 3.42 37.00 Q 2.92 37.00 2.92 37.50 L 2.92 41.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G4O2S4I1" data-segment-ids="G4O2S4I1:1S" d="M 15.84 37.00 L 15.84 43.00"/>
+<path class="edge" data-edge-id="edge:S4O1G3I2" data-segment-ids="S4O1G3I2:1S" d="M 15.84 46.00 L 15.84 50.00"/>
+<path class="edge" data-edge-id="edge:S4O1G3I2" data-segment-ids="S4O1G3I2:2W" d="M 15.84 50.00 L -1.08 50.00"/>
+<path class="edge" data-edge-id="edge:S4O1G3I2" data-segment-ids="S4O1G3I2:3N" d="M -1.08 50.00 L -1.08 20.00"/>
+<path class="edge" data-edge-id="edge:S4O1G3I2" data-segment-ids="S4O1G3I2:4E" d="M -1.08 20.00 L 11.84 20.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S3I1" data-segment-ids="G3O1S3I1:1S" d="M 15.84 26.00 L 15.84 28.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1S6I1" data-segment-ids="S5O1S6I1:1S" d="M 2.92 46.00 L 2.92 52.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S6O1S7I1" data-segment-ids="S6O1S7I1:1S" d="M 2.92 55.00 L 2.92 59.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S7O1G6I1" data-segment-ids="S7O1G6I1:1S" d="M 2.92 62.00 L 2.92 64.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G6O1S9I1" data-segment-ids="G6O1S9I1:1S" d="M 2.92 64.00 L 2.92 68.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G6O2S8I1" data-segment-ids="G6O2S8I1:1S" d="M -10.00 64.00 L -10.00 68.00"/>
+<path class="edge" data-edge-id="edge:S8O1G5I2" data-segment-ids="S8O1G5I2:1S" d="M -10.00 71.00 L -10.00 73.00"/>
+<path class="edge" data-edge-id="edge:S8O1G5I2" data-segment-ids="S8O1G5I2:2W" d="M -10.00 73.00 L -14.00 73.00"/>
+<path class="edge" data-edge-id="edge:S8O1G5I2" data-segment-ids="S8O1G5I2:3N" d="M -14.00 73.00 L -14.00 37.00"/>
+<path class="edge" data-edge-id="edge:S8O1G5I2" data-segment-ids="S8O1G5I2:4E" d="M -14.00 37.00 L -1.08 37.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G5O1S5I1" data-segment-ids="G5O1S5I1:1S" d="M 2.92 41.00 L 2.92 43.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S9O1S0I1" data-segment-ids="S9O1S0I1:1S S9O1S0I1:2W S9O1S0I1:3N S9O1S0I1:4E S9O1S0I1:5S" d="M 2.92 71.00 L 2.92 74.50 Q 2.92 75.00 2.42 75.00 L -15.50 75.00 Q -16.00 75.00 -16.00 74.50 L -16.00 2.50 Q -16.00 2.00 -15.50 2.00 L 28.26 2.00 Q 28.76 2.00 28.76 2.50 L 28.76 4.00"/>
+<rect class="step" x="26.76" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="27.01" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="28.76" y="5.50">0</text>
+<rect class="step" x="26.76" y="15.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="28.76" y="16.50">1</text>
+<rect class="step" x="26.76" y="28.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="28.76" y="29.50">2</text>
+<rect class="step" x="13.84" y="28.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="15.84" y="29.50">3</text>
+<rect class="step" x="13.84" y="43.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="15.84" y="44.50">4</text>
+<rect class="step" x="0.92" y="43.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="2.92" y="44.50">5</text>
+<rect class="step" x="0.92" y="52.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="2.92" y="53.50">6</text>
+<rect class="step" x="0.92" y="59.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="2.92" y="60.50">7</text>
+<rect class="step" x="-12.00" y="68.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="-10.00" y="69.50">8</text>
+<rect class="step" x="0.92" y="68.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="2.92" y="69.50">9</text>
+<line class="assoc" x1="30.76" y1="5.50" x2="31.76" y2="5.50"/>
+<rect class="action" x="31.76" y="4.07" width="6.92" height="2.86"/>
+<text class="action-label" x="35.22" y="5.09"><tspan x="35.22" dy="0">Await spec and</tspan><tspan x="35.22" dy="0.82">user answers</tspan></text>
+<line class="assoc" x1="30.76" y1="16.50" x2="31.76" y2="16.50"/>
+<rect class="action" x="31.76" y="15.07" width="6.92" height="2.86"/>
+<text class="action-label" x="35.22" y="15.68"><tspan x="35.22" dy="0">Contractualize</tspan><tspan x="35.22" dy="0.82">requirements (metric/</tspan><tspan x="35.22" dy="0.82">threshold/oracle)</tspan></text>
+<line class="assoc" x1="30.76" y1="29.50" x2="31.76" y2="29.50"/>
+<rect class="action" x="31.76" y="28.07" width="6.92" height="2.86"/>
+<text class="action-label" x="35.22" y="29.09"><tspan x="35.22" dy="0">Escalate open</tspan><tspan x="35.22" dy="0.82">questions to user</tspan></text>
+<line class="assoc" x1="17.84" y1="29.50" x2="18.84" y2="29.50"/>
+<rect class="action" x="18.84" y="28.07" width="6.92" height="2.86"/>
+<text class="action-label" x="22.30" y="29.09"><tspan x="22.30" dy="0">Review design intent</tspan><tspan x="22.30" dy="0.82">(scenario walkthrough)</tspan></text>
+<line class="assoc" x1="17.84" y1="44.50" x2="18.84" y2="44.50"/>
+<rect class="action" x="18.84" y="43.07" width="6.92" height="2.86"/>
+<text class="action-label" x="22.30" y="44.09"><tspan x="22.30" dy="0">Revise design proposal</tspan><tspan x="22.30" dy="0.82">per review concerns</tspan></text>
+<line class="assoc" x1="4.92" y1="44.50" x2="5.92" y2="44.50"/>
+<rect class="action" x="5.92" y="43.07" width="6.92" height="2.86"/>
+<text class="action-label" x="9.38" y="43.68"><tspan x="9.38" dy="0">Crosscheck against</tspan><tspan x="9.38" dy="0.82">reference (CrossCheckDiff</tspan><tspan x="9.38" dy="0.82">+ first divergence)</tspan></text>
+<line class="assoc" x1="4.92" y1="53.50" x2="5.92" y2="53.50"/>
+<rect class="action" x="5.92" y="52.07" width="6.92" height="2.86"/>
+<text class="action-label" x="9.38" y="53.09"><tspan x="9.38" dy="0">Wrap native tool results</tspan><tspan x="9.38" dy="0.82">into ValidationEvidence</tspan></text>
+<line class="assoc" x1="4.92" y1="60.50" x2="5.92" y2="60.50"/>
+<rect class="action" x="5.92" y="59.07" width="6.92" height="2.86"/>
+<text class="action-label" x="9.38" y="60.09"><tspan x="9.38" dy="0">Return evidence to spine</tspan><tspan x="9.38" dy="0.82">(evidence_returns/)</tspan></text>
+<line class="assoc" x1="-8.00" y1="69.50" x2="-7.00" y2="69.50"/>
+<rect class="action" x="-7.00" y="68.07" width="6.92" height="2.86"/>
+<text class="action-label" x="-3.54" y="69.09"><tspan x="-3.54" dy="0">Debug via cost-ordered</tspan><tspan x="-3.54" dy="0.82">hypothesis ladder</tspan></text>
+<line class="assoc" x1="4.92" y1="69.50" x2="5.92" y2="69.50"/>
+<rect class="action" x="5.92" y="68.07" width="6.92" height="2.86"/>
+<text class="action-label" x="9.38" y="69.09"><tspan x="9.38" dy="0">Derive workflow</tspan><tspan x="9.38" dy="0.82">plan from spine state</tspan></text>
+<line class="gate" x1="22.76" y1="13.00" x2="30.76" y2="13.00"/>
+<circle class="branch-junction" cx="28.76" cy="20.00" r="0.28"/>
+<circle class="branch-junction" cx="15.84" cy="33.00" r="0.28"/>
+<line class="gate" x1="9.84" y1="26.00" x2="17.84" y2="26.00"/>
+<line class="gate" x1="-12.00" y1="64.00" x2="4.92" y2="64.00"/>
+<line class="gate" x1="-3.08" y1="41.00" x2="4.92" y2="41.00"/>
+<line class="gate" x1="27.76" y1="9.00" x2="29.76" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1G1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="30.16" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1G1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="30.16" dy="0">spec_received</tspan></text>
+<line class="gate" x1="14.84" y1="24.00" x2="16.84" y2="24.00" data-label-kind="condition-stub" data-edge-id="edge:G2O1G3I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label" x="17.24" y="24.00" data-label-kind="condition-stub" data-edge-id="edge:G2O1G3I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="17.24" dy="0">contracts_complete</tspan></text>
+<line class="gate" x1="27.76" y1="24.00" x2="29.76" y2="24.00" data-label-kind="condition-stub" data-edge-id="edge:G2O2S2I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label" x="30.16" y="24.00" data-label-kind="condition-stub" data-edge-id="edge:G2O2S2I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="30.16" dy="0">unverifiable_items_found</tspan></text>
+<line class="gate" x1="23.76" y1="11.00" x2="25.76" y2="11.00" data-label-kind="condition-stub" data-edge-id="edge:S2O1G1I2" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label-left" x="23.36" y="11.00" data-label-kind="condition-stub" data-edge-id="edge:S2O1G1I2" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="23.36" dy="0">user_answered</tspan></text>
+<line class="gate" x1="1.92" y1="39.00" x2="3.92" y2="39.00" data-label-kind="condition-stub" data-edge-id="edge:G4O1G5I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label" x="4.32" y="39.00" data-label-kind="condition-stub" data-edge-id="edge:G4O1G5I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="4.32" dy="0">verdict_approve_or_concerns</tspan></text>
+<line class="gate" x1="14.84" y1="39.00" x2="16.84" y2="39.00" data-label-kind="condition-stub" data-edge-id="edge:G4O2S4I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="17.24" y="39.00" data-label-kind="condition-stub" data-edge-id="edge:G4O2S4I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="17.24" dy="0">verdict_reject</tspan></text>
+<line class="gate" x1="13.84" y1="21.00" x2="13.84" y2="23.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1G3I2" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"/>
+<text class="gate-label-left" x="11.04" y="22.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1G3I2" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"><tspan x="11.04" dy="0">design_revised</tspan></text>
+<line class="gate" x1="1.92" y1="48.00" x2="3.92" y2="48.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1S6I1" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"/>
+<text class="gate-label" x="4.32" y="48.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1S6I1" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"><tspan x="4.32" dy="0">diff_computed</tspan></text>
+<line class="gate" x1="1.92" y1="57.00" x2="3.92" y2="57.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1S7I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"/>
+<text class="gate-label" x="4.32" y="57.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1S7I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"><tspan x="4.32" dy="0">evidence_wrapped</tspan></text>
+<line class="gate" x1="1.92" y1="66.00" x2="3.92" y2="66.00" data-label-kind="condition-stub" data-edge-id="edge:G6O1S9I1" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"/>
+<text class="gate-label" x="4.32" y="66.00" data-label-kind="condition-stub" data-edge-id="edge:G6O1S9I1" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"><tspan x="4.32" dy="0">all_requirements_verified</tspan></text>
+<line class="gate" x1="-11.00" y1="66.00" x2="-9.00" y2="66.00" data-label-kind="condition-stub" data-edge-id="edge:G6O2S8I1" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"/>
+<text class="gate-label-left" x="-14.20" y="66.00" data-label-kind="condition-stub" data-edge-id="edge:G6O2S8I1" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"><tspan x="-14.20" dy="0">verification_failed</tspan></text>
+<line class="gate" x1="0.92" y1="38.00" x2="0.92" y2="40.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G5I2" data-arrow-id="condition_stub:T12" data-transition-id="T12" data-condition-stub-id="condition_stub:T12"/>
+<text class="gate-label-left" x="-1.88" y="39.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G5I2" data-arrow-id="condition_stub:T12" data-transition-id="T12" data-condition-stub-id="condition_stub:T12"><tspan x="-1.88" dy="0">cheapest_hypothesis_tested</tspan></text>
+<line class="gate" x1="1.92" y1="73.00" x2="3.92" y2="73.00" data-label-kind="condition-stub" data-edge-id="edge:S9O1S0I1" data-arrow-id="condition_stub:T13" data-transition-id="T13" data-condition-stub-id="condition_stub:T13"/>
+<text class="gate-label" x="4.32" y="73.00" data-label-kind="condition-stub" data-edge-id="edge:S9O1S0I1" data-arrow-id="condition_stub:T13" data-transition-id="T13" data-condition-stub-id="condition_stub:T13"><tspan x="4.32" dy="0">next_iteration</tspan></text>
+</svg>

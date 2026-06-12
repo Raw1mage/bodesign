@@ -1,0 +1,223 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "workflow_verification-discipline data contracts",
+  "description": "Four data contracts: RequirementContract (G1), CrossCheckDiff (G3/A4), ValidationEvidence envelope (A5), EvidenceReturn v1 (A3). simple_fix_candidates (G6) is embedded as a BlockerReturn extension.",
+  "definitions": {
+    "OracleTool": {
+      "description": "DD-2: closed enum, not free string. 'none' means unverifiable and forces open_questions escalation.",
+      "type": "string",
+      "enum": ["drc_gate", "erc", "crosscheck", "si_check", "gerber_compare", "spice", "user_judgment", "none"]
+    },
+    "VerificationStatus": {
+      "description": "DD-9: pass only via oracle execution record; default is unverified, never pass.",
+      "type": "string",
+      "enum": ["unverified", "pass", "fail", "unverifiable"]
+    },
+    "Severity": {
+      "type": "string",
+      "enum": ["critical", "major", "minor", "info"]
+    },
+    "EvidenceAnchor": {
+      "description": "Evidence-linked reference (file/net/coordinate/tool-output). Follows existing EvidenceRef convention.",
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["file", "net", "component", "coordinate", "tool_output", "document"] },
+        "ref": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "RequirementContract": {
+      "description": "G1/DD-1: extension of ExtractedRequirement (requirement_planning.py:83-89), not a parallel schema. Existing fields key/label/state/evidence retained; new fields optional with safe defaults.",
+      "type": "object",
+      "required": ["key", "label", "state"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "enum": ["stated", "answered", "missing"] },
+        "evidence": { "type": "string" },
+        "metric": { "type": "string", "description": "Measurable quantity name, e.g. board_length_mm. Absent => not yet contractualized." },
+        "threshold": { "type": "string", "description": "Comparator expression, e.g. '<=60', '==4', 'in [2,4]'." },
+        "measurement_method": { "type": "string", "description": "How the metric is obtained from the oracle tool output." },
+        "oracle_tool": { "$ref": "#/definitions/OracleTool" },
+        "verification_status": { "$ref": "#/definitions/VerificationStatus", "default": "unverified" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "oracle_tool": { "const": "none" } }, "required": ["oracle_tool"] },
+          "then": { "properties": { "verification_status": { "const": "unverifiable" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+
+    "RequirementVerdict": {
+      "description": "Per-requirement pass/fail row in the verification table.",
+      "type": "object",
+      "required": ["requirement_key", "verdict"],
+      "properties": {
+        "requirement_key": { "type": "string" },
+        "verdict": { "$ref": "#/definitions/VerificationStatus" },
+        "measured_value": { "type": "string" },
+        "anchors": { "type": "array", "items": { "$ref": "#/definitions/EvidenceAnchor" } }
+      },
+      "additionalProperties": false
+    },
+
+    "SimpleFixCandidate": {
+      "description": "G6/DD-3: cheap-hypothesis entry attached to BlockerReturn. Structural proposals are gated until all candidates are ruled_out with evidence.",
+      "type": "object",
+      "required": ["hypothesis", "check_method", "ruled_out"],
+      "properties": {
+        "hypothesis": { "type": "string", "minLength": 1 },
+        "check_method": { "type": "string", "minLength": 1 },
+        "ruled_out": { "type": "boolean", "default": false },
+        "evidence_ref": { "$ref": "#/definitions/EvidenceAnchor" }
+      },
+      "additionalProperties": false
+    },
+
+    "CrossCheckDiffItem": {
+      "description": "G3/DD-5: one structured difference. dimension-unavailable is reported at diff level, never faked as matched.",
+      "type": "object",
+      "required": ["dimension", "key", "status", "severity"],
+      "properties": {
+        "dimension": { "type": "string", "enum": ["net", "pad", "component", "pin", "component_value", "layout_rule"] },
+        "key": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["matched", "missing", "extra"] },
+        "severity": { "$ref": "#/definitions/Severity" },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/definitions/EvidenceAnchor" } }
+      },
+      "additionalProperties": false
+    },
+
+    "CrossCheckDiff": {
+      "description": "G3/DD-5: generalization of ReferenceCheck (reference_crosscheck.py:27-42). Keeps label/coverage_pct/verdict/provenance dual-track with prose.",
+      "type": "object",
+      "required": ["label", "items", "coverage_pct", "dimensions_available", "dimensions_unavailable"],
+      "properties": {
+        "label": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/definitions/CrossCheckDiffItem" } },
+        "first_divergence": {
+          "description": "Index into items[] of the first non-matched item after severity ordering; null when fully matched.",
+          "type": ["integer", "null"]
+        },
+        "coverage_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "verdict": { "type": "string", "description": "Prose verdict retained for human readers." },
+        "provenance": { "type": "object" },
+        "dimensions_available": { "type": "array", "items": { "type": "string" } },
+        "dimensions_unavailable": {
+          "description": "Dimensions skipped due to missing evidence — explicitly reported, never silently treated as compared.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["dimension", "reason"],
+            "properties": {
+              "dimension": { "type": "string" },
+              "reason": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "RootCauseReport": {
+      "description": "G3: standardized four-part root-cause report, written to events.",
+      "type": "object",
+      "required": ["methodology", "findings", "evidence", "fix"],
+      "properties": {
+        "methodology": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "findings": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "evidence": { "type": "array", "items": { "$ref": "#/definitions/EvidenceAnchor" }, "minItems": 1 },
+        "fix": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "ValidationFinding": {
+      "type": "object",
+      "required": ["id", "severity", "message"],
+      "properties": {
+        "id": { "type": "string" },
+        "severity": { "$ref": "#/definitions/Severity" },
+        "message": { "type": "string" },
+        "anchor": { "$ref": "#/definitions/EvidenceAnchor" }
+      },
+      "additionalProperties": false
+    },
+
+    "ValidationEvidence": {
+      "description": "A5/DD-6: unified envelope. Wrapper layer over native tool returns — native fields preserved under raw_result, never reinterpreted.",
+      "type": "object",
+      "required": ["tool", "inputs", "findings", "severity"],
+      "properties": {
+        "tool": { "$ref": "#/definitions/OracleTool" },
+        "inputs": { "type": "object", "description": "Tool invocation inputs (paths, parameters, effective values)." },
+        "findings": { "type": "array", "items": { "$ref": "#/definitions/ValidationFinding" } },
+        "severity": { "$ref": "#/definitions/Severity", "description": "Max severity across findings; 'info' when findings is empty." },
+        "anchors": { "type": "array", "items": { "$ref": "#/definitions/EvidenceAnchor" } },
+        "requirement_refs": { "type": "array", "items": { "type": "string" }, "description": "RequirementContract keys this run measures." },
+        "raw_result": { "type": "object", "description": "Native tool return, untouched." }
+      },
+      "additionalProperties": false
+    },
+
+    "EvidenceReturn": {
+      "description": "A3/DD-7: third spine artifact class (bodesign.c00.evidence_return.v1). Mirrors WorkPacket/BlockerReturn persistence: count-based IDs (<LAYER>-EV-0001), JSON file under _orchestration/evidence_returns/, append-only log.jsonl event, malformed => OrchestrationError.",
+      "type": "object",
+      "required": ["schema", "evidence_id", "packet_id", "source_layer", "envelope", "requirement_verdicts", "resolved"],
+      "properties": {
+        "schema": { "const": "bodesign.c00.evidence_return.v1" },
+        "evidence_id": { "type": "string", "pattern": "^(C0[1-6])-EV-[0-9]{4}$" },
+        "packet_id": { "type": "string", "pattern": "^C00-WP-[0-9]{4}$" },
+        "source_layer": { "type": "string", "enum": ["C01", "C02", "C03", "C04", "C05", "C06"] },
+        "envelope": { "$ref": "#/definitions/ValidationEvidence" },
+        "requirement_verdicts": { "type": "array", "items": { "$ref": "#/definitions/RequirementVerdict" } },
+        "resolved": { "type": "boolean", "default": false },
+        "resolution": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    },
+
+    "DesignReviewRecord": {
+      "description": "G2/DD-4: review document contract. Gate checks verdict presence + non-empty scenarios; REJECT keeps deterministic-validation blocked.",
+      "type": "object",
+      "required": ["subject", "scenarios", "counts", "verdict"],
+      "properties": {
+        "subject": { "type": "string", "description": "Layout intent / subsystem under review." },
+        "scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "walkthrough", "conclusion", "severity"],
+            "properties": {
+              "name": { "type": "string", "description": "e.g. power sequencing, reset chain, I2C address conflict, level compatibility, diff-pair topology" },
+              "walkthrough": { "type": "string" },
+              "conclusion": { "type": "string" },
+              "severity": { "$ref": "#/definitions/Severity" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "counts": {
+          "type": "object",
+          "required": ["critical", "major", "minor"],
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "major": { "type": "integer", "minimum": 0 },
+            "minor": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "verdict": { "type": "string", "enum": ["APPROVE", "APPROVE_WITH_CONCERNS", "REJECT"] },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/definitions/EvidenceAnchor" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

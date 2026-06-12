@@ -14,3 +14,7 @@ venv/
 # specbase KB index — transient SQLite WAL companions (the .sqlite itself is tracked)
 .specbase/*.sqlite-shm
 .specbase/*.sqlite-wal
+
+# research: keep analysis .md, exclude bulky upstream paper sources
+docs/research/arxiv/*/src/
+docs/research/arxiv/*/*.bin

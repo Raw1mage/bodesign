@@ -193,6 +193,57 @@ datasheets) · `jlcpcb`/`pcbway` (fab/assembly ordering, DFM rules) · `spice` (
 `docx`/`pptx`/`pdf`/`xlsx` + the `docxmcp` MCP (document artifacts). Stage guides call these out
 where they fit; never hand-roll what a companion skill already does well.
 
+## Pre-implementation design review (G2 — scenario walkthrough before validation)
+
+Between "propose subsystem/layout intent" and "deterministic validation" sits a mandatory
+`design-review` stage. The review is walkthrough work — you reason through failure scenarios
+against the candidate intent, then record a verdict. The workflow gate
+(`record_design_review` / `review_gate_status` in workflow-core) only verifies that a review
+happened and produced a verdict; the thinking is yours.
+
+**Minimum scenario set** — walk through every applicable item; skipping an applicable one is a
+review defect, not a shortcut:
+
+- **power sequencing** — rail bring-up order, enable dependencies, inrush at first plug-in
+- **reset chain** — who resets whom, POR timing vs supervisor, strapping pins sampled at reset
+- **I2C address conflict** — every bus member's 7-bit address (including address-select straps)
+- **level compatibility** — each interface pair's VIH/VIL/VOH/VOL across voltage domains
+- **diff-pair topology** — USB/Ethernet/LVDS pair routing intent, polarity, AC coupling needs
+
+Each scenario gets `{name, walkthrough, conclusion, severity}` (severity: critical/major/minor/info).
+Verdict is `APPROVE` / `APPROVE_WITH_CONCERNS` / `REJECT`:
+
+- `REJECT` **keeps deterministic-validation blocked** until concerns are resolved and re-reviewed.
+- A missing review record blocks validation the same way (`REVIEW_MISSING`) — the gate cannot be
+  skipped by simply not doing the review.
+- `APPROVE_WITH_CONCERNS` passes the gate but the concerns must appear as scenarios with
+  severity ≥ major, so they stay visible downstream.
+
+The record persists to the client project folder (`_design_review/design_review.json`) as
+evidence — reviews that live only in chat are not reviews.
+
+## Debug cost-ordering discipline (G6 — cheap hypotheses before structural changes)
+
+When a verification gate fails (DRC / ERC / SI / reference crosscheck mismatch), do **not** jump
+to structural proposals (re-layout, layer-count change, subsystem rework). Most failures have
+cheap causes. The mandatory order:
+
+1. **Enumerate `simple_fix_candidates` first** — attach them to the blocker
+   (`return_blocker(..., simple_fix_candidates=[...])`): each candidate is
+   `{hypothesis, check_method, ruled_out, evidence_ref}`. Typical cheap hypotheses:
+   - DRC rule parameter wrong (rule file / net-class value, not the copper)
+   - a single net or pad exception, not a systemic problem
+   - footprint pin definition error (symbol↔footprint mapping)
+   - stale generated output (re-run the deterministic tool before trusting the failure)
+2. **Rule each candidate out with evidence** — `ruled_out: true` requires an `evidence_ref`
+   (tool output, file anchor). The schema rejects evidence-free rule-outs.
+3. **Only after all candidates are `ruled_out`** may a structural proposal be made.
+   `BlockerReturn.structural_proposal_allowed` is the machine gate: while any candidate has
+   `ruled_out: false`, structural re-design suggestions are out of bounds.
+
+This is the same principle as "verify the premise before stacking fixes": a structural change
+made while a cheap explanation is still alive destroys evidence and multiplies blast radius.
+
 ## The one rule that overrides convenience
 
 Everything here serves a single discipline: **a bodesign package is trustworthy because it never

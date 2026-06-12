@@ -1,0 +1,232 @@
+{
+  "Steps": [
+    {
+      "StepNumber": 0,
+      "ModuleRef": "A1",
+      "StepType": "initial",
+      "StepAction": "Await spec and user answers",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 1,
+      "ModuleRef": "A1",
+      "StepType": "normal",
+      "StepAction": "Contractualize requirements (metric/threshold/oracle)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 2,
+      "ModuleRef": "A1",
+      "StepType": "normal",
+      "StepAction": "Escalate open questions to user",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 3,
+      "ModuleRef": "A2",
+      "StepType": "normal",
+      "StepAction": "Review design intent (scenario walkthrough)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 4,
+      "ModuleRef": "A2",
+      "StepType": "normal",
+      "StepAction": "Revise design proposal per review concerns",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 5,
+      "ModuleRef": "A3",
+      "StepType": "normal",
+      "StepAction": "Crosscheck against reference (CrossCheckDiff + first divergence)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 6,
+      "ModuleRef": "A4",
+      "StepType": "normal",
+      "StepAction": "Wrap native tool results into ValidationEvidence",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 7,
+      "ModuleRef": "A5",
+      "StepType": "normal",
+      "StepAction": "Return evidence to spine (evidence_returns/)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 8,
+      "ModuleRef": "A3",
+      "StepType": "normal",
+      "StepAction": "Debug via cost-ordered hypothesis ladder",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 9,
+      "ModuleRef": "A6",
+      "StepType": "normal",
+      "StepAction": "Derive workflow plan from spine state",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    }
+  ],
+  "Gates": [
+    {
+      "GateId": "G1",
+      "GateNumber": 1,
+      "GateType": "convergence_or",
+      "Owner": { "Kind": "target", "StepNumber": 1 },
+      "Inputs": [
+        { "Port": "I1", "From": "S0O1" },
+        { "Port": "I2", "From": "S2O1" }
+      ],
+      "Outputs": [
+        { "Port": "O1", "To": "S1I1" }
+      ]
+    },
+    {
+      "GateId": "G2",
+      "GateNumber": 2,
+      "GateType": "divergence_or",
+      "Owner": { "Kind": "source", "StepNumber": 1 },
+      "Inputs": [
+        { "Port": "I1", "From": "S1O1" }
+      ],
+      "Outputs": [
+        { "Port": "O1", "To": "G3I1", "Condition": "contracts_complete" },
+        { "Port": "O2", "To": "S2I1", "Condition": "unverifiable_items_found" }
+      ]
+    },
+    {
+      "GateId": "G3",
+      "GateNumber": 3,
+      "GateType": "convergence_or",
+      "Owner": { "Kind": "target", "StepNumber": 3 },
+      "Inputs": [
+        { "Port": "I1", "From": "G2O1" },
+        { "Port": "I2", "From": "S4O1" }
+      ],
+      "Outputs": [
+        { "Port": "O1", "To": "S3I1" }
+      ]
+    },
+    {
+      "GateId": "G4",
+      "GateNumber": 4,
+      "GateType": "divergence_or",
+      "Owner": { "Kind": "source", "StepNumber": 3 },
+      "Inputs": [
+        { "Port": "I1", "From": "S3O1" }
+      ],
+      "Outputs": [
+        { "Port": "O1", "To": "G5I1", "Condition": "verdict_approve_or_concerns" },
+        { "Port": "O2", "To": "S4I1", "Condition": "verdict_reject" }
+      ]
+    },
+    {
+      "GateId": "G5",
+      "GateNumber": 5,
+      "GateType": "convergence_or",
+      "Owner": { "Kind": "target", "StepNumber": 5 },
+      "Inputs": [
+        { "Port": "I1", "From": "G4O1" },
+        { "Port": "I2", "From": "S8O1" }
+      ],
+      "Outputs": [
+        { "Port": "O1", "To": "S5I1" }
+      ]
+    },
+    {
+      "GateId": "G6",
+      "GateNumber": 6,
+      "GateType": "divergence_or",
+      "Owner": { "Kind": "source", "StepNumber": 7 },
+      "Inputs": [
+        { "Port": "I1", "From": "S7O1" }
+      ],
+      "Outputs": [
+        { "Port": "O1", "To": "S9I1", "Condition": "all_requirements_verified" },
+        { "Port": "O2", "To": "S8I1", "Condition": "verification_failed" }
+      ]
+    }
+  ],
+  "Edges": [
+    { "EdgeId": "S0O1G1I1", "From": "S0O1", "To": "G1I1", "Condition": "spec_received" },
+    { "EdgeId": "S2O1G1I2", "From": "S2O1", "To": "G1I2", "Condition": "user_answered" },
+    { "EdgeId": "G1O1S1I1", "From": "G1O1", "To": "S1I1", "Condition": "" },
+
+    { "EdgeId": "S1O1G2I1", "From": "S1O1", "To": "G2I1", "Condition": "" },
+    { "EdgeId": "G2O1G3I1", "From": "G2O1", "To": "G3I1", "Condition": "contracts_complete" },
+    { "EdgeId": "G2O2S2I1", "From": "G2O2", "To": "S2I1", "Condition": "unverifiable_items_found" },
+
+    { "EdgeId": "S4O1G3I2", "From": "S4O1", "To": "G3I2", "Condition": "design_revised" },
+    { "EdgeId": "G3O1S3I1", "From": "G3O1", "To": "S3I1", "Condition": "" },
+
+    { "EdgeId": "S3O1G4I1", "From": "S3O1", "To": "G4I1", "Condition": "" },
+    { "EdgeId": "G4O1G5I1", "From": "G4O1", "To": "G5I1", "Condition": "verdict_approve_or_concerns" },
+    { "EdgeId": "G4O2S4I1", "From": "G4O2", "To": "S4I1", "Condition": "verdict_reject" },
+
+    { "EdgeId": "S8O1G5I2", "From": "S8O1", "To": "G5I2", "Condition": "cheapest_hypothesis_tested" },
+    { "EdgeId": "G5O1S5I1", "From": "G5O1", "To": "S5I1", "Condition": "" },
+
+    { "EdgeId": "S5O1S6I1", "From": "S5O1", "To": "S6I1", "Condition": "diff_computed" },
+    { "EdgeId": "S6O1S7I1", "From": "S6O1", "To": "S7I1", "Condition": "evidence_wrapped" },
+
+    { "EdgeId": "S7O1G6I1", "From": "S7O1", "To": "G6I1", "Condition": "" },
+    { "EdgeId": "G6O1S9I1", "From": "G6O1", "To": "S9I1", "Condition": "all_requirements_verified" },
+    { "EdgeId": "G6O2S8I1", "From": "G6O2", "To": "S8I1", "Condition": "verification_failed" },
+
+    { "EdgeId": "S9O1S0I1", "From": "S9O1", "To": "S0I1", "Condition": "next_iteration" }
+  ]
+}

@@ -10,6 +10,15 @@ class ComponentInstance:
     footprint: str | None = None
     placement: dict[str, float | str] = field(default_factory=dict)
     evidence_refs: list[EvidenceRef] = field(default_factory=list)
+    # G7/DD-13 minimal comparator extensions (all optional; existing callers unaffected):
+    # value: passive component value (e.g. "10k", "100n"); None for non-passives.
+    # optional: reference designs mark non-essential parts (bulk caps, debug headers);
+    #   absence in a candidate is NOT penalized by the reference comparator.
+    # flexible_pin_groups: named sets of interchangeable pins (e.g. GPIO banks);
+    #   {"GPIO_A": ["PA0", "PA1", "PA2"]} — any member satisfies a match.
+    value: str | None = None
+    optional: bool = False
+    flexible_pin_groups: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

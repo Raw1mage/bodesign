@@ -1,0 +1,39 @@
+{
+  "diagram_title": "Verification Discipline — Component View (workflow-core)",
+  "diagram_level": "component",
+  "diagram_layout": "top_down",
+  "scope": { "type": "container", "id": "CT1" },
+  "persons": [
+    { "id": "P1", "name": "Design Engineer", "description": "Provides natural-language spec, answers open questions, approves design review verdicts", "external": true }
+  ],
+  "systems": [
+    { "id": "SYS1", "name": "bodesign MCP Server", "description": "AI PCB design copilot delivered as a standalone MCP server", "external": false },
+    { "id": "SYS2", "name": "KiCad Toolchain", "description": "kicad-cli + pcbnew: ERC/DRC, gerber export, native tool results", "external": true }
+  ],
+  "containers": [
+    { "id": "CT1", "type": "api", "name": "workflow-core", "technology": "Python package", "description": "Requirement planning, orchestration spine, reference crosscheck, workflow contracts", "systemRef": "SYS1" },
+    { "id": "CT2", "type": "api", "name": "design-ir", "technology": "Python package", "description": "BoardDesign IR schema + deterministic reference comparator (G7)", "systemRef": "SYS1" }
+  ],
+  "components": [
+    { "id": "C1", "type": "none", "name": "Requirement Planner", "technology": "requirement_planning.py", "description": "A1: extracts requirements and binds RequirementContract (metric/threshold/oracle); escalates unverifiable items", "containerRef": "CT1" },
+    { "id": "C2", "type": "none", "name": "Design Review Gate", "technology": "skills/bodesign methodology + review record schema", "description": "A2: pre-implementation scenario walkthrough producing DesignReviewRecord verdicts", "containerRef": "CT1" },
+    { "id": "C3", "type": "none", "name": "Reference Crosschecker", "technology": "reference_crosscheck.py", "description": "A3: CrossCheckDiff with per-dimension severity and first_divergence; cost-ordered debug ladder", "containerRef": "CT1" },
+    { "id": "C4", "type": "none", "name": "Evidence Adapter", "technology": "validation_evidence.py (new)", "description": "A4: wraps native tool results into ValidationEvidence envelopes, raw_result preserved", "containerRef": "CT1" },
+    { "id": "C5", "type": "none", "name": "Orchestration Spine", "technology": "orchestration.py + _orchestration/ files", "description": "A5: persists evidence_returns/ records, updates requirement verification_status, fail-fast on malformed payloads", "containerRef": "CT1" },
+    { "id": "C6", "type": "none", "name": "Workflow Plan Deriver", "technology": "contracts.py derive_workflow_plan", "description": "A6: computes ReferenceBoardWorkflowPlan stage status from spine state; static plan demoted to template", "containerRef": "CT1" },
+    { "id": "C7", "type": "none", "name": "Reference Comparator", "technology": "design_ir/compare/ (new)", "description": "G7/DD-10~13: deterministic IR-vs-IR matching (two-stage + Hungarian) and weighted scoring (Dice/attr/conn 0.4/0.2/0.4); emits CrossCheckDiffItem details, wrappable as ValidationEvidence", "containerRef": "CT2" }
+  ],
+  "relationships": [
+    { "id": "R1", "source": "P1", "target": "C1", "description": "Submits spec + answers open questions", "technology": "MCP tool call", "position": "down" },
+    { "id": "R2", "source": "C1", "target": "C2", "description": "Requirement contracts feed review scenarios", "technology": "RequirementContract", "position": "down" },
+    { "id": "R3", "source": "C2", "target": "P1", "description": "Surfaces REJECT / APPROVE_WITH_CONCERNS verdicts", "technology": "DesignReviewRecord", "position": "up" },
+    { "id": "R4", "source": "C1", "target": "C3", "description": "Provides severity rules + requirement refs", "technology": "requirement_refs", "position": "down" },
+    { "id": "R5", "source": "SYS2", "target": "C4", "description": "Native tool results (ERC/DRC/si_check)", "technology": "JSON reports", "position": "down" },
+    { "id": "R6", "source": "C3", "target": "C4", "description": "CrossCheckDiff + root-cause report", "technology": "CrossCheckDiff", "position": "down" },
+    { "id": "R7", "source": "C4", "target": "C5", "description": "ValidationEvidence envelopes + requirement verdicts", "technology": "bodesign.c00.evidence_return.v1", "position": "down" },
+    { "id": "R8", "source": "C5", "target": "C6", "description": "Spine state (packets + blockers + evidence returns)", "technology": "_orchestration/ files", "position": "down" },
+    { "id": "R9", "source": "C6", "target": "P1", "description": "Spine-derived workflow plan + readiness", "technology": "ReferenceBoardWorkflowPlan", "position": "up" },
+    { "id": "R10", "source": "C7", "target": "C3", "description": "Component/pin-level match details + sub-scores feed crosscheck diff", "technology": "CrossCheckDiffItem", "position": "right" },
+    { "id": "R11", "source": "C7", "target": "C4", "description": "Comparator result wrapped as envelope (tool=crosscheck)", "technology": "ValidationEvidence", "position": "down" }
+  ]
+}

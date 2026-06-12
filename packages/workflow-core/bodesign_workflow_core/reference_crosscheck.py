@@ -58,6 +58,136 @@ def crosscheck_nets(generated: set[str], reference: set[str], label: str, proven
                           coverage_pct=coverage, verdict=verdict, provenance=provenance or {})
 
 
+# ── G3/DD-5: structured multi-dimension diff (generalization, not replacement) ──
+
+DIFF_DIMENSIONS: tuple[str, ...] = ("net", "pad", "component", "pin", "component_value", "layout_rule")
+_SEVERITY_RANK = {"critical": 0, "major": 1, "minor": 2, "info": 3}
+
+
+class CrossCheckError(ValueError):
+    """Raised for invalid crosscheck inputs (XCHK_* family)."""
+
+
+@dataclass(slots=True)
+class CrossCheckDiffItem:
+    dimension: str
+    key: str
+    status: str  # "matched" | "missing" | "extra"
+    severity: str  # "critical" | "major" | "minor" | "info"
+    evidence_refs: list[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"dimension": self.dimension, "key": self.key, "status": self.status,
+                "severity": self.severity, "evidence_refs": list(self.evidence_refs)}
+
+
+@dataclass(slots=True)
+class CrossCheckDiff:
+    label: str
+    items: list[CrossCheckDiffItem] = field(default_factory=list)
+    first_divergence: int | None = None
+    coverage_pct: int = 0
+    verdict: str = ""
+    provenance: dict = field(default_factory=dict)
+    dimensions_available: list[str] = field(default_factory=list)
+    dimensions_unavailable: list[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "label": self.label,
+            "items": [i.to_dict() for i in self.items],
+            "first_divergence": self.first_divergence,
+            "coverage_pct": self.coverage_pct,
+            "verdict": self.verdict,
+            "provenance": self.provenance,
+            "dimensions_available": list(self.dimensions_available),
+            "dimensions_unavailable": list(self.dimensions_unavailable),
+        }
+
+
+# Deterministic severity assignment per (dimension, status). Missing reference
+# coverage is the reliability gap (major); extra generated content is novel
+# material to verify (minor); matched is informational.
+_DIFF_SEVERITY: dict[str, str] = {"missing": "major", "extra": "minor", "matched": "info"}
+
+
+def crosscheck_diff(
+    generated: dict[str, set[str]],
+    reference: dict[str, set[str]],
+    label: str,
+    provenance: dict | None = None,
+) -> CrossCheckDiff:
+    """Compare generated vs reference evidence across dimensions (DD-5).
+
+    `generated` / `reference` map dimension name -> key set. A dimension is
+    compared only when BOTH sides provide evidence; otherwise it is reported in
+    `dimensions_unavailable` with a reason — never silently treated as matched
+    (XCHK_DIMENSION_UNAVAILABLE is a report, not an exception).
+
+    Keeps `crosscheck_nets` semantics for the net dimension: coverage_pct and
+    the prose verdict are computed exactly as before (dual track).
+    """
+    for side_name, side in (("generated", generated), ("reference", reference)):
+        for dim in side:
+            if dim not in DIFF_DIMENSIONS:
+                raise CrossCheckError(
+                    f"unknown diff dimension {dim!r} in {side_name} (allowed: {', '.join(DIFF_DIMENSIONS)})"
+                )
+    if "reference" and all(not v for v in reference.values()):
+        raise CrossCheckError(
+            "XCHK_EMPTY_REFERENCE: reference evidence is empty; crosscheck cannot produce a meaningful diff"
+        )
+
+    items: list[CrossCheckDiffItem] = []
+    available: list[str] = []
+    unavailable: list[dict] = []
+    for dim in DIFF_DIMENSIONS:
+        gen_has = dim in generated
+        ref_has = dim in reference
+        if not gen_has and not ref_has:
+            continue  # dimension not requested by either side
+        if not gen_has or not ref_has:
+            missing_side = "generated" if not gen_has else "reference"
+            unavailable.append({"dimension": dim, "reason": f"no {dim} evidence provided by {missing_side} side"})
+            continue
+        if not reference[dim]:
+            unavailable.append({"dimension": dim, "reason": f"reference {dim} evidence is empty"})
+            continue
+        available.append(dim)
+        gen, ref = generated[dim], reference[dim]
+        for key in sorted(gen & ref):
+            items.append(CrossCheckDiffItem(dim, key, "matched", _DIFF_SEVERITY["matched"]))
+        for key in sorted(ref - gen):
+            items.append(CrossCheckDiffItem(dim, key, "missing", _DIFF_SEVERITY["missing"]))
+        for key in sorted(gen - ref):
+            items.append(CrossCheckDiffItem(dim, key, "extra", _DIFF_SEVERITY["extra"]))
+
+    if not available:
+        raise CrossCheckError(
+            "XCHK_EMPTY_REFERENCE: no dimension has evidence on both sides; nothing comparable"
+        )
+
+    # Deterministic ordering: severity rank, then dimension order, then key.
+    items.sort(key=lambda i: (_SEVERITY_RANK[i.severity], DIFF_DIMENSIONS.index(i.dimension), i.key))
+    first_divergence = next((idx for idx, i in enumerate(items) if i.status != "matched"), None)
+
+    # Dual track: net-dimension coverage + prose verdict identical to crosscheck_nets.
+    if "net" in available:
+        net_check = crosscheck_nets(generated["net"], reference["net"], label, provenance)
+        coverage, verdict = net_check.coverage_pct, net_check.verdict
+    else:
+        matched_n = sum(1 for i in items if i.status == "matched")
+        ref_total = sum(len(reference[d]) for d in available)
+        coverage = round(100 * matched_n / max(ref_total, 1))
+        verdict = f"{matched_n}/{ref_total} reference keys matched across {', '.join(available)} ({coverage}%)."
+
+    return CrossCheckDiff(
+        label=label, items=items, first_divergence=first_divergence,
+        coverage_pct=coverage, verdict=verdict, provenance=provenance or {},
+        dimensions_available=available, dimensions_unavailable=unavailable,
+    )
+
+
 def extract_schematic_net_labels(sch_path: str | Path, pattern: str | None = None) -> set[str]:
     text = Path(sch_path).read_text(encoding="utf-8", errors="ignore")
     nets = set(GLOBAL_LABEL_RE.findall(text))

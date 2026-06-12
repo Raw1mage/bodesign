@@ -1,0 +1,311 @@
+[
+  {
+    "id": "TV-G1-01",
+    "requirement": "RequirementContract（G1）",
+    "scenario": "可量測需求收斂為合約",
+    "input": {
+      "user_spec_fragment": "USB-C 供電、板長 ≤ 60mm",
+      "answered_questions": { "board_length_limit_mm": 60 }
+    },
+    "expected_output": {
+      "requirement": {
+        "key": "board_length",
+        "state": "answered",
+        "metric": "board_length_mm",
+        "threshold": "<=60",
+        "oracle_tool": "drc_gate",
+        "verification_status": "unverified"
+      },
+      "binding_validation": "validate_requirement_bindings passes unchanged"
+    }
+  },
+  {
+    "id": "TV-G1-02",
+    "requirement": "RequirementContract（G1）",
+    "scenario": "不可量測需求 fail fast",
+    "input": {
+      "user_spec_fragment": "外觀要好看"
+    },
+    "expected_output": {
+      "requirement": {
+        "key": "aesthetics",
+        "oracle_tool": "none",
+        "verification_status": "unverifiable"
+      },
+      "open_questions_contains": "aesthetics",
+      "must_not": ["silent skip", "auto-assigned oracle"]
+    }
+  },
+  {
+    "id": "TV-G1-03",
+    "requirement": "RequirementContract（G1）",
+    "scenario": "每輪驗證輸出 pass/fail 對表",
+    "input": {
+      "contracts": [
+        { "key": "board_length", "oracle_tool": "drc_gate" },
+        { "key": "usb_dp_dm_skew", "oracle_tool": "si_check" },
+        { "key": "net_parity", "oracle_tool": "crosscheck" }
+      ],
+      "evidence_returns": [
+        { "requirement_key": "board_length", "verdict": "pass", "measured_value": "58.4" },
+        { "requirement_key": "net_parity", "verdict": "fail" }
+      ]
+    },
+    "expected_output": {
+      "table": [
+        { "requirement_key": "board_length", "verdict": "pass" },
+        { "requirement_key": "usb_dp_dm_skew", "verdict": "unverified" },
+        { "requirement_key": "net_parity", "verdict": "fail" }
+      ],
+      "invariant": "usb_dp_dm_skew has no oracle execution record => stays unverified, never inferred pass (DD-9)"
+    }
+  },
+  {
+    "id": "TV-G6-01",
+    "requirement": "Debug 成本排序紀律（G6）",
+    "scenario": "DRC 失敗先列簡單解釋",
+    "input": {
+      "blocker": { "blocker_id": "C04-BL-0003", "summary": "clearance violation on NET_VBUS" }
+    },
+    "expected_output": {
+      "blocker_has_simple_fix_candidates": true,
+      "candidates_min_count": 2,
+      "each_candidate_fields": ["hypothesis", "check_method", "ruled_out"],
+      "structural_proposal_gated_until": "all candidates ruled_out == true with evidence_ref"
+    }
+  },
+  {
+    "id": "TV-G2-01",
+    "requirement": "Design Review Gate（G2）",
+    "scenario": "子系統設計審查產出裁決",
+    "input": {
+      "layout_intent": { "subsystems": ["MCU", "USB-C PD", "buck 5V→3V3"], "interfaces": ["I2C0", "USB2.0 FS"] }
+    },
+    "expected_output": {
+      "review_record": {
+        "scenarios_min_count": 3,
+        "scenario_names_include": ["power sequencing", "I2C address conflict", "level compatibility"],
+        "counts_present": ["critical", "major", "minor"],
+        "verdict_in": ["APPROVE", "APPROVE_WITH_CONCERNS", "REJECT"]
+      },
+      "persisted_to": "client project folder"
+    }
+  },
+  {
+    "id": "TV-G2-02",
+    "requirement": "Design Review Gate（G2）",
+    "scenario": "review 不可被跳過",
+    "input": {
+      "workflow_state": "advancing to deterministic-validation",
+      "design_review_record": null
+    },
+    "expected_output": {
+      "validation_stage_status": "blocked",
+      "blocker_reason": "design-review 未完成",
+      "behavior": "fail fast — no silent pass-through"
+    }
+  },
+  {
+    "id": "TV-G3-01",
+    "requirement": "結構化 diff（G3/A4）",
+    "scenario": "crosscheck 輸出 CrossCheckDiff",
+    "input": {
+      "generated_nets": ["GND", "VBUS", "SDA0", "SCL0"],
+      "reference_nets": ["GND", "VBUS", "SDA0", "SCL0", "INT_N"],
+      "pad_evidence_available": false
+    },
+    "expected_output": {
+      "diff": {
+        "items_contains": { "dimension": "net", "key": "INT_N", "status": "missing", "severity": "major" },
+        "first_divergence_points_to": "INT_N",
+        "dimensions_unavailable_contains": { "dimension": "pad", "reason": "no pad evidence provided" }
+      },
+      "dual_track": "coverage_pct and prose verdict unchanged from crosscheck_nets behavior"
+    }
+  },
+  {
+    "id": "TV-G3-02",
+    "requirement": "root-cause 報告（G3/A4）",
+    "scenario": "root-cause 報告標準化",
+    "input": {
+      "divergence": { "dimension": "net", "key": "INT_N", "status": "missing" }
+    },
+    "expected_output": {
+      "report_fields": ["methodology", "findings", "evidence", "fix"],
+      "evidence_each_has_anchor": true,
+      "written_to": "events"
+    }
+  },
+  {
+    "id": "TV-A3-01",
+    "requirement": "Evidence backflow（A3）",
+    "scenario": "驗證證據回流並持久化",
+    "input": {
+      "packet_id": "C00-WP-0002",
+      "source_layer": "C04",
+      "envelope": { "tool": "drc_gate", "findings": [], "severity": "info" },
+      "requirement_verdicts": [{ "requirement_key": "board_length", "verdict": "pass" }]
+    },
+    "expected_output": {
+      "file_created": "_orchestration/evidence_returns/C04-EV-0001.json",
+      "schema": "bodesign.c00.evidence_return.v1",
+      "log_jsonl_appended": true
+    }
+  },
+  {
+    "id": "TV-A3-02",
+    "requirement": "Evidence backflow（A3）",
+    "scenario": "malformed payload fail fast",
+    "input": {
+      "payload": { "schema": "bodesign.c00.evidence_return.v1", "evidence_id": "BAD-FORMAT" }
+    },
+    "expected_output": {
+      "raises": "OrchestrationError",
+      "no_file_written": true,
+      "no_log_event": true
+    }
+  },
+  {
+    "id": "TV-A3-03",
+    "requirement": "Evidence backflow（A3）",
+    "scenario": "C00 消費 evidence",
+    "input": {
+      "evidence_return": {
+        "requirement_verdicts": [
+          { "requirement_key": "board_length", "verdict": "pass" },
+          { "requirement_key": "net_parity", "verdict": "fail" }
+        ]
+      }
+    },
+    "expected_output": {
+      "requirement_status_updates": { "board_length": "pass", "net_parity": "fail" },
+      "fail_path": "C00 may open new work packet via existing dispatch; never auto-executes fixes"
+    }
+  },
+  {
+    "id": "TV-A5-01",
+    "requirement": "ValidationEvidence envelope（A5）",
+    "scenario": "工具輸出包裝為 envelope",
+    "input": {
+      "tool": "si_check",
+      "native_result": { "skew_ps": 12.3, "limit_ps": 50, "status": "ok" }
+    },
+    "expected_output": {
+      "envelope_fields": ["tool", "inputs", "findings", "severity"],
+      "raw_result_preserved": { "skew_ps": 12.3, "limit_ps": 50, "status": "ok" },
+      "invariant": "native fields never reinterpreted, only wrapped"
+    }
+  },
+  {
+    "id": "TV-A1-01",
+    "requirement": "編排表面統一（A1）",
+    "scenario": "stage 狀態從 spine 推導",
+    "input": {
+      "orchestration_dir": {
+        "work_packets": [{ "packet_id": "C00-WP-0001", "layer": "C04", "status": "dispatched" }],
+        "blockers": [{ "blocker_id": "C04-BL-0001", "resolved": false }],
+        "evidence_returns": []
+      }
+    },
+    "expected_output": {
+      "stage_layout": { "status": "blocked", "blockers_contains": "C04-BL-0001" },
+      "source": "computed from spine state, not function-argument snapshot"
+    }
+  },
+  {
+    "id": "TV-A1-02",
+    "requirement": "編排表面統一（A1）",
+    "scenario": "spine 未初始化 fail fast",
+    "input": {
+      "orchestration_dir": null
+    },
+    "expected_output": {
+      "blocker": "spine-not-initialized",
+      "must_not": ["fallback to parameter-snapshot behavior"]
+    }
+  },
+  {
+    "id": "TV-G7-01",
+    "requirement": "Reference Comparator（G7）",
+    "scenario": "良品自比對得滿分",
+    "input": {
+      "candidate_ir": "fixtures/golden_board.ir.json",
+      "reference_ir": "fixtures/golden_board.ir.json"
+    },
+    "expected_output": {
+      "scores": { "S_comp": 1.0, "S_attr": 1.0, "S_conn": 1.0, "S_total": 1.0 },
+      "items_all_status": "matched",
+      "first_divergence": null
+    }
+  },
+  {
+    "id": "TV-G7-02",
+    "requirement": "Reference Comparator（G7）",
+    "scenario": "擾動設計輸出分級退化分數與明細",
+    "input": {
+      "reference_ir": "fixtures/golden_board.ir.json",
+      "candidate_perturbations": ["remove required component U2", "change R3 value 10k→1k", "swap nets SDA0/SCL0"]
+    },
+    "expected_output": {
+      "scores_invariant": "S_total = 0.4*S_comp + 0.2*S_attr + 0.4*S_conn, each sub-score degraded",
+      "items_contain": [
+        { "dimension": "component", "key": "U2", "status": "missing" },
+        { "dimension": "component_value", "key": "R3", "status_in": ["missing", "extra"] },
+        { "dimension": "pin", "key_contains": "SDA0" }
+      ],
+      "must_not": ["binary pass/fail only", "single aggregate score without details"]
+    }
+  },
+  {
+    "id": "TV-G7-03",
+    "requirement": "Reference Comparator（G7）",
+    "scenario": "元件匹配採兩段式 + Hungarian 全域指派",
+    "input": {
+      "reference_ir_has": { "optional_components": ["C9 (bulk cap, optional=true)"], "symmetric_passives": ["R1", "C2"], "flexible_pin_groups": [{ "component": "U1", "group": "GPIO_A", "pins": ["PA0", "PA1", "PA2"] }] },
+      "candidate_ir_lacks": ["C9"]
+    },
+    "expected_output": {
+      "optional_absence_penalty": 0,
+      "symmetric_pin_normalization": "__sym__",
+      "flexible_pin_match": "any member of GPIO_A counts as matched",
+      "assignment": "Hungarian global optimum over pin-neighborhood-signature similarity matrix, required components first"
+    }
+  },
+  {
+    "id": "TV-G7-04",
+    "requirement": "Reference Comparator（G7）",
+    "scenario": "輸入 IR 不合法即 fail fast",
+    "input": {
+      "candidate_ir": "fixtures/broken_board.ir.json (component without pin definitions)"
+    },
+    "expected_output": {
+      "raises": "CMP_IR_INVALID",
+      "must_not": ["partial comparison", "silently skipping broken components"]
+    }
+  },
+  {
+    "id": "TV-G7-05",
+    "requirement": "Reference Comparator（G7）",
+    "scenario": "確定性與規模",
+    "input": {
+      "candidate_ir": "fixtures/large_board.ir.json (hundreds of components, thousands of pins)",
+      "runs": 2
+    },
+    "expected_output": {
+      "determinism": "two runs produce byte-equal output (explicit tie-breaking by ref designator lexical order)",
+      "benchmark": "Hungarian assignment completes within acceptable wall time at board scale"
+    }
+  },
+  {
+    "id": "TV-A1-03",
+    "requirement": "編排表面統一（A1）",
+    "scenario": "API 向後相容",
+    "input": {
+      "caller": "existing /workflow/reference-board client"
+    },
+    "expected_output": {
+      "return_shape": "ReferenceBoardWorkflowPlan fields unchanged",
+      "existing_tests": "all green"
+    }
+  }
+]

@@ -35,10 +35,12 @@ from .agent_registry import DOWNSTREAM_CODES, AgentRegistry, load_agent_registry
 
 WORK_PACKET_SCHEMA = "bodesign.c00.work_packet.v1"
 BLOCKER_RETURN_SCHEMA = "bodesign.c00.blocker_return.v1"
+EVIDENCE_RETURN_SCHEMA = "bodesign.c00.evidence_return.v1"
 
 ORCH_REL_DIR = Path("_orchestration")
 _WP_REL_DIR = ORCH_REL_DIR / "work_packets"
 _BLOCKER_REL_DIR = ORCH_REL_DIR / "blockers"
+_EVIDENCE_REL_DIR = ORCH_REL_DIR / "evidence_returns"
 _LOG_REL_PATH = ORCH_REL_DIR / "log.jsonl"
 
 # Default C00 source pointers (mirror the contract's `source` block).
@@ -90,6 +92,39 @@ class WorkPacket:
         }
 
 
+def _normalize_simple_fix_candidates(candidates: list[Any] | None) -> list[dict[str, Any]]:
+    """DD-3 (G6 debug-cost-ordering): each candidate is a cheap hypothesis that
+    must be ruled out (with evidence) before structural proposals are allowed.
+    Shape: {hypothesis, check_method, ruled_out, evidence_ref?}."""
+    norm: list[dict[str, Any]] = []
+    for i, item in enumerate(candidates or []):
+        if not isinstance(item, dict):
+            raise OrchestrationError(f"simple_fix_candidates[{i}] must be an object")
+        hypothesis = item.get("hypothesis")
+        check_method = item.get("check_method")
+        if not isinstance(hypothesis, str) or not hypothesis.strip():
+            raise OrchestrationError(f"simple_fix_candidates[{i}] requires a non-empty `hypothesis`")
+        if not isinstance(check_method, str) or not check_method.strip():
+            raise OrchestrationError(f"simple_fix_candidates[{i}] requires a non-empty `check_method`")
+        ruled_out = item.get("ruled_out", False)
+        if not isinstance(ruled_out, bool):
+            raise OrchestrationError(f"simple_fix_candidates[{i}].ruled_out must be a boolean")
+        if ruled_out and not item.get("evidence_ref"):
+            raise OrchestrationError(
+                f"simple_fix_candidates[{i}] is marked ruled_out without an `evidence_ref` — "
+                "ruling out a hypothesis requires evidence"
+            )
+        entry: dict[str, Any] = {
+            "hypothesis": hypothesis.strip(),
+            "check_method": check_method.strip(),
+            "ruled_out": ruled_out,
+        }
+        if item.get("evidence_ref") is not None:
+            entry["evidence_ref"] = item["evidence_ref"]
+        norm.append(entry)
+    return norm
+
+
 @dataclass(slots=True)
 class BlockerReturn:
     blocker_id: str
@@ -106,7 +141,15 @@ class BlockerReturn:
     proposed_state: str
     resolved: bool = False
     resolution: dict[str, Any] | None = None
+    simple_fix_candidates: list[dict[str, Any]] = field(default_factory=list)
     schema: str = BLOCKER_RETURN_SCHEMA
+
+    @property
+    def structural_proposal_allowed(self) -> bool:
+        """G6 gate: structural proposals (re-layout, layer-count change) are
+        allowed only after every cheap hypothesis has been ruled out with
+        evidence. No candidates recorded => nothing rules the gate => allowed."""
+        return all(c.get("ruled_out") for c in self.simple_fix_candidates)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,6 +168,7 @@ class BlockerReturn:
             "proposed_state": self.proposed_state,
             "resolved": self.resolved,
             "resolution": self.resolution,
+            "simple_fix_candidates": list(self.simple_fix_candidates),
         }
 
 
@@ -160,6 +204,7 @@ def _orch_root(folder: str | Path) -> Path:
 def _ensure_dirs(root: Path) -> None:
     (root / _WP_REL_DIR).mkdir(parents=True, exist_ok=True)
     (root / _BLOCKER_REL_DIR).mkdir(parents=True, exist_ok=True)
+    (root / _EVIDENCE_REL_DIR).mkdir(parents=True, exist_ok=True)
 
 
 def _normalize_inputs(inputs: dict[str, Any] | None) -> dict[str, list[Any]]:
@@ -319,6 +364,7 @@ def return_blocker(
     recommended_owner: str = "user",
     proposed_state: str = "blocked",
     evidence: dict[str, Any] | None = None,
+    simple_fix_candidates: list[Any] | None = None,
 ) -> BlockerReturn:
     """A downstream layer returns a blocker against its work packet to C00.
 
@@ -362,6 +408,7 @@ def return_blocker(
         options=list(options or []),
         recommended_owner=recommended_owner,
         proposed_state=proposed_state,
+        simple_fix_candidates=_normalize_simple_fix_candidates(simple_fix_candidates),
     )
     (root / _BLOCKER_REL_DIR / f"{blocker.blocker_id}.json").write_text(
         json.dumps(blocker.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -391,6 +438,7 @@ def _blocker_from_data(data: dict[str, Any]) -> BlockerReturn:
         proposed_state=data.get("proposed_state", "blocked"),
         resolved=data.get("resolved", False),
         resolution=data.get("resolution"),
+        simple_fix_candidates=data.get("simple_fix_candidates", []),
     )
 
 
@@ -455,3 +503,177 @@ def ingest_blocker(
         note=note,
         resolution=blocker.resolution,
     )
+
+
+# ── Evidence returns (A3/DD-7: third spine artifact class) ─────────────
+
+
+@dataclass(slots=True)
+class EvidenceReturn:
+    """Measured validation evidence flowing back from a downstream layer to C00.
+
+    Mirrors WorkPacket/BlockerReturn persistence exactly: count-based IDs
+    (`<LAYER>-EV-0001`), JSON file under `_orchestration/evidence_returns/`,
+    append-only `log.jsonl` event, malformed payload => OrchestrationError.
+    """
+
+    evidence_id: str
+    packet_id: str
+    source_layer: str
+    envelope: dict[str, Any]  # ValidationEvidence.to_dict() shape
+    requirement_verdicts: list[dict[str, Any]] = field(default_factory=list)
+    resolved: bool = False
+    resolution: dict[str, Any] | None = None
+    schema: str = EVIDENCE_RETURN_SCHEMA
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "evidence_id": self.evidence_id,
+            "packet_id": self.packet_id,
+            "source_layer": self.source_layer,
+            "envelope": dict(self.envelope),
+            "requirement_verdicts": list(self.requirement_verdicts),
+            "resolved": self.resolved,
+            "resolution": self.resolution,
+        }
+
+
+def _next_evidence_id(root: Path, source_layer: str) -> str:
+    prefix = f"{source_layer}-EV-"
+    existing = (
+        sorted((root / _EVIDENCE_REL_DIR).glob(f"{prefix}*.json"))
+        if (root / _EVIDENCE_REL_DIR).exists()
+        else []
+    )
+    return f"{prefix}{len(existing) + 1:04d}"
+
+
+def _validate_requirement_verdicts(verdicts: list[Any] | None) -> list[dict[str, Any]]:
+    norm: list[dict[str, Any]] = []
+    for i, row in enumerate(verdicts or []):
+        if not isinstance(row, dict):
+            raise OrchestrationError(f"requirement_verdicts[{i}] must be an object")
+        key, verdict = row.get("requirement_key"), row.get("verdict")
+        if not isinstance(key, str) or not key.strip():
+            raise OrchestrationError(f"requirement_verdicts[{i}] requires a non-empty `requirement_key`")
+        if verdict not in ("pass", "fail"):
+            raise OrchestrationError(
+                f"requirement_verdicts[{i}].verdict must be 'pass' or 'fail' (an oracle execution "
+                f"outcome), got {verdict!r}"
+            )
+        entry: dict[str, Any] = {"requirement_key": key.strip(), "verdict": verdict}
+        if row.get("measured_value") is not None:
+            entry["measured_value"] = row["measured_value"]
+        if row.get("anchors"):
+            entry["anchors"] = list(row["anchors"])
+        norm.append(entry)
+    return norm
+
+
+def return_evidence(
+    folder: str | Path,
+    packet_id: str,
+    *,
+    envelope: dict[str, Any],
+    requirement_verdicts: list[Any] | None = None,
+) -> EvidenceReturn:
+    """A downstream layer returns measured validation evidence to C00 (A3).
+
+    `envelope` must be a ValidationEvidence dict (schema-checked); the source
+    layer is taken from the referenced packet. Malformed payloads fail fast
+    (EV_SCHEMA_INVALID family) and persist nothing — no spine pollution.
+    """
+    if not isinstance(envelope, dict) or not envelope:
+        raise OrchestrationError("EV_SCHEMA_INVALID: evidence return requires a non-empty `envelope` object")
+    if envelope.get("schema") != "bodesign.validation_evidence.v1":
+        raise OrchestrationError(
+            f"EV_SCHEMA_INVALID: envelope schema {envelope.get('schema')!r} unsupported "
+            "(expected bodesign.validation_evidence.v1)"
+        )
+    for required_key in ("tool", "inputs", "findings", "severity"):
+        if required_key not in envelope:
+            raise OrchestrationError(f"EV_SCHEMA_INVALID: envelope missing `{required_key}`")
+    verdicts = _validate_requirement_verdicts(requirement_verdicts)
+
+    root = _orch_root(folder)
+    packet = get_work_packet(root, packet_id)  # EV_PACKET_NOT_FOUND: fails fast on unknown packet
+    _ensure_dirs(root)
+
+    ev = EvidenceReturn(
+        evidence_id=_next_evidence_id(root, packet.target_layer),
+        packet_id=packet_id,
+        source_layer=packet.target_layer,
+        envelope=dict(envelope),
+        requirement_verdicts=verdicts,
+    )
+    (root / _EVIDENCE_REL_DIR / f"{ev.evidence_id}.json").write_text(
+        json.dumps(ev.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    _append_log(root, {
+        "event": "evidence.returned", "evidence_id": ev.evidence_id, "packet_id": packet_id,
+        "source_layer": packet.target_layer, "severity": envelope.get("severity"),
+        "requirement_verdicts_count": len(verdicts),
+    })
+    return ev
+
+
+def _evidence_from_data(data: dict[str, Any]) -> EvidenceReturn:
+    return EvidenceReturn(
+        evidence_id=data["evidence_id"],
+        packet_id=data["packet_id"],
+        source_layer=data["source_layer"],
+        envelope=data.get("envelope", {}),
+        requirement_verdicts=data.get("requirement_verdicts", []),
+        resolved=data.get("resolved", False),
+        resolution=data.get("resolution"),
+    )
+
+
+def get_evidence_return(folder: str | Path, evidence_id: str) -> EvidenceReturn:
+    root = _orch_root(folder)
+    return _evidence_from_data(_read_json(root / _EVIDENCE_REL_DIR / f"{evidence_id}.json", EVIDENCE_RETURN_SCHEMA))
+
+
+def list_evidence_returns(folder: str | Path, *, unresolved_only: bool = False) -> list[EvidenceReturn]:
+    root = _orch_root(folder)
+    e_dir = root / _EVIDENCE_REL_DIR
+    if not e_dir.exists():
+        return []
+    evs = [_evidence_from_data(_read_json(p, EVIDENCE_RETURN_SCHEMA)) for p in sorted(e_dir.glob("*-EV-*.json"))]
+    return [e for e in evs if not e.resolved] if unresolved_only else evs
+
+
+def ingest_evidence(folder: str | Path, evidence_id: str) -> dict[str, Any]:
+    """C00 consumes an evidence return: derives requirement verification-status
+    updates and (for fails) candidate follow-up dispatches.
+
+    Does NOT auto-execute anything — like ingest_blocker, this records the
+    consumption; opening a new work packet remains C00's explicit dispatch step
+    (existing dispatch_work_packet flow). Marks the evidence return resolved.
+    """
+    root = _orch_root(folder)
+    ev = get_evidence_return(root, evidence_id)
+    if ev.resolved:
+        raise OrchestrationError(f"evidence return {evidence_id} is already ingested")
+
+    status_updates = {row["requirement_key"]: row["verdict"] for row in ev.requirement_verdicts}
+    failed = [k for k, v in status_updates.items() if v == "fail"]
+
+    ev.resolved = True
+    ev.resolution = {"status_updates": status_updates, "ingested_by": "C00"}
+    (root / _EVIDENCE_REL_DIR / f"{evidence_id}.json").write_text(
+        json.dumps(ev.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    _append_log(root, {"event": "requirement.status_changed", "evidence_id": evidence_id,
+                       "updates": status_updates})
+    return {
+        "evidence_id": evidence_id,
+        "packet_id": ev.packet_id,
+        "requirement_status_updates": status_updates,
+        "failed_requirements": failed,
+        "note": (
+            "Verification statuses recorded; for failed requirements C00 may open a new work "
+            "packet via the existing dispatch flow — ingest never auto-executes fixes."
+        ),
+    }

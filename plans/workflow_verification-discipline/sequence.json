@@ -1,0 +1,302 @@
+[
+  {
+    "id": "SEQ1",
+    "name": "Requirement contractualization with unverifiable escalation",
+    "requirementRefs": [
+      "R1"
+    ],
+    "participants": [
+      {
+        "id": "P1",
+        "name": "Design Engineer",
+        "componentRef": null
+      },
+      {
+        "id": "P2",
+        "name": "Requirement Planner",
+        "componentRef": "C1"
+      },
+      {
+        "id": "P3",
+        "name": "Orchestration Spine",
+        "componentRef": "C5"
+      }
+    ],
+    "messages": [
+      {
+        "id": "MSG1",
+        "from": "P1",
+        "to": "P2",
+        "label": "submit natural-language spec",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG2",
+        "from": "P2",
+        "to": "P2",
+        "label": "extract requirements; bind metric/threshold/measurement_method/oracle_tool",
+        "kind": "self"
+      },
+      {
+        "id": "MSG3",
+        "from": "P2",
+        "to": "P1",
+        "label": "open_questions (items without measurable contract)",
+        "kind": "async"
+      },
+      {
+        "id": "MSG4",
+        "from": "P1",
+        "to": "P2",
+        "label": "answers / clarified thresholds",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG5",
+        "from": "P2",
+        "to": "P3",
+        "label": "persist RequirementContract set (verification_status=pending)",
+        "kind": "sync"
+      }
+    ]
+  },
+  {
+    "id": "SEQ2",
+    "name": "Design review gate before IR generation",
+    "requirementRefs": [
+      "R2"
+    ],
+    "participants": [
+      {
+        "id": "P1",
+        "name": "Design Engineer",
+        "componentRef": null
+      },
+      {
+        "id": "P4",
+        "name": "Design Review Gate",
+        "componentRef": "C2"
+      },
+      {
+        "id": "P3",
+        "name": "Orchestration Spine",
+        "componentRef": "C5"
+      }
+    ],
+    "messages": [
+      {
+        "id": "MSG6",
+        "from": "P3",
+        "to": "P4",
+        "label": "layout intent proposal + requirement contracts",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG7",
+        "from": "P4",
+        "to": "P4",
+        "label": "scenario walkthrough (power sequencing / reset chain / address conflicts / level compat / diff pairs)",
+        "kind": "self"
+      },
+      {
+        "id": "MSG8",
+        "from": "P4",
+        "to": "P3",
+        "label": "DesignReviewRecord verdict=APPROVE | APPROVE_WITH_CONCERNS",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG9",
+        "from": "P4",
+        "to": "P1",
+        "label": "verdict=REJECT → concerns surfaced for redesign",
+        "kind": "async"
+      }
+    ]
+  },
+  {
+    "id": "SEQ3",
+    "name": "Crosscheck divergence to evidence backflow",
+    "requirementRefs": [
+      "R3",
+      "R5",
+      "R6"
+    ],
+    "participants": [
+      {
+        "id": "P5",
+        "name": "Reference Crosschecker",
+        "componentRef": "C3"
+      },
+      {
+        "id": "P6",
+        "name": "Evidence Adapter",
+        "componentRef": "C4"
+      },
+      {
+        "id": "P3",
+        "name": "Orchestration Spine",
+        "componentRef": "C5"
+      },
+      {
+        "id": "P7",
+        "name": "KiCad Toolchain",
+        "componentRef": null
+      }
+    ],
+    "messages": [
+      {
+        "id": "MSG10",
+        "from": "P7",
+        "to": "P6",
+        "label": "native tool results (ERC/DRC/si_check JSON)",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG11",
+        "from": "P5",
+        "to": "P5",
+        "label": "compute CrossCheckDiff (per-dimension severity + first_divergence)",
+        "kind": "self"
+      },
+      {
+        "id": "MSG12",
+        "from": "P5",
+        "to": "P6",
+        "label": "CrossCheckDiff + four-part root-cause report",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG13",
+        "from": "P6",
+        "to": "P6",
+        "label": "wrap into ValidationEvidence envelope (raw_result preserved)",
+        "kind": "self"
+      },
+      {
+        "id": "MSG14",
+        "from": "P6",
+        "to": "P3",
+        "label": "evidence_return payload (bodesign.c00.evidence_return.v1)",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG15",
+        "from": "P3",
+        "to": "P3",
+        "label": "validate payload; fail fast on malformed; update requirement verification_status",
+        "kind": "self"
+      }
+    ]
+  },
+  {
+    "id": "SEQ4",
+    "name": "Cost-ordered debug ladder on verification failure",
+    "requirementRefs": [
+      "R4"
+    ],
+    "participants": [
+      {
+        "id": "P5",
+        "name": "Reference Crosschecker",
+        "componentRef": "C3"
+      },
+      {
+        "id": "P3",
+        "name": "Orchestration Spine",
+        "componentRef": "C5"
+      }
+    ],
+    "messages": [
+      {
+        "id": "MSG16",
+        "from": "P3",
+        "to": "P5",
+        "label": "verification failed → enter debug ladder",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG17",
+        "from": "P5",
+        "to": "P5",
+        "label": "rung 1: check trivial causes (units, net naming, pin mapping)",
+        "kind": "self"
+      },
+      {
+        "id": "MSG18",
+        "from": "P5",
+        "to": "P5",
+        "label": "rung 2: check single-component causes (footprint, value, orientation)",
+        "kind": "self"
+      },
+      {
+        "id": "MSG19",
+        "from": "P5",
+        "to": "P5",
+        "label": "rung 3: structural causes (topology, missing nets) — only after rungs 1-2 exhausted",
+        "kind": "self"
+      },
+      {
+        "id": "MSG20",
+        "from": "P5",
+        "to": "P3",
+        "label": "root-cause report (symptom / first_divergence / cause / fix)",
+        "kind": "sync"
+      }
+    ]
+  },
+  {
+    "id": "SEQ5",
+    "name": "Spine-derived workflow plan",
+    "requirementRefs": [
+      "R7"
+    ],
+    "participants": [
+      {
+        "id": "P1",
+        "name": "Design Engineer",
+        "componentRef": null
+      },
+      {
+        "id": "P8",
+        "name": "Workflow Plan Deriver",
+        "componentRef": "C6"
+      },
+      {
+        "id": "P3",
+        "name": "Orchestration Spine",
+        "componentRef": "C5"
+      }
+    ],
+    "messages": [
+      {
+        "id": "MSG21",
+        "from": "P1",
+        "to": "P8",
+        "label": "request workflow plan / readiness",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG22",
+        "from": "P8",
+        "to": "P3",
+        "label": "read spine state (packets + blockers + evidence_returns)",
+        "kind": "sync"
+      },
+      {
+        "id": "MSG23",
+        "from": "P8",
+        "to": "P8",
+        "label": "derive stage status; no fallback when spine uninitialized → explicit error",
+        "kind": "self"
+      },
+      {
+        "id": "MSG24",
+        "from": "P8",
+        "to": "P1",
+        "label": "ReferenceBoardWorkflowPlan (spine-derived, per-stage blockers)",
+        "kind": "sync"
+      }
+    ]
+  }
+]

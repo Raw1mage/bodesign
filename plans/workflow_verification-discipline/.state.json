@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "state": "verified",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-12T08:05:10.679Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-12T08:49:09.892Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "All designed-state artifacts complete: spec.md (7 requirements GIVEN/WHEN/THEN), design.md (DD-1~DD-9, Goals/Non-Goals + Risks/Trade-offs), data-schema.json (4 contracts), idef0.json + grafcet.json (canonical Steps/Gates/Edges) + c4.json validated and rendered via drawmiat, sequence.json (5 scenarios)"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-12T09:00:05.415Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Planned-state artifacts complete (all validator headings fixed): tasks.md (5 phases), handoff.md (Required Reads / Stop Gates In Force), test-vectors.json (14 TV), errors.md (Error Catalogue), observability.md (Events / Metrics)"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-12T09:55:16.793Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者批准進入 implementing（handoff checklist 最後一項）；八項 requirement + DD-1~13 + 19 TV 就緒"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-12T11:09:11.875Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "五 phase 全部完成（tasks.md 全 [x]）；484 tests 全綠（新增 92 tests 覆蓋 19 條 TV）；architecture.md 已全貌同步；handoff.md 附 Validation Evidence"
+    }
+  ]
+}
