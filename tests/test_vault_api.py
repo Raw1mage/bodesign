@@ -43,7 +43,8 @@ class VaultApiTestCase(unittest.TestCase):
 class ToolRegistryTests(VaultApiTestCase):
     def test_vault_tools_registered_in_core_group(self):
         for name in ("bodesign_vault_ingest", "bodesign_vault_query",
-                     "bodesign_vault_spec_check", "bodesign_vault_queue"):
+                     "bodesign_vault_spec_check", "bodesign_vault_queue",
+                     "bodesign_vault_diagnostics"):
             spec = self.server.TOOLS_BY_NAME.get(name)
             self.assertIsNotNone(spec, name)
             self.assertEqual("core", spec["group"], name)
@@ -151,6 +152,22 @@ class SpecCheckAndQueueTests(VaultApiTestCase):
         self.assertTrue(queue["ok"], queue)
         mpns = [row["mpn"] for row in queue["result"]["queue"]]
         self.assertIn("AP2112K-3.3", mpns)
+
+    def test_diagnostics_reports_live_vault_without_temp_fallback(self):
+        with self.vault_api.open_repository() as repo:
+            repo.upsert_component("AP2112K-3.3", actor=ACTOR)
+            repo.record_gap("AP2112K-3.3", "datasheet", "datasheet missing", actor=ACTOR)
+        result = self.server.run_tool("bodesign_vault_diagnostics", {"limit": 5})
+        self.assertTrue(result["ok"], result)
+        diagnostics = result["result"]
+        self.assertEqual("ok", diagnostics["status"])
+        self.assertEqual(self.vault_dir, diagnostics["vault_dir"])
+        self.assertTrue(diagnostics["db_exists"])
+        self.assertEqual(1, diagnostics["queue_count"])
+        self.assertEqual("AP2112K-3.3", diagnostics["queue"][0]["mpn"])
+        self.assertIn("docker compose run", diagnostics["safe_diagnostic_command"])
+        self.assertEqual("policy-gated-until-configured",
+                         diagnostics["external_fetch_policy"]["implementation_state"])
 
 
 class HttpContractTests(VaultApiTestCase):

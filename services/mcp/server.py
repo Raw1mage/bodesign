@@ -232,6 +232,48 @@ def _h_render_board_model(a: dict) -> Any:
                               width=a.get("width", 1700), height=a.get("height", 1300)).to_dict()
 
 
+def _h_c02_render_enclosure(a: dict) -> Any:
+    from bodesign_eda_bridge import render_enclosure_model
+    return render_enclosure_model(a["stl_path"], a["out_dir"],
+                                  views=tuple(a.get("views", ["top", "iso"])),
+                                  width=a.get("width", 1700), height=a.get("height", 1300),
+                                  color=a.get("color")).to_dict()
+
+
+def _h_c02_plan_intent(a: dict) -> Any:
+    from bodesign_workflow_core import plan_c02_intent
+    return plan_c02_intent(a["spec_text"], a.get("answers"))
+
+
+def _h_c02_voice_to_design(a: dict) -> Any:
+    from bodesign_workflow_core import voice_to_design
+    result = voice_to_design(a["out_dir"], a["spec_text"], a.get("answers"), bool(a.get("approve", False)))
+    if result.get("status") != "approved":
+        return result
+    from bodesign_eda_bridge import render_enclosure_model
+    stl_rel = (result.get("stl") or {}).get("stl_path")
+    if not stl_rel:
+        return {**result, "render": {"status": "error", "note": "approved but no stl_path to render"}}
+    stl_abs = str(Path(a["out_dir"]) / stl_rel)
+    # CMF colour: explicit handler arg wins, else the colour the voice plan extracted.
+    cmf_color = a.get("color")
+    if cmf_color is None:
+        cmf_color = ((result.get("plan") or {}).get("gen_params") or {}).get("cmf_color")
+    render = render_enclosure_model(stl_abs, str(Path(a["out_dir"]) / "C02-ME" / "render"),
+                                    views=tuple(a.get("views", ["top", "iso"])),
+                                    width=a.get("width", 1700), height=a.get("height", 1300),
+                                    color=cmf_color).to_dict()
+    pipeline = list(result.get("pipeline", []))
+    if render.get("status") == "rendered":
+        pipeline.append("rendered")
+    return {**result, "pipeline": pipeline, "render": render, "images": render.get("images", [])}
+
+
+def _h_c02_project_svg(a: dict) -> Any:
+    from bodesign_workflow_core import export_c02_projection_svg
+    return export_c02_projection_svg(a["out_dir"], a.get("openscad_bin"), bool(a.get("cut", False))).to_dict()
+
+
 def _h_c03_export_mech_constraints(a: dict) -> Any:
     from bodesign_workflow_core import export_c03_mechanical_constraints
     return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
@@ -303,6 +345,11 @@ def _h_vault_spec_check(a: dict) -> Any:
 def _h_vault_queue(a: dict) -> Any:
     return _vault_guard(lambda: _vault_api().vault_queue(
         limit=int(a.get("limit", 80)), vault_dir=a.get("vault_dir")))
+
+
+def _h_vault_diagnostics(a: dict) -> Any:
+    return _vault_guard(lambda: _vault_api().vault_diagnostics(
+        limit=int(a.get("limit", 20)), vault_dir=a.get("vault_dir")))
 
 
 # ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
@@ -739,6 +786,25 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"glb_path": _STR, "out_dir": _STR,
                 "views": {"type": "array", "items": _STR}, "width": {"type": "integer"}, "height": {"type": "integer"}},
                 "required": ["glb_path", "out_dir"]}},
+    {"name": "bodesign_c02_render_enclosure", "handler": _h_c02_render_enclosure,
+     "description": "Render a generated C02 enclosure STL (Enclosure.stl from c02_export_stl) to top/iso design-sketch PNGs — closes the 'voice-to-design' loop so a generated draft is *viewable*. Loads the STL natively via trimesh and rasterises offscreen via pyrender/EGL on the me worker (same backend as render_board_model). STL is already in mm; faces get a neutral enclosure grey since STL carries no colour, unless an optional CMF `color` (hex #RRGGBB[AA] / named EN+中文 e.g. white/黑/silver/銀 / RGB(A) array) is given for a single-colour design sketch. Output is marked prototype draft, not ME approval. Degrades to no-deps/no-gl rather than crashing.",
+     "schema": {"type": "object", "properties": {"stl_path": _STR, "out_dir": _STR,
+                "views": {"type": "array", "items": _STR}, "width": {"type": "integer"}, "height": {"type": "integer"},
+                "color": _STR},
+                "required": ["stl_path", "out_dir"]}},
+    {"name": "bodesign_c02_plan_intent", "handler": _h_c02_plan_intent,
+     "description": "Extract C02 enclosure constraints from a spoken natural-language product description (voice-to-design front end). Deterministic keyword + regex extraction binds the 8 C02 mechanical fields (board outline W×H, component heights, mounting holes, connector openings, heat sources, antenna keepouts, battery, environment); each field is answered/stated/missing. Never guesses dimensions — missing board/heights or wall/clearance surface as a next_question. Returns {status (needs-clarification|ready-for-approval), draft+field_status, gen_params, readiness_pct, can_generate_cad_source, next_question, missing}. Pure analysis: generates no CAD.",
+     "schema": {"type": "object", "properties": {"spec_text": _STR, "answers": {"type": "object"}}, "required": ["spec_text"]}},
+    {"name": "bodesign_c02_voice_to_design", "handler": _h_c02_voice_to_design,
+     "description": "Orchestrate the full voice-to-design loop: spoken intent → clarify → approval gate → enclosure source → STL → top/iso render. Calls plan_c02_intent; if constraints are incomplete returns the clarifying plan (no CAD); if ready and approve!=true returns the constraint set for confirmation (no CAD). Only with approve=true AND complete constraints+wall/clearance does it run generate_openscad → export_stl → render_enclosure, returning {status:approved, pipeline, images}. Honours the C02 approval gate and the no-guess-dimensions rule; degrades honestly when OpenSCAD CLI or GL is absent.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "spec_text": _STR, "answers": {"type": "object"},
+                "approve": {"type": "boolean"}, "views": {"type": "array", "items": _STR},
+                "width": {"type": "integer"}, "height": {"type": "integer"}, "color": _STR},
+                "required": ["out_dir", "spec_text"]}},
+    {"name": "bodesign_c02_project_svg", "handler": _h_c02_project_svg,
+     "description": "Project the generated 3D enclosure (Enclosure.stl from c02_export_stl) to a clean 2D vector SVG via OpenSCAD projection() — the 2D drawing is DERIVED from the 3D model (same source, no drift), so it is exact geometric paths, not a messy raster trace. Writes a wrapper .scad doing projection(cut=<cut>) import(Enclosure.stl) then runs openscad -o Enclosure.svg on the me worker. cut=false gives the outline silhouette (design view); cut=true a planar z=0 cross-section. Fails fast (no fake SVG) when the STL or OpenSCAD CLI is absent. Returns {status (source_missing|export_unavailable|export_failed|svg_exported), svg_path, wrapper_path, vector_ready}.",
+     "schema": {"type": "object", "properties": {"out_dir": _STR, "openscad_bin": _STR, "cut": {"type": "boolean"}},
+                "required": ["out_dir"]}},
     {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
      "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
@@ -762,6 +828,9 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"mpn": _STR, "field": _STR, "claimed_value": {}, "vault_root": _STR, "vault_dir": _STR}, "required": ["mpn", "field"]}},
     {"name": "bodesign_vault_queue", "handler": _h_vault_queue,
      "description": "Server vault knowledge queue: components with open knowledge gaps ranked by DD-9 priority (usage frequency x gap severity). The 'what to research next' worklist. Contract identical to GET /vault/queue.",
+     "schema": {"type": "object", "properties": {"limit": {"type": "integer"}, "vault_dir": _STR}}},
+    {"name": "bodesign_vault_diagnostics", "handler": _h_vault_diagnostics,
+     "description": "Diagnose the live server-side Component Vault through the supported storage boundary: reports configured vault dir, db presence/size, queue_count, queue preview, and the safe compose-run diagnostic command. It never falls back to a temporary vault or Docker host volume path. Contract identical to GET /vault/diagnostics.",
      "schema": {"type": "object", "properties": {"limit": {"type": "integer"}, "vault_dir": _STR}}},
     {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
      "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
@@ -863,6 +932,9 @@ _ME_GROUP_TOOLS = {
     "bodesign_c02_export_skp",
     "bodesign_c02_export_step",
     "bodesign_render_board_model",
+    "bodesign_c02_render_enclosure",
+    "bodesign_c02_voice_to_design",
+    "bodesign_c02_project_svg",
 }
 # Electronics engineering (C03/C04/C06): tools whose handlers need KiCad
 # (kicad-cli/pcbnew) or ngspice. Pure-python EE-adjacent tools (pin_allocation,
@@ -1519,6 +1591,10 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         return await asyncio.to_thread(lambda: _vault_http(
             lambda api: api.vault_spec_check(mpn, spec_field, claimed_value=claimed, vault_root=vault_root)))
 
+    async def vault_diagnostics_ep(request: Request) -> Response:
+        limit = int(request.query_params.get("limit", "20"))
+        return await asyncio.to_thread(lambda: _vault_http(lambda api: api.vault_diagnostics(limit=limit)))
+
     app = Starlette(routes=[
         Route("/", landing),
         Route("/tools", tools_index),
@@ -1534,6 +1610,7 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         Route("/vault/search", vault_search_ep),
         Route("/vault/queue", vault_queue_ep),
         Route("/vault/spec-check", vault_spec_check_ep),
+        Route("/vault/diagnostics", vault_diagnostics_ep),
         Mount("/mcp", app=handle_mcp),
     ])
 

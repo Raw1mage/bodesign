@@ -13,10 +13,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict
+import os
 from typing import Any, Iterator
 
 from bodesign_component_kb.repository import VaultRepository, VaultRepositoryError
-from bodesign_component_kb.storage import VaultError, open_vault
+from bodesign_component_kb.storage import VAULT_DIR_ENV, VaultError, open_vault
 from bodesign_component_kb.vault import spec_check as _spec_check
 
 # HTTP status mapping for VAULT-Exxx codes (errors.md):
@@ -159,6 +160,42 @@ def vault_queue(limit: int = 80, vault_dir: str | None = None) -> dict[str, Any]
     """GET /vault/queue: DD-9 priority-ranked knowledge queue."""
     with open_repository(vault_dir) as repo:
         return {"status": "ok", "queue": repo.knowledge_queue(limit=limit)}
+
+
+def vault_diagnostics(limit: int = 20, vault_dir: str | None = None) -> dict[str, Any]:
+    """GET /vault/diagnostics | bodesign_vault_diagnostics.
+
+    Reports the live server-vault status through the same storage boundary as
+    normal tools. It never falls back to a temp vault or Docker host paths.
+    """
+    configured_dir = os.environ.get(VAULT_DIR_ENV) or vault_dir
+    storage = open_vault(vault_dir)
+    try:
+        repo = VaultRepository(storage)
+        queue = repo.knowledge_queue(limit=limit)
+        db_path = storage.db_path
+        return {
+            "status": "ok",
+            "vault_dir": str(storage.vault_dir),
+            "configured_vault_dir": configured_dir,
+            "db_path": str(db_path),
+            "db_exists": db_path.exists(),
+            "db_size_bytes": db_path.stat().st_size if db_path.exists() else 0,
+            "queue_count": len(queue),
+            "queue": queue,
+            "external_fetch_policy": {
+                "automatic_downloads_approved_by_user": True,
+                "implementation_state": "policy-gated-until-configured",
+                "note": "Diagnostics report vault state only; they do not fetch external documents.",
+            },
+            "safe_diagnostic_command": (
+                "docker compose run --rm -e PYTHONPATH=packages/shared:packages/component-kb:services/mcp "
+                "bodesign python3 -c 'from services.mcp import vault_api; "
+                "import json; print(json.dumps(vault_api.vault_diagnostics(), ensure_ascii=False, indent=2))'"
+            ),
+        }
+    finally:
+        storage.close()
 
 
 def vault_query(payload: dict[str, Any]) -> dict[str, Any]:
