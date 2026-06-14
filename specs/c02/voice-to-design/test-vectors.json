@@ -1,0 +1,82 @@
+[
+  {
+    "name": "extract_dimensions_wxh",
+    "input": { "spec_text": "我要一個 50×30mm 的盒子，側面開 USB-C，室內用" },
+    "expect": {
+      "draft.board_outline": { "width_mm": 50, "height_mm": 30 },
+      "field_status.board_outline": "stated",
+      "field_status.connector_openings": "stated",
+      "field_status.environment_targets": "stated",
+      "field_status.component_heights": "missing",
+      "next_question.key": "component_heights",
+      "status": "needs-clarification"
+    }
+  },
+  {
+    "name": "extract_height_with_unit",
+    "input": { "spec_text": "盒子 60x40，最高的元件大概 15 公釐" },
+    "expect": {
+      "draft.board_outline": { "width_mm": 60, "height_mm": 40 },
+      "draft.component_heights": [{ "height_mm": 15 }],
+      "field_status.component_heights": "stated"
+    }
+  },
+  {
+    "name": "missing_dimension_not_guessed",
+    "input": { "spec_text": "我要一個小盒子裝感測器" },
+    "expect": {
+      "field_status.board_outline": "missing",
+      "next_question.key": "board_outline",
+      "next_question.blocks_source": true,
+      "status": "needs-clarification",
+      "can_generate_cad_source": false
+    }
+  },
+  {
+    "name": "answers_merge_promotes_status",
+    "input": {
+      "spec_text": "50x30 的盒子，元件高 12mm",
+      "answers": { "board_outline": "50x30", "component_heights": "12mm" }
+    },
+    "expect": {
+      "field_status.board_outline": "answered",
+      "field_status.component_heights": "answered",
+      "can_generate_cad_source": true
+    }
+  },
+  {
+    "name": "secondary_missing_does_not_block",
+    "input": { "spec_text": "盒子 50x30，元件高 12mm，壁厚 2mm 間隙 1mm" },
+    "expect": {
+      "can_generate_cad_source": true,
+      "field_status.heat_sources": "missing",
+      "field_status.antenna_keepouts": "missing",
+      "status": "ready-for-approval",
+      "note": "次要約束缺失不擋 source 草稿（對齊 38% 實跑）"
+    }
+  },
+  {
+    "name": "approval_gate_not_auto_generate",
+    "input": {
+      "spec_text": "盒子 50x30，元件高 12mm，壁厚 2mm，間隙 1mm，蓋間隙 1mm",
+      "approve": false
+    },
+    "expect": {
+      "status": "ready-for-approval",
+      "generated_source": false,
+      "note": "approve=false → 只回約束集待確認，不自動生 CAD（DD-4）"
+    }
+  },
+  {
+    "name": "full_loop_approved",
+    "input": {
+      "spec_text": "盒子 50x30，元件高 12mm，壁厚 2mm，間隙 1mm，蓋間隙 1mm，側面 USB-C，室內",
+      "approve": true
+    },
+    "expect": {
+      "status": "approved",
+      "pipeline": ["source_generated", "stl_exported", "rendered"],
+      "images_count": 2
+    }
+  }
+]

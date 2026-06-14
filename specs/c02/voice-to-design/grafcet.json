@@ -1,0 +1,122 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Idle — awaiting spoken design needs",
+    "LinkInputType": ["convergence_or"],
+    "LinkInputNumber": [8, 9],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["spoken needs submitted"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Extract spoken intent into C02 constraint draft (keyword-binding, c03 schema)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["draft extracted"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Assess constraint readiness (present/missing, can_generate_cad_source)",
+    "LinkInputType": ["convergence_or"],
+    "LinkInputNumber": [1, 3],
+    "LinkOutputNumber": [3, 4],
+    "LinkOutputType": "divergence_or",
+    "Condition": [],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Ask next clarifying question; merge answer; recompute readiness (no guessing)",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["key constraint missing"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Generate enclosure OpenSCAD source after user approves constraint set",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["key constraints present AND user approved"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Export printable STL via OpenSCAD CLI",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["scad source ready"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A6",
+    "StepType": "normal",
+    "StepAction": "Render enclosure: trimesh load STL into pyrender",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [5],
+    "LinkOutputNumber": [7, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": [],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A6",
+    "StepType": "normal",
+    "StepAction": "Emit design view (top/iso PNG) + STL; return success",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [6],
+    "LinkOutputNumber": [8],
+    "LinkOutputType": "track",
+    "Condition": ["GL render available"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 8,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Deliver design package; await next request",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [7],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["delivered"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 9,
+    "ModuleRef": "A6",
+    "StepType": "normal",
+    "StepAction": "Report no-gl/no-deps degrade with STL still available (no fake image)",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [6],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["GL unavailable"],
+    "SubGrafcet": []
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "diagram_title": "Voice-to-Enclosure Pipeline",
+  "diagram_level": "component",
+  "diagram_layout": "top_down",
+  "scope": { "type": "container", "id": "CT1" },
+  "persons": [
+    { "id": "P1", "name": "Designer / User", "description": "口述產品結構需求、答覆澄清、確認約束、收設計稿", "external": true }
+  ],
+  "systems": [
+    { "id": "SYS1", "name": "bodesign MCP Server", "description": "C00–C07 硬體設計生命週期 MCP", "external": false }
+  ],
+  "containers": [
+    { "id": "CT1", "type": "api", "name": "C02 voice-to-design", "technology": "Python", "description": "C02 口述→3D外殼設計編排", "systemRef": "SYS1" }
+  ],
+  "components": [
+    { "id": "C1", "type": "none", "name": "Intent Extractor", "technology": "keyword-binding", "description": "口述→C02約束草稿（moduleRef A1，仿plan_design_intent）", "containerRef": "CT1" },
+    { "id": "C2", "type": "none", "name": "Readiness Assessor", "technology": "c02_readiness", "description": "算完整度+缺項（moduleRef A2）", "containerRef": "CT1" },
+    { "id": "C3", "type": "none", "name": "Clarification Loop", "technology": "c01_next_question style", "description": "反問補全，不猜尺寸（moduleRef A3）", "containerRef": "CT1" },
+    { "id": "C4", "type": "none", "name": "OpenSCAD Generator", "technology": "c02_generate_openscad", "description": "約束→實體外殼source（moduleRef A4）", "containerRef": "CT1" },
+    { "id": "C5", "type": "none", "name": "STL Exporter", "technology": "c02_export_stl + OpenSCAD CLI", "description": "source→真STL（moduleRef A5）", "containerRef": "CT1" },
+    { "id": "C6", "type": "none", "name": "Enclosure Renderer", "technology": "trimesh + pyrender", "description": "STL→top/iso設計稿（moduleRef A6）", "containerRef": "CT1" }
+  ],
+  "relationships": [
+    { "id": "R1", "source": "P1", "target": "CT1", "description": "口述需求", "technology": "MCP", "position": "down" },
+    { "id": "R2", "source": "C1", "target": "C2", "description": "constraint draft", "technology": "call", "position": "down" },
+    { "id": "R3", "source": "C2", "target": "C3", "description": "missing list", "technology": "call", "position": "down" },
+    { "id": "R4", "source": "C3", "target": "C1", "description": "answered constraints (loop)", "technology": "call", "position": "up" },
+    { "id": "R5", "source": "C2", "target": "C4", "description": "confirmed set", "technology": "call", "position": "down" },
+    { "id": "R6", "source": "C4", "target": "C5", "description": "Enclosure.scad", "technology": "call", "position": "down" },
+    { "id": "R7", "source": "C5", "target": "C6", "description": "Enclosure.stl", "technology": "call", "position": "down" },
+    { "id": "R8", "source": "C6", "target": "P1", "description": "design view + STL", "technology": "file", "position": "right" }
+  ]
+}

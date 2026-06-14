@@ -1,0 +1,30 @@
+{
+  "diagram_title": "C01 Design Vector Emitter",
+  "diagram_level": "component",
+  "diagram_layout": "top_down",
+  "scope": { "type": "container", "id": "CT1" },
+  "persons": [
+    { "id": "P1", "name": "ID Designer / User", "description": "提供 C01 描述偏好，並接手可編輯 SVG", "external": true }
+  ],
+  "systems": [
+    { "id": "SYS1", "name": "bodesign MCP Server", "description": "C00–C07 硬體設計生命週期 MCP", "external": false }
+  ],
+  "containers": [
+    { "id": "CT1", "type": "api", "name": "workflow-core C01", "technology": "Python", "description": "C01 工業設計工作流模組", "systemRef": "SYS1" }
+  ],
+  "components": [
+    { "id": "C1", "type": "none", "name": "Answer State Reader", "technology": "c01_id_package.py", "description": "讀取 answer_state.json 並判定描述完整度（moduleRef A1）", "containerRef": "CT1" },
+    { "id": "C2", "type": "none", "name": "Glyph Library", "technology": "deterministic SVG symbols", "description": "外殼原型 + 外露元件 symbol 庫（moduleRef A2）", "containerRef": "CT1" },
+    { "id": "C3", "type": "none", "name": "Layout Composer", "technology": "LLM controlled assembly", "description": "圖元佈局 + 面板網格 + CMF 套色（moduleRef A3）", "containerRef": "CT1" },
+    { "id": "C4", "type": "none", "name": "SVG Assembler", "technology": "Python", "description": "分層 SVG 組裝，元件包成命名 group（moduleRef A4）", "containerRef": "CT1" },
+    { "id": "C5", "type": "none", "name": "Vector Schema Validator", "technology": "Python", "description": "驗證圖層命名與元件 group 齊全（moduleRef A5）", "containerRef": "CT1" }
+  ],
+  "relationships": [
+    { "id": "R1", "source": "P1", "target": "CT1", "description": "呼叫 c01_emit_design_vector", "technology": "MCP", "position": "down" },
+    { "id": "R2", "source": "C1", "target": "C2", "description": "validated description fields", "technology": "call", "position": "down" },
+    { "id": "R3", "source": "C2", "target": "C3", "description": "selected symbols + placeholders", "technology": "call", "position": "down" },
+    { "id": "R4", "source": "C3", "target": "C4", "description": "structured layout + CMF decision", "technology": "call", "position": "down" },
+    { "id": "R5", "source": "C4", "target": "C5", "description": "candidate layered SVG", "technology": "call", "position": "down" },
+    { "id": "R6", "source": "C5", "target": "P1", "description": "editable Design_Vector.svg + report", "technology": "file", "position": "right" }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "c02_voice-to-design data contracts",
+  "description": "口述→3D外殼設計稿的資料契約：口述輸入、抽取草稿、澄清迴圈、渲染結果。抽取目標 schema 對齊 c03_export_mechanical_constraints。",
+  "definitions": {
+    "SpokenIntentInput": {
+      "type": "object",
+      "description": "使用者口述（自然語言文字）+ 已累積答覆",
+      "properties": {
+        "spec_text": { "type": "string", "description": "自然語言產品結構需求口述" },
+        "answers": { "type": "object", "description": "前幾輪澄清問題的答覆（key=約束欄位）", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["spec_text"]
+    },
+    "C02ConstraintDraft": {
+      "type": "object",
+      "description": "抽取出的 C02 約束草稿，對齊 c03_export_mechanical_constraints 欄位",
+      "properties": {
+        "board_outline": { "type": "object", "properties": { "width_mm": { "type": "number" }, "height_mm": { "type": "number" } } },
+        "component_heights": { "type": "array", "items": { "type": "object", "properties": { "ref": { "type": "string" }, "height_mm": { "type": "number" } } } },
+        "mounting_holes": { "type": "array", "items": { "type": "object" } },
+        "connector_openings": { "type": "array", "items": { "type": "object" } },
+        "heat_sources": { "type": "array", "items": { "type": "object" } },
+        "antenna_keepouts": { "type": "array", "items": { "type": "object" } },
+        "battery_envelope": { "type": "object" },
+        "environment_targets": { "type": "object" },
+        "field_status": {
+          "type": "object",
+          "description": "每欄位三態（仿 plan_design_intent）",
+          "additionalProperties": { "type": "string", "enum": ["answered", "stated", "missing"] }
+        }
+      }
+    },
+    "ClarifyingQuestion": {
+      "type": "object",
+      "description": "對缺失關鍵約束的反問（仿 c01_next_question）",
+      "properties": {
+        "key": { "type": "string", "description": "對應的約束欄位" },
+        "label": { "type": "string" },
+        "question": { "type": "string" },
+        "blocks_source": { "type": "boolean", "description": "true=此約束缺失會擋生 source（如壁厚/板框）；false=次要約束，缺失不擋草稿" }
+      },
+      "required": ["key", "question", "blocks_source"]
+    },
+    "IntentPlanResult": {
+      "type": "object",
+      "description": "口述抽取+readiness 的回傳",
+      "properties": {
+        "status": { "type": "string", "enum": ["needs-clarification", "ready-for-approval", "approved"] },
+        "draft": { "$ref": "#/definitions/C02ConstraintDraft" },
+        "readiness_pct": { "type": "integer" },
+        "can_generate_cad_source": { "type": "boolean" },
+        "next_question": { "anyOf": [{ "$ref": "#/definitions/ClarifyingQuestion" }, { "type": "null" }] },
+        "missing": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["status", "readiness_pct", "can_generate_cad_source"]
+    },
+    "EnclosureRenderResult": {
+      "type": "object",
+      "description": "c02_render_enclosure 回傳（沿用既有 ModelRenderResult 形狀）",
+      "properties": {
+        "source": { "type": "string", "description": "STL 路徑" },
+        "status": { "type": "string", "enum": ["rendered", "no-deps", "no-gl", "empty", "error"] },
+        "images": { "type": "array", "items": { "type": "string" }, "description": "top/iso PNG 路徑" },
+        "bounds_mm": { "type": ["array", "null"], "items": { "type": "number" } },
+        "note": { "type": "string", "description": "degrade 原因（no-gl/no-deps 時）" }
+      },
+      "required": ["source", "status"]
+    }
+  }
+}

@@ -153,25 +153,15 @@ def _decode_mesh(glb_path):
     return np.vstack(verts), np.vstack(faces), np.vstack(colours)
 
 
-def render_board_model(glb_path: str | Path, out_dir: str | Path,
-                       views: tuple[str, ...] = ("top", "iso"),
-                       width: int = 1700, height: int = 1300) -> ModelRenderResult:
-    src = Path(glb_path)
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
-    try:
-        import numpy as np  # noqa: F401
-        decoded = _decode_mesh(src)
-    except ImportError as exc:
-        return ModelRenderResult(str(src), "no-deps", note=f"missing parser/draco dep: {exc}")
-    except Exception as exc:  # pragma: no cover - upstream parse variance
-        return ModelRenderResult(str(src), "error", note=f"decode failed: {exc}")
-    if decoded is None:
-        return ModelRenderResult(str(src), "empty", note="no draco primitives decoded")
+def _render_mesh_views(V, F, C, out: Path, stem: str,
+                       views: tuple[str, ...], width: int, height: int):
+    """Rasterise (vertices, faces, vertex_colours) to top/iso PNGs via pyrender/EGL.
 
+    Shared rendering backend for both the glTF board path and the STL enclosure
+    path — the only difference upstream is how V/F/C were decoded. Returns
+    (images, status, note); status is "rendered" | "no-deps" | "no-gl".
+    """
     import numpy as np
-    V, F, C = decoded
     lo, hi = V.min(0), V.max(0)
     centre = (lo + hi) / 2
     size = float(np.linalg.norm(hi - lo)) or 1.0
@@ -181,8 +171,7 @@ def render_board_model(glb_path: str | Path, out_dir: str | Path,
         import pyrender
         from PIL import Image
     except ImportError as exc:
-        return ModelRenderResult(str(src), "no-deps", primitive_count=len(F),
-                                 note=f"render dep missing: {exc}")
+        return [], "no-deps", f"render dep missing: {exc}"
 
     try:
         mesh = pyrender.Mesh.from_trimesh(
@@ -210,15 +199,164 @@ def render_board_model(glb_path: str | Path, out_dir: str | Path,
             renderer = pyrender.OffscreenRenderer(width, height)
             colour, _ = renderer.render(scene)
             renderer.delete()
-            path = out / f"{src.stem}_{name}.png"
+            path = out / f"{stem}_{name}.png"
             Image.fromarray(colour).save(path)
             images.append(str(path))
     except Exception as exc:  # pragma: no cover - GL/EGL availability varies
-        return ModelRenderResult(str(src), "no-gl", primitive_count=len(F),
-                                 note=f"offscreen GL render failed: {exc}")
+        return [], "no-gl", f"offscreen GL render failed: {exc}"
+
+    return images, "rendered", ""
+
+
+def render_board_model(glb_path: str | Path, out_dir: str | Path,
+                       views: tuple[str, ...] = ("top", "iso"),
+                       width: int = 1700, height: int = 1300) -> ModelRenderResult:
+    src = Path(glb_path)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+    try:
+        import numpy as np  # noqa: F401
+        decoded = _decode_mesh(src)
+    except ImportError as exc:
+        return ModelRenderResult(str(src), "no-deps", note=f"missing parser/draco dep: {exc}")
+    except Exception as exc:  # pragma: no cover - upstream parse variance
+        return ModelRenderResult(str(src), "error", note=f"decode failed: {exc}")
+    if decoded is None:
+        return ModelRenderResult(str(src), "empty", note="no draco primitives decoded")
+
+    import numpy as np
+    V, F, C = decoded
+    lo, hi = V.min(0), V.max(0)
+
+    images, status, note = _render_mesh_views(V, F, C, out, src.stem, views, width, height)
+    if status != "rendered":
+        return ModelRenderResult(str(src), status, primitive_count=len(F), note=note)
 
     return ModelRenderResult(
         str(src), "rendered", images=images,
         bounds_mm=[round(float(x) * 1000, 2) for x in (*lo, *hi)],  # gltf metres -> mm
         primitive_count=len(F),
         note="rendered from the published 3D board model (real board, not auto-generated)")
+
+
+# Named CMF colours (EN + 中文) -> RGB. Single-colour design intent only; not a
+# material/PBR system. Alpha defaults to 255 (opaque) unless a #RRGGBBAA hex is given.
+_CMF_COLOR_NAMES = {
+    "white": (245, 246, 248), "白": (245, 246, 248), "白色": (245, 246, 248),
+    "black": (28, 30, 34), "黑": (28, 30, 34), "黑色": (28, 30, 34),
+    "grey": (176, 180, 188), "gray": (176, 180, 188), "灰": (176, 180, 188), "灰色": (176, 180, 188),
+    "silver": (200, 204, 209), "銀": (200, 204, 209), "銀色": (200, 204, 209),
+    "red": (200, 60, 55), "紅": (200, 60, 55), "紅色": (200, 60, 55),
+    "green": (60, 160, 90), "綠": (60, 160, 90), "綠色": (60, 160, 90),
+    "blue": (60, 110, 200), "藍": (60, 110, 200), "藍色": (60, 110, 200),
+    "navy": (35, 55, 110), "深藍": (35, 55, 110),
+    "orange": (230, 140, 50), "橘": (230, 140, 50), "橘色": (230, 140, 50), "橙": (230, 140, 50),
+    "yellow": (235, 205, 60), "黃": (235, 205, 60), "黃色": (235, 205, 60),
+}
+
+_DEFAULT_ENCLOSURE_RGBA = (176, 180, 188, 255)  # neutral enclosure grey
+
+
+def _resolve_cmf_color(color) -> tuple[int, int, int, int] | None:
+    """Resolve a CMF colour spec to an (R,G,B,A) tuple of ints 0..255, or None.
+
+    Accepts:
+      - None                       -> None (caller keeps neutral grey)
+      - "#RRGGBB" / "#RRGGBBAA"     -> parsed hex (A defaults 255)
+      - a named colour (EN/中文)    -> from _CMF_COLOR_NAMES, A=255
+      - (r,g,b) / (r,g,b,a) tuple   -> clamped to 0..255 ints
+    Returns None on any unparseable input — the caller then falls back to grey
+    rather than crashing. This is a single-colour resolver, NOT a material system.
+    """
+    if color is None:
+        return None
+    if isinstance(color, (tuple, list)):
+        try:
+            vals = [max(0, min(255, int(round(float(c))))) for c in color]
+        except (TypeError, ValueError):
+            return None
+        if len(vals) == 3:
+            return (vals[0], vals[1], vals[2], 255)
+        if len(vals) == 4:
+            return (vals[0], vals[1], vals[2], vals[3])
+        return None
+    if isinstance(color, str):
+        s = color.strip()
+        if not s:
+            return None
+        if s.startswith("#"):
+            hexpart = s[1:]
+            if len(hexpart) == 6 or len(hexpart) == 8:
+                try:
+                    r = int(hexpart[0:2], 16)
+                    g = int(hexpart[2:4], 16)
+                    b = int(hexpart[4:6], 16)
+                    a = int(hexpart[6:8], 16) if len(hexpart) == 8 else 255
+                    return (r, g, b, a)
+                except ValueError:
+                    return None
+            return None
+        named = _CMF_COLOR_NAMES.get(s) or _CMF_COLOR_NAMES.get(s.lower())
+        if named is not None:
+            return (named[0], named[1], named[2], 255)
+        return None
+    return None
+
+
+def render_enclosure_model(stl_path: str | Path, out_dir: str | Path,
+                           views: tuple[str, ...] = ("top", "iso"),
+                           width: int = 1700, height: int = 1300,
+                           color=None) -> ModelRenderResult:
+    """Render a C02 enclosure STL (top/iso) so a generated draft is *viewable*.
+
+    Closes the C02 'voice-to-design' loop: c02_export_stl produces a real STL,
+    this turns it into a design-sketch PNG using the same pyrender/EGL backend as
+    the board path. STL is already in mm (no glTF metres->mm scaling). trimesh
+    reads STL natively; faces get a neutral enclosure grey since STL carries no
+    colour — unless a CMF ``color`` (hex / named EN+中文 / RGB(A) tuple) is given,
+    in which case every face takes that single colour. An unparseable colour falls
+    back to grey and is noted (never crashes). Degrades to no-deps/no-gl otherwise.
+    """
+    src = Path(stl_path)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+
+    if not src.exists():
+        return ModelRenderResult(str(src), "error", note=f"STL not found: {src}")
+
+    try:
+        import numpy as np
+        import trimesh
+    except ImportError as exc:
+        return ModelRenderResult(str(src), "no-deps", note=f"trimesh/numpy missing: {exc}")
+
+    try:
+        tm = trimesh.load(str(src), force="mesh")
+    except Exception as exc:  # pragma: no cover - STL parse variance
+        return ModelRenderResult(str(src), "error", note=f"STL load failed: {exc}")
+    if tm is None or getattr(tm, "vertices", None) is None or len(tm.vertices) == 0:
+        return ModelRenderResult(str(src), "empty", note="STL had no geometry")
+
+    V = np.asarray(tm.vertices, float)
+    F = np.asarray(tm.faces, int)
+    rgba = _resolve_cmf_color(color)
+    color_note = ""
+    if rgba is None:
+        rgba = _DEFAULT_ENCLOSURE_RGBA  # neutral enclosure grey
+        if color is not None:
+            color_note = f" (unparseable CMF colour {color!r}, fell back to grey)"
+    C = np.tile(list(rgba), (len(V), 1))
+    lo, hi = V.min(0), V.max(0)
+
+    images, status, note = _render_mesh_views(V, F, C, out, src.stem, views, width, height)
+    if status != "rendered":
+        return ModelRenderResult(str(src), status, primitive_count=len(F), note=note)
+
+    return ModelRenderResult(
+        str(src), "rendered", images=images,
+        bounds_mm=[round(float(x), 2) for x in (*lo, *hi)],  # STL already in mm
+        primitive_count=len(F),
+        note=("rendered from the generated C02 enclosure STL "
+              "(prototype draft, not ME approval)" + color_note))

@@ -1,0 +1,81 @@
+<svg width="1529.7" height="711.6" viewBox="-206.9 -165.8 1529.7 711.6" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="black" /></marker>
+<marker id="call_arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 M 0 2 L 6 5 L 0 8" fill="none" stroke="black" stroke-width="1" /></marker>
+</defs>
+<rect x="-206.9" y="-165.8" width="1529.7" height="711.6" fill="white" />
+<rect x="130.0" y="120.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A1" />
+<text x="230.0" y="149.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >A1</text>
+<text x="230.0" y="181.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >EXTRACT SPOKEN</text>
+<text x="230.0" y="212.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >DESIGN INTENT</text>
+<rect x="462.0" y="120.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A2" />
+<text x="562.0" y="151.0" text-anchor="middle" font-size="14" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >A2</text>
+<text x="562.0" y="181.0" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >ASSESS CONSTRAINT</text>
+<text x="562.0" y="211.0" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >READINESS</text>
+<rect x="826.0" y="120.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A3" />
+<text x="926.0" y="149.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >A3</text>
+<text x="926.0" y="181.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >RESOLVE MISSING</text>
+<text x="926.0" y="212.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >CONSTRAINTS</text>
+<rect x="130.0" y="340.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A4" />
+<text x="230.0" y="369.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >A4</text>
+<text x="230.0" y="401.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >GENERATE</text>
+<text x="230.0" y="432.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >ENCLOSURE SOURCE</text>
+<rect x="462.0" y="340.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A5" />
+<text x="562.0" y="369.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >A5</text>
+<text x="562.0" y="401.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >EXPORT</text>
+<text x="562.0" y="432.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >PRINTABLE STL</text>
+<rect x="826.0" y="340.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A6" />
+<text x="926.0" y="369.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A6" >A6</text>
+<text x="926.0" y="401.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A6" >RENDER</text>
+<text x="926.0" y="432.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A6" >ENCLOSURE VIEW</text>
+<rect x="40.0" y="44.2" width="1036.0" height="491.6" stroke="black" fill="none" stroke-width="2" />
+<rect x="374.0" y="-155.8" width="368.0" height="110.0" stroke="black" fill="white" stroke-width="1.5" data-id="A0" />
+<text x="558.0" y="-129.8" text-anchor="middle" font-size="14" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >A0</text>
+<text x="558.0" y="-99.8" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >TURN SPOKEN NEEDS</text>
+<text x="558.0" y="-69.8" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >INTO ENCLOSURE DESIGN</text>
+<line x1="374.0" y1="-155.8" x2="40.0" y2="44.2" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="742.0" y1="-155.8" x2="1076.0" y2="44.2" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="374.0" y1="-45.8" x2="40.0" y2="535.8" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="742.0" y1="-45.8" x2="1076.0" y2="535.8" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<path d="M 330.0 180.0 L 462.0 180.0" stroke="black" stroke-width="1.2" data-arrow-id="AR3" data-waypoints="330.0,180.0 462.0,180.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 662.0 160.0 L 826.0 160.0" stroke="black" stroke-width="1.2" data-arrow-id="AR6" data-waypoints="662.0,160.0 826.0,160.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 330.0 400.0 L 462.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR12" data-waypoints="330.0,400.0 462.0,400.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 662.0 400.0 L 826.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR14" data-waypoints="662.0,400.0 826.0,400.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 662.0 200.0 L 734.0 200.0 Q 744.0 200.0 744.0 210.0 L 744.0 280.0 Q 744.0 290.0 734.0 290.0 L 100.0 290.0 Q 90.0 290.0 90.0 300.0 L 90.0 390.0 Q 90.0 400.0 100.0 400.0 L 130.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR9" data-waypoints="662.0,200.0 744.0,200.0 744.0,290.0 90.0,290.0 90.0,400.0 130.0,400.0" marker-end="url(#arrow)" fill="none" />
+<path d="M -10.0 180.0 L 130.0 180.0" stroke="black" stroke-width="1.2" data-arrow-id="AR1" data-waypoints="-10.0,180.0 130.0,180.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 275.8 L 230.0 240.0" stroke="black" stroke-width="1.2" data-arrow-id="AR2" data-waypoints="230.0,275.8 230.0,240.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 562.0 84.2 L 562.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="AR4" data-waypoints="562.0,84.2 562.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 562.0 275.8 L 562.0 240.0" stroke="black" stroke-width="1.2" data-arrow-id="AR5" data-waypoints="562.0,275.8 562.0,240.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 84.2 L 230.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="AR7" data-waypoints="230.0,84.2 230.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 926.0 275.8 L 926.0 240.0" stroke="black" stroke-width="1.2" data-arrow-id="AR8" data-waypoints="926.0,275.8 926.0,240.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 304.2 L 230.0 340.0" stroke="black" stroke-width="1.2" data-arrow-id="AR10" data-waypoints="230.0,304.2 230.0,340.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 495.8 L 230.0 460.0" stroke="black" stroke-width="1.2" data-arrow-id="AR11" data-waypoints="230.0,495.8 230.0,460.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 562.0 495.8 L 562.0 460.0" stroke="black" stroke-width="1.2" data-arrow-id="AR13" data-waypoints="562.0,495.8 562.0,460.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 926.0 495.8 L 926.0 460.0" stroke="black" stroke-width="1.2" data-arrow-id="AR15" data-waypoints="926.0,495.8 926.0,460.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1026.0 400.0 L 1126.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR16" data-waypoints="1026.0,400.0 1126.0,400.0" marker-end="url(#arrow)" fill="none" />
+<text x="224.0" y="256.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR2">keyword-binding</text>
+<text x="236.0" y="256.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR2">extractor</text>
+<text x="562.0" y="78.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR4">c03 mechanical-constraints schema</text>
+<text x="558.0" y="256.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR5">c02_readiness</text>
+<text x="230.0" y="78.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR7">answered constraints</text>
+<text x="926.0" y="291.8" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR8">c01_next_question loop</text>
+<text x="224.0" y="334.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR10">user approval</text>
+<text x="236.0" y="334.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR10">gate (no guessing)</text>
+<text x="230.0" y="511.8" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">c02_generate_openscad</text>
+<text x="562.0" y="511.8" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR13">c02_export_stl (OpenSCAD CLI)</text>
+<text x="926.0" y="511.8" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR15">render_enclosure_model (trimesh + pyrender)</text>
+<text x="396.0" y="175.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR3">C02 constraint</text>
+<text x="396.0" y="192.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR3">draft</text>
+<text x="744.0" y="155.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR6">missing-constraint</text>
+<text x="744.0" y="172.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR6">list</text>
+<text x="396.0" y="395.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR12">Enclosure.scad</text>
+<text x="396.0" y="412.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR12">source</text>
+<text x="744.0" y="392.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR14" >Enclosure.stl</text>
+<text x="558.0" y="308.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR9" >confirmed constraint set</text>
+<text x="-14.0" y="158.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">spoken</text>
+<text x="-14.0" y="184.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">natural-language</text>
+<text x="-14.0" y="210.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">needs</text>
+<text x="1130.0" y="378.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR16">enclosure design</text>
+<text x="1130.0" y="404.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR16">view (top/iso</text>
+<text x="1130.0" y="430.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR16">PNG) + STL</text>
+</svg>

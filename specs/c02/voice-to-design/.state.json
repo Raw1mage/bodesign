@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-14T00:01:31.812Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-14T00:09:06.386Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "authored spec.md (GIVEN/WHEN/THEN), design.md (DD-1..DD-4: NL抽取仿plan_design_intent/反問保fail-fast/渲染重構複用/編排尊重gate), data-schema.json (口述輸入/約束草稿/澄清迴圈/渲染結果契約), idef0.json (6 activities/16 arrows, validated) + grafcet.json (10 steps/4 gates/16 edges, validated) + c4.json (6 components, validated) + sequence.json; 口述→3D外殼設計稿全鏈閉環設計定稿"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-14T01:10:56.970Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "authored tasks.md + handoff.md + test-vectors.json (array) + errors.md + observability.md; render DD-3 done last session"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-14T06:15:02.975Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Phase 1-7 實作完成並逐階段 PoC 實證（口述抽取/反問/編排閉環 + 真連接器孔 + 真螺柱孔 + hull 立邊圓角 + CMF 上色 + 投影 2D 向量 SVG），最後一項收尾任務 7.6 進行中"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-14T06:15:32.852Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Phase 1-7 全完成且逐階段 PoC 實證（口述→反問→approval gate→OpenSCAD→STL→render 全鏈閉環 + 真連接器孔 + 真螺柱孔 + hull 立邊圓角 + CMF 上色 + 投影 2D 向量 SVG），tasks.md 41 項全勾、測試零回歸、architecture 已同步、event log 齊全"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-14T06:15:41.481Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示畢業。Phase 1-7 全完成且逐階段 PoC 實證（口述→反問→approval gate→OpenSCAD→STL→render 全鏈閉環 + 真連接器孔 + 真螺柱孔 + hull 立邊圓角 + CMF 上色 + 投影 2D 向量 SVG），tasks.md 41 項全勾、測試零回歸、architecture 已同步、event log 齊全"
+    }
+  ]
+}

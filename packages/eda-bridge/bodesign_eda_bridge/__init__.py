@@ -13,7 +13,7 @@ from .bom_export import BomResult, export_bom, export_netlist
 from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
 from .layout import LayoutResult, PCBNEW_AVAILABLE, emit_layout
-from .model_render import ModelRenderResult, render_board_model
+from .model_render import ModelRenderResult, render_board_model, render_enclosure_model
 from .impedance import solve_impedance
 from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocation, render_pin_allocation_csv, render_pin_allocation_md
 from .simulate import SimResult, simulate_schematic
@@ -79,6 +79,7 @@ __all__ = [
     "emit_kicad_symbol",
     "emit_layout",
     "render_board_model",
+    "render_enclosure_model",
     "ModelRenderResult",
     "emit_kicad_schematic",
     "emit_kicad_symbol_library_from_pin_table",

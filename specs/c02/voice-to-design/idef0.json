@@ -1,0 +1,30 @@
+{
+  "diagram_title": "Turn Spoken Needs Into Enclosure Design",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Extract Spoken Design Intent", "description": "自然語言口述 → C02 約束草稿（仿 plan_design_intent keyword-binding，對齊 c03_export_mechanical_constraints schema）", "decomposition": null },
+    { "id": "A2", "title": "Assess Constraint Readiness", "description": "c02_readiness 算完整度，標 present/missing 與是否 can_generate_cad_source", "decomposition": null },
+    { "id": "A3", "title": "Resolve Missing Constraints", "description": "對缺失關鍵約束反問補全（仿 c01_next_question/update_answers），使用者答覆併入、重算", "decomposition": null },
+    { "id": "A4", "title": "Generate Enclosure Source", "description": "約束確認後 c02_generate_openscad 生實體外殼 source，不猜尺寸", "decomposition": null },
+    { "id": "A5", "title": "Export Printable Stl", "description": "c02_export_stl 經 OpenSCAD CLI 匯出真 STL", "decomposition": null },
+    { "id": "A6", "title": "Render Enclosure View", "description": "render_enclosure_model 用 trimesh 載入 STL → 既有 pyrender 產 top/iso 設計稿", "decomposition": null }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "spoken natural-language needs", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:mechanism", "label": "keyword-binding extractor (plan_design_intent style)", "type": "mechanism" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "C02 constraint draft", "type": "output" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:control", "label": "c03 mechanical-constraints schema", "type": "control" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:mechanism", "label": "c02_readiness", "type": "mechanism" },
+    { "id": "AR6", "source": "A2:output", "target": "A3:input", "label": "missing-constraint list", "type": "output" },
+    { "id": "AR7", "source": "A3:output", "target": "A1:control", "label": "answered constraints (merge + recompute)", "type": "control" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A3:mechanism", "label": "c01_next_question / update_answers loop", "type": "mechanism" },
+    { "id": "AR9", "source": "A2:output", "target": "A4:input", "label": "confirmed constraint set", "type": "output" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A4:control", "label": "user approval gate (no guessing)", "type": "control" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A4:mechanism", "label": "c02_generate_openscad", "type": "mechanism" },
+    { "id": "AR12", "source": "A4:output", "target": "A5:input", "label": "Enclosure.scad source", "type": "output" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A5:mechanism", "label": "c02_export_stl (OpenSCAD CLI)", "type": "mechanism" },
+    { "id": "AR14", "source": "A5:output", "target": "A6:input", "label": "Enclosure.stl", "type": "output" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A6:mechanism", "label": "render_enclosure_model (trimesh + pyrender)", "type": "mechanism" },
+    { "id": "AR16", "source": "A6:output", "target": "EXTERNAL", "label": "enclosure design view (top/iso PNG) + STL", "type": "output" }
+  ]
+}

@@ -1,0 +1,35 @@
+[
+  {
+    "title": "完整一條龍：口述→反問→確認→出圖",
+    "participants": ["Designer", "Intent Extractor", "Readiness Assessor", "Clarification Loop", "OpenSCAD Generator", "STL Exporter", "Enclosure Renderer"],
+    "messages": [
+      { "from": "Designer", "to": "Intent Extractor", "label": "MSG1: 口述「50×30盒子，側面USB-C，室內用」", "componentRef": "C1" },
+      { "from": "Intent Extractor", "to": "Readiness Assessor", "label": "MSG2: C02 constraint draft (board/opening/env stated)", "componentRef": "C2" },
+      { "from": "Readiness Assessor", "to": "Clarification Loop", "label": "MSG3: missing 壁厚/間隙 (blocks_source)", "componentRef": "C3" },
+      { "from": "Clarification Loop", "to": "Designer", "label": "MSG4: 反問「壁厚要幾mm？」", "componentRef": "C3" },
+      { "from": "Designer", "to": "Clarification Loop", "label": "MSG5: 答「2mm」", "componentRef": "C3" },
+      { "from": "Clarification Loop", "to": "Readiness Assessor", "label": "MSG6: 併入答覆、重算 readiness=ready-for-approval", "componentRef": "C2" },
+      { "from": "Readiness Assessor", "to": "Designer", "label": "MSG7: 呈現完整約束集請確認 (approval gate)", "componentRef": "C2" },
+      { "from": "Designer", "to": "OpenSCAD Generator", "label": "MSG8: 確認約束", "componentRef": "C4" },
+      { "from": "OpenSCAD Generator", "to": "STL Exporter", "label": "MSG9: Enclosure.scad", "componentRef": "C5" },
+      { "from": "STL Exporter", "to": "Enclosure Renderer", "label": "MSG10: Enclosure.stl", "componentRef": "C6" },
+      { "from": "Enclosure Renderer", "to": "Designer", "label": "MSG11: top/iso 設計稿 PNG + STL", "componentRef": "C6" }
+    ]
+  },
+  {
+    "title": "次要約束缺失不擋草稿",
+    "participants": ["Designer", "Readiness Assessor", "OpenSCAD Generator"],
+    "messages": [
+      { "from": "Designer", "to": "Readiness Assessor", "label": "MSG1: 板框/壁厚齊備，但 heat/RF missing", "componentRef": "C2" },
+      { "from": "Readiness Assessor", "to": "OpenSCAD Generator", "label": "MSG2: can_generate_cad_source=true (38%實跑行為)，標出缺項不擋", "componentRef": "C4" }
+    ]
+  },
+  {
+    "title": "渲染無 GL 降級",
+    "participants": ["STL Exporter", "Enclosure Renderer", "Designer"],
+    "messages": [
+      { "from": "STL Exporter", "to": "Enclosure Renderer", "label": "MSG1: Enclosure.stl", "componentRef": "C6" },
+      { "from": "Enclosure Renderer", "to": "Designer", "label": "MSG2: no-gl 降級，STL 仍可用，不造假圖", "componentRef": "C6" }
+    ]
+  }
+]

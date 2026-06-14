@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "c01_design-vector data contracts",
+  "description": "C01 描述驅動可編輯向量稿的資料契約：輸入 answer_state 子集、LLM 受控組裝裁決、SVG 分層 schema、工具回傳。S2 策略下 LLM 只輸出 AssemblyDecision，不自由吐 SVG 字串。",
+  "definitions": {
+    "DesignVectorInput": {
+      "type": "object",
+      "description": "從 C01 answer_state.json 取用的描述子集（不另立平行狀態）",
+      "properties": {
+        "form_archetype": { "type": "string", "description": "產品形態原型（dev-kit/handheld/desktop-sensor/wearable/wall-mounted/...）；缺失即 fail-fast" },
+        "usage_posture": { "type": "string", "description": "使用姿態（held/desk/mounted/worn/embedded）" },
+        "primary_face": { "type": "string", "description": "主互動面，決定面板網格朝向" },
+        "visible_component_treatment": { "type": "string", "enum": ["emphasized", "subtle", "hidden", "protected"], "description": "外露元件視覺處理" },
+        "exposed_components": {
+          "type": "array",
+          "description": "需可見/可操作的外露元件清單",
+          "items": { "type": "string", "enum": ["camera", "microphone", "speaker", "display", "led", "button", "usb-c", "antenna", "vent", "mounting"] }
+        },
+        "cmf_direction": { "type": "string", "description": "CMF 情緒方向（rugged/premium/medical-clean/playful/industrial/utility/brand-specific）" },
+        "display_uiux": { "type": "string", "description": "狀態呈現方式（display/led/button/buzzer/app/none）" }
+      },
+      "required": ["form_archetype", "primary_face", "exposed_components", "cmf_direction"]
+    },
+    "GlyphSymbol": {
+      "type": "object",
+      "description": "確定性 SVG 圖元庫中的一個 symbol（外殼原型或外露元件）",
+      "properties": {
+        "glyph_id": { "type": "string", "description": "穩定圖元 ID，如 shell-handheld / comp-camera / comp-usb-c" },
+        "kind": { "type": "string", "enum": ["shell", "component", "placeholder"] },
+        "component_type": { "type": "string", "description": "kind=component 時對應 exposed_components 的型別；placeholder 時為原始未覆蓋型別" },
+        "viewbox": { "type": "string", "description": "圖元自身 viewBox" },
+        "covered": { "type": "boolean", "description": "false = 圖元庫未收錄，以 generic placeholder 呈現並須在 report 告知" }
+      },
+      "required": ["glyph_id", "kind", "covered"]
+    },
+    "AssemblyDecision": {
+      "type": "object",
+      "description": "LLM 受控組裝的唯一輸出格式（A3）。只含結構化裁決，不含 SVG 字串；組裝與驗證由確定性 Python 完成",
+      "properties": {
+        "shell_glyph_id": { "type": "string", "description": "選用的外殼原型圖元 ID" },
+        "canvas": {
+          "type": "object",
+          "properties": { "width": { "type": "number" }, "height": { "type": "number" } },
+          "required": ["width", "height"]
+        },
+        "panel_grid": {
+          "type": "object",
+          "description": "面板網格定義，對應 primary_face",
+          "properties": { "rows": { "type": "integer" }, "cols": { "type": "integer" }, "origin_face": { "type": "string" } },
+          "required": ["rows", "cols"]
+        },
+        "placements": {
+          "type": "array",
+          "description": "每個外露元件的圖元放置裁決",
+          "items": {
+            "type": "object",
+            "properties": {
+              "glyph_id": { "type": "string" },
+              "component_type": { "type": "string" },
+              "instance": { "type": "integer", "description": "同型別第 n 個，供命名 component-<type>-<n>" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "scale": { "type": "number" }
+            },
+            "required": ["glyph_id", "component_type", "instance", "x", "y"]
+          }
+        },
+        "cmf_colorway": {
+          "type": "object",
+          "description": "CMF 色票對應（套到 cmf-fill 圖層）",
+          "properties": {
+            "primary": { "type": "string", "description": "hex 色值" },
+            "secondary": { "type": "string" },
+            "accent": { "type": "string" }
+          },
+          "required": ["primary"]
+        }
+      },
+      "required": ["shell_glyph_id", "canvas", "panel_grid", "placements", "cmf_colorway"]
+    },
+    "LayeredSvgSchema": {
+      "type": "object",
+      "description": "組裝後 SVG 的分層契約（DD-3）；schema validator(A5) 依此判定成功",
+      "properties": {
+        "required_layers": {
+          "type": "array",
+          "description": "五類必備頂層圖層命名（缺一即驗證失敗）",
+          "items": { "type": "string", "enum": ["outline", "panel", "cmf-fill", "components", "annotations"] },
+          "minItems": 5
+        },
+        "component_group_id_pattern": { "type": "string", "const": "component-<type>-<n>", "description": "每外露元件須包成此命名的獨立 <g> group" }
+      },
+      "required": ["required_layers", "component_group_id_pattern"]
+    },
+    "DesignVectorResult": {
+      "type": "object",
+      "description": "c01_emit_design_vector 工具回傳",
+      "properties": {
+        "status": { "type": "string", "enum": ["success", "missing", "external-needed", "validation-failed"] },
+        "svg_path": { "type": ["string", "null"], "description": "成功時的 Design_Vector.svg 相對路徑；非成功為 null" },
+        "layers": { "type": "array", "items": { "type": "string" }, "description": "實際產出的圖層清單" },
+        "glyphs_used": { "type": "array", "items": { "type": "string" }, "description": "使用到的圖元 ID" },
+        "placeholders": { "type": "array", "items": { "type": "string" }, "description": "用 generic placeholder 呈現的元件型別（不靜默省略）" },
+        "cmf_applied": { "type": "object", "description": "實際套用的 CMF 色值" },
+        "missing_fields": { "type": "array", "items": { "type": "string" }, "description": "status=missing/external-needed 時列出的缺失 answer_state 欄位" },
+        "validation_errors": { "type": "array", "items": { "type": "string" }, "description": "status=validation-failed 時的具體缺項" }
+      },
+      "required": ["status"]
+    }
+  }
+}

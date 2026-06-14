@@ -1,0 +1,30 @@
+[
+  {
+    "title": "成功路徑：描述完整 → 可編輯向量稿",
+    "participants": ["ID Designer", "C01 Tool", "Glyph Library", "LLM Composer", "SVG Assembler", "Schema Validator"],
+    "messages": [
+      { "from": "ID Designer", "to": "C01 Tool", "label": "MSG1: c01_emit_design_vector(answer_state)", "componentRef": "C1" },
+      { "from": "C01 Tool", "to": "Glyph Library", "label": "MSG2: select symbols by form_archetype + exposed_components", "componentRef": "C2" },
+      { "from": "Glyph Library", "to": "LLM Composer", "label": "MSG3: selected symbols + placeholders", "componentRef": "C3" },
+      { "from": "LLM Composer", "to": "SVG Assembler", "label": "MSG4: layout coords + panel grid + CMF colorway", "componentRef": "C4" },
+      { "from": "SVG Assembler", "to": "Schema Validator", "label": "MSG5: candidate layered SVG", "componentRef": "C5" },
+      { "from": "Schema Validator", "to": "ID Designer", "label": "MSG6: Design_Vector.svg + layer/glyph/CMF report (success)", "componentRef": "C5" }
+    ]
+  },
+  {
+    "title": "Fail-fast：描述不足",
+    "participants": ["ID Designer", "C01 Tool"],
+    "messages": [
+      { "from": "ID Designer", "to": "C01 Tool", "label": "MSG1: c01_emit_design_vector(incomplete answer_state)", "componentRef": "C1" },
+      { "from": "C01 Tool", "to": "ID Designer", "label": "MSG2: missing/external-needed + field list (no SVG, no fabrication)", "componentRef": "C1" }
+    ]
+  },
+  {
+    "title": "驗證失敗：組裝結果不合格",
+    "participants": ["LLM Composer", "SVG Assembler", "Schema Validator", "ID Designer"],
+    "messages": [
+      { "from": "SVG Assembler", "to": "Schema Validator", "label": "MSG1: candidate layered SVG", "componentRef": "C5" },
+      { "from": "Schema Validator", "to": "ID Designer", "label": "MSG2: validation failure + concrete missing items (no half-built SVG)", "componentRef": "C5" }
+    ]
+  }
+]

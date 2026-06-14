@@ -1,0 +1,27 @@
+{
+  "diagram_title": "Emit C01 Editable Design Vector",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Read C01 Answer State", "description": "讀取 C01 answer_state.json 並判定描述欄位完整度（form_archetype/primary_face/exposed_components/cmf_direction 等）", "decomposition": null },
+    { "id": "A2", "title": "Select Glyph Library Symbols", "description": "依 exposed_components + form_archetype 從確定性 SVG 圖元庫挑選外殼原型與元件 symbol；未覆蓋者標 placeholder", "decomposition": null },
+    { "id": "A3", "title": "Compose Layout And Colorway", "description": "LLM 受控組裝：決定圖元佈局座標、面板網格對應 primary_face、套用 CMF 色值（輸出為結構化裁決，非自由 SVG 字串）", "decomposition": null },
+    { "id": "A4", "title": "Assemble Layered Svg", "description": "依固定圖層命名（outline/panel/cmf-fill/components/annotations）組裝分層 SVG，每元件包成獨立命名 group", "decomposition": null },
+    { "id": "A5", "title": "Validate Vector Schema", "description": "通過 SVG schema 驗證（圖層齊全、元件 group 存在、SVG 合法）才回報成功，否則回報失敗與缺項", "decomposition": null }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "C01 answer_state.json", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "fail-fast on missing fields (no fabrication)", "type": "control" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "validated description fields", "type": "output" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:input", "label": "deterministic glyph library", "type": "input" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:control", "label": "EXPOSED_COMPONENT_KEYWORDS classification", "type": "control" },
+    { "id": "AR6", "source": "A2:output", "target": "A3:input", "label": "selected symbols + placeholders", "type": "output" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A3:control", "label": "S2 layout constraints (panel grid, primary_face)", "type": "control" },
+    { "id": "AR8", "source": "A3:output", "target": "A4:input", "label": "structured layout + CMF decision", "type": "output" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A4:control", "label": "fixed layer naming schema (DD-3)", "type": "control" },
+    { "id": "AR10", "source": "A4:output", "target": "A5:input", "label": "candidate layered SVG", "type": "output" },
+    { "id": "AR11", "source": "A5:output", "target": "EXTERNAL", "label": "editable Design_Vector.svg + layer/glyph/CMF report", "type": "output" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A3:mechanism", "label": "LLM (controlled structured assembly)", "type": "mechanism" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A4:mechanism", "label": "workflow-core c01_id_package.py", "type": "mechanism" },
+    { "id": "AR14", "source": "EXTERNAL", "target": "A5:mechanism", "label": "SVG schema validator", "type": "mechanism" }
+  ]
+}

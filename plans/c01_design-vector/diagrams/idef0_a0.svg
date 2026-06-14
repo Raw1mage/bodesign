@@ -1,0 +1,76 @@
+<svg width="1608.6" height="717.6" viewBox="-218.3 -171.8 1608.6 717.6" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="black" /></marker>
+<marker id="call_arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 M 0 2 L 6 5 L 0 8" fill="none" stroke="black" stroke-width="1" /></marker>
+</defs>
+<rect x="-218.3" y="-171.8" width="1608.6" height="717.6" fill="white" />
+<rect x="130.0" y="120.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A1" />
+<text x="230.0" y="149.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >A1</text>
+<text x="230.0" y="181.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >READ C01</text>
+<text x="230.0" y="212.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >ANSWER STATE</text>
+<rect x="494.0" y="120.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A2" />
+<text x="594.0" y="149.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >A2</text>
+<text x="594.0" y="181.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >SELECT GLYPH</text>
+<text x="594.0" y="212.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >LIBRARY SYMBOLS</text>
+<rect x="842.0" y="120.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A3" />
+<text x="942.0" y="149.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >A3</text>
+<text x="942.0" y="181.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >COMPOSE LAYOUT</text>
+<text x="942.0" y="212.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >AND COLORWAY</text>
+<rect x="130.0" y="340.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A4" />
+<text x="230.0" y="369.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >A4</text>
+<text x="230.0" y="401.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >ASSEMBLE</text>
+<text x="230.0" y="432.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >LAYERED SVG</text>
+<rect x="494.0" y="340.0" width="200.0" height="120.0" stroke="black" fill="white" stroke-width="1.5" data-id="A5" />
+<text x="594.0" y="369.6" text-anchor="middle" font-size="15" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >A5</text>
+<text x="594.0" y="401.0" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >VALIDATE</text>
+<text x="594.0" y="432.9" text-anchor="middle" font-size="17" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >VECTOR SCHEMA</text>
+<rect x="40.0" y="38.2" width="1092.0" height="497.6" stroke="black" fill="none" stroke-width="2" />
+<rect x="434.0" y="-161.8" width="304.0" height="110.0" stroke="black" fill="white" stroke-width="1.5" data-id="A0" />
+<text x="586.0" y="-135.8" text-anchor="middle" font-size="14" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >A0</text>
+<text x="586.0" y="-105.8" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >EMIT C01 EDITABLE</text>
+<text x="586.0" y="-75.8" text-anchor="middle" font-size="16" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >DESIGN VECTOR</text>
+<line x1="434.0" y1="-161.8" x2="40.0" y2="38.2" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="738.0" y1="-161.8" x2="1132.0" y2="38.2" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="434.0" y1="-51.8" x2="40.0" y2="535.8" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="738.0" y1="-51.8" x2="1132.0" y2="535.8" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<path d="M 330.0 200.0 L 494.0 200.0" stroke="black" stroke-width="1.2" data-arrow-id="AR3" data-waypoints="330.0,200.0 494.0,200.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 694.0 180.0 L 842.0 180.0" stroke="black" stroke-width="1.2" data-arrow-id="AR6" data-waypoints="694.0,180.0 842.0,180.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 330.0 400.0 L 494.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR10" data-waypoints="330.0,400.0 494.0,400.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1042.0 180.0 L 1072.0 180.0 Q 1082.0 180.0 1082.0 190.0 L 1082.0 280.0 Q 1082.0 290.0 1072.0 290.0 L 100.0 290.0 Q 90.0 290.0 90.0 300.0 L 90.0 390.0 Q 90.0 400.0 100.0 400.0 L 130.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR8" data-waypoints="1042.0,180.0 1082.0,180.0 1082.0,290.0 90.0,290.0 90.0,400.0 130.0,400.0" marker-end="url(#arrow)" fill="none" />
+<path d="M -10.0 180.0 L 130.0 180.0" stroke="black" stroke-width="1.2" data-arrow-id="AR1" data-waypoints="-10.0,180.0 130.0,180.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 84.2 L 230.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="AR2" data-waypoints="230.0,84.2 230.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M -10.0 78.2 L 402.0 78.2 Q 412.0 78.2 412.0 88.2 L 412.0 150.0 Q 412.0 160.0 422.0 160.0 L 494.0 160.0" stroke="black" stroke-width="1.2" data-arrow-id="AR4" data-waypoints="-10.0,78.2 412.0,78.2 412.0,160.0 494.0,160.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 594.0 84.2 L 594.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="AR5" data-waypoints="594.0,84.2 594.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 942.0 84.2 L 942.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="AR7" data-waypoints="942.0,84.2 942.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 304.2 L 230.0 340.0" stroke="black" stroke-width="1.2" data-arrow-id="AR9" data-waypoints="230.0,304.2 230.0,340.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 694.0 400.0 L 1182.0 400.0" stroke="black" stroke-width="1.2" data-arrow-id="AR11" data-waypoints="694.0,400.0 1182.0,400.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 942.0 275.8 L 942.0 240.0" stroke="black" stroke-width="1.2" data-arrow-id="AR12" data-waypoints="942.0,275.8 942.0,240.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 230.0 495.8 L 230.0 460.0" stroke="black" stroke-width="1.2" data-arrow-id="AR13" data-waypoints="230.0,495.8 230.0,460.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 594.0 495.8 L 594.0 460.0" stroke="black" stroke-width="1.2" data-arrow-id="AR14" data-waypoints="594.0,495.8 594.0,460.0" marker-end="url(#arrow)" fill="none" />
+<text x="224.0" y="114.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR2">fail-fast on missing</text>
+<text x="236.0" y="114.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR2">fields (no fabrication)</text>
+<text x="594.0" y="78.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR5">EXPOSED_COMPONENT_KEYWORDS classification</text>
+<text x="936.0" y="114.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR7">S2 layout constraints</text>
+<text x="948.0" y="114.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR7">(panel grid, primary_face)</text>
+<text x="224.0" y="334.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR9">fixed layer naming</text>
+<text x="236.0" y="334.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR9">schema (DD-3)</text>
+<text x="936.0" y="256.0" font-size="13" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR12">LLM (controlled</text>
+<text x="948.0" y="256.0" font-size="13" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR12">structured assembly)</text>
+<text x="230.0" y="511.8" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR13">workflow-core c01_id_package.py</text>
+<text x="594.0" y="511.8" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR14">SVG schema validator</text>
+<text x="412.0" y="195.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR3">validated</text>
+<text x="412.0" y="212.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR3">description fields</text>
+<text x="768.0" y="175.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR6">selected symbols</text>
+<text x="768.0" y="192.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR6">+ placeholders</text>
+<text x="412.0" y="395.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR10">candidate</text>
+<text x="412.0" y="412.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR10">layered SVG</text>
+<text x="586.0" y="308.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR8" >structured layout + CMF decision</text>
+<text x="-14.0" y="171.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">C01</text>
+<text x="-14.0" y="197.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">answer_state.json</text>
+<text x="-14.0" y="69.2" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR4">deterministic</text>
+<text x="-14.0" y="95.2" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR4">glyph library</text>
+<text x="1186.0" y="365.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">editable</text>
+<text x="1186.0" y="391.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">Design_Vector.svg</text>
+<text x="1186.0" y="417.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">+ layer/glyph/</text>
+<text x="1186.0" y="443.0" font-size="20" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">CMF report</text>
+</svg>

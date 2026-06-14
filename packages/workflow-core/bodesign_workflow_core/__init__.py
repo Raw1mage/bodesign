@@ -172,6 +172,7 @@ from .c01_id_package import (
 from .c02_me_package import (
     C02ConstraintItem,
     C02ConstraintReadiness,
+    C02FieldBinding,
     C02OpenScadResult,
     C02PackageResult,
     C02SkpExportResult,
@@ -179,10 +180,13 @@ from .c02_me_package import (
     C02StlExportResult,
     assess_c02_constraint_readiness,
     emit_c02_enclosure_package,
+    export_c02_projection_svg,
     export_c02_skp,
     export_c02_step,
     export_c02_stl,
     generate_c02_openscad,
+    plan_c02_intent,
+    voice_to_design,
 )
 from .c03_mechanical_constraints import (
     C03MechanicalConstraintResult,
@@ -282,6 +286,7 @@ __all__ = [
     "emit_c01_concept_prompts",
     "emit_c01_rockbox_package",
     "emit_c02_enclosure_package",
+    "export_c02_projection_svg",
     "export_c02_skp",
     "export_c02_step",
     "export_c02_stl",

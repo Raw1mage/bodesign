@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1101" height="1220" viewBox="2.00 -2.00 55.05 61.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="2.00" y="-2.00" width="55.05" height="61.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1S1I1" data-segment-ids="S0O1S1I1:1S" d="M 25.35 7.00 L 25.35 11.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1G1I1" data-segment-ids="S1O1G1I1:1S" d="M 25.35 14.00 L 25.35 16.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1S2I1" data-segment-ids="G1O1S2I1:1S" d="M 25.35 16.00 L 25.35 18.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O2S7I1" data-segment-ids="G1O2S7I1:1S" d="M 40.70 16.00 L 40.70 18.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1S3I1" data-segment-ids="S2O1S3I1:1S" d="M 25.35 21.00 L 25.35 25.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1S4I1" data-segment-ids="S3O1S4I1:1S" d="M 25.35 28.00 L 25.35 32.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1S5I1" data-segment-ids="S4O1S5I1:1S" d="M 25.35 35.00 L 25.35 39.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1G2I1" data-segment-ids="S5O1G2I1:1S" d="M 25.35 42.00 L 25.35 44.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1S6I1" data-segment-ids="G2O1S6I1:1S" d="M 10.00 44.00 L 10.00 46.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O2S8I1" data-segment-ids="G2O2S8I1:1S" d="M 25.35 44.00 L 25.35 46.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S6O1G3I1" data-segment-ids="S6O1G3I1:1S" d="M 10.00 49.00 L 10.00 53.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S0I1" data-segment-ids="G3O1S0I1:1S G3O1S0I1:2W G3O1S0I1:3N G3O1S0I1:4E G3O1S0I1:5S" d="M 25.35 53.00 L 25.35 54.50 Q 25.35 55.00 24.85 55.00 L 6.50 55.00 Q 6.00 55.00 6.00 54.50 L 6.00 2.50 Q 6.00 2.00 6.50 2.00 L 24.85 2.00 Q 25.35 2.00 25.35 2.50 L 25.35 4.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S7O1G3I2" data-segment-ids="S7O1G3I2:1S" d="M 40.70 21.00 L 40.70 53.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S8O1G3I3" data-segment-ids="S8O1G3I3:1S" d="M 25.35 49.00 L 25.35 53.00"/>
+<rect class="step" x="23.35" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="23.60" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="25.35" y="5.50">0</text>
+<rect class="step" x="23.35" y="11.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="25.35" y="12.50">1</text>
+<rect class="step" x="23.35" y="18.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="25.35" y="19.50">2</text>
+<rect class="step" x="23.35" y="25.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="25.35" y="26.50">3</text>
+<rect class="step" x="23.35" y="32.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="25.35" y="33.50">4</text>
+<rect class="step" x="23.35" y="39.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="25.35" y="40.50">5</text>
+<rect class="step" x="8.00" y="46.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="10.00" y="47.50">6</text>
+<rect class="step" x="38.70" y="18.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="40.70" y="19.50">7</text>
+<rect class="step" x="23.35" y="46.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="25.35" y="47.50">8</text>
+<line class="assoc" x1="27.35" y1="5.50" x2="28.35" y2="5.50"/>
+<rect class="action" x="28.35" y="4.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="5.09"><tspan x="33.02" dy="0">Idle — awaiting c01_</tspan><tspan x="33.02" dy="0.82">emit_design_vector call</tspan></text>
+<line class="assoc" x1="27.35" y1="12.50" x2="28.35" y2="12.50"/>
+<rect class="action" x="28.35" y="11.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="12.09"><tspan x="33.02" dy="0">Read C01 answer_state and</tspan><tspan x="33.02" dy="0.82">assess description completeness</tspan></text>
+<line class="assoc" x1="27.35" y1="19.50" x2="28.35" y2="19.50"/>
+<rect class="action" x="28.35" y="18.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="18.68"><tspan x="33.02" dy="0">Select glyph-library symbols (shell</tspan><tspan x="33.02" dy="0.82">archetype + exposed components)</tspan><tspan x="33.02" dy="0.82">; mark uncovered as placeholder</tspan></text>
+<line class="assoc" x1="27.35" y1="26.50" x2="28.35" y2="26.50"/>
+<rect class="action" x="28.35" y="25.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="25.68"><tspan x="33.02" dy="0">LLM controlled assembly: layout</tspan><tspan x="33.02" dy="0.82">coordinates + panel grid (primary_</tspan><tspan x="33.02" dy="0.82">face) + CMF colorway</tspan></text>
+<line class="assoc" x1="27.35" y1="33.50" x2="28.35" y2="33.50"/>
+<rect class="action" x="28.35" y="32.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="32.68"><tspan x="33.02" dy="0">Assemble layered SVG (outline/panel/</tspan><tspan x="33.02" dy="0.82">cmf-fill/components/annotations);</tspan><tspan x="33.02" dy="0.82">wrap each component in named group</tspan></text>
+<line class="assoc" x1="27.35" y1="40.50" x2="28.35" y2="40.50"/>
+<rect class="action" x="28.35" y="39.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="39.68"><tspan x="33.02" dy="0">Validate SVG schema (layers</tspan><tspan x="33.02" dy="0.82">complete, component groups</tspan><tspan x="33.02" dy="0.82">present, valid SVG)</tspan></text>
+<line class="assoc" x1="12.00" y1="47.50" x2="13.00" y2="47.50"/>
+<rect class="action" x="13.00" y="46.07" width="9.35" height="2.86"/>
+<text class="action-label" x="17.68" y="47.09"><tspan x="17.68" dy="0">Emit Design_Vector.svg + layer/</tspan><tspan x="17.68" dy="0.82">glyph/CMF report; return success</tspan></text>
+<line class="assoc" x1="42.70" y1="19.50" x2="43.70" y2="19.50"/>
+<rect class="action" x="43.70" y="18.07" width="9.35" height="2.86"/>
+<text class="action-label" x="48.38" y="18.68"><tspan x="48.38" dy="0">Fail-fast: return missing/</tspan><tspan x="48.38" dy="0.82">external-needed with field</tspan><tspan x="48.38" dy="0.82">list; emit no SVG, no fabrication</tspan></text>
+<line class="assoc" x1="27.35" y1="47.50" x2="28.35" y2="47.50"/>
+<rect class="action" x="28.35" y="46.07" width="9.35" height="2.86"/>
+<text class="action-label" x="33.02" y="46.68"><tspan x="33.02" dy="0">Report validation failure</tspan><tspan x="33.02" dy="0.82">with concrete missing</tspan><tspan x="33.02" dy="0.82">items; emit no half-built SVG</tspan></text>
+<line class="gate" x1="23.35" y1="16.00" x2="42.70" y2="16.00"/>
+<line class="gate" x1="8.00" y1="44.00" x2="27.35" y2="44.00"/>
+<line class="gate" x1="8.00" y1="53.00" x2="42.70" y2="53.00"/>
+<line class="gate" x1="24.35" y1="9.00" x2="26.35" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="26.75" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="26.75" dy="0">emit_design_vector invoked</tspan></text>
+<line class="gate" x1="24.35" y1="23.00" x2="26.35" y2="23.00" data-label-kind="condition-stub" data-edge-id="edge:S2O1S3I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label" x="26.75" y="22.32" data-label-kind="condition-stub" data-edge-id="edge:S2O1S3I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="26.75" dy="0">required fields present (form_</tspan><tspan x="26.75" dy="0.68">archetype/primary_face/exposed_</tspan><tspan x="26.75" dy="0.68">components/cmf_direction)</tspan></text>
+<line class="gate" x1="24.35" y1="30.00" x2="26.35" y2="30.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1S4I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label" x="26.75" y="30.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1S4I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="26.75" dy="0">symbols selected</tspan></text>
+<line class="gate" x1="24.35" y1="37.00" x2="26.35" y2="37.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="26.75" y="37.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="26.75" dy="0">structured layout decision ready</tspan></text>
+<line class="gate" x1="9.00" y1="51.00" x2="11.00" y2="51.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1G3I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"/>
+<text class="gate-label-left" x="8.60" y="50.32" data-label-kind="condition-stub" data-edge-id="edge:S6O1G3I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"><tspan x="8.60" dy="0">schema</tspan><tspan x="8.60" dy="0.68">validation</tspan><tspan x="8.60" dy="0.68">passed</tspan></text>
+<line class="gate" x1="39.70" y1="51.00" x2="41.70" y2="51.00" data-label-kind="condition-stub" data-edge-id="edge:S7O1G3I2" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"/>
+<text class="gate-label" x="42.10" y="51.00" data-label-kind="condition-stub" data-edge-id="edge:S7O1G3I2" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"><tspan x="42.10" dy="0">required description fields missing</tspan></text>
+<line class="gate" x1="24.35" y1="51.00" x2="26.35" y2="51.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G3I3" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"/>
+<text class="gate-label" x="26.75" y="51.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G3I3" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"><tspan x="26.75" dy="0">schema validation failed</tspan></text>
+</svg>
