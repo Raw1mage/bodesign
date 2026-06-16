@@ -6,6 +6,35 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
+### 新增 — C00 PRD 以 docx 產出（重現 Rockbox Word 文件架構）
+- 把 C00 PRD 的產出從純 Markdown 升級為**可組成帶樣式 .docx** 的封裝，文件架構**重現真實
+  Rockbox C07-PRD Word 檔**：封面區 + 改版紀錄表 + 12 個編號 Heading-1 章節 + 各章節內部的
+  表格骨架（Objectives 表、Electrical 規格表、R&R RACI 矩陣、Team Roster 聯絡卡…），並依
+  `include_rf` 條件產出獨立的 RF Requirements 文件。
+- **伺服端預存範本**：Word 架構以 `.dotx` 二進位 + JSON 架構描述並存於
+  `packages/workflow-core/.../templates/`（`c00_prd.dotx`、`c00_rf.dotx`、
+  `c00_prd.docx_architecture.json`），供重複使用。
+- **Renderer**（`workflow-core/c00_prd_docx.py` `render_c00_prd_docx_package`）：從
+  `answer_state` 為每份文件渲染出 docxmcp 可組裝的封裝——`body.md` + `outline.md` +
+  `manifest.json` + `template/template.dotx`。誠實紀律不變：missing／drafted 等欄位狀態保持
+  可見，且 renderer **絕不**標記 human approval。
+- **MCP 工具** `bodesign_c00_emit_prd_docx`（handler `_h_c00_emit_prd_docx`）：**預設為
+  client-side orchestration**（MVP）——bodesign 只回傳封裝 + assemble 提示，由呼叫端用自己的
+  docxmcp 連線驅動 `document.assemble`（因此 bodesign 不依賴 docxmcp 的 runtime／帳號／權限）。
+  `assemble=true` 才選用內部 MCP bridge（經 `mcp_delegate.call_external_mcp_tool` 接 docxmcp）；
+  當 docxmcp server 未配置時誠實降級為 `worker_unavailable`，**絕不**偽造 .docx。
+- docxmcp 雷點記錄：`assemble` 的 `doc_dir` 必須是**絕對容器路徑**
+  （`/var/cache/docxmcp/sessions/<token>/…`）；相對路徑會解析到 `/app` 而失敗。
+- 測試：`tests/test_c00_prd_docx.py` —— 6 unit（架構描述載入／封面+章節標題／欄位狀態可見+表格
+  渲染／不標 approval／產出可組裝封裝／render 需先 scaffold）；端到端實跑驗證通過（scaffold →
+  填 81 欄 answers → render → docxmcp assemble → 兩份合法 Word 2007+ .docx）。
+
+### 變更 — bodesign skill：階段交付物改置於 stage 根目錄
+- 取消 `03_output/` 交付物子目錄，改為**交付物平鋪在各 cXX 階段根目錄**，打開階段資料夾即可
+  一眼看出該階段交付了什麼；只有輔助材料（`01_refs/` 輸入、`02_build/` 中間產物）仍留在編號
+  子目錄。同步更新 `SKILL.md`、`stage-structure` 與 `si-constraint` 參考文件，以及 C04–C07
+  各階段 GUIDE。
+
 ### 新增 — datasheet 接地的 SPICE model 卡（vault L4 → cascade tier-1）
 - `packages/component-kb/spice_card.py` — 一條完全確定性的管線，把 SPICE 模擬接地到 datasheet
   證據，使 model 準確度是被**展示**而非假設。LLM 只參與上游抽取；ingest／generate／materialize
