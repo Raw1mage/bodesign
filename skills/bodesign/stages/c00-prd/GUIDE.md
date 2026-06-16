@@ -9,6 +9,12 @@ not "go run a skill."
 
 Read `../../references/honesty-model.md` before writing a single field. It overrides everything here.
 
+**Write for the next reader, who is an AI agent or a junior engineer.** Every downstream stage — C01…C07 —
+consumes this PRD as machine-actionable input, not prose to admire. So be explicit and unambiguous, avoid
+unexplained jargon, and give enough detail that a reader with no prior context can act on a field without
+guessing. Ambiguity doesn't stay here; it propagates as a wrong decision downstream. (Honesty governs
+*whether* a value is asserted; this governs *how clearly* it's stated once it is.)
+
 ## Purpose & scope
 
 **This stage owns:**
@@ -41,7 +47,11 @@ status with a reason + owner — silent absence is not allowed.
 
 **Self-verify:** run `bodesign_c00_readiness` (`folder`) and report which fields/sections are still
 open. C00 is not done while any gating section is unanswered without an honest accepted-risk/external
-owner. Model: `thesmart_products/rockbox/c00-prd/`.
+owner. Then run two honesty-review passes the readiness tool can't compute: a **boundary check** — no
+C03/C05-level detail (schematic, pin assignment, part numbers as *decisions*, firmware code) has leaked
+in; the PRD states *what/why*, downstream owns *how* — and an **evidence check** — every asserted value
+and capability-table row carries a source; nothing unsupported slipped past `missing`. Model:
+`thesmart_products/rockbox/c00-prd/`.
 
 ## Inputs (from upstream)
 
@@ -54,6 +64,14 @@ C00 is the head of the chain, so its inputs are external, not from a prior bodes
 - A **prior-generation PRD or real fabricated board**, if reorganising/archiving one (rockbox is a
   preserve-only archive of a shipped board). In that case copy originals verbatim into `source/` and
   never mutate them; your companions sit alongside and index them.
+
+When a reference design or prior PRD exists, produce a **capability / gap identification table** as part
+of discovery: each row a capability the baseline already provides (with its source — datasheet + page or
+reference path), its **match level** to this product's need (full / partial / none), and the resulting
+**gap** a downstream stage must close (which one). This is what keeps *derived ≠ invented* honest at the
+system level — you see at a glance what's inherited vs. net-new, and every inherited claim carries
+provenance. A capability row with no source is a defect, same rule as any field. (C00 only *identifies*
+the gap; deciding how to close it — the part, the circuit — is C03/C05.)
 
 If none of these exist yet, the PRD starts mostly `missing` — that is a legitimate honest state, not a
 failure. You fill it by interviewing the owner, not by inventing plausible answers.
@@ -91,11 +109,26 @@ Drive each field from the owner's answers. Where you can derive a fact from a ci
 STM32N657 spec from the N6 datasheet), set `answered` with `source` = that reference + page/section. Where
 you can't, set `missing`/`external-needed`/`blocked` with a reason — never a guess.
 
+**Batch the high-leverage questions first.** Before drafting, ask the owner the 3–5 questions that unblock
+the most fields — problem/goal, core scope, the hard boundaries (what's explicitly *not* in scope), the
+headline targets (cost / quantity / certification), and the success metric. Use `AskUserQuestion` with
+named options so the owner picks rather than free-types, and fold each answer back as `answered` with
+`source: user`. Whatever the owner can't answer yet stays `missing`/`external-needed` — you ask, you don't
+invent.
+
+**Use the question catalog.** `references/prd-interview-guide.md` is the field-keyed question bank for this
+whole collect-ideas loop — the interview protocol, the six cross-cutting dimensions to hit for every
+requirement (what/why-not-how, priority & scope, measurable success, provenance, risk+mitigation+owner,
+target≠result), and a per-section question list mapped one-to-one to the answer-state fields so each answer
+drops straight in and renders into the docx with no translation step.
+
 1. **s01 Business strategy** — `target_customer`, `problem_statement`, `business_goal`, `success_metric`,
    `market_or_use_context`. (`success_metric` typically carries the headline cost & maturity targets.)
 2. **s02 Project overall** — `product_summary`, `primary_use_cases`, plus engineering scope and
    build-volume intent (e.g. EVT 50 sets → 500-unit pilot).
 3. **s03 Objectives** — the numbered product goals (maturity to DVT, FPS/perf target, cost target, …).
+   Each objective must be **verifiable**: state its acceptance criterion and how it's measured, so C06 can
+   write a test against it. A goal with no measurable criterion is `drafted`, not `answered`. → feeds C06.
 4. **s04 System architecture** — the product-level block diagram + a short narrative. This is the field
    that most directly seeds C03. Render the diagram with `drawmiat` (C4 / block) or an ASCII block as in
    the real PRDs; capture compute, memory, power chain, connectivity, sensors, I/O.
@@ -110,9 +143,13 @@ you can't, set `missing`/`external-needed`/`blocked` with a reason — never a g
 8. **s08 Roles & responsibility** — discipline → owner → deliverable, for C00–C07. Often
    `external-needed` early (the org hasn't assigned owners) — leave it visibly open.
 9. **s09 Assumptions & constraints** — the baseline assumptions and known limits (reference-design
-   baseline, external-lab certification gates, out-of-scope items, TBC component choices). → feeds
-   C01/C02/C03/C06.
-10. **s10 Project management** — stage-gate plan (EVT→DVT→pre-MP), sync cadence, change-control loop.
+   baseline, external-lab certification gates, out-of-scope items, TBC component choices). Keep this to
+   standing assumptions/limits; program **risks** (with mitigation + owner) live in s10's risk register.
+   → feeds C01/C02/C03/C06.
+10. **s10 Project management** — stage-gate plan (EVT→DVT→pre-MP), sync cadence, change-control loop,
+    issue tracking, and the **risk register**: each program risk with likelihood/impact, a mitigation,
+    and an owner. A risk with no mitigation or owner is a worry, not a plan — record it `accepted-risk`
+    with who signed off, or give it a mitigation (single-source parts, cert-fail risk, schedule slip).
 11. **s11 Schedule** — milestone table vs M0 (PRD freeze, schematic+BOM, layout+gerber, EVT, verify,
     DVT). Mark due dates `TBC` until committed — a `drafted` schedule is honest; a fake one is not.
 12. **s12 Team roster** — chip/module vendors, ODM/assembly, certification lab. Vendors TBC and lab TBC
