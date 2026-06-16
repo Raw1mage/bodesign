@@ -1,0 +1,221 @@
+{
+  "name": "C00/C07 PRD docx layout architecture",
+  "schema": "bodesign.c00.docx_architecture.v1",
+  "draft": true,
+  "source": "Extracted from the Rockbox C07-PRD shipped Word architecture (Rockbox_Project requirements_A03 + Rockbox_RF requirements_R01), de-productized into a generic, reusable docx layout contract. No client content retained — only the structural skeleton (cover, revision history, heading order, per-section body layout).",
+  "purpose": "Drive a styled .docx render of the C00 PRD: tells the renderer how to turn answer_state field values into a body.md + table layout that matches the real Word document architecture, then feed to docxmcp assemble against the stored .dotx style template.",
+  "render_contract": {
+    "engine": "docxmcp",
+    "action": "assemble",
+    "package_layout": "decomposed: body.md + outline.md + template/template.dotx; tables emitted inline as GFM pipe tables under their owning heading; cover + revision history rendered as leading blocks before section 1.",
+    "note": "The renderer NEVER fabricates content. Missing/drafted/external-needed/blocked/accepted-risk field states stay visible in the rendered cell/paragraph, mirroring the Markdown emitter's honesty rules."
+  },
+  "documents": [
+    {
+      "file": "Project_Requirements.md",
+      "title": "Product Development Proposal",
+      "template_dotx": "c00_prd.dotx",
+      "cover": {
+        "blocks": [
+          { "kind": "product_name", "style": "Title", "source_field": "project_name", "fallback": "{product name}" },
+          { "kind": "product_generation", "style": "Subtitle", "source_field": "product_generation", "fallback": "" },
+          { "kind": "document_type", "style": "Subtitle", "text": "Product Development Proposal" },
+          { "kind": "version", "style": "Subtitle", "source_field": "document_version", "fallback": "Version 1.0", "prefix": "Version " }
+        ]
+      },
+      "revision_history": {
+        "heading": "Revision History",
+        "style": "Heading 1",
+        "table": {
+          "columns": ["Version", "Description of change(s)", "Date"],
+          "source": "revision_history",
+          "row_fields": ["version", "description", "date"],
+          "min_rows": 1
+        }
+      },
+      "sections": [
+        {
+          "id": "s01_business_strategy",
+          "title": "1. Company Vision & Business Strategy",
+          "style": "Heading 1",
+          "body_layout": "prose",
+          "prose_fields": ["business_goal", "target_customer", "problem_statement", "market_or_use_context", "success_metric"]
+        },
+        {
+          "id": "s02_project_overall",
+          "title": "2. Project Overall",
+          "style": "Heading 1",
+          "body_layout": "prose",
+          "prose_fields": ["product_summary", "primary_use_cases", "operating_environment", "package_scope", "major_exclusions"]
+        },
+        {
+          "id": "s03_project_objectives",
+          "title": "3. Project Objectives",
+          "style": "Heading 1",
+          "body_layout": "objective_table",
+          "objective_table": {
+            "label_prefix": "OBJECTIVE",
+            "source_fields": ["functional_objectives", "performance_objectives", "quality_objectives", "acceptance_criteria"],
+            "note": "Each objective item becomes a labelled row: 'OBJECTIVE N | <objective text>'."
+          }
+        },
+        {
+          "id": "s04_system_architecture",
+          "title": "4. System Architecture",
+          "style": "Heading 1",
+          "body_layout": "prose_with_diagram_slot",
+          "prose_fields": ["subsystems", "main_components", "power_flow", "data_flow", "control_flow", "interfaces"],
+          "diagram_slot": { "kind": "architecture_diagram", "source_field": "architecture_diagram_ref", "fallback": "{architecture diagram pending — C03/C04 handoff}" }
+        },
+        {
+          "id": "s05_id_me_requirements",
+          "title": "5. ID / Mechanical Requirements",
+          "style": "Heading 1",
+          "body_layout": "bullet_table",
+          "bullet_table": {
+            "single_column": true,
+            "source_fields": ["industrial_design_intent", "dimensions", "mounting", "connectors", "display_or_ui", "environment", "assembly_constraints"],
+            "note": "One requirement statement per row, single-column table (mirrors Rockbox ID/Mech requirement list)."
+          }
+        },
+        {
+          "id": "s06_electrical_requirements",
+          "title": "6. Electrical Requirements",
+          "style": "Heading 1",
+          "body_layout": "bullet_table",
+          "bullet_table": {
+            "single_column": true,
+            "source_fields": ["compute", "power_input", "power_budget", "battery_or_charging", "memory", "connectivity", "sensors", "interfaces", "compliance_targets", "key_parts_or_references"]
+          }
+        },
+        {
+          "id": "s07_software_requirements",
+          "title": "7. Software Requirements",
+          "style": "Heading 1",
+          "body_layout": "bullet_table",
+          "bullet_table": {
+            "single_column": true,
+            "source_fields": ["functional_behaviors", "operating_modes", "state_transitions", "external_interfaces", "firmware_responsibilities", "logging_or_update_policy", "pin_map_dependency"]
+          }
+        },
+        {
+          "id": "s08_roles_responsibility",
+          "title": "8. Role & Responsibility",
+          "style": "Heading 1",
+          "body_layout": "raci_table",
+          "raci_table": {
+            "row_label_column": "Service Requirement",
+            "owner_columns_source_field": "owner_columns",
+            "owner_columns_fallback": ["Company", "Vendor"],
+            "rows_source_field": "owner_matrix",
+            "row_fields": ["service_requirement", "assignments"],
+            "note": "RACI matrix: first column is the service/deliverable, remaining columns are the responsible parties with a role marker (e.g. Owner/Approver/Support)."
+          }
+        },
+        {
+          "id": "s09_assumptions_constraints",
+          "title": "9. Assumption & Constraints",
+          "style": "Heading 1",
+          "body_layout": "bullet_list",
+          "bullet_fields": ["assumptions", "constraints", "risks", "dependencies", "accepted_gaps"]
+        },
+        {
+          "id": "s10_project_management",
+          "title": "10. Project Management",
+          "style": "Heading 1",
+          "body_layout": "bullet_list",
+          "bullet_fields": ["milestones", "deliverables", "review_gates", "approval_process", "change_control"]
+        },
+        {
+          "id": "s11_schedule",
+          "title": "11. Project High-level Schedule (due date, TBC)",
+          "style": "Heading 1",
+          "body_layout": "schedule_list",
+          "schedule_list": {
+            "source_field": "target_dates",
+            "item_fields": ["activity", "date"],
+            "supporting_fields": ["dependency_order", "long_lead_items", "review_windows", "external_lead_times"],
+            "note": "Each schedule item is an activity followed by its target date (mirrors Rockbox 'activity / date' pairs)."
+          }
+        },
+        {
+          "id": "s12_team_roster",
+          "title": "12. Company & Vendor Team Roster",
+          "style": "Heading 1",
+          "body_layout": "contact_cards",
+          "contact_cards": {
+            "card_rows": ["Title", "AUTHOR", "PHONE", "EMAIL", "Functional Role"],
+            "source_field": "internal_contacts",
+            "additional_sources": ["external_vendors", "reviewers", "approval_contacts", "escalation_path"],
+            "card_fields": ["title", "name", "phone", "email", "functional_role"],
+            "min_cards": 1,
+            "note": "Each contact is a 2-column card table (label | value) with the five fixed rows; multiple contacts stack as successive card tables."
+          }
+        }
+      ]
+    },
+    {
+      "file": "RF_Requirements.md",
+      "title": "RF Requirements",
+      "template_dotx": "c00_rf.dotx",
+      "conditional_when": "wireless, cellular, RF, BLE, Wi-Fi, antenna, or certification target is present",
+      "cover": {
+        "blocks": [
+          { "kind": "product_name", "style": "Title", "source_field": "project_name", "fallback": "{product name}" },
+          { "kind": "product_generation", "style": "Subtitle", "source_field": "product_generation", "fallback": "" },
+          { "kind": "document_type", "style": "Subtitle", "text": "RF Requirements" },
+          { "kind": "version", "style": "Subtitle", "source_field": "rf_document_version", "fallback": "Version 1.0", "prefix": "Version " }
+        ]
+      },
+      "revision_history": {
+        "heading": "Revision History",
+        "style": "Heading 1",
+        "table": {
+          "columns": ["Version", "Description of change(s)", "Date"],
+          "source": "rf_revision_history",
+          "row_fields": ["version", "description", "date"],
+          "min_rows": 1
+        }
+      },
+      "sections": [
+        {
+          "id": "rf01_product_brief",
+          "title": "1.0 Product Brief",
+          "style": "Heading 1",
+          "body_layout": "prose",
+          "prose_fields": ["rf_use_case", "region", "radio_standard", "antenna_context"]
+        },
+        {
+          "id": "rf02_project_objectives",
+          "title": "2.0 Project Objectives",
+          "style": "Heading 1",
+          "body_layout": "objective_table",
+          "objective_table": {
+            "label_prefix": "OBJECTIVE",
+            "source_fields": ["rf_success_criteria", "range_or_link_target", "power_constraint"]
+          }
+        },
+        {
+          "id": "rf03_rf_specifications",
+          "title": "3.0 RF Specifications",
+          "style": "Heading 1",
+          "body_layout": "bullet_table",
+          "bullet_table": {
+            "single_column": true,
+            "source_fields": ["frequency_bands", "module_or_chip", "antenna_type", "certification_target", "test_needs"]
+          }
+        }
+      ]
+    }
+  ],
+  "body_layout_kinds": {
+    "prose": "Field values rendered as flowing paragraphs in field order; empty fields show their {field-name} placeholder with state tag.",
+    "prose_with_diagram_slot": "Prose paragraphs plus a reserved diagram slot paragraph.",
+    "objective_table": "Two-column table; left column is a sequential 'OBJECTIVE N' label, right column is the objective text (one row per source-list item).",
+    "bullet_table": "Single-column table; one requirement statement per row.",
+    "bullet_list": "Markdown bullet list (no table); one item per source-list element.",
+    "raci_table": "Matrix table; first column is the deliverable/service, remaining columns are responsible parties with role markers.",
+    "schedule_list": "Activity + date pairs rendered as a two-line block or two-column table per milestone.",
+    "contact_cards": "Stacked 2-column (label | value) card tables, one per contact, with fixed label rows."
+  }
+}

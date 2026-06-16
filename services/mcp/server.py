@@ -158,6 +158,59 @@ def _h_c00_update_answers(a: dict) -> Any:
     return c00_update_answers(a["folder"], a["answers"], regenerate=a.get("regenerate", True)).to_dict()
 
 
+def _h_c00_emit_prd_docx(a: dict) -> Any:
+    """Render the C00 PRD as docxmcp-assemblable package(s) matching the stored
+    Rockbox Word architecture. Default is client-side orchestration (the MVP per
+    specs/architecture.md): bodesign renders the package(s) only, and the calling
+    client drives docxmcp `document.assemble` over its own docxmcp connection — so
+    bodesign does not depend on docxmcp runtime/accounts/permissions or require
+    cross-container network reachability. Set assemble=true to opt into the
+    internal MCP bridge (requires a configured docxmcp server via
+    BODESIGN_MCP_SERVERS / BODESIGN_MCP_DOCXMCP_URL); when unconfigured the
+    bridge degrades honestly to worker_unavailable and never fabricates a .docx.
+    Honest: missing/drafted/etc. field states stay visible; never marks human
+    approval."""
+    from bodesign_workflow_core import render_c00_prd_docx_package
+
+    render = render_c00_prd_docx_package(a["folder"])
+    result = render.to_dict()
+
+    # Default: render-only (client-side orchestration). The client assembles each
+    # package via its own docxmcp connection using the returned package_dir.
+    if not a.get("assemble", False):
+        result["assembled"] = []
+        result["assemble_hint"] = {
+            "orchestration": "client-side",
+            "instruction": "For each package, call docxmcp document.assemble with "
+                           "doc_dir=<package_dir> and out=<package_dir>/<stem>.docx. "
+                           "doc_dir MUST be the absolute path docxmcp sees for the "
+                           "uploaded package (e.g. /var/cache/docxmcp/sessions/<token>); "
+                           "a relative path resolves against /app and fails.",
+        }
+        return result
+
+    # Opt-in internal bridge: assemble via the configured external docxmcp MCP.
+    from mcp_delegate import call_external_mcp_tool
+
+    assembled: list[dict] = []
+    for pkg in render.packages:
+        out_path = str(Path(pkg.package_dir) / f"{pkg.stem}.docx")
+        call = call_external_mcp_tool(
+            "docxmcp",
+            "document",
+            {"action": "assemble", "doc_dir": pkg.package_dir, "out": out_path},
+        )
+        assembled.append({
+            "document_file": pkg.document_file,
+            "stem": pkg.stem,
+            "doc_dir": pkg.package_dir,
+            "out_path": out_path,
+            "assemble": call,
+        })
+    result["assembled"] = assembled
+    return result
+
+
 def _h_c01_readiness(a: dict) -> Any:
     from bodesign_workflow_core import assess_c01_package_readiness
     return assess_c01_package_readiness(a["folder"]).to_dict()
@@ -734,6 +787,9 @@ TOOLS: list[dict] = [
      "description": "Record user/consultant answers into the C00 PRD answer-state, recompute readiness, and regenerate the PRD Markdown. `answers` maps a field key (or qualified `section_id.field`) to a value, or to {value, state} where state ∈ missing/drafted/answered/external-needed/blocked/accepted-risk. Unknown keys → not_found; an unqualified key in multiple sections → ambiguous (not guessed). Never marks human approval. This is how C00 field answers get recorded (the consultant's intake), without hand-editing answer_state.json.",
      "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "regenerate": {"type": "boolean"}},
                 "required": ["folder", "answers"]}},
+    {"name": "bodesign_c00_emit_prd_docx", "handler": _h_c00_emit_prd_docx,
+     "description": "Render the C00 PRD as a docxmcp-assemblable package matching the stored Rockbox Word architecture (cover + revision history + 12 sections with per-section table layouts; conditional RF document) — body.md + outline.md + manifest.json + template/template.dotx (from the committed c00_prd.dotx/c00_rf.dotx) built from answer_state. DEFAULT is client-side orchestration (the MVP): bodesign returns the package(s) + an assemble_hint, and the CALLING CLIENT drives docxmcp document.assemble itself (so bodesign does not depend on docxmcp runtime/accounts/permissions). Set assemble=true to opt into the internal MCP bridge, which assembles via a configured docxmcp server (BODESIGN_MCP_SERVERS / BODESIGN_MCP_DOCXMCP_URL); when unconfigured it degrades honestly to worker_unavailable and never fabricates a .docx. Honest: missing/drafted/external-needed/blocked/accepted-risk field states stay visible; never marks human approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "assemble": {"type": "boolean"}}, "required": ["folder"]}},
     {"name": "bodesign_c01_emit_package", "handler": _h_c01_emit,
      "description": "Emit a Rockbox-like C01 ID package: Ai file/Design_Direction.md, CMF/CMF_Direction.md, Display UIUX/UIUX_Requirements.md, Interface_Constraints.json, and ID handoff, with draft/decision markers.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},

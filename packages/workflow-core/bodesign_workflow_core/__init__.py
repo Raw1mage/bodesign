@@ -143,6 +143,14 @@ from .c00_prd_template import (
     load_c00_prd_template,
     scaffold_c00_prd_package,
 )
+from .c00_prd_docx import (
+    C00DocxArchitecture,
+    C00DocxArchitectureError,
+    C00DocxPackage,
+    C00DocxRenderResult,
+    load_c00_docx_architecture,
+    render_c00_prd_docx_package,
+)
 from .c01_id_template import (
     C01IdRubric,
     C01IdTemplate,
