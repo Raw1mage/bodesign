@@ -36,10 +36,10 @@ missing.
 
 | # | Required artifact | File | Bucket |
 |---|---|---|---|
-| 1 | Manufacturing-transfer record | `Manufacturing_Transfer.md` | `03_output/` |
-| 2 | Fab-output package (when C04 frozen) | `gerber/` (Gerber · drill · IPC · route · params), panelization, stackup | `03_output/` |
-| 3 | Manufacturing BOM / CPL | `mfg_bom.csv` + CPL | `03_output/` (only after C04 fab export) |
-| 4 | Cost / qty / cert targets + DFM checklist | within `Manufacturing_Transfer.md`, cited to C00 | `03_output/` |
+| 1 | Manufacturing-transfer record | `Manufacturing_Transfer.md` | stage root |
+| 2 | Fab-output package (when C04 frozen) | `gerber/` (Gerber · drill · IPC · route · params), panelization, stackup | stage root |
+| 3 | Manufacturing BOM / CPL | `mfg_bom.csv` + CPL | stage root (only after C04 fab export) |
+| 4 | Cost / qty / cert targets + DFM checklist | within `Manufacturing_Transfer.md`, cited to C00 | stage root |
 
 **Self-verify:** confirm the C04 freeze via `fab_release_gate.py` (there is no `c07_readiness` tool)
 and `bodesign_package_readiness` for the roll-up; every fab item must list its owning gate + honest

@@ -27,7 +27,7 @@ What C06 does **not** own:
 
 ## Required deliverables — Definition of Done
 
-Produce **all** of these into the stage's `03_output/` bucket before you report C06 done or hand off
+Produce **all** of these at the stage root before you report C06 done or hand off
 (see SKILL.md § "Definition of Done"; debug overlays/scripts go in `02_build/`). Each exists **or**
 carries an honest `not-run`/`blocked` status with a reason. A record where SPICE/EMC/thermal are
 honestly `not-run` and only the cross-check is `pass` is a **legitimate done-state** — but every

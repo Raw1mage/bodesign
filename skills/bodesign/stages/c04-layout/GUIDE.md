@@ -39,19 +39,19 @@ warn.** See `../../references/honesty-model.md` rule 5 and the C04 paragraph the
 ## Required deliverables — Definition of Done
 
 Produce **all** of these before you report C04 done or hand off (see SKILL.md § "Definition of
-Done"; deliverables land in `03_output/`, rendered previews in `02_build/`). Each exists **or** carries
+Done"; deliverables land at the stage root, rendered previews in `02_build/`). Each exists **or** carries
 an explicit `drafted`/`pending`/`not-run` status with a reason — fab outputs stay `pending` until
 the board is frozen, which is honest, not missing.
 
 | # | Required artifact | File | Bucket |
 |---|---|---|---|
-| 1 | Layout + placement constraints | `Layout_Constraints.json` + `Placement_Constraints.md` | `03_output/` |
-| 2 | Stackup + routing rules | `Stackup.md` + `Routing_Rules.md` | `03_output/` |
-| 3 | Routed board + DRC report | `<board>.kicad_pcb` + `<board>.drc.rpt` | `03_output/` |
-| 4 | Gerbers + drill | `gerbers/` + `drill/` | `03_output/` |
-| 5 | Assembly package | CPL · IPC-2581 · assembly drawing | `03_output/` |
+| 1 | Layout + placement constraints | `Layout_Constraints.json` + `Placement_Constraints.md` | stage root |
+| 2 | Stackup + routing rules | `Stackup.md` + `Routing_Rules.md` | stage root |
+| 3 | Routed board + DRC report | `<board>.kicad_pcb` + `<board>.drc.rpt` | stage root |
+| 4 | Gerbers + drill | `gerbers/` + `drill/` | stage root |
+| 5 | Assembly package | CPL · IPC-2581 · assembly drawing | stage root |
 | 6 | Per-layer copper PNGs + fab view | `copper_layers/`, `renders/` | `02_build/` |
-| 7 | Length-match + SI reports | `<board>.lengthmatch.json`, `<board>.si.json` | `03_output/` (high-speed only) |
+| 7 | Length-match + SI reports | `<board>.lengthmatch.json`, `<board>.si.json` | stage root (high-speed only) |
 
 **Self-verify:** run the gate — `bodesign_layout_drc_gate` (`board_path`) + `bodesign_c04_readiness`
 (`folder`) — and report the verdict (see "Gate / done-criteria" below). Mechanical constraints are

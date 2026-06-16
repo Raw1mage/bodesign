@@ -74,10 +74,10 @@ artifacts, narrating what *could* be produced, and stopping until the user asks 
 user named the stage (or the work is clearly in it), produce the whole set.
 
 Required deliverables are filed under the canonical stage layout — every deliverable (the spec/handoff
-`.md` docs, the `.json` bridges, the engineering files, a viewable PNG) goes in **`03_output/`**;
+`.md` docs, the `.json` bridges, the engineering files, a viewable PNG) goes flat at the **stage root**;
 `01_refs/` holds external inputs; `02_build/` holds garbage-collectable intermediates; the stage
 **root holds only `README.md`/`CHANGELOG.md`** (an execution record, not a deliverable). See
-`references/stage-structure.md`. `03_output/` *is* the Definition of Done; the readiness tools score
+`references/stage-structure.md`. The **deliverables at the stage root** *are* the Definition of Done; the readiness tools score
 it. Each shared artifact (mechanical constraints, pin map, PRD targets) has one owning stage and is
 consumed by reference downstream, never re-copied.
 

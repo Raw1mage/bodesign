@@ -23,7 +23,7 @@ C06 decisions. When you find yourself writing C, stop — you've crossed the lin
 
 ## Required deliverables — Definition of Done
 
-Produce **all** of these into the stage's `03_output/` bucket before you report C05 done or hand off
+Produce **all** of these at the stage root before you report C05 done or hand off
 (see SKILL.md § "Definition of Done"). Each exists **or** carries an explicit `draft`/`blocked`
 status with a reason + owner. The whole package is spec-level `draft` until the FW team signs off —
 that is honest, but every required file must still be present.
@@ -35,7 +35,7 @@ that is honest, but every required file must still be present.
 | 3 | State machine | `State_Machine.md` |
 | 4 | Task breakdown | `Task_Breakdown.md` |
 | 5 | Pin-map bridge | `Pin_Map_Bridge.json` (**derived from C03's pin map — zero invented pins**) |
-| 6 | Build notes | `Firmware_Build_Notes.md` (→ `03_output/`) |
+| 6 | Build notes | `Firmware_Build_Notes.md` (→ stage root) |
 
 **Self-verify:** run `bodesign_c05_readiness` (`folder`); validate `Pin_Map_Bridge.json` parses; every
 signal must trace to a C03 pinmap row. Model: `thesmart_products/rockbox/c05-fw/`.

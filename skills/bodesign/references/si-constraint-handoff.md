@@ -8,7 +8,7 @@ the copper.
 
 Run it as code: `emit_si_constraint_export(...)` in `bodesign_workflow_core.si_handoff`.
 
-## What it produces (in `03_output/`)
+## What it produces (at the stage root)
 
 | File | Role |
 |---|---|
