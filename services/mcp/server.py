@@ -88,7 +88,8 @@ def _h_compose(a: dict) -> Any:
     from bodesign_eda_bridge import compose_schematic
     r = compose_schematic(a["out_dir"], a["project_name"], a["spec"],
                           symbol_dirs=a.get("symbol_dirs", "/usr/share/kicad/symbols"),
-                          validate=a.get("validate", True))
+                          validate=a.get("validate", True),
+                          connection_style=a.get("connection_style", "label"))
     return {"placed": r.placed, "nets": r.nets, "schematic": r.emit.schematic_path,
             "unresolved_pins": r.emit.unresolved_pins, "warnings": r.warnings,
             "validation": _jsonable(r.validation) if r.validation else None}
@@ -245,6 +246,23 @@ def _h_c01_add_reference_image(a: dict) -> Any:
 def _h_c01_confirm_reference_cue(a: dict) -> Any:
     from bodesign_workflow_core import c01_confirm_reference_cue
     return c01_confirm_reference_cue(a["folder"], a["cue_id"], a["confirmation"], a.get("note", "")).to_dict()
+
+
+def _h_c01_emit_id_visual_package(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c01_id_visual_package
+    return emit_c01_id_visual_package(a["folder"], a.get("answer_state"),
+                                      figma_available=bool(a.get("figma_available", False)),
+                                      ai_export_path=a.get("ai_export_path")).to_dict()
+
+
+def _h_c01_emit_cmf_package(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c01_cmf_package
+    return emit_c01_cmf_package(a["folder"], a.get("answer_state")).to_dict()
+
+
+def _h_c01_emit_uiux_package(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c01_uiux_package
+    return emit_c01_uiux_package(a["folder"], a.get("answer_state")).to_dict()
 
 
 def _h_c02_readiness(a: dict) -> Any:
@@ -681,6 +699,17 @@ def _h_render_gerber_preview(a: dict) -> Any:
                                  drill_dir=a.get("drill_dir"), layer_glob=a.get("layer_glob"))
 
 
+def _h_dxf_to_dwg(a: dict) -> Any:
+    from bodesign_eda_bridge import dxf_to_dwg
+    return dxf_to_dwg(a["in_path"], a["out_dir"],
+                      version=a.get("version", "R2000"), normalize=a.get("normalize", True))
+
+
+def _h_dwg_to_dxf(a: dict) -> Any:
+    from bodesign_eda_bridge import dwg_to_dxf
+    return dwg_to_dxf(a["in_path"], a["out_dir"])
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
     {"name": "bodesign_impedance_solve", "handler": _h_impedance_solve,
@@ -712,7 +741,13 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}}, "required": ["board_path", "out_path"]}},
     {"name": "bodesign_render_gerber_preview", "handler": _h_render_gerber_preview,
      "description": "C04 Gerber preview evidence: render a real Gerber layer through the gerber-core pygerber raster path. Unsupported composite modes return render-unavailable instead of drawing a decorative fallback.",
-     "schema": {"type": "object", "properties": {"gerber_dir": _STR, "out_path": _STR, "mode": _STR, "drill_dir": _STR, "layer_glob": _STR}, "required": ["gerber_dir", "out_path", "mode"]}},
+      "schema": {"type": "object", "properties": {"gerber_dir": _STR, "out_path": _STR, "mode": _STR, "drill_dir": _STR, "layer_glob": _STR}, "required": ["gerber_dir", "out_path", "mode"]}},
+    {"name": "bodesign_dxf_to_dwg", "handler": _h_dxf_to_dwg,
+     "description": "Local lossless DXF->DWG conversion via LibreDWG dxf2dwg, with optional ezdxf normalization (default on) that rewrites the input as a clean version DXF (LWPOLYLINE/TEXT/layers/colors preserved) for best DWG roundtrip fidelity. Output is AC1015 (AutoCAD 2000) DWG. No-fallback: if the LibreDWG binaries are missing it returns ok=false with 'rebuild image' rather than degrading. Returns dwg_path + dwgread-verified entity counts + warnings.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_dir": _STR, "version": _STR, "normalize": {"type": "boolean"}}, "required": ["in_path", "out_dir"]}},
+    {"name": "bodesign_dwg_to_dxf", "handler": _h_dwg_to_dxf,
+     "description": "Local DWG->DXF conversion via LibreDWG dwg2dxf. No-fallback: missing LibreDWG binary returns ok=false with 'rebuild image' rather than degrading. Returns dxf_path + dwgread-verified entity counts + warnings.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_dir": _STR}, "required": ["in_path", "out_dir"]}},
     {"name": "bodesign_mcp_call", "handler": _h_mcp_call,
      "description": "MCP-to-MCP delegation: call a tool on an external MCP server registered by name (via BODESIGN_MCP_SERVERS or BODESIGN_MCP_<NAME>_URL) and return its result. Use to drive docxmcp/drawmiat/other MCP servers through bodesign. Degrades cleanly: an unconfigured server is worker_unavailable, a configured-but-unreachable one is worker_starting (retryable); never fabricates a result.",
      "schema": {"type": "object", "properties": {"server": _STR, "tool": _STR, "arguments": {"type": "object"}},
@@ -734,9 +769,9 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"symbol_name": _STR, "pins": {"type": "array"}, "output_path": _STR,
                 "footprint_filter": _STR, "datasheet": _STR}, "required": ["symbol_name", "pins", "output_path"]}},
     {"name": "bodesign_compose_schematic", "handler": _h_compose,
-     "description": "Compose a schematic from a design spec (components + REF.PIN nets); auto-place + emit + kicad-cli validate.",
+     "description": "Compose a schematic from a design spec (components + REF.PIN nets); auto-place + emit + kicad-cli validate. connection_style='label' (default) places a global label on every pin; 'wire' draws orthogonal wires (2-pin L-route, 3+ pin daisy-chain + junctions) for human-readable schematics. Components may carry x/y for caller-supplied placement.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "spec": {"type": "object"},
-                "symbol_dirs": {}, "validate": {"type": "boolean"}}, "required": ["out_dir", "project_name", "spec"]}},
+                "symbol_dirs": {}, "validate": {"type": "boolean"}, "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}}, "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_pin_allocation", "handler": _h_pin_alloc,
      "description": "Build a pin/GPIO allocation table (C03->FW interface) from a net list; returns CSV.",
      "schema": {"type": "object", "properties": {"nets": {"type": "array"}, "mcu_refs": {"type": "array", "items": _STR}}, "required": ["nets"]}},
@@ -802,6 +837,15 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c01_update_answers", "handler": _h_c01_update_answers,
      "description": "Update C01-ID/answer_state.json with user/design preferences, then regenerate the Rockbox-like C01 package and return the next question. Does not mark ID approval or create final .ai/Figma/CAD artifacts.",
      "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "c00": {}}, "required": ["folder", "answers"]}},
+    {"name": "bodesign_c01_emit_id_visual_package", "handler": _h_c01_emit_id_visual_package,
+     "description": "Emit the C01 ID-native Ai file bucket (C01-ID/Ai file/): a layered, designer-editable <product>_ID_skeleton.svg (outline/panel/cmf-fill/components/annotations layers, each exposed component an independently-selectable component-<type>-<n> group) + figma_import_spec.json + README.md. Inputs: Interface_Constraints.json (primary) + answer_state (form_archetype/primary_face/exposed_components/cmf_direction). Fails fast (status=missing, C01V-E001) when a required field is absent — never fabricates geometry. Unknown component types render as generic placeholders and are reported (not silently dropped). Carries a visible 'draft / not final industrial design' marking. Never fabricates a .ai (ai_emitted=false unless a real Illustrator export path is configured); without Figma it still emits figma_import_spec.json. Not an ID approval.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "answer_state": {"type": "object"}, "figma_available": {"type": "boolean"}, "ai_export_path": _STR}, "required": ["folder"]}},
+    {"name": "bodesign_c01_emit_cmf_package", "handler": _h_c01_emit_cmf_package,
+     "description": "Emit the C01 ID-native CMF draft bucket (C01-ID/CMF/): cmf_tokens.json (material_family/finish/colour routes/RF-transparent zones/gasket-sealing notes/sample-vendor gates, approval_state permanently not-approved) + <product>_CMF_Direction markdown (rendered to PDF via the approved emit_document pipeline when LibreOffice is available; otherwise the markdown source is emitted and the PDF is marked pending, C01D-E001 — never hand-stitched) + README.md. Fails fast (status=missing, C01C-E001) when cmf_direction is absent — no default material. Carries a visible 'not CMF approval' marking.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "answer_state": {"type": "object"}}, "required": ["folder"]}},
+    {"name": "bodesign_c01_emit_uiux_package", "handler": _h_c01_emit_uiux_package,
+     "description": "Emit the C01 ID-native Display UI/UX draft bucket (C01-ID/Display UI_UX/ — underscore, coexists with the core companion Display UIUX/): uiux_wireframes.svg (state wireframes) + <product>_UIUX_Flow markdown (rendered to PDF via emit_document when available; else markdown source + PDF pending, C01D-E001) + README.md. Covers OLED screens/states, LED state vocabulary, insert/remove feedback, privacy/local-only, and charging/connectivity/error states. No-display products map explicitly to LED/status/button interaction (not silently omitted). Fails fast (status=missing, C01U-E001) when neither display_uiux nor any status component is described. Carries a visible 'not UI sign-off' marking.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "answer_state": {"type": "object"}}, "required": ["folder"]}},
     {"name": "bodesign_c01_emit_concept_prompts", "handler": _h_c01_emit_concept_prompts,
      "description": "Persist reference-only C01 concept/moodboard/UI prompt artifacts (Concept_Image_Prompts.md, Moodboard_Prompts.md, UI_Concept_Prompts.md) derived from accumulated C00/C01 intent. Generalized design language; not final art and not a copy of any product/brand.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
