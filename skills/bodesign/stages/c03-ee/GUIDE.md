@@ -71,7 +71,11 @@ In all commands, `ENG=../../engines/kicad/scripts` (the KiCad engine script dir)
 Author `Design_Definition.md` (or `EE_Design_Specification.md`): design intent, the block
 architecture (a table of blocks → key parts → datasheet/reference provenance), the power tree,
 the key interfaces, and a "design/verification notes for C06" section. Add an `Architecture.md`
-block diagram. Model these on the real examples — see
+block diagram. **Use a functional/circuit block diagram (functional blocks + buses/interfaces) for
+EE architecture — NOT a C4-model container diagram.** C4 (Context/Container/Component) is a
+*software*-architecture notation and is the wrong tool for describing a circuit; the same applies to
+C04. Power distribution may use IDEF0; signal/data flow a flow diagram — but the system/host
+architecture is a functional block diagram. Model these on the real examples — see
 `thesmart_products/openmv/C03-EE/03_output/Design_Definition.md` and
 `thesmart_products/openmv/N6_board/C03_EE/{EE_Design_Specification,Architecture,Power_Tree,Interface_Definitions}.md`.
 
@@ -108,6 +112,23 @@ bodesign MCP server"):** generate rather than hand-draw.
   reference design → complete each interface), so every net traces to a datasheet requirement rather
   than being invented to fill the spec.
 - `bodesign_pin_allocation` (`nets`, `mcu_refs`) to derive the GPIO/peripheral map for step 7/FW.
+
+**Standard step — render a PNG preview of every ERC-clean sheet.** As soon as a sheet
+validates, produce a directly-openable PNG next to its `.kicad_sch` so a human can review the
+schematic without opening KiCad. kicad-cli has no direct PNG export for schematics, so the route
+is `sch → PDF (kicad-cli) → PNG (pdftoppm)`; the embedded `lib_symbols` make it self-contained:
+
+```sh
+assets/render_sch_png.sh generated/sch_radio/aiguard_radio.kicad_sch   # one sheet
+assets/render_sch_png.sh generated/                                    # every sheet under it
+# under the hood, per sheet:
+#   kicad-cli sch export pdf --output X.pdf X.kicad_sch && pdftoppm -png -r 150 X.pdf X
+```
+
+The PNG is a **review artifact, not a correctness gate** — ERC (the kicad-cli validation block
+returned by `compose_schematic`) stays the check. Don't treat a rendered PNG as evidence of
+correctness. If `pdftoppm` is absent, export SVG (`kicad-cli sch export svg`) or ship the PDF and
+say so — don't silently skip the preview.
 
 **Fallback — manual KiCad capture** (MCP absent, or a reverse-engineered baseline with no spec to
 generate from): author the `.kicad_sch` by hand as above.
@@ -321,6 +342,9 @@ C06 produces the verdicts; C03 names the plan.
   `--stage/--audience`), `what_if.py`, `diff_analysis.py`, `summarize_findings.py`,
   `cross_analysis.py`/`cross_verify.py` (when a PCB exists), `export_issues.py`. Bridges:
   `../../engines/datasheets`, `../../engines/emc`.
+- **`assets/render_sch_png.sh`** — standard SOP-step-2 helper: render any ERC-clean `.kicad_sch`
+  (or a whole `generated/` tree) to an openable PNG preview via `kicad-cli sch export pdf` +
+  `pdftoppm`. Review artifact only — ERC stays the correctness gate.
 - **Documentation engine** — `../../engines/kidoc/` (`ENGINE.md`): HDD / power-analysis /
   schematic-review / ICD packages, rendered SVGs, styled PDF.
 - **`datasheets` skill** — IC pin/electrical/topology extraction; consumed by the analyzer for

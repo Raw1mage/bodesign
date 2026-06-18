@@ -9,8 +9,8 @@ a subfolder for the messier supporting material. So every `cXX-*/` stage folder 
 ```
 cXX-<name>/
 ├── README.md / CHANGELOG.md   ← the stage's meta record (project-execution log / index, not a deliverable)
-├── <deliverables…>            ← every clean output flat at the root: spec/handoff docs, .json bridges,
-│                                  engineering files, a viewable PNG  (one glance = what this stage delivered)
+├── <deliverables…>            ← every clean output flat at the root, NO subfolders: .docx documents, .json
+│                                  bridges, engineering files, a viewable PNG  (one glance = what this stage delivered)
 ├── 01_refs/                   reference — external inputs this stage CONSUMES
 └── 02_build/                  build     — intermediate/derived products + build workspaces (garbage-collectable)
 ```
@@ -22,20 +22,41 @@ cXX-<name>/
 > skill-doc convention that required a manual reconcile step. **Legacy:** the `thesmart_products/rockbox/`
 > and `openmv/` tracks predate this and still use the old `03_output/` layout; new work uses flat.
 
+> **Convention (changed 2026-06-19):** **document deliverables are delivered as `.docx`**, not `.md`.
+> The editable Markdown is an **intermediate source** that lives in `02_build/` (e.g.
+> `02_build/<Doc>.docx.body.md`); docxmcp assembles it into the `.docx` deliverable at the stage root.
+> Author/edit content in the `.md` under `02_build/`, then (re)assemble the `.docx`. **No deliverable
+> subfolders** — every deliverable sits flat at the stage root; the only subfolders are `01_refs/` and
+> `02_build/`. (So a `schematics/` folder for schematic PNGs is wrong — the PNGs go at the stage root.)
+> Files a professional tool *needs* in a specific tree (a KiCad project's own `generated/` workspace, a
+> routing tool's relative-path bundle) stay as that tool requires under `02_build/` — see "Complex
+> stages" below; the **viewable result** (PNG/PDF) is copied flat to the root.
+>
+> **Language:** the `.docx` document deliverable is written in **繁體中文 (Traditional Chinese)** —
+> translate the `.md` source if it is in English or 簡體中文 before assembling. The `.md` intermediate
+> may stay in whatever working language it was authored in (it is not the deliverable). `README.md` /
+> `CHANGELOG.md` are meta (not deliverables) and need not be translated. This applies to **all C00–C07
+> stages**.
+
 ## What goes where
 
 | Location | Put here | Examples |
 |---|---|---|
-| **stage root** | **The stage's `README.md`/`CHANGELOG.md` (meta/index) AND every clean deliverable** downstream consumes — spec/handoff **docs** (`.md`), structured-data bridges (`.json`), the real engineering files, and a viewable `.png` so the result can be eyeballed without opening CAD/EDA. The README is named distinctly, so deliverables vs the index stay clear. | `README.md`; `Architecture_and_BOM.md`, `Functional_Spec.md`, `*_Handoff*.md`, `Interface_Constraints.json`, `Pin_Map_Bridge.json`, `.kicad_sch`, BOM, Gerbers, STEP, a render/preview PNG, a `.docx` |
+| **stage root** | **The stage's `README.md`/`CHANGELOG.md` (meta/index) AND every clean deliverable** downstream consumes — document deliverables as **`.docx`** (the editable `.md` source stays in `02_build/`), structured-data bridges (`.json`), the real engineering files, and a viewable `.png` so the result can be eyeballed without opening CAD/EDA. Flat — **no deliverable subfolders**. The README is named distinctly, so deliverables vs the index stay clear. | `README.md`; `Design_Definition.docx`, `Functional_Spec.docx`, `*_Handoff*.docx`, `Interface_Constraints.json`, `Pin_Map_Bridge.json`, `.kicad_sch`, BOM, Gerbers, STEP, a render/preview PNG |
 | **`01_refs/`** | **External reference source** the stage reads but did not produce — anything consumed as input. PDFs, datasheets, client requirement specs, a reference design, a constraint export consumed from an earlier stage. | requirement `.pdf`/`.docx`, `datasheets/`, an upstream `Mechanical_Constraint_Export.json` mirror |
 | **`02_build/`** | **Intermediate & derived** artifacts produced on the way to the deliverables. **Transient — a later garbage-collection pass keeps only what has lasting value.** | analyzer runs (`analysis/`), schematic viewers (`.jrl`/`.opj`), granular per-layer copper PNGs, debug overlays + scripts, working state (`answer_state.json`), docx body sources |
 
 ### The recurring judgment calls (decide consistently)
 
-- **Spec / handoff / SOP docs are deliverables → stage root**, even though they are markdown. The
-  README/CHANGELOG are also at the root but are the *meta* layer (an index/log about the stage), not
-  deliverables. "Is this a thing I hand downstream?" yes → a deliverable at the root; "is this a
-  log/index about my own work?" → `README.md`.
+- **Document deliverables ship as `.docx` at the stage root; their Markdown is an intermediate source in
+  `02_build/`.** Author/edit the content in the `.md` (under `02_build/`), then docxmcp-assemble the
+  `.docx` to the root — the `.md` is *how you wrote it*, the `.docx` is *what you deliver*. The
+  README/CHANGELOG stay at the root as the *meta* layer (Markdown is fine for them — they are an
+  index/log, not deliverables). "Is this a document I hand downstream?" yes → `.docx` at the root, `.md`
+  in `02_build/`; "is this a log/index about my own work?" → `README.md` (stays `.md` at root).
+- **No deliverable subfolders.** Every deliverable sits flat at the stage root; the only subfolders are
+  `01_refs/` and `02_build/`. Don't create a `schematics/`, `docs/`, `figures/` bucket — viewable PNGs,
+  `.docx`, bridges, and engineering files all go flat at the root.
 - **Structured-data deliverables (`.json` bridges, BOM/netlist tables) → stage root.**
 - **Deliverables must be eyeball-able.** Mechanical → a render/`.glb`+viewer or PNG; circuit/PCB →
   a schematic/board/copper PNG. If only a binary deliverable exists, generate a preview (the MCP's
@@ -43,6 +64,24 @@ cXX-<name>/
 - **External input vs. stage deliverable.** A client requirement `.docx`/`.pdf` is *consumed input*
   → `01_refs/`. A doc the stage *authors as its output* (spec, handoff, SOP) → stage root.
 - **Generated previews/intermediates → `02_build/`**; the showcase result PNG → stage root.
+
+## Producing the `.docx` deliverable from the `.md` source (the standard recipe)
+
+The `.md` (in `02_build/`) is the editable source; the `.docx` at the stage root is the deliverable.
+To (re)generate a stage-root `.docx` in the **house style + 繁體中文** via docxmcp:
+
+1. **House template** — decompose any existing house `.docx` (`docxmcp_document action=decompose`).
+   You get a package with `template/` (styles/numbering/theme) + a `body.md` + `next_args.assemble`.
+   Upload it under an **ASCII filename** first (a CJK stem breaks the `doc_dir` path arg).
+2. **Translate + inject** — translate the source `.md` to **繁體中文**, then replace the package's
+   `body.md` with that content. **Bundle any referenced images** into the package (next to `body.md`,
+   matching the `![](name.png)` paths) or they render as "[image not found]".
+3. **Assemble** — `docxmcp_document action=assemble` with the package `doc_dir`; the `.docx` inherits
+   the house numbering (壹、/ 一、/（一）) and styles. Download it to the **stage root**; move the source
+   `.md` into `02_build/`.
+
+Never hand-edit OOXML; if docxmcp can't assemble, stop and report (don't fall back to LibreOffice/pandoc
+as the delivery path — soffice is fine only for a read-only render check).
 
 ## One canonical owner per cross-stage artifact — consume by reference, never re-copy
 
