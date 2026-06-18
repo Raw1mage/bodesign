@@ -46,6 +46,7 @@ def compose_schematic(
     symbol_dirs: str | Path | list = DEFAULT_SYMBOL_DIR,
     columns: int = 4,
     validate: bool = False,
+    connection_style: str = "label",
 ) -> ComposeResult:
     raw_components = spec.get("components", [])
     raw_nets = spec.get("nets", [])
@@ -58,7 +59,13 @@ def compose_schematic(
         if not ref or not symbol:
             warnings.append(f"component #{index} missing ref/symbol; skipped")
             continue
-        x, y = _auto_place(index, columns)
+        # Level-1 AI/tool split: honour caller-supplied placement (x, y) when present;
+        # only fall back to the naive grid when the spec omits coordinates. The AI owns
+        # placement (the spatial/aesthetic judgement); the tool owns wire geometry.
+        if comp.get("x") is not None and comp.get("y") is not None:
+            x, y = float(comp["x"]), float(comp["y"])
+        else:
+            x, y = _auto_place(index, columns)
         components.append(EmitComponent(
             ref=ref, lib_id=symbol, value=str(comp.get("value", "")),
             footprint=str(comp.get("footprint", "")), x=x, y=y,
@@ -71,7 +78,7 @@ def compose_schematic(
         if name and nodes:
             nets.append(EmitNet(name=name, nodes=nodes))
 
-    emit = emit_kicad_schematic(out_dir, project_name, components, nets, symbol_dir=symbol_dirs)
+    emit = emit_kicad_schematic(out_dir, project_name, components, nets, symbol_dir=symbol_dirs, connection_style=connection_style)
     warnings.extend(emit.warnings)
     result = ComposeResult(emit=emit, placed=emit.component_count, nets=emit.net_count, warnings=warnings)
     if validate:

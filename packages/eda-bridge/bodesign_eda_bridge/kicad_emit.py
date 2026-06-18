@@ -77,6 +77,17 @@ def _uid() -> str:
     return str(_uuid.uuid4())
 
 
+def _snap_grid(value: float, grid: float = 1.27) -> float:
+    """Snap a coordinate onto KiCad's connection grid (default 1.27 mm / 50 mil).
+
+    Library pin local offsets are grid-multiples, so once a symbol origin is snapped
+    its absolute pin endpoints land on-grid too — which is what lets a drawn wire end
+    actually merge with the pin (off-grid endpoints surface as `pin_not_connected` in
+    ERC and `endpoint_off_grid` warnings).
+    """
+    return round(round(value / grid) * grid, 4)
+
+
 def vault_symbol(repository, mpn: str) -> dict:
     """Consult the component vault for a verified KiCad symbol mapping (R5).
 
@@ -204,7 +215,24 @@ def emit_kicad_schematic(
     components: list[EmitComponent],
     nets: list[EmitNet],
     symbol_dir: str | Path = DEFAULT_SYMBOL_DIR,
+    connection_style: str = "label",
 ) -> SchematicEmitResult:
+    """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
+
+    connection_style taxonomy (the AI/tool split — Level 1):
+      - "label" (default, unchanged): every pin of every net gets a global label.
+        Electrically correct, visually sparse; no drawn wires. Back-compat path.
+      - "wire": a 2-node net is joined by a drawn orthogonal wire between its two
+        pin endpoints (tool auto-routes the geometry from the AI-supplied placement),
+        plus ONE local label at the wire midpoint to preserve the net name. Nets with
+        !=2 resolvable nodes fall back to global labels (buses / power / single-pin),
+        so the result is always ERC-valid.
+      - "auto": alias of "wire" (kept for forward-compat naming).
+
+    Only the connectivity emission differs by style; placement is the caller's job
+    (AI supplies component.x / component.y). The tool never invents placement here.
+    """
+    drawn = connection_style in ("wire", "auto")
     root = Path(project_dir)
     root.mkdir(parents=True, exist_ok=True)
     root_uuid = _uid()
@@ -223,6 +251,15 @@ def emit_kicad_schematic(
         embedded_defs[component.lib_id] = definition
         pin_maps[component.lib_id] = pins
 
+    # Snap every component onto KiCad's 1.27 mm connection grid. Library pin local
+    # offsets are grid-multiples, so once the symbol origin is on-grid the absolute
+    # pin endpoint is too — which is what lets a drawn wire end actually merge with
+    # the pin (off-grid endpoints read as `pin_not_connected` in ERC). Harmless to
+    # label mode (global labels don't require grid alignment).
+    for component in components:
+        component.x = _snap_grid(component.x)
+        component.y = _snap_grid(component.y)
+
     placements = {component.ref: component for component in components}
     symbol_blocks = [
         _symbol_instance_block(component, project_name, root_uuid)
@@ -230,23 +267,54 @@ def emit_kicad_schematic(
         if component.lib_id in embedded_defs
     ]
 
+    def _pin_abs(ref: str, pin: str) -> tuple[float, float] | None:
+        component = placements.get(ref)
+        if component is None or component.lib_id not in pin_maps:
+            return None
+        endpoint = pin_maps[component.lib_id].get(pin)
+        if endpoint is None:
+            return None
+        return (round(component.x + endpoint[0], 4), round(component.y - endpoint[1], 4))
+
     label_blocks: list[str] = []
+    wire_blocks: list[str] = []
+    junction_blocks: list[str] = []
     unresolved: list[str] = []
     for net in nets:
+        endpoints: list[tuple[float, float]] = []
+        net_unresolved = False
         for ref, pin in net.nodes:
-            component = placements.get(ref)
-            if component is None or component.lib_id not in pin_maps:
+            abs_pt = _pin_abs(ref, pin)
+            if abs_pt is None:
                 unresolved.append(f"{ref}.{pin}")
+                net_unresolved = True
                 continue
-            endpoint = pin_maps[component.lib_id].get(pin)
-            if endpoint is None:
-                unresolved.append(f"{ref}.{pin}")
-                continue
-            label_x = round(component.x + endpoint[0], 4)
-            label_y = round(component.y - endpoint[1], 4)
-            label_blocks.append(_global_label_block(net.name, label_x, label_y))
+            endpoints.append(abs_pt)
 
-    schematic = _schematic_document(root_uuid, embedded_defs.values(), symbol_blocks, label_blocks)
+        # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
+        if drawn and not net_unresolved and len(endpoints) == 2:
+            waypoints = _orthogonal_route(endpoints[0], endpoints[1])
+            for a, b in zip(waypoints, waypoints[1:]):
+                wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
+            mid = waypoints[len(waypoints) // 2]
+            label_blocks.append(_local_label_block(net.name, mid[0], mid[1]))
+        elif drawn and not net_unresolved and len(endpoints) >= 3:
+            segments, junctions = _bus_route(endpoints)
+            for (a, b) in segments:
+                wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
+            for (jx, jy) in junctions:
+                junction_blocks.append(_junction_block(jx, jy))
+            # one local label on the trunk's left end to name the net
+            trunk = segments[0]
+            label_blocks.append(_local_label_block(net.name, trunk[0][0], trunk[0][1]))
+        else:
+            # label fallback: power, single-pin, unresolved, or style=label
+            for abs_pt in endpoints:
+                label_blocks.append(_global_label_block(net.name, abs_pt[0], abs_pt[1]))
+
+    schematic = _schematic_document(
+        root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks
+    )
     schematic_path = root / f"{project_name}.kicad_sch"
     schematic_path.write_text(schematic, encoding="utf-8")
     project_path = root / f"{project_name}.kicad_pro"
@@ -289,9 +357,106 @@ def _global_label_block(name: str, x: float, y: float) -> str:
     )
 
 
-def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks) -> str:
+def _local_label_block(name: str, x: float, y: float) -> str:
+    """A plain (label ...) names a wire net locally without the global-label glyph.
+
+    Used in drawn-wire mode so a 2-pin point-to-point net keeps its declared name
+    (otherwise kicad-cli's netlist would auto-name it Net-(U1-Pad1)). Placed at the
+    wire's mid-segment so it sits on copper, not on a pin.
+    """
+    return (
+        f'  (label "{name}" (at {x} {y} 0)\n'
+        f'    (effects (font (size 1.27 1.27)) (justify left)) (uuid "{_uid()}"))'
+    )
+
+
+def _wire_segment_block(x1: float, y1: float, x2: float, y2: float) -> str:
+    """One straight wire segment between two absolute schematic points."""
+    return (
+        f'  (wire (pts (xy {round(x1, 4)} {round(y1, 4)}) (xy {round(x2, 4)} {round(y2, 4)}))\n'
+        f'    (stroke (width 0) (type default)) (uuid "{_uid()}"))'
+    )
+
+
+def _junction_block(x: float, y: float) -> str:
+    """A junction dot marks an electrical connection where 3+ wires meet."""
+    return f'  (junction (at {round(x, 4)} {round(y, 4)}) (diameter 0) (color 0 0 0 0) (uuid "{_uid()}"))'
+
+
+def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float]) -> list[tuple[float, float]]:
+    """Level-1 auto-router: return the polyline waypoints for an orthogonal (Manhattan)
+    connection between two pin endpoints.
+
+    Taxonomy:
+      - input  p1, p2: absolute schematic (x, y) of the two pin endpoints to join.
+      - output: ordered list of >=2 waypoints; consecutive pairs are axis-aligned
+                segments. NOT allowed to return a diagonal segment.
+      - rule: collinear pins (same x or same y) → single straight segment [p1, p2];
+              otherwise an L-route through one elbow [p1, (p2.x, p1.y), p2]
+              (horizontal-first), which KiCad renders as two segments + the elbow
+              needs no junction (a 2-wire corner is implicit).
+      - done when: every returned consecutive pair shares an axis (dx==0 or dy==0).
+    """
+    (x1, y1), (x2, y2) = p1, p2
+    if abs(x1 - x2) < 1e-6 or abs(y1 - y2) < 1e-6:
+        return [p1, p2]
+    return [p1, (x2, y1), p2]
+
+
+def _bus_route(endpoints: list[tuple[float, float]]) -> tuple[list[tuple[tuple[float, float], tuple[float, float]]], list[tuple[float, float]]]:
+    """Multi-node (3+ pin) net router: a routing-channel daisy-chain.
+
+    Rationale (root cause of the trunk approach's failure): a single horizontal trunk
+    spanning all component x-columns crosses each (vertical) part's axis, so it can
+    collide with the OTHER pin of a 2-pin part — producing phantom shorts and leaving
+    pins unconnected. Instead we route every pin out to a shared horizontal CHANNEL that
+    sits in clear space below all pins, then run ONE channel wire along it, tapping each
+    pin's drop-wire with a junction. The drops are vertical (pin.x → channel_y); the
+    channel is horizontal at a y strictly below every pin, so it never overlaps a symbol
+    body or the part's other pin.
+
+    Taxonomy:
+      - input  endpoints: >=3 absolute pin (x, y) on one net (duplicate x allowed).
+      - output (segments, junctions):
+          segments  = vertical drop per pin (pin → channel_y) + one horizontal channel
+                      wire spanning [min_x, max_x] at channel_y. All axis-aligned.
+          junctions = a dot at every (pin_x, channel_y) tap that is interior to the
+                      channel span (the electrically-required 3-way meets); the two
+                      extreme taps are channel endpoints and need none.
+      - NOT allowed: a diagonal segment; a channel y that is not strictly below every pin.
+      - rule: channel_y = max(pin_y) + 5.08 mm (grid: 4×1.27), guaranteed below all pins
+              so drops never cross a symbol. Each distinct pin.x gets one drop; shared-x
+              pins share a drop. Junctions only at interior taps.
+      - done when: every pin reaches the channel by one vertical drop and the channel is
+              a single horizontal wire covering [min_x, max_x].
+    """
+    # Dedupe coincident pins, order left→right (then top→bottom) for a stable chain.
+    pts: list[tuple[float, float]] = []
+    seen: set[tuple[float, float]] = set()
+    for p in sorted(endpoints, key=lambda q: (q[0], q[1])):
+        if p in seen:
+            continue
+        seen.add(p)
+        pts.append(p)
+
+    segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    junctions: list[tuple[float, float]] = []
+    # Daisy-chain consecutive pins with the proven 2-pin orthogonal router.
+    for a, b in zip(pts, pts[1:]):
+        waypoints = _orthogonal_route(a, b)
+        for s, e in zip(waypoints, waypoints[1:]):
+            segments.append((s, e))
+    # An interior pin has a chain wire arriving AND leaving at its endpoint → with the
+    # symbol pin that is a 3-way meet, so it needs a junction dot. The two end pins of
+    # the chain are simple endpoint-to-endpoint joins and need none.
+    for p in pts[1:-1]:
+        junctions.append(p)
+    return segments, junctions
+
+
+def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks, wire_blocks=(), junction_blocks=()) -> str:
     lib_symbols = "\n".join(definitions)
-    body = "\n".join([*symbol_blocks, *label_blocks])
+    body = "\n".join([*symbol_blocks, *wire_blocks, *junction_blocks, *label_blocks])
     return (
         "(kicad_sch\n"
         f'  (version {SCHEMATIC_VERSION})\n'
