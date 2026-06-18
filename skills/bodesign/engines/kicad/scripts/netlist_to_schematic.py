@@ -85,7 +85,7 @@ def main():
     print(f"schematic: {a.out_svg}  ({ncells} cells incl {ng} GND + {nv} VCC, {len(nets)} nets)")
     if a.png:
         if not shutil.which("cairosvg"): sys.exit("cairosvg not found — pip install cairosvg")
-        subprocess.run(["cairosvg", a.out_svg, "-o", a.png, "--output-width", str(a.png_width)], check=True)
+        subprocess.run(["cairosvg", a.out_svg, "-o", a.png, "-b", "white", "--output-width", str(a.png_width)], check=True)
         print(f"png: {a.png}")
 
 if __name__ == "__main__":
