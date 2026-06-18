@@ -130,6 +130,25 @@ returned by `compose_schematic`) stays the check. Don't treat a rendered PNG as 
 correctness. If `pdftoppm` is absent, export SVG (`kicad-cli sch export svg`) or ship the PDF and
 say so — don't silently skip the preview.
 
+**Standard step — a CONNECTED, readable schematic from the netlist (`engines/kicad/scripts/
+netlist_to_schematic.py`).** The kicad-cli PDF above renders whatever the sheet contains; if the
+sheet was composed in `label` style it shows per-pin net-label fan-outs — every part an island,
+no drawn inter-component relationship (worse than a spreadsheet). The netlist is the connectivity
+SSOT, so draw the actual circuit from it with **netlistsvg** (ELK auto-layout) + the bundled
+analog skin:
+
+```sh
+# KiCad .net  ->  netlistsvg JSON  ->  netlistsvg (analog skin)  ->  SVG  ->  PNG
+engines/kicad/scripts/netlist_to_schematic.py <sub>/<sub>.net out.svg --png out.png
+# deps: node + `npm i -g netlistsvg`  ;  `pip install cairosvg` (PNG)
+```
+
+It renders R/C/L as real symbols, **per-pin GND/VCC symbols**, ICs/connectors as pinout boxes, and
+draws the **inter-component connections as routed wires + junctions** — series elements sit in the
+wire path, parallel taps show junction dots, pull-ups go to VCC. This is the connection-centric
+view that actually communicates the design; prefer it over a label fan-out for any multi-chip
+subsystem. (It reads the same netlist, so it asserts no connectivity the netlist doesn't already have.)
+
 **Fallback — manual KiCad capture** (MCP absent, or a reverse-engineered baseline with no spec to
 generate from): author the `.kicad_sch` by hand as above.
 
@@ -342,6 +361,11 @@ C06 produces the verdicts; C03 names the plan.
   `--stage/--audience`), `what_if.py`, `diff_analysis.py`, `summarize_findings.py`,
   `cross_analysis.py`/`cross_verify.py` (when a PCB exists), `export_issues.py`. Bridges:
   `../../engines/datasheets`, `../../engines/emc`.
+- **`../../engines/kicad/scripts/netlist_to_schematic.py`** — draw a **connected, readable schematic
+  from the netlist (SSOT)** via netlistsvg + bundled analog skin: R/C/L symbols, per-pin GND/VCC,
+  ICs as pinout boxes, and inter-component wires + junctions (series in-path, parallel taps). Use it
+  for any multi-chip subsystem instead of a per-pin label fan-out. Deps: `npm i -g netlistsvg`,
+  `pip install cairosvg`.
 - **`assets/render_sch_png.sh`** — standard SOP-step-2 helper: render any ERC-clean `.kicad_sch`
   (or a whole `generated/` tree) to an openable PNG preview via `kicad-cli sch export pdf` +
   `pdftoppm`. Review artifact only — ERC stays the correctness gate.
