@@ -149,6 +149,14 @@ wire path, parallel taps show junction dots, pull-ups go to VCC. This is the con
 view that actually communicates the design; prefer it over a label fan-out for any multi-chip
 subsystem. (It reads the same netlist, so it asserts no connectivity the netlist doesn't already have.)
 
+**Make chips look like chips — 4-edge symbols (`engines/kicad/scripts/symbol_4edge.py`).**
+emit_symbol packs pins onto 1-2 edges (a long strip that doesn't read as an IC). Real schematic
+symbols are a body rectangle with pins on **all four edges**. `symbol_4edge.py` re-places a VALID
+`.kicad_sym`'s pins around 4 edges in **datasheet pin-number order** (L->B->R->T, QFP convention),
+keeping the file KiCad-valid (only coordinates/angles + body rect change). Validate with
+`kicad-cli sym upgrade`, preview a single symbol with `kicad-cli sym export svg` + cairosvg. Run this
+on every generated chip symbol BEFORE composing a schematic, so placed parts show a true 4-edge pinout.
+
 **Drawing rules baked into the tool (don't regress these):**
 - **PNG on white background** (`cairosvg -b white`) — the default transparent canvas is unreadable
   on dark viewers.
