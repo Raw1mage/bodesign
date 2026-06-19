@@ -149,6 +149,15 @@ wire path, parallel taps show junction dots, pull-ups go to VCC. This is the con
 view that actually communicates the design; prefer it over a label fan-out for any multi-chip
 subsystem. (It reads the same netlist, so it asserts no connectivity the netlist doesn't already have.)
 
+**Draw the MCU body too — don't let the core chip go missing (`host_from_pinmap.py`).**
+When subsystem netlists use header connectors as MCU stand-ins, the main processor never gets
+drawn. Build it from the pin-allocation CSV: `host_from_pinmap.py Pin_Allocation.csv out.kicad_sym
+out.net` emits a functionally-grouped 4-edge MCU symbol (one subsystem per edge) + a host netlist
+whose pins carry the header-net names, then render it with netlist_to_kicad_sch like any subsystem.
+Its net labels tie to every subsystem sheet, so the MCU reads as the hub. The generator places ICs
+on a GRID (not one wide row) with passives compactly below, sized to the largest cell — keeps the
+sheet dense, not a wide strip with a big empty band.
+
 **Compose the schematic — hybrid, KiCad-native (`engines/kicad/scripts/netlist_to_kicad_sch.py`).**
 This is the real schematic step (supersedes the netlistsvg preview for deliverables): it emits an
 openable `.kicad_sch` that KiCad's own engine renders. Chips are placed as 4-edge symbols; every pin

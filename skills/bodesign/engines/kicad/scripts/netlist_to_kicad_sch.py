@@ -92,17 +92,30 @@ def is_gnd(n): return n.upper() in ("GND","GNDA","AGND","VSS","VSS1") or n.upper
 def is_pwr(n): return bool(re.match(r'(VCC|VDD|V1V8|V3V3|VSYS|SYS|VBAT|VIO|VDDA|\+|3V3|1V8)', n, re.I))
 ICs=[r for r in comps if len(ppos.get((comps[r]["lib"],comps[r]["part"]),{}))>2]
 small=[r for r in comps if r not in ICs]
-placed={}; S=5.08
-# place ICs spaced by their width
-x=120.0; y0=140.0; gap=40.0
-for ref in sorted(ICs):
+import math
+placed={}; S=5.08; CHARW=1.45
+def lblext(ref, angs):  # room (mm) a side needs = stub + arrow + longest net-label text on those pin angles
+    pos=ppos.get((comps[ref]["lib"],comps[ref]["part"]),{})
+    m=max((len(pinnet.get((ref,num)) or "") for num,(px,py,ang) in pos.items() if ang in angs), default=0)
+    return S + 8 + m*CHARW
+def cellsz(ref):
     w,h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(40,40))
-    x+=w/2
-    placed[ref]=(x,y0); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',x,y0,h/2+5.08)
-    x+=w/2+gap
-# small parts (R/C) in a band below
+    return (lblext(ref,(0,))+w+lblext(ref,(180,)), h+2*lblext(ref,(90,270)))
+# ICs on a GRID (not one wide row) sized to the largest cell; keeps the sheet compact, not empty
+ICsS=sorted(ICs); gap=18.0
+colw=(max((cellsz(r)[0] for r in ICsS), default=80))+gap
+rowh=(max((cellsz(r)[1] for r in ICsS), default=40))+gap
+ncol=max(1, min(len(ICsS), int(math.ceil(math.sqrt(len(ICsS))))+1)) if ICsS else 1
+x0=70.0; y0=90.0
+for i,ref in enumerate(ICsS):
+    cx=x0+(i%ncol)*colw+colw/2; cy=y0+(i//ncol)*rowh+rowh/2
+    h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(40,40))[1]
+    placed[ref]=(cx,cy); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',cx,cy,h/2+6.35)
+# small parts (R/C) in a compact band right below the IC grid
+nrows=(len(ICsS)+ncol-1)//ncol if ICsS else 0
+py0=y0+nrows*rowh+24
 for i,ref in enumerate(sorted(small)):
-    px=70.0+(i%18)*22; py=300.0+(i//18)*36; placed[ref]=(px,py); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',px,py,5.08)
+    px=x0+(i%18)*30; py=py0+(i//18)*48; placed[ref]=(px,py); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',px,py,7.0)
 for ref,(ox,oy) in placed.items():
     pos=ppos.get((comps[ref]["lib"],comps[ref]["part"]),{})
     for num,(px,py,ang) in pos.items():
