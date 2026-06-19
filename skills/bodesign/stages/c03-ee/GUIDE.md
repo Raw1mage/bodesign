@@ -149,6 +149,20 @@ wire path, parallel taps show junction dots, pull-ups go to VCC. This is the con
 view that actually communicates the design; prefer it over a label fan-out for any multi-chip
 subsystem. (It reads the same netlist, so it asserts no connectivity the netlist doesn't already have.)
 
+**Drawing rules baked into the tool (don't regress these):**
+- **PNG on white background** (`cairosvg -b white`) — the default transparent canvas is unreadable
+  on dark viewers.
+- **Power/GND symbols are labeled with their rail net name** (V1V8 / V3V3 / GND …), not a generic
+  unnamed triangle — otherwise you can't tell which rail a decoupling cap or power pin belongs to.
+- **R/C symbols show ref + value** (e.g. `C1 / 100nF`, `RS3 / 40`) so series/pull-up/decoupling
+  values are visible, not just reference designators.
+- netlistsvg detail: the rail/value text is delivered through a cell's `attributes` (`value` for the
+  rail name on vcc/gnd, `ref`+`value` on R/C). **Cell keys must NOT contain a `.`** — netlistsvg
+  derives the attribute name via `id.split('.')[2]`, so a dotted key (`V1V8.0`) silently drops the
+  label. Use `_` as the instance separator (`V1V8_0`). The bundled skin's vcc/gnd/vee labels use
+  `s:attribute="value"` with the `nodelabel` class removed (the `nodelabel` path bypasses attribute
+  substitution).
+
 **Fallback — manual KiCad capture** (MCP absent, or a reverse-engineered baseline with no spec to
 generate from): author the `.kicad_sch` by hand as above.
 

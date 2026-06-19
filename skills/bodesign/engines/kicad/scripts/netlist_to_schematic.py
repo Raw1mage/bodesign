@@ -49,17 +49,20 @@ def to_netlistsvg(comps, nets, module="sch"):
         for idx, (p, nm) in enumerate(sorted(pins)):
             port = (("A", "B")[min(idx, 1)] if rc else p)
             if is_gnd(nm):
-                pp = newid(); g = f"GND{gc[0]}"; gc[0] += 1
-                cells[g] = {"type": "gnd", "port_directions": {"A": "input"}, "connections": {"A": [pp]}}
+                pp = newid(); g = f"{nm}_{gc[0]}"; gc[0] += 1   # unique key; rail name shown via attributes
+                cells[g] = {"type": "gnd", "port_directions": {"A": "input"}, "connections": {"A": [pp]}, "attributes": {"value": nm}}
                 conn[port] = [pp]
             elif is_pwr(nm):
-                pp = newid(); v = f"PWR{vc[0]}"; vc[0] += 1
-                cells[v] = {"type": "vcc", "port_directions": {"A": "input"}, "connections": {"A": [pp]}}
+                pp = newid(); v = f"{nm}_{vc[0]}"; vc[0] += 1   # which rail is explicit: V1V8 / V3V3 / ...
+                cells[v] = {"type": "vcc", "port_directions": {"A": "input"}, "connections": {"A": [pp]}, "attributes": {"value": nm}}
                 conn[port] = [pp]
             else:
                 conn[port] = [sigid[nm]]
             pdir[port] = "input"
-        cells[ref] = {"type": rc if rc else f"{ref}\n{c.get('part', ref)}", "port_directions": pdir, "connections": conn}
+        cell = {"type": rc if rc else f"{ref}\n{c.get('part', ref)}", "port_directions": pdir, "connections": conn}
+        if rc:  # show ref + value on the R/C symbol (skin uses s:attribute ref/value)
+            cell["attributes"] = {"ref": ref, "value": c.get("value", "")}
+        cells[ref] = cell
     netnames = {nm: {"bits": [b], "hide_name": 0} for nm, b in sigid.items()}
     return {"modules": {module: {"ports": {}, "cells": cells, "netnames": netnames}}}, len(cells), gc[0], vc[0]
 
