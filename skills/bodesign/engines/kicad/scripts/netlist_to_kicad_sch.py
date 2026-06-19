@@ -90,13 +90,17 @@ def reach(ref, angs):  # how far a net label reaches beyond the body edge on tho
     return max((S+HEX+2+len(pinnet.get((ref,num)) or "")*CHARW for num,(px,py,ang) in pos.items() if ang in angs), default=S+HEX)
 def is_gnd(n): return n.upper() in ("GND","GNDA","AGND","VSS","VSS1") or n.upper().startswith("GND")
 def is_pwr(n): return bool(re.match(r'(VCC|VDD|V1V8|V3V3|VSYS|SYS|VBAT|VIO|VDDA|\+|3V3|1V8)', n, re.I))
+def txtx(ref,x):  # x of refdes/value text for a 2-pin part: just past the body, not past a phantom label
+    pos=ppos.get((comps[ref]["lib"],comps[ref]["part"]),{}); w=extent.get((comps[ref]["lib"],comps[ref]["part"]),(5,5))[0]
+    sideR=any(a==180 for _,(_,_,a) in pos.items())   # vertical R/C have no right pin -> small fixed gap
+    return x+w/2+((reach(ref,(180,))+2.5) if sideR else 3.2)
 def place(ref,key,x,y):
     w,h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(5,5))
     npins=len(ppos.get((comps[ref]["lib"],comps[ref]["part"]),{}))
     if npins>2:  # IC: refdes clear ABOVE the top labels, value clear BELOW the bottom labels (centered)
         rx=vx=x; ry=y-(h/2+reach(ref,(270,))+4.5); vy=y+(h/2+reach(ref,(90,))+4.5); jc=""
-    else:        # 2-pin part: refdes+value to the RIGHT, clear of the vertical pins/labels
-        rx=vx=x+w/2+reach(ref,(180,))+2.5; ry=y-1.9; vy=y+1.9; jc="(justify left)"
+    else:        # 2-pin part: refdes+value just right of the (narrow) body
+        rx=vx=txtx(ref,x); ry=y-1.9; vy=y+1.9; jc="(justify left)"
     body.append(f'  (symbol (lib_id "{key}")(at {x:.2f} {y:.2f} 0)(unit 1)(exclude_from_sim no)(in_bom yes)(on_board yes)(dnp no)(uuid "{U()}")\n'
       f'    (property "Reference" "{ref}" (at {rx:.2f} {ry:.2f} 0)(effects (font (size 1.27 1.27)){jc}))\n'
       f'    (property "Value" "{comps[ref]["value"]}" (at {vx:.2f} {vy:.2f} 0)(effects (font (size 1.27 1.27)){jc}))\n'
@@ -107,7 +111,7 @@ def cellbox(ref,x,y):  # full footprint of a placed symbol incl labels + ref/val
     L=x-(w/2+reach(ref,(0,))); R=x+(w/2+reach(ref,(180,)))
     T=y-(h/2+reach(ref,(270,))); B=y+(h/2+reach(ref,(90,)))
     if npins>2: T-=8; B+=8          # ref above / value below
-    else: R+=len(ref)*CHARW+10       # ref/value text to the right
+    else: R=txtx(ref,x)+max(len(ref),len(comps[ref]["value"]))*CHARW+3   # ref/value text to the right
     return (L,T,R,B)
 def cellsz(ref): L,T,R,B=cellbox(ref,0,0); return (R-L, B-T)
 ICs=[r for r in comps if len(ppos.get((comps[r]["lib"],comps[r]["part"]),{}))>2]
