@@ -20,7 +20,7 @@ def keynum(n):
     m = re.match(r'^(\d+)$', n)
     return (0, int(n)) if m else (1, n)   # numeric first, then alpha (BGA balls)
 pins.sort(key=lambda p: keynum(p[2]))
-N = len(pins); PITCH = 3.81; LEN = 5.08   # 3.81mm pitch gives room for pin-name + net-label text
+N = len(pins); PITCH = 7.62; LEN = 5.08   # 3.81mm pitch gives room for pin-name + net-label text
 base, rem = divmod(N, 4)
 sizes = [base + (1 if i < rem else 0) for i in range(4)]  # L, B, R, T
 nL, nB, nR, nT = sizes

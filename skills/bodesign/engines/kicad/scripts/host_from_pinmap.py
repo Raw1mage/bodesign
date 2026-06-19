@@ -19,7 +19,7 @@ groups={"radio":[], "memory":[], "sensors":[], "debug":[]}
 for r in rows: groups.setdefault(r["subsystem"],[]).append(r)
 # representative power pins (BGA power balls are many; show a representative set, honestly labelled)
 power=[("VDD","VDD_P1"),("VDD","VDD_P2"),("VDDA","VDDA_P"),("VDDCORE","VCAP_P"),("VSS","VSS_P1"),("VSS","VSS_P2")]
-P=3.81; LEN=5.08
+P=7.62; LEN=5.08
 # edges: LEFT=radio, RIGHT=memory, BOTTOM=sensors+debug, TOP=power
 left=[(r["mcu_signal"],r["mcu_ball"] or r["header_net"]) for r in groups["radio"]]
 right=[(r["mcu_signal"],r["mcu_ball"] or r["header_net"]) for r in groups["memory"]]
