@@ -113,82 +113,28 @@ bodesign MCP server"):** generate rather than hand-draw.
   than being invented to fill the spec.
 - `bodesign_pin_allocation` (`nets`, `mcu_refs`) to derive the GPIO/peripheral map for step 7/FW.
 
-**Standard step — render a PNG preview of every ERC-clean sheet.** As soon as a sheet
-validates, produce a directly-openable PNG next to its `.kicad_sch` so a human can review the
-schematic without opening KiCad. kicad-cli has no direct PNG export for schematics, so the route
-is `sch → PDF (kicad-cli) → PNG (pdftoppm)`; the embedded `lib_symbols` make it self-contained:
+**Standard step — render readable, deliverable-grade schematics.** Produce directly-openable
+`.kicad_sch` sheets that KiCad's own engine renders to white-background PNGs, with chips as true
+4-edge symbols, the MCU drawn as the hub, and a hybrid connection style (discrete R/C/decoupling as
+wired networks, wide buses by net label). The full ruleset — and the **why** behind each rule, since
+every one came from a real failure (one-sided strips, crammed connectors, off-canvas clipping,
+text overlap, empty-yet-crammed layout) — is in **`references/schematic-drawing-rules.md`**. Read it
+before generating or modifying schematics; the rules are load-bearing, not style preferences.
+
+Pipeline (scripts in `engines/kicad/scripts/`; deps: `kicad-cli`, `pip install cairosvg`):
 
 ```sh
-assets/render_sch_png.sh generated/sch_radio/aiguard_radio.kicad_sch   # one sheet
-assets/render_sch_png.sh generated/                                    # every sheet under it
-# under the hood, per sheet:
-#   kicad-cli sch export pdf --output X.pdf X.kicad_sch && pdftoppm -png -r 150 X.pdf X
+symbol_4edge.py  in.kicad_sym out.kicad_sym          # every symbol incl. stock connectors -> 4 edges
+host_from_pinmap.py Pin_Allocation.csv mcu.kicad_sym host.net   # draw the MCU body (the core chip)
+netlist_to_kicad_sch.py <sub>.net out.kicad_sch      # hybrid compose (symbols/ resolved beside .net)
+render_hybrid_sch.sh out.kicad_sch out.png           # kicad-cli svg --exclude-drawing-sheet -> white PNG -> autocrop
 ```
 
-The PNG is a **review artifact, not a correctness gate** — ERC (the kicad-cli validation block
-returned by `compose_schematic`) stays the check. Don't treat a rendered PNG as evidence of
-correctness. If `pdftoppm` is absent, export SVG (`kicad-cli sch export svg`) or ship the PDF and
-say so — don't silently skip the preview.
-
-**Standard step — a CONNECTED, readable schematic from the netlist (`engines/kicad/scripts/
-netlist_to_schematic.py`).** The kicad-cli PDF above renders whatever the sheet contains; if the
-sheet was composed in `label` style it shows per-pin net-label fan-outs — every part an island,
-no drawn inter-component relationship (worse than a spreadsheet). The netlist is the connectivity
-SSOT, so draw the actual circuit from it with **netlistsvg** (ELK auto-layout) + the bundled
-analog skin:
-
-```sh
-# KiCad .net  ->  netlistsvg JSON  ->  netlistsvg (analog skin)  ->  SVG  ->  PNG
-engines/kicad/scripts/netlist_to_schematic.py <sub>/<sub>.net out.svg --png out.png
-# deps: node + `npm i -g netlistsvg`  ;  `pip install cairosvg` (PNG)
-```
-
-It renders R/C/L as real symbols, **per-pin GND/VCC symbols**, ICs/connectors as pinout boxes, and
-draws the **inter-component connections as routed wires + junctions** — series elements sit in the
-wire path, parallel taps show junction dots, pull-ups go to VCC. This is the connection-centric
-view that actually communicates the design; prefer it over a label fan-out for any multi-chip
-subsystem. (It reads the same netlist, so it asserts no connectivity the netlist doesn't already have.)
-
-**Draw the MCU body too — don't let the core chip go missing (`host_from_pinmap.py`).**
-When subsystem netlists use header connectors as MCU stand-ins, the main processor never gets
-drawn. Build it from the pin-allocation CSV: `host_from_pinmap.py Pin_Allocation.csv out.kicad_sym
-out.net` emits a functionally-grouped 4-edge MCU symbol (one subsystem per edge) + a host netlist
-whose pins carry the header-net names, then render it with netlist_to_kicad_sch like any subsystem.
-Its net labels tie to every subsystem sheet, so the MCU reads as the hub. The generator places ICs
-on a GRID (not one wide row) with passives compactly below, sized to the largest cell — keeps the
-sheet dense, not a wide strip with a big empty band.
-
-**Compose the schematic — hybrid, KiCad-native (`engines/kicad/scripts/netlist_to_kicad_sch.py`).**
-This is the real schematic step (supersedes the netlistsvg preview for deliverables): it emits an
-openable `.kicad_sch` that KiCad's own engine renders. Chips are placed as 4-edge symbols; every pin
-is stubbed and terminated by a GND symbol / a power symbol (rail name) / a global net label. 2-pin
-passives (R/C) are drawn with their terminal connections so decoupling, series-R and pull-ups appear
-as visible wired networks; wide buses connect by matching net-label name. Run `symbol_4edge.py` on the
-symbol lib first. Render with `render_hybrid_sch.sh <sch> <png>` (kicad-cli sch export svg
---exclude-drawing-sheet -> cairosvg white bg -> autocrop). Top/bottom pin labels are emitted vertical
-so they don't collide; chip ref/value sit clear of the top pins.
-
-**Make chips look like chips — 4-edge symbols (`engines/kicad/scripts/symbol_4edge.py`).**
-emit_symbol packs pins onto 1-2 edges (a long strip that doesn't read as an IC). Real schematic
-symbols are a body rectangle with pins on **all four edges**. `symbol_4edge.py` re-places a VALID
-`.kicad_sym`'s pins around 4 edges in **datasheet pin-number order** (L->B->R->T, QFP convention),
-keeping the file KiCad-valid (only coordinates/angles + body rect change). Validate with
-`kicad-cli sym upgrade`, preview a single symbol with `kicad-cli sym export svg` + cairosvg. Run this
-on every generated chip symbol BEFORE composing a schematic, so placed parts show a true 4-edge pinout.
-
-**Drawing rules baked into the tool (don't regress these):**
-- **PNG on white background** (`cairosvg -b white`) — the default transparent canvas is unreadable
-  on dark viewers.
-- **Power/GND symbols are labeled with their rail net name** (V1V8 / V3V3 / GND …), not a generic
-  unnamed triangle — otherwise you can't tell which rail a decoupling cap or power pin belongs to.
-- **R/C symbols show ref + value** (e.g. `C1 / 100nF`, `RS3 / 40`) so series/pull-up/decoupling
-  values are visible, not just reference designators.
-- netlistsvg detail: the rail/value text is delivered through a cell's `attributes` (`value` for the
-  rail name on vcc/gnd, `ref`+`value` on R/C). **Cell keys must NOT contain a `.`** — netlistsvg
-  derives the attribute name via `id.split('.')[2]`, so a dotted key (`V1V8.0`) silently drops the
-  label. Use `_` as the instance separator (`V1V8_0`). The bundled skin's vcc/gnd/vee labels use
-  `s:attribute="value"` with the `nodelabel` class removed (the `nodelabel` path bypasses attribute
-  substitution).
+The single most important rule (the RCA for the recurring overlap/clipping/empty churn): **one
+text-extent model drives cell sizing, ref/value placement AND the page size** — when they diverge you
+under- and over-estimate at once. After rendering, **verify no-clip** (autocropped ink must not touch
+any image edge). A quick netlistsvg connectivity preview exists (`netlist_to_schematic.py`) but is
+**not** a deliverable — netlistsvg can't draw 4-edge symbols.
 
 **Fallback — manual KiCad capture** (MCP absent, or a reverse-engineered baseline with no spec to
 generate from): author the `.kicad_sch` by hand as above.
@@ -402,14 +348,15 @@ C06 produces the verdicts; C03 names the plan.
   `--stage/--audience`), `what_if.py`, `diff_analysis.py`, `summarize_findings.py`,
   `cross_analysis.py`/`cross_verify.py` (when a PCB exists), `export_issues.py`. Bridges:
   `../../engines/datasheets`, `../../engines/emc`.
-- **`../../engines/kicad/scripts/netlist_to_schematic.py`** — draw a **connected, readable schematic
-  from the netlist (SSOT)** via netlistsvg + bundled analog skin: R/C/L symbols, per-pin GND/VCC,
-  ICs as pinout boxes, and inter-component wires + junctions (series in-path, parallel taps). Use it
-  for any multi-chip subsystem instead of a per-pin label fan-out. Deps: `npm i -g netlistsvg`,
-  `pip install cairosvg`.
-- **`assets/render_sch_png.sh`** — standard SOP-step-2 helper: render any ERC-clean `.kicad_sch`
-  (or a whole `generated/` tree) to an openable PNG preview via `kicad-cli sch export pdf` +
-  `pdftoppm`. Review artifact only — ERC stays the correctness gate.
+- **Readable-schematic toolchain** (`../../engines/kicad/scripts/`, full ruleset in
+  `references/schematic-drawing-rules.md`): `symbol_4edge.py` (pins → 4 edges, datasheet order, incl.
+  stock connectors), `host_from_pinmap.py` (draw the MCU body from the pin-allocation CSV),
+  `netlist_to_kicad_sch.py` (hybrid KiCad-native compose: discrete R/C as wired networks, buses by net
+  label), `render_hybrid_sch.sh` (white-bg autocropped PNG via KiCad's engine). Deps: `kicad-cli`,
+  `pip install cairosvg`. `netlist_to_schematic.py` (netlistsvg) is a quick connectivity preview only —
+  not a deliverable (can't draw 4-edge symbols).
+- **`assets/render_sch_png.sh`** — alternate PDF→PNG preview (`kicad-cli sch export pdf` + `pdftoppm`).
+  Review artifact only — ERC stays the correctness gate.
 - **Documentation engine** — `../../engines/kidoc/` (`ENGINE.md`): HDD / power-analysis /
   schematic-review / ICD packages, rendered SVGs, styled PDF.
 - **`datasheets` skill** — IC pin/electrical/topology extraction; consumed by the analyzer for
