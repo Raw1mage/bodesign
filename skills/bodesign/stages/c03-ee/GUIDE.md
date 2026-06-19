@@ -149,6 +149,16 @@ wire path, parallel taps show junction dots, pull-ups go to VCC. This is the con
 view that actually communicates the design; prefer it over a label fan-out for any multi-chip
 subsystem. (It reads the same netlist, so it asserts no connectivity the netlist doesn't already have.)
 
+**Compose the schematic — hybrid, KiCad-native (`engines/kicad/scripts/netlist_to_kicad_sch.py`).**
+This is the real schematic step (supersedes the netlistsvg preview for deliverables): it emits an
+openable `.kicad_sch` that KiCad's own engine renders. Chips are placed as 4-edge symbols; every pin
+is stubbed and terminated by a GND symbol / a power symbol (rail name) / a global net label. 2-pin
+passives (R/C) are drawn with their terminal connections so decoupling, series-R and pull-ups appear
+as visible wired networks; wide buses connect by matching net-label name. Run `symbol_4edge.py` on the
+symbol lib first. Render with `render_hybrid_sch.sh <sch> <png>` (kicad-cli sch export svg
+--exclude-drawing-sheet -> cairosvg white bg -> autocrop). Top/bottom pin labels are emitted vertical
+so they don't collide; chip ref/value sit clear of the top pins.
+
 **Make chips look like chips — 4-edge symbols (`engines/kicad/scripts/symbol_4edge.py`).**
 emit_symbol packs pins onto 1-2 edges (a long strip that doesn't read as an IC). Real schematic
 symbols are a body rectangle with pins on **all four edges**. `symbol_4edge.py` re-places a VALID
