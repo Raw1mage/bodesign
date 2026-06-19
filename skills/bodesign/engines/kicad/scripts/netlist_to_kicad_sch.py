@@ -74,7 +74,10 @@ for pk,pn,src in [("power:GND","GND","power"),("power:VCC","VCC","power")]:
     if pk not in libsyms:
         blk,_=extract(f"{KS}/{src}.kicad_sym",pn)
         if blk: libsyms[pk]=re.sub(r'^\t?\(symbol "[^"]+"', f'\t(symbol "{pk}"', blk, count=1)
+import math
 body=[]
+# ---- ONE text-extent model, used for cell sizing, ref/value placement AND page bbox ----
+S=6.0; HEX=2.6; CHARW=1.05; LBLH=2.4   # stub, label-hexagon, per-char advance (1.27 font), label thickness
 def wire(x1,y1,x2,y2): body.append(f'  (wire (pts (xy {x1:.2f} {y1:.2f})(xy {x2:.2f} {y2:.2f}))(stroke (width 0.1524)(type default))(uuid "{U()}"))')
 def glabel(tt,x,y,a,j): body.append(f'  (global_label "{tt}" (shape bidirectional)(at {x:.2f} {y:.2f} {a})(effects (font (size 1.27 1.27))(justify {j}))(uuid "{U()}"))')
 def psym(key,x,y,val,ang=0):
@@ -82,41 +85,61 @@ def psym(key,x,y,val,ang=0):
       f'(property "Reference" "#PWR" (at {x:.2f} {y:.2f} 0)(effects (font (size 1.0 1.0)) hide))'
       f'(property "Value" "{val}" (at {x:.2f} {y+(3.5 if ang==0 else -3.5):.2f} 0)(effects (font (size 1.0 1.0))))'
       f'(instances (project "s" (path "/" (reference "#PWR")(unit 1)))))')
-def place(ref,key,x,y,hh=4.0):
-    ry=y-(hh+9.0); vy=y+(hh+9.0); lx=x-2.0
-    body.append(f'  (symbol (lib_id "{key}")(at {x:.2f} {y:.2f} 0)(unit 1)(exclude_from_sim no)(in_bom yes)(on_board yes)(dnp no)(uuid "{U()}")\n'
-      f'    (property "Reference" "{ref}" (at {lx:.2f} {ry:.2f} 0)(effects (font (size 1.4 1.4))(justify left)))\n'
-      f'    (property "Value" "{comps[ref]["value"]}" (at {lx:.2f} {vy:.2f} 0)(effects (font (size 1.4 1.4))(justify left)))\n'
-      f'    (instances (project "s" (path "/" (reference "{ref}")(unit 1)))))')
+def reach(ref, angs):  # how far a net label reaches beyond the body edge on those pin angles
+    pos=ppos.get((comps[ref]["lib"],comps[ref]["part"]),{})
+    return max((S+HEX+2+len(pinnet.get((ref,num)) or "")*CHARW for num,(px,py,ang) in pos.items() if ang in angs), default=S+HEX)
 def is_gnd(n): return n.upper() in ("GND","GNDA","AGND","VSS","VSS1") or n.upper().startswith("GND")
 def is_pwr(n): return bool(re.match(r'(VCC|VDD|V1V8|V3V3|VSYS|SYS|VBAT|VIO|VDDA|\+|3V3|1V8)', n, re.I))
+def place(ref,key,x,y):
+    w,h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(5,5))
+    npins=len(ppos.get((comps[ref]["lib"],comps[ref]["part"]),{}))
+    if npins>2:  # IC: refdes clear ABOVE the top labels, value clear BELOW the bottom labels (centered)
+        rx=vx=x; ry=y-(h/2+reach(ref,(270,))+4.5); vy=y+(h/2+reach(ref,(90,))+4.5); jc=""
+    else:        # 2-pin part: refdes+value to the RIGHT, clear of the vertical pins/labels
+        rx=vx=x+w/2+reach(ref,(180,))+2.5; ry=y-1.9; vy=y+1.9; jc="(justify left)"
+    body.append(f'  (symbol (lib_id "{key}")(at {x:.2f} {y:.2f} 0)(unit 1)(exclude_from_sim no)(in_bom yes)(on_board yes)(dnp no)(uuid "{U()}")\n'
+      f'    (property "Reference" "{ref}" (at {rx:.2f} {ry:.2f} 0)(effects (font (size 1.27 1.27)){jc}))\n'
+      f'    (property "Value" "{comps[ref]["value"]}" (at {vx:.2f} {vy:.2f} 0)(effects (font (size 1.27 1.27)){jc}))\n'
+      f'    (instances (project "s" (path "/" (reference "{ref}")(unit 1)))))')
+def cellbox(ref,x,y):  # full footprint of a placed symbol incl labels + ref/value text -> (minx,miny,maxx,maxy)
+    w,h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(5,5))
+    npins=len(ppos.get((comps[ref]["lib"],comps[ref]["part"]),{}))
+    L=x-(w/2+reach(ref,(0,))); R=x+(w/2+reach(ref,(180,)))
+    T=y-(h/2+reach(ref,(270,))); B=y+(h/2+reach(ref,(90,)))
+    if npins>2: T-=8; B+=8          # ref above / value below
+    else: R+=len(ref)*CHARW+10       # ref/value text to the right
+    return (L,T,R,B)
+def cellsz(ref): L,T,R,B=cellbox(ref,0,0); return (R-L, B-T)
 ICs=[r for r in comps if len(ppos.get((comps[r]["lib"],comps[r]["part"]),{}))>2]
 small=[r for r in comps if r not in ICs]
-import math
-placed={}; S=8.0; CHARW=1.6
-def lblext(ref, angs):  # room (mm) a side needs = stub + arrow + longest net-label text on those pin angles
-    pos=ppos.get((comps[ref]["lib"],comps[ref]["part"]),{})
-    m=max((len(pinnet.get((ref,num)) or "") for num,(px,py,ang) in pos.items() if ang in angs), default=0)
-    return S + 8 + m*CHARW
-def cellsz(ref):
-    w,h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(40,40))
-    return (lblext(ref,(0,))+w+lblext(ref,(180,)), h+2*lblext(ref,(90,270)))
-# ICs on a GRID (not one wide row) sized to the largest cell; keeps the sheet compact, not empty
-ICsS=sorted(ICs); gap=36.0
-colw=(max((cellsz(r)[0] for r in ICsS), default=80))+gap
-rowh=(max((cellsz(r)[1] for r in ICsS), default=40))+gap
+placed={}
+# ICs on a GRID with per-column width + per-row height (variable cells pack tight, small gaps)
+ICsS=sorted(ICs); gap=10.0; x0=40.0; y0=40.0
 ncol=max(1, min(len(ICsS), int(math.ceil(math.sqrt(len(ICsS))))+1)) if ICsS else 1
-x0=70.0; y0=90.0
-for i,ref in enumerate(ICsS):
-    cx=x0+(i%ncol)*colw+colw/2; cy=y0+(i//ncol)*rowh+rowh/2
-    h=extent.get((comps[ref]["lib"],comps[ref]["part"]),(40,40))[1]
-    placed[ref]=(cx,cy); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',cx,cy,h/2+6.35)
-# small parts (R/C) in a compact band right below the IC grid
 nrows=(len(ICsS)+ncol-1)//ncol if ICsS else 0
-py0=y0+nrows*rowh+24
+cells={r:cellsz(r) for r in ICsS}
+colW=[0.0]*ncol; rowH=[0.0]*max(1,nrows)
+for i,ref in enumerate(ICsS):
+    colW[i%ncol]=max(colW[i%ncol],cells[ref][0]); rowH[i//ncol]=max(rowH[i//ncol],cells[ref][1])
+colCx=[]; acc=x0
+for c in range(ncol): colCx.append(acc+colW[c]/2); acc+=colW[c]+gap
+rowCy=[]; acc=y0
+for r in range(max(1,nrows)): rowCy.append(acc+rowH[r]/2); acc+=rowH[r]+gap
+for i,ref in enumerate(ICsS):
+    cx=colCx[i%ncol]; cy=rowCy[i//ncol]; placed[ref]=(cx,cy); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',cx,cy)
+# small parts (R/C) in a band below the IC grid, columns sized to the actual small-cell footprint
+py0=(rowCy[-1]+rowH[-1]/2+18) if rowCy else y0
+gridR=(colCx[-1]+colW[-1]/2) if colCx else (x0+400)
+scw=(max((cellsz(r)[0] for r in small), default=22))+6
+sch=(max((cellsz(r)[1] for r in small), default=30))+12
+ncolS=max(6, int((gridR-x0)//scw)) if small else 1
 for i,ref in enumerate(sorted(small)):
-    px=x0+(i%16)*48; py=py0+(i//16)*68; placed[ref]=(px,py); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',px,py,7.0)
+    px=x0+scw/2+(i%ncolS)*scw; py=py0+sch/2+(i//ncolS)*sch; placed[ref]=(px,py); place(ref,f'{comps[ref]["lib"]}:{comps[ref]["part"]}',px,py)
+# wire/label loop + bbox from the SAME cellbox model (page fits exactly, never clips)
+BX=[1e9,-1e9]; BY=[1e9,-1e9]
+def bump(x,y): BX[0]=min(BX[0],x);BX[1]=max(BX[1],x);BY[0]=min(BY[0],y);BY[1]=max(BY[1],y)
 for ref,(ox,oy) in placed.items():
+    L,T,R,B=cellbox(ref,ox,oy); bump(L,T); bump(R,B)
     pos=ppos.get((comps[ref]["lib"],comps[ref]["part"]),{})
     for num,(px,py,ang) in pos.items():
         ax=ox+px; ay=oy-py; net=pinnet.get((ref,num))
@@ -126,10 +149,16 @@ for ref,(ox,oy) in placed.items():
         elif ang==90: ex,ey=ax,ay+S; la,j=270,"right"
         else:         ex,ey=ax,ay-S; la,j=90,"left"
         wire(ax,ay,ex,ey)
-        if is_gnd(net): psym("power:GND",ex,ey,"GND",0 if ang in(90,) else 0)
+        if is_gnd(net): psym("power:GND",ex,ey,"GND",0)
         elif is_pwr(net): psym("power:VCC",ex,ey,net,0)
         else: glabel(net,ex,ey,la,j)
-doc=(f'(kicad_sch (version 20250114)(generator "ai-hybrid")(generator_version "9.0")(uuid "{U()}")(paper "A1")\n'
+# page = content bbox + margin; shift so nothing is off the top/left edge; +12 safety so text never clips
+M=14.0; dx=M-BX[0] if BX[0]<M else 0.0; dy=M-BY[0] if BY[0]<M else 0.0
+PW=round(BX[1]+dx+M,1); PH=round(BY[1]+dy+M,1)
+if dx or dy:
+    import re as _re
+    body=[_re.sub(r'\(at (-?\d+\.?\d*) (-?\d+\.?\d*)',lambda m:f'(at {float(m.group(1))+dx:.2f} {float(m.group(2))+dy:.2f}',ln) for ln in body]
+doc=(f'(kicad_sch (version 20250114)(generator "ai-hybrid")(generator_version "9.0")(uuid "{U()}")(paper "User" {PW} {PH})\n'
      f'  (lib_symbols\n'+"\n".join(libsyms.values())+'\n  )\n'+"\n".join(body)+
      '\n  (sheet_instances (path "/" (page "1")))\n)\n')
-open(OUT,"w",encoding="utf-8").write(doc); print("wrote",OUT,"ICs",len(ICs),"small",len(small))
+open(OUT,"w",encoding="utf-8").write(doc); print(f"wrote {OUT} ICs {len(ICs)} small {len(small)} page {PW}x{PH}mm")

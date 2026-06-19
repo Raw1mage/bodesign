@@ -12,10 +12,9 @@ Usage: symbol_4edge.py <in.kicad_sym> <out.kicad_sym>
 """
 import re, sys
 src = open(sys.argv[1], encoding="utf-8").read()
-# pin blocks: type, name, number (positions ignored, we re-place)
-pins = re.findall(
-    r'\(pin (\w+) line\s*\(at [^)]*\)\s*\(length [^)]*\)\s*'
-    r'\(name "([^"]+)"[^\n]*\)\s*\(number "([^"]+)"[^\n]*\)\s*\)', src, re.S)
+# pin blocks: type, name, number (positions ignored, we re-place). Tolerant of multi-line
+# name/number with nested effects (stock KiCad Connector symbols use that layout).
+pins = re.findall(r'\(pin\s+(\w+)\s+line\b.*?\(name "([^"]+)".*?\(number "([^"]+)"', src, re.S)
 def keynum(n):
     m = re.match(r'^(\d+)$', n)
     return (0, int(n)) if m else (1, n)   # numeric first, then alpha (BGA balls)
@@ -53,8 +52,15 @@ for k in range(nT):
 pin_sec = "\n".join(out)
 rect = (f'\t\t\t(rectangle\n\t\t\t\t(start {-half_w} {half_h})\n\t\t\t\t(end {half_w} {-half_h})\n'
         f'\t\t\t\t(stroke (width 0.254) (type default))\n\t\t\t\t(fill (type background))\n\t\t\t)')
-# replace the _0_1 rectangle body and the _1_1 pin section
-src = re.sub(r'(\(symbol "[^"]+_0_1"\s*).*?(\n\t\t\))', r'\1' + rect + r'\2', src, count=1, flags=re.S)
-src = re.sub(r'(\(symbol "[^"]+_1_1"\s*).*?(\n\t\t\)\n\t\)\n\))', r'\1\n' + pin_sec + r'\2', src, count=1, flags=re.S)
+# Rebuild the inner unit symbols: _0_1 = body rectangle, _1_1 = re-placed pins. This works for
+# both emit_symbol symbols (have _0_1/_1_1) and stock connectors (only _1_1, no rectangle).
+name = re.search(r'\(symbol "([^"]+)"', src).group(1)
+inner = (f'\t\t(symbol "{name}_0_1"\n{rect}\n\t\t)\n'
+         f'\t\t(symbol "{name}_1_1"\n{pin_sec}\n\t\t)')
+m = re.search(r'\n\t\t\(symbol "'+re.escape(name)+r'_\d+_\d+"', src)
+if m:  # replace all inner unit sub-symbols (they are the last thing in the outer symbol)
+    src = src[:m.start()] + '\n' + inner + '\n\t)\n)\n'
+else:  # no unit sub-symbols at all — inject before the outer-symbol / lib close
+    src = re.sub(r'\n\t\)\s*\n\)\s*\Z', '\n'+inner+'\n\t)\n)\n', src, flags=re.S)
 open(sys.argv[2], "w", encoding="utf-8").write(src)
 print(f"N={N} sides L/B/R/T={sizes} half_w={half_w} half_h={half_h}")
