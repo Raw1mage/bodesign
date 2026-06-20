@@ -216,6 +216,7 @@ def emit_kicad_schematic(
     nets: list[EmitNet],
     symbol_dir: str | Path = DEFAULT_SYMBOL_DIR,
     connection_style: str = "label",
+    paper: str = "A4",
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
 
@@ -313,7 +314,7 @@ def emit_kicad_schematic(
                 label_blocks.append(_global_label_block(net.name, abs_pt[0], abs_pt[1]))
 
     schematic = _schematic_document(
-        root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks
+        root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks, paper=paper
     )
     schematic_path = root / f"{project_name}.kicad_sch"
     schematic_path.write_text(schematic, encoding="utf-8")
@@ -454,7 +455,7 @@ def _bus_route(endpoints: list[tuple[float, float]]) -> tuple[list[tuple[tuple[f
     return segments, junctions
 
 
-def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks, wire_blocks=(), junction_blocks=()) -> str:
+def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks, wire_blocks=(), junction_blocks=(), paper: str = "A4") -> str:
     lib_symbols = "\n".join(definitions)
     body = "\n".join([*symbol_blocks, *wire_blocks, *junction_blocks, *label_blocks])
     return (
@@ -463,7 +464,7 @@ def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks
         '  (generator "bodesign")\n'
         '  (generator_version "9.0")\n'
         f'  (uuid "{root_uuid}")\n'
-        '  (paper "A4")\n'
+        f'  (paper "{paper}")\n'
         f"  (lib_symbols\n{lib_symbols}\n  )\n"
         f"{body}\n"
         '  (sheet_instances (path "/" (page "1")))\n'

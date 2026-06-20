@@ -1,0 +1,98 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Await compose request",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["compose_schematic called with spec"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Cluster components by declared group or net-degree",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["clusters resolved"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Run deterministic force-directed refinement within each cluster",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["iterations exhausted"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Re-space overlapping clusters with deterministic gutter",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["no bbox overlap remains"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Route nets as wires; fall back to label for power, bus and single-pin",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["all nets routed or labelled"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Fit smallest standard sheet to content bbox and center",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["sheet selected and content placed"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Emit grid-snapped kicad_sch and run kicad-cli validate",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [5],
+    "LinkOutputNumber": [7],
+    "LinkOutputType": "track",
+    "Condition": ["schematic emitted and validated"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A6",
+    "StepType": "normal",
+    "StepAction": "Measure ink coverage if render toolchain present, else report measurement-unavailable, then return result",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [6],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["result returned; await next compose request"],
+    "SubGrafcet": []
+  }
+]

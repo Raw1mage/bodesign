@@ -1,0 +1,142 @@
+[
+  {
+    "$comment": "eda_schematic-draftsman-quality test vectors — concrete input/expected-output pairs per spec.md Acceptance Checks. style=draftsman opt-in；確定性 force-directed 無 RNG。",
+    "id": "TV1",
+    "name": "帶 group → 同群相鄰、群間分離、群內無 bbox 重疊",
+    "input": {
+      "style": "draftsman",
+      "spec": {
+        "components": [
+          { "ref": "U1", "symbol": "MCU:Generic", "group": "mcu" },
+          { "ref": "C1", "symbol": "Device:C", "value": "100n", "group": "mcu" },
+          { "ref": "U2", "symbol": "Regulator:LDO", "group": "power" },
+          { "ref": "C2", "symbol": "Device:C", "value": "10u", "group": "power" }
+        ],
+        "nets": [
+          { "name": "VCC", "nodes": ["U2.3", "U1.1", "C1.1", "C2.1"], "kind": "power" },
+          { "name": "GND", "nodes": ["U1.2", "C1.2", "U2.1", "C2.2"], "kind": "power" }
+        ]
+      }
+    },
+    "expect": {
+      "clusters_count": 2,
+      "same_group_adjacent": true,
+      "groups_separated": true,
+      "no_bbox_overlap": true
+    }
+  },
+  {
+    "id": "TV2",
+    "name": "無 group → net-degree 分群生效、非 index%columns",
+    "input": {
+      "style": "draftsman",
+      "spec": {
+        "components": [
+          { "ref": "U1", "symbol": "MCU:Generic" },
+          { "ref": "R1", "symbol": "Device:R", "value": "10k" },
+          { "ref": "R2", "symbol": "Device:R", "value": "10k" }
+        ],
+        "nets": [ { "name": "SIG", "nodes": ["U1.5", "R1.1", "R2.1"] } ]
+      }
+    },
+    "expect": {
+      "clustering_source": "net-degree",
+      "placement_not_index_grid": true
+    }
+  },
+  {
+    "id": "TV3",
+    "name": "2-node net → 實體 wire + local label，無 global-label",
+    "input": {
+      "style": "draftsman",
+      "spec": {
+        "components": [ { "ref": "R1", "symbol": "Device:R" }, { "ref": "R2", "symbol": "Device:R" } ],
+        "nets": [ { "name": "NET_A", "nodes": ["R1.2", "R2.1"], "kind": "signal" } ]
+      }
+    },
+    "expect": {
+      "route_stats": { "wired_nets": 1, "labelled_nets": 0 },
+      "svg_has_wire_segment": true,
+      "no_global_label_for": "NET_A"
+    }
+  },
+  {
+    "id": "TV4",
+    "name": "power/bus/單pin/unresolved → 退回 label 且 route_stats 可見",
+    "input": {
+      "style": "draftsman",
+      "spec": {
+        "components": [ { "ref": "U1", "symbol": "MCU:Generic" }, { "ref": "C1", "symbol": "Device:C" } ],
+        "nets": [
+          { "name": "VCC", "nodes": ["U1.1", "C1.1"], "kind": "power" },
+          { "name": "DANGLE", "nodes": ["U1.9"] }
+        ]
+      }
+    },
+    "expect": {
+      "route_stats": {
+        "labelled_nets": 2,
+        "label_fallback_reasons_contains": [
+          { "net": "VCC", "reason": "power" },
+          { "net": "DANGLE", "reason": "single-pin" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "TV5",
+    "name": "sheet-fit 選頁正確、內容不溢出",
+    "input": { "input_ref": "TV1.input" },
+    "expect": {
+      "sheet_fit": { "selected_paper_in": ["A4", "A3"], "overflow": false }
+    }
+  },
+  {
+    "id": "TV6",
+    "name": "ink% 相對 netlist 基準明顯提升",
+    "input": { "input_ref": "TV1.input" },
+    "expect": {
+      "ink_metrics_available": true,
+      "draftsman_ink_pct_ge_2x_netlist_baseline": true,
+      "draftsman_ink_pct_min": 10
+    }
+  },
+  {
+    "id": "TV7",
+    "name": "缺 ink toolchain → measurement_unavailable",
+    "input": { "input_ref": "TV1.input", "env": { "pdftoppm": "absent" } },
+    "expect": {
+      "ink_metrics": { "available": false, "missing_tools_contains": ["pdftoppm"], "ink_pct": null }
+    }
+  },
+  {
+    "id": "TV8",
+    "name": "draftsman 產出 kicad-cli validate 通過、與 label 模式電氣等價",
+    "input": { "input_ref": "TV1.input", "validate": true },
+    "expect": {
+      "kicad_cli_validate_pass": true,
+      "electrically_equivalent_to_label_mode": true
+    }
+  },
+  {
+    "id": "TV9",
+    "name": "向後相容：style=netlist / connection_style=label 舊行為保留",
+    "input": {
+      "style": "netlist",
+      "spec": { "input_ref": "TV1.input.spec" }
+    },
+    "expect": {
+      "byte_equivalent_to_pre_upgrade": true,
+      "placement_is_auto_place_grid": true,
+      "connection_style_effective": "label"
+    }
+  },
+  {
+    "id": "TV10",
+    "name": "確定性：相同輸入 → 穩定產出（force-directed 無 RNG）",
+    "input": { "input_ref": "TV1.input" },
+    "expect": {
+      "two_runs_placement_identical": true
+    }
+  }
+]

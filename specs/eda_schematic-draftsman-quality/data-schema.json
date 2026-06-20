@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "eda_schematic-draftsman-quality data contracts",
+  "description": "Draftsman 品質電路圖的資料契約：compose spec 輸入（擴充 group 宣告）、placement 中間表示、connection routing 結果、ink/bbox 度量回傳。placement/route/measure 全程確定性 pure-python，無 LLM 參與。",
+  "definitions": {
+    "ComposeComponent": {
+      "type": "object",
+      "description": "compose spec 的一個元件宣告。x/y 缺省時由 placement 演算法填入；group 缺省時由 net-degree 推導。",
+      "properties": {
+        "ref": { "type": "string", "description": "參考標號，如 U1 / R3；缺失即 fail-fast skip + warning" },
+        "symbol": { "type": "string", "description": "KiCad lib_id，如 Device:R；找不到即 warning + skip，不以預設件替代" },
+        "value": { "type": "string", "description": "標稱值，可空" },
+        "footprint": { "type": "string", "description": "footprint，可空" },
+        "group": { "type": "string", "description": "顯式子系統分群標籤（如 power/mcu/memory）；提供時覆蓋 net-degree 推導" },
+        "x": { "type": ["number", "null"], "description": "顯式 placement X(mm)；與 y 同時提供時沿用，不套分群演算法" },
+        "y": { "type": ["number", "null"], "description": "顯式 placement Y(mm)" }
+      },
+      "required": ["ref", "symbol"]
+    },
+    "ComposeNet": {
+      "type": "object",
+      "description": "named-net 互連宣告。",
+      "properties": {
+        "name": { "type": "string", "description": "網路名，如 VCC_3.3V / I2C_SDA" },
+        "nodes": {
+          "type": "array",
+          "description": "節點清單，每項格式 'REF.PIN'；無法解析者進 unresolved_pins，不靜默丟棄",
+          "items": { "type": "string" }
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["signal", "power", "bus"],
+          "description": "選填路由意圖提示；power/bus 即使 ≤2 節點也走 label。缺省時依節點數推導（2=wire,3+=channel）"
+        }
+      },
+      "required": ["name", "nodes"]
+    },
+    "ComposeSpec": {
+      "type": "object",
+      "description": "compose_schematic 的 spec 入參（向後相容既有形狀，新增 group/kind 皆 optional）。",
+      "properties": {
+        "components": { "type": "array", "items": { "$ref": "#/definitions/ComposeComponent" } },
+        "nets": { "type": "array", "items": { "$ref": "#/definitions/ComposeNet" } }
+      },
+      "required": ["components", "nets"]
+    },
+    "Cluster": {
+      "type": "object",
+      "description": "placement 階段 A 產出的一個分群（確定性，無 RNG）。",
+      "properties": {
+        "cluster_id": { "type": "string", "description": "群識別，顯式 group 名或推導出的 'auto-<n>'" },
+        "source": { "type": "string", "enum": ["declared", "net-degree"], "description": "分群來源" },
+        "members": { "type": "array", "items": { "type": "string" }, "description": "群內 component ref 清單" },
+        "center_mm": {
+          "type": "object",
+          "properties": { "x": { "type": "number" }, "y": { "type": "number" } },
+          "required": ["x", "y"],
+          "description": "群中心座標"
+        }
+      },
+      "required": ["cluster_id", "source", "members", "center_mm"]
+    },
+    "PlacementParams": {
+      "type": "object",
+      "description": "確定性 force-directed 參數（固定值，保證可回歸）。",
+      "properties": {
+        "iterations": { "type": "integer", "description": "固定迭代次數，無提前隨機終止" },
+        "spring_k": { "type": "number", "description": "彈力係數（共 net 吸引）" },
+        "repulse_k": { "type": "number", "description": "斥力係數（避免重疊）" },
+        "cluster_gutter_mm": { "type": "number", "description": "群間固定間距" },
+        "grid_mm": { "type": "number", "description": "終局座標 snap 的連接格點（1.27）" }
+      },
+      "required": ["iterations", "spring_k", "repulse_k", "cluster_gutter_mm", "grid_mm"]
+    },
+    "RouteStats": {
+      "type": "object",
+      "description": "connection routing 結果統計（A3）。",
+      "properties": {
+        "wired_nets": { "type": "integer", "description": "畫成實體 wire 的 net 數（2-pin L-route + 3+ channel）" },
+        "labelled_nets": { "type": "integer", "description": "退回 global-label 的 net 數（power/bus/單pin/unresolved）" },
+        "junctions": { "type": "integer", "description": "junction dot 數" },
+        "label_fallback_reasons": {
+          "type": "array",
+          "description": "每筆退回 label 的 net 與原因（不靜默）",
+          "items": {
+            "type": "object",
+            "properties": {
+              "net": { "type": "string" },
+              "reason": { "type": "string", "enum": ["power", "bus", "single-pin", "unresolved"] }
+            },
+            "required": ["net", "reason"]
+          }
+        }
+      },
+      "required": ["wired_nets", "labelled_nets", "junctions", "label_fallback_reasons"]
+    },
+    "SheetFit": {
+      "type": "object",
+      "description": "sheet 自適應結果（A4）。",
+      "properties": {
+        "selected_paper": { "type": "string", "enum": ["A4", "A3", "A2", "A1", "A0"], "description": "選用的最小可容納標準頁" },
+        "content_bbox_mm": {
+          "type": "object",
+          "properties": { "w": { "type": "number" }, "h": { "type": "number" } },
+          "required": ["w", "h"]
+        },
+        "overflow": { "type": "boolean", "description": "內容超過最大標準頁時 true + warning，不靜默裁切" }
+      },
+      "required": ["selected_paper", "content_bbox_mm", "overflow"]
+    },
+    "InkMetrics": {
+      "type": "object",
+      "description": "ink/bbox 量化驗收回傳（A6），toolchain-gated。",
+      "properties": {
+        "available": { "type": "boolean", "description": "false = 缺 pdftoppm/poppler/PIL，度量不可用（不偽造）" },
+        "missing_tools": { "type": "array", "items": { "type": "string" }, "description": "available=false 時列出缺失工具" },
+        "ink_pct": { "type": ["number", "null"], "description": "著墨率（非背景像素比 0-100）；不可用時 null" },
+        "content_fill_pct": { "type": ["number", "null"], "description": "內容 bbox 佔版面比 0-100；不可用時 null" },
+        "dpi": { "type": ["integer", "null"], "description": "渲染 dpi（150-200）" }
+      },
+      "required": ["available", "missing_tools"]
+    },
+    "ComposeDraftsmanResult": {
+      "type": "object",
+      "description": "compose_schematic（draftsman 模式）工具回傳。",
+      "properties": {
+        "schematic_path": { "type": "string" },
+        "style": { "type": "string", "enum": ["draftsman", "netlist"], "description": "實際採用的模式" },
+        "placed": { "type": "integer" },
+        "nets": { "type": "integer" },
+        "clusters": { "type": "array", "items": { "$ref": "#/definitions/Cluster" } },
+        "route_stats": { "$ref": "#/definitions/RouteStats" },
+        "sheet_fit": { "$ref": "#/definitions/SheetFit" },
+        "ink_metrics": { "$ref": "#/definitions/InkMetrics" },
+        "validated": { "type": "boolean", "description": "kicad-cli validate 結果" },
+        "unresolved_pins": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["schematic_path", "style", "placed", "nets", "warnings"]
+    }
+  }
+}

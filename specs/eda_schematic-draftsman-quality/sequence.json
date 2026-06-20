@@ -1,0 +1,45 @@
+[
+  {
+    "title": "成功路徑：spec → draftsman 品質電路圖",
+    "participants": ["Caller", "Composer", "Cluster Engine", "Placement Engine", "kicad_emit", "kicad-cli", "Ink Metrics"],
+    "messages": [
+      { "from": "Caller", "to": "Composer", "label": "MSG1: compose_schematic(spec, style=draftsman)", "componentRef": "A1" },
+      { "from": "Composer", "to": "Cluster Engine", "label": "MSG2: cluster by declared group or net-degree", "componentRef": "A1" },
+      { "from": "Cluster Engine", "to": "Placement Engine", "label": "MSG3: clusters + members", "componentRef": "A2" },
+      { "from": "Placement Engine", "to": "Composer", "label": "MSG4: placed components (deterministic force-directed, grid-snapped)", "componentRef": "A2" },
+      { "from": "Composer", "to": "kicad_emit", "label": "MSG5: emit with connection_style=wire", "componentRef": "A3" },
+      { "from": "kicad_emit", "to": "Composer", "label": "MSG6: wired nets + label fallbacks + junctions", "componentRef": "A3" },
+      { "from": "Composer", "to": "Composer", "label": "MSG7: fit smallest standard sheet + center", "componentRef": "A4" },
+      { "from": "Composer", "to": "kicad-cli", "label": "MSG8: validate .kicad_sch", "componentRef": "A5" },
+      { "from": "kicad-cli", "to": "Composer", "label": "MSG9: validation OK", "componentRef": "A5" },
+      { "from": "Composer", "to": "Ink Metrics", "label": "MSG10: measure ink/bbox (pdftoppm + PIL)", "componentRef": "A6" },
+      { "from": "Ink Metrics", "to": "Caller", "label": "MSG11: ComposeDraftsmanResult (clusters/route/sheet/ink)", "componentRef": "A6" }
+    ]
+  },
+  {
+    "title": "退回 label：power/bus/單pin/unresolved net",
+    "participants": ["Composer", "kicad_emit", "Caller"],
+    "messages": [
+      { "from": "Composer", "to": "kicad_emit", "label": "MSG1: emit wire mode with power/bus/single-pin nets present", "componentRef": "A3" },
+      { "from": "kicad_emit", "to": "Composer", "label": "MSG2: these nets fall back to global-label (reasons recorded, not silent)", "componentRef": "A3" },
+      { "from": "Composer", "to": "Caller", "label": "MSG3: route_stats.label_fallback_reasons listed in result", "componentRef": "A6" }
+    ]
+  },
+  {
+    "title": "Toolchain 缺失：ink 度量不可用（no fabrication）",
+    "participants": ["Composer", "Ink Metrics", "Caller"],
+    "messages": [
+      { "from": "Composer", "to": "Ink Metrics", "label": "MSG1: measure ink/bbox", "componentRef": "A6" },
+      { "from": "Ink Metrics", "to": "Caller", "label": "MSG2: available=false + missing_tools=[pdftoppm/poppler/PIL] (ink_pct=null, no faked metric)", "componentRef": "A6" }
+    ]
+  },
+  {
+    "title": "向後相容：style=netlist 沿用舊行為",
+    "participants": ["Caller", "Composer", "kicad_emit"],
+    "messages": [
+      { "from": "Caller", "to": "Composer", "label": "MSG1: compose_schematic(spec, style=netlist or connection_style=label)", "componentRef": "A1" },
+      { "from": "Composer", "to": "kicad_emit", "label": "MSG2: naive grid placement + global-label connectivity (unchanged)", "componentRef": "A5" },
+      { "from": "kicad_emit", "to": "Caller", "label": "MSG3: legacy-equivalent .kicad_sch (no regression)", "componentRef": "A5" }
+    ]
+  }
+]

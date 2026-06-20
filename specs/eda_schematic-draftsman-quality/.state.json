@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-19T06:47:22.832Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-19T06:57:05.870Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "proposal/spec/design + idef0/grafcet/c4(sequence)/data-schema 完成；idef0+grafcet 經 drawmiat 驗證通過。依 BR issue_20260618 draftsman 品質電路圖；placement 採先分群後群內 force-directed（使用者確認）。"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-19T07:25:48.114Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "補齊 planned artifacts：tasks.md（7 phase）+ handoff.md（Required Reads/Stop Gates In Force）+ test-vectors.json（TV1-TV10 頂層陣列）+ errors.md（Error Catalogue E-DRAFT-001..006）+ observability.md（Events/Metrics）。DD-3 定案 opt-in draftsman、預設 netlist。"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-19T07:48:32.267Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "實作完成、19 tests OK（orchestrator 複驗），首批 tasks 已勾，進入 implementing；剩 7.4 收尾 event_record。"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-19T07:49:16.088Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "所有 tasks（phase 1-7 含 7.4 收尾 event）完成。19 tests OK（orchestrator 獨立複驗，零回歸）。opt-in style=draftsman、預設 netlist byte-equivalent、確定性無 RNG。architecture.md 同步、event_record 收尾完成。"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-19T07:58:55.903Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示 graduate。verified 完成：19 tests OK、opt-in style=draftsman、預設不破壞、architecture.md 同步、event 收尾。"
+    }
+  ]
+}

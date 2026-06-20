@@ -1,0 +1,27 @@
+{
+  "diagram_title": "Compose Draftsman-Quality Schematic",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Cluster Components By Subsystem", "description": "依宣告 group 或 net-degree 推導把相關元件分群", "decomposition": null },
+    { "id": "A2", "title": "Refine Placement Within Cluster", "description": "群內確定性 force-directed 微調，被動件靠主 IC、消除 bbox 重疊", "decomposition": null },
+    { "id": "A3", "title": "Route Connectivity As Wires", "description": "2-pin L-route、3+ pin channel、power/bus 退回 label", "decomposition": null },
+    { "id": "A4", "title": "Fit Sheet To Content", "description": "依內容 bbox 選最小可容納標準頁並置中", "decomposition": null },
+    { "id": "A5", "title": "Emit Validated Schematic", "description": "組裝 .kicad_sch + grid-snap，kicad-cli validate", "decomposition": null },
+    { "id": "A6", "title": "Measure Ink Coverage", "description": "pdftoppm + PIL 量 ink% 與內容佔版面比；缺 toolchain 顯式 unavailable", "decomposition": null }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "Design Spec (components + nets)", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "Group / Subsystem Declarations", "type": "control" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "Clustered Component Groups", "type": "output" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:control", "label": "Deterministic Force-Directed Params (fixed seed/iters)", "type": "control" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:mechanism", "label": "Symbol BBox Estimator (load_symbol pin-extent)", "type": "mechanism" },
+    { "id": "AR6", "source": "A2:output", "target": "A3:input", "label": "Placed Components (x,y)", "type": "output" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A3:control", "label": "Connection Style (draftsman / netlist)", "type": "control" },
+    { "id": "AR8", "source": "A3:output", "target": "A4:input", "label": "Wired Net Geometry + Label Fallbacks", "type": "output" },
+    { "id": "AR9", "source": "A4:output", "target": "A5:input", "label": "Fitted Layout + Sheet Size", "type": "output" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A5:mechanism", "label": "kicad_emit + kicad-cli", "type": "mechanism" },
+    { "id": "AR11", "source": "A5:output", "target": "A6:input", "label": "Validated .kicad_sch", "type": "output" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A6:mechanism", "label": "pdftoppm + PIL", "type": "mechanism" },
+    { "id": "AR13", "source": "A6:output", "target": "EXTERNAL", "label": "Ink/BBox Metrics + Draftsman Schematic", "type": "output" }
+  ]
+}

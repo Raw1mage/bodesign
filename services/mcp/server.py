@@ -89,10 +89,22 @@ def _h_compose(a: dict) -> Any:
     r = compose_schematic(a["out_dir"], a["project_name"], a["spec"],
                           symbol_dirs=a.get("symbol_dirs", "/usr/share/kicad/symbols"),
                           validate=a.get("validate", True),
-                          connection_style=a.get("connection_style", "label"))
-    return {"placed": r.placed, "nets": r.nets, "schematic": r.emit.schematic_path,
-            "unresolved_pins": r.emit.unresolved_pins, "warnings": r.warnings,
-            "validation": _jsonable(r.validation) if r.validation else None}
+                          connection_style=a.get("connection_style"),
+                          style=a.get("style", "netlist"),
+                          measure_ink=a.get("measure_ink", False))
+    out = {"placed": r.placed, "nets": r.nets, "schematic": r.emit.schematic_path,
+           "style": r.style,
+           "unresolved_pins": r.emit.unresolved_pins, "warnings": r.warnings,
+           "validation": _jsonable(r.validation) if r.validation else None}
+    if r.clusters:
+        out["clusters"] = [c.to_dict() for c in r.clusters]
+    if r.route_stats is not None:
+        out["route_stats"] = r.route_stats.to_dict()
+    if r.sheet_fit is not None:
+        out["sheet_fit"] = r.sheet_fit.to_dict()
+    if r.ink_metrics is not None:
+        out["ink_metrics"] = r.ink_metrics
+    return out
 
 
 def _h_pin_alloc(a: dict) -> Any:
@@ -769,9 +781,10 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"symbol_name": _STR, "pins": {"type": "array"}, "output_path": _STR,
                 "footprint_filter": _STR, "datasheet": _STR}, "required": ["symbol_name", "pins", "output_path"]}},
     {"name": "bodesign_compose_schematic", "handler": _h_compose,
-     "description": "Compose a schematic from a design spec (components + REF.PIN nets); auto-place + emit + kicad-cli validate. connection_style='label' (default) places a global label on every pin; 'wire' draws orthogonal wires (2-pin L-route, 3+ pin daisy-chain + junctions) for human-readable schematics. Components may carry x/y for caller-supplied placement.",
+     "description": "Compose a schematic from a design spec (components + REF.PIN nets); place + emit + kicad-cli validate. style='netlist' (default, unchanged) uses a naive index grid + global labels (back-compat). style='draftsman' (opt-in) does subsystem-clustered deterministic force-directed placement + drawn wires + sheet-fit for engineer-readable schematics. connection_style overrides the style-derived default when given ('label' global labels; 'wire' orthogonal wires). Components may carry group (subsystem cluster) and x/y (caller-supplied placement). measure_ink=true (draftsman only) renders + measures ink%/content-fill% (toolchain-gated).",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "spec": {"type": "object"},
-                "symbol_dirs": {}, "validate": {"type": "boolean"}, "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}}, "required": ["out_dir", "project_name", "spec"]}},
+                "symbol_dirs": {}, "validate": {"type": "boolean"}, "style": {"type": "string", "enum": ["netlist", "draftsman"]},
+                "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"}}, "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_pin_allocation", "handler": _h_pin_alloc,
      "description": "Build a pin/GPIO allocation table (C03->FW interface) from a net list; returns CSV.",
      "schema": {"type": "object", "properties": {"nets": {"type": "array"}, "mcu_refs": {"type": "array", "items": _STR}}, "required": ["nets"]}},
