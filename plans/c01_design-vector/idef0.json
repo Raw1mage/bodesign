@@ -1,27 +1,30 @@
 {
-  "diagram_title": "Emit C01 Editable Design Vector",
+  "diagram_title": "Emit C01 ID-Native Deliverable Buckets",
   "node_reference": "A0",
   "activities": [
-    { "id": "A1", "title": "Read C01 Answer State", "description": "讀取 C01 answer_state.json 並判定描述欄位完整度（form_archetype/primary_face/exposed_components/cmf_direction 等）", "decomposition": null },
-    { "id": "A2", "title": "Select Glyph Library Symbols", "description": "依 exposed_components + form_archetype 從確定性 SVG 圖元庫挑選外殼原型與元件 symbol；未覆蓋者標 placeholder", "decomposition": null },
-    { "id": "A3", "title": "Compose Layout And Colorway", "description": "LLM 受控組裝：決定圖元佈局座標、面板網格對應 primary_face、套用 CMF 色值（輸出為結構化裁決，非自由 SVG 字串）", "decomposition": null },
-    { "id": "A4", "title": "Assemble Layered Svg", "description": "依固定圖層命名（outline/panel/cmf-fill/components/annotations）組裝分層 SVG，每元件包成獨立命名 group", "decomposition": null },
-    { "id": "A5", "title": "Validate Vector Schema", "description": "通過 SVG schema 驗證（圖層齊全、元件 group 存在、SVG 合法）才回報成功，否則回報失敗與缺項", "decomposition": null }
+    { "id": "A1", "title": "Read C01 Inputs", "description": "讀取 Interface_Constraints.json（主）+ answer_state.json（補）+ 可選 C02/C03 envelope evidence；各 bucket 依需求欄位判定完整度，缺關鍵欄位 fail-fast（no silent fallback）", "decomposition": null },
+    { "id": "A2", "title": "Emit Ai File Bucket", "description": "由 form_archetype/primary_face/exposed_components/cmf_direction 經 S2 圖元庫+LLM 受控組裝產分層 ID skeleton SVG + figma_import_spec.json + README；不偽造 .ai", "decomposition": "A0-A2" },
+    { "id": "A3", "title": "Emit CMF Bucket", "description": "由 cmf_direction + constraints 推導 material family/finish/colour routes/RF-transparent zones/gasket/sample gates → CMF_Direction.pdf + cmf_tokens.json + README；標 not CMF approval", "decomposition": null },
+    { "id": "A4", "title": "Emit Display UIUX Bucket", "description": "由 display_uiux + exposed_components 產 OLED/LED/insert-remove/privacy/charging/error 狀態 → UIUX_Flow.pdf + uiux_wireframes.svg + README；無 display 映射 LED/status/button；標 not UI sign-off", "decomposition": null },
+    { "id": "A5", "title": "Assess Dual-Track Readiness", "description": "回報 companion_readiness（五件 core source-of-truth）與 id_native_readiness（三 bucket optional/demo）兩條獨立 track；ID-native 產出不得讓 package 從 draft 升 approved", "decomposition": null }
   ],
   "arrows": [
-    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "C01 answer_state.json", "type": "input" },
-    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "fail-fast on missing fields (no fabrication)", "type": "control" },
-    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "validated description fields", "type": "output" },
-    { "id": "AR4", "source": "EXTERNAL", "target": "A2:input", "label": "deterministic glyph library", "type": "input" },
-    { "id": "AR5", "source": "EXTERNAL", "target": "A2:control", "label": "EXPOSED_COMPONENT_KEYWORDS classification", "type": "control" },
-    { "id": "AR6", "source": "A2:output", "target": "A3:input", "label": "selected symbols + placeholders", "type": "output" },
-    { "id": "AR7", "source": "EXTERNAL", "target": "A3:control", "label": "S2 layout constraints (panel grid, primary_face)", "type": "control" },
-    { "id": "AR8", "source": "A3:output", "target": "A4:input", "label": "structured layout + CMF decision", "type": "output" },
-    { "id": "AR9", "source": "EXTERNAL", "target": "A4:control", "label": "fixed layer naming schema (DD-3)", "type": "control" },
-    { "id": "AR10", "source": "A4:output", "target": "A5:input", "label": "candidate layered SVG", "type": "output" },
-    { "id": "AR11", "source": "A5:output", "target": "EXTERNAL", "label": "editable Design_Vector.svg + layer/glyph/CMF report", "type": "output" },
-    { "id": "AR12", "source": "EXTERNAL", "target": "A3:mechanism", "label": "LLM (controlled structured assembly)", "type": "mechanism" },
-    { "id": "AR13", "source": "EXTERNAL", "target": "A4:mechanism", "label": "workflow-core c01_id_package.py", "type": "mechanism" },
-    { "id": "AR14", "source": "EXTERNAL", "target": "A5:mechanism", "label": "SVG schema validator", "type": "mechanism" }
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "Interface_Constraints.json + answer_state.json", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:input", "label": "optional C02/C03 envelope evidence", "type": "input" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:control", "label": "fail-fast on missing fields (no fabrication / no silent fallback)", "type": "control" },
+    { "id": "AR4", "source": "A1:output", "target": "A2:input", "label": "validated visual fields", "type": "output" },
+    { "id": "AR5", "source": "A1:output", "target": "A3:input", "label": "validated CMF fields", "type": "output" },
+    { "id": "AR6", "source": "A1:output", "target": "A4:input", "label": "validated UIUX fields", "type": "output" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A2:control", "label": "fixed layer naming schema (DD-3) + draft marking (DD-6)", "type": "control" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A3:control", "label": "not CMF approval marking (DD-6)", "type": "control" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A4:control", "label": "not UI sign-off marking (DD-6)", "type": "control" },
+    { "id": "AR10", "source": "A2:output", "target": "A5:input", "label": "Ai file bucket files", "type": "output" },
+    { "id": "AR11", "source": "A3:output", "target": "A5:input", "label": "CMF bucket files", "type": "output" },
+    { "id": "AR12", "source": "A4:output", "target": "A5:input", "label": "Display UIUX bucket files", "type": "output" },
+    { "id": "AR13", "source": "A5:output", "target": "EXTERNAL", "label": "dual-track readiness (companion + id_native)", "type": "output" },
+    { "id": "AR14", "source": "EXTERNAL", "target": "A2:mechanism", "label": "S2 glyph library + LLM controlled assembly", "type": "mechanism" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A3:mechanism", "label": "docxmcp PDF pipeline (bodesign_emit_doc)", "type": "mechanism" },
+    { "id": "AR16", "source": "EXTERNAL", "target": "A4:mechanism", "label": "docxmcp PDF pipeline + wireframe glyphs", "type": "mechanism" },
+    { "id": "AR17", "source": "EXTERNAL", "target": "A5:mechanism", "label": "workflow-core c01_id_package.py", "type": "mechanism" }
   ]
 }

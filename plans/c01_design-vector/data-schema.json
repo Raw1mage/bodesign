@@ -106,6 +106,86 @@
         "validation_errors": { "type": "array", "items": { "type": "string" }, "description": "status=validation-failed 時的具體缺項" }
       },
       "required": ["status"]
+    },
+    "BucketResult": {
+      "type": "object",
+      "description": "v2 (BR): 三 bucket emitter 共用回傳契約。每個 emitter 產出一個 C01-ID/<bucket>/ 資料夾的 draft deliverable",
+      "properties": {
+        "status": { "type": "string", "enum": ["success", "missing", "external-needed", "validation-failed"] },
+        "bucket": { "type": "string", "enum": ["ai_file", "cmf", "display_uiux"], "description": "產出的 ID-native bucket 類別" },
+        "out_dir": { "type": ["string", "null"], "description": "bucket 資料夾相對路徑（如 C01-ID/Ai file/、C01-ID/CMF/、C01-ID/Display UI_UX/）" },
+        "files": { "type": "array", "items": { "type": "string" }, "description": "產出檔相對路徑清單" },
+        "draft_markings": { "type": "array", "items": { "type": "string" }, "description": "實際蓋上的 draft 標記文字（如 'not final industrial design' / 'not CMF approval' / 'not UI sign-off'），不得為空" },
+        "missing_fields": { "type": "array", "items": { "type": "string" }, "description": "status=missing/external-needed 時列出的缺失輸入欄位（no silent fallback）" },
+        "validation_errors": { "type": "array", "items": { "type": "string" }, "description": "status=validation-failed 時的具體缺項" }
+      },
+      "required": ["status", "bucket"]
+    },
+    "IdVisualPackageResult": {
+      "allOf": [{ "$ref": "#/definitions/BucketResult" }],
+      "description": "emit_c01_id_visual_package：Ai file bucket。files 含 <product>_ID_skeleton.svg / figma_import_spec.json / README.md",
+      "properties": {
+        "glyphs_used": { "type": "array", "items": { "type": "string" } },
+        "placeholders": { "type": "array", "items": { "type": "string" }, "description": "未覆蓋元件以 generic placeholder 呈現並告知" },
+        "ai_emitted": { "type": "boolean", "description": "是否產出真實 .ai（僅在有 Illustrator-compatible export path 時為 true；預設 false，不偽造）" }
+      }
+    },
+    "CmfTokens": {
+      "type": "object",
+      "description": "cmf_tokens.json：CMF 設計 token 表，由 cmf_direction + constraints 推導",
+      "properties": {
+        "cmf_direction": { "type": "string", "description": "情緒方向來源（rugged/premium/medical-clean/...）" },
+        "material_family": { "type": "array", "items": { "type": "string" }, "description": "材質族（如 ABS/PC-blend/aluminium/silicone）" },
+        "finish": { "type": "array", "items": { "type": "string" }, "description": "表面處理（matte/soft-touch/anodized/...）" },
+        "color_routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "hex": { "type": "string" },
+              "role": { "type": "string", "enum": ["primary", "secondary", "accent"] }
+            },
+            "required": ["name", "hex", "role"]
+          }
+        },
+        "rf_transparent_zones": { "type": "array", "items": { "type": "string" }, "description": "需 RF 穿透的材質區域（antenna 對應）" },
+        "gasket_sealing_notes": { "type": "array", "items": { "type": "string" } },
+        "sample_vendor_gates": { "type": "array", "items": { "type": "string" }, "description": "需材質樣品/廠商核可的 gate" },
+        "approval_state": { "type": "string", "const": "not-approved", "description": "恆為 not-approved，不宣稱 CMF sample 核可" }
+      },
+      "required": ["cmf_direction", "material_family", "color_routes", "approval_state"]
+    },
+    "TrackReadiness": {
+      "type": "object",
+      "description": "v2: readiness 單一 track（companion 或 id_native）",
+      "properties": {
+        "readiness_pct": { "type": "integer" },
+        "present": { "type": "integer", "description": "已產出/保留 draft 的項目數" },
+        "total": { "type": "integer" },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": { "type": "string" },
+              "rel_path": { "type": "string" },
+              "status": { "type": "string", "enum": ["present", "partial", "missing"] }
+            },
+            "required": ["key", "rel_path", "status"]
+          }
+        }
+      },
+      "required": ["readiness_pct", "present", "total", "artifacts"]
+    },
+    "DualTrackReadinessExtension": {
+      "type": "object",
+      "description": "v2: assess_c01_package_readiness 在既有回傳上「附加」的雙軌欄位。既有 readiness_pct/usable/artifacts/human_approved 語意不變（向後相容，對 core companion）",
+      "properties": {
+        "companion_readiness": { "$ref": "#/definitions/TrackReadiness", "description": "五件 source-of-truth core companion（即既有 C01_OUTPUTS）的就緒度，明確別名既有 core track" },
+        "id_native_readiness": { "$ref": "#/definitions/TrackReadiness", "description": "三 bucket（Ai file/CMF/Display UI_UX）optional/demo 就緒度。不得讓 package 從 draft 升 approved" }
+      },
+      "required": ["companion_readiness", "id_native_readiness"]
     }
   }
 }

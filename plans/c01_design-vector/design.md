@@ -32,6 +32,14 @@ C01（工業設計）階段目前的「設計形象」產出只有 raster 一條
 - **DD-2**: PoC（Phase 1）驗收標準 = 用一個真實描述生出一張「完整產品形象圖」：含外殼輪廓 + 主視覺面板佈局 + CMF 配色色塊 + 外露元件標示的分層 SVG，設計師能直接開 Figma 接手修改即為及格。不及格（圖層碎裂/元件無法選取/構圖崩壞）則回頭調 S2 圖元庫與佈局 prompt 策略，不進 implementing 後續 phase。
 - **DD-3**: SVG 必須語意化分層——固定圖層命名規範（`outline` / `panel` / `cmf-fill` / `components/<type>` / `annotations`），每個外露元件包成獨立命名 `<g id="component-camera-1">` group。這是「設計師可編輯」承諾的具體實現，也是 PoC 及格判定的客觀依據。
 - **DD-4**: 輸入單一來源 = 既有 C01 answer_state 欄位（`form_archetype` / `usage_posture` / `primary_face` / `visible_component_treatment` / `exposed_components` / `cmf_direction` / `display_uiux`），不另立平行狀態。沿用 C01 readiness/handoff 機制；answer_state 不足時標 `missing`/`external-needed`，不捏造幾何。
+- **DD-5** (2026-06-17, EXTEND): 範圍從單一 `c01_emit_design_vector` 擴成 **三 bucket emitter**（依 BR）。三者各自獨立工具、共用 answer_state + `Interface_Constraints.json` 輸入、共用 fail-fast 與 draft-marking 紀律：
+  - `emit_c01_id_visual_package` → `C01-ID/Ai file/`（`<product>_ID_skeleton.svg` 內部沿用 DD-1 S2 分層 SVG 引擎 + `figma_import_spec.json` + `README.md`）。
+  - `emit_c01_cmf_package` → `C01-ID/CMF/`（`<product>_CMF_Direction.pdf` + `cmf_tokens.json` + `README.md`）。
+  - `emit_c01_uiux_package` → `C01-ID/Display UI_UX/`（`<product>_UIUX_Flow.pdf` + `uiux_wireframes.svg` + `README.md`）。
+  注意 bucket 路徑用 BR 指定的 `Display UI_UX/`（底線），與既有 companion 的 `Display UIUX/`（無底線、`C01_OUTPUTS["display_uiux"]`）**並存不衝突**：companion 是 source-of-truth markdown，ID-native bucket 是 optional demo 交付物。
+- **DD-6** (2026-06-17, EXTEND): **不偽造原生檔**。`.ai` 僅在有真實 Illustrator-compatible export path 時產出，否則只給 SVG + `figma_import_spec.json`（Figma 不可用時的中間產物）。PDF 經 docxmcp / approved bodesign document pipeline 組裝（`bodesign_emit_doc` → docx+pdf，或 `bodesign_mcp_call` 驅動 docxmcp），不手工拼 PDF bytes。每個視覺產出帶可見 draft 浮水印文字（`draft / not final industrial design` · `not CMF approval` · `not UI sign-off`）。
+- **DD-7** (2026-06-17, EXTEND): `assess_c01_package_readiness` 擴成**雙軌**回報但**向後相容**。既有 `readiness_pct` / `usable` / `artifacts`（對五件 core companion，即 `C01_OUTPUTS`）語意完全不變；新增 `companion_readiness`（明確別名既有 core track）與 `id_native_readiness`（三 bucket，optional）兩個獨立 track 欄位。ID-native 產出**不得**讓 package 從 draft 升 approved、**不得**作為 final ID approval 依據（`human_approved` 仍恆為 False，由人工 gate 控制）。
+- **DD-8** (2026-06-17, EXTEND): emitter 輸入優先序 = `Interface_Constraints.json`（C01 已產出的下游契約，DD-4 的 `_constraints()` 輸出）為主、answer_state 補充、C02/C03 envelope evidence 可選。三 bucket 缺關鍵欄位時各自 fail-fast（CMF 缺 `cmf_direction`；UIUX 缺 `display_uiux`/status 描述；visual 缺 `form_archetype`/`primary_face`/`exposed_components`），回 `missing`/`external-needed` + 缺欄清單，不以預設值靜默續跑（天條：no silent fallback）。無 display 產品的 UIUX 映射到 LED/status/button 互動，屬顯式設計決策非 fallback。
 
 ## Risks / Trade-offs
 
@@ -42,7 +50,8 @@ C01（工業設計）階段目前的「設計形象」產出只有 raster 一條
 
 ## Critical Files
 
-- `packages/workflow-core/bodesign_workflow_core/c01_id_package.py` — 新增 `emit_c01_design_vector` 函式；圖元庫定義；沿用 `C01_INTERACTION_FIELDS` / `EXPOSED_COMPONENT_KEYWORDS` / answer_state 機制；新增輸出物 rel path（如 `C01-ID/Ai file/Design_Vector.svg`）。
-- `services/mcp/server.py` — 新增 `_h_c01_emit_design_vector` handler + tool schema 註冊（line ~176 區塊鄰近）。
-- `tests/test_mcp_server.py` — 新增 design-vector 工具測試（schema、分層輸出、缺輸入 fail-fast）。
-- `specs/architecture.md` — C01 能力邊界更新（raster → raster + 可編輯向量雙軌）at living transition。
+- `packages/workflow-core/bodesign_workflow_core/c01_id_package.py` — 新增三 bucket emitter（`emit_c01_id_visual_package` / `emit_c01_cmf_package` / `emit_c01_uiux_package`）；SVG 圖元庫定義；CMF token 表 + 材質族對應；UIUX wireframe 圖元；draft-marking helper；沿用 `C01_INTERACTION_FIELDS` / `EXPOSED_COMPONENT_KEYWORDS` / `_constraints()` / answer_state 機制；擴充 `assess_c01_package_readiness` 為雙軌；新增 bucket rel path 常數（`C01-ID/Ai file/`, `C01-ID/CMF/`, `C01-ID/Display UI_UX/`）。
+- `services/mcp/server.py` — 新增 3 個 handler（`_h_c01_emit_id_visual_package` / `_h_c01_emit_cmf_package` / `_h_c01_emit_uiux_package`）+ tool schema 註冊（c01 區塊 ~line 793 附近），readiness handler 沿用既有 `_h_c01_readiness`（回傳已含新分軌欄位）。
+- PDF 組裝 — 透過既有 `bodesign_emit_doc`（markdown→docx+pdf）或 `bodesign_mcp_call` 驅動 docxmcp；不手工拼 PDF。
+- `tests/test_mcp_server.py` / `tests/test_c01_id_package.py` — 新增三 bucket 工具測試（schema、bucket 輸出、缺輸入 fail-fast、draft 標記、readiness 分軌、no-fallback）。
+- `specs/architecture.md` — C01 能力邊界更新（raster → raster 參考 + ID-native 三 bucket draft deliverable + readiness 雙軌）at living transition。

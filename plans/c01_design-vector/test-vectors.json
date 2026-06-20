@@ -1,0 +1,118 @@
+[
+    {
+      "$comment": "c01_design-vector test vectors — concrete input/expected-output pairs per Requirement (v2 BR-extended). 三 bucket emitter + readiness 雙軌。",
+      "id": "TV-1",
+      "requirement": "產出 Ai file ID-native bucket",
+      "tool": "emit_c01_id_visual_package",
+      "input": {
+        "answer_state": {
+          "form_archetype": "handheld",
+          "primary_face": "front",
+          "exposed_components": ["camera", "led", "usb-c", "button"],
+          "cmf_direction": "rugged"
+        },
+        "interface_constraints": { "exposed_components": [{ "type": "camera" }, { "type": "led" }] }
+      },
+      "expect": {
+        "status": "success",
+        "bucket": "ai_file",
+        "files_contain": ["Ai file/", "_ID_skeleton.svg", "figma_import_spec.json", "README.md"],
+        "draft_markings_nonempty": true,
+        "ai_emitted": false,
+        "svg_layers": ["outline", "panel", "cmf-fill", "components", "annotations"]
+      }
+    },
+    {
+      "id": "TV-2",
+      "requirement": "產出 Ai file ID-native bucket — 未覆蓋元件 placeholder",
+      "tool": "emit_c01_id_visual_package",
+      "input": {
+        "answer_state": {
+          "form_archetype": "desktop-sensor",
+          "primary_face": "top",
+          "exposed_components": ["camera", "exotic-sensor-xyz"],
+          "cmf_direction": "premium"
+        }
+      },
+      "expect": {
+        "status": "success",
+        "placeholders_contain": ["exotic-sensor-xyz"]
+      }
+    },
+    {
+      "id": "TV-3",
+      "requirement": "Ai file fail-fast — 缺 form_archetype",
+      "tool": "emit_c01_id_visual_package",
+      "input": { "answer_state": { "primary_face": "front", "exposed_components": ["led"], "cmf_direction": "rugged" } },
+      "expect": { "status": "missing", "missing_fields_contain": ["form_archetype"], "no_files": true }
+    },
+    {
+      "id": "TV-4",
+      "requirement": "產出 CMF draft bucket",
+      "tool": "emit_c01_cmf_package",
+      "input": {
+        "answer_state": { "cmf_direction": "rugged", "exposed_components": ["antenna", "usb-c"] },
+        "interface_constraints": { "exposed_components": [{ "type": "antenna" }] }
+      },
+      "expect": {
+        "status": "success",
+        "bucket": "cmf",
+        "files_contain": ["CMF/", "_CMF_Direction.pdf", "cmf_tokens.json", "README.md"],
+        "draft_markings_contain": ["not CMF approval"],
+        "cmf_tokens": { "approval_state": "not-approved", "material_family_nonempty": true, "rf_transparent_zones_nonempty": true }
+      }
+    },
+    {
+      "id": "TV-5",
+      "requirement": "CMF fail-fast — 缺 cmf_direction",
+      "tool": "emit_c01_cmf_package",
+      "input": { "answer_state": { "exposed_components": ["led"] } },
+      "expect": { "status": "missing", "missing_fields_contain": ["cmf_direction"], "no_files": true }
+    },
+    {
+      "id": "TV-6",
+      "requirement": "產出 Display UI/UX draft bucket — 有 display",
+      "tool": "emit_c01_uiux_package",
+      "input": { "answer_state": { "display_uiux": "OLED screen with status icons", "exposed_components": ["display", "led", "button", "usb-c"] } },
+      "expect": {
+        "status": "success",
+        "bucket": "display_uiux",
+        "files_contain": ["Display UI_UX/", "_UIUX_Flow.pdf", "uiux_wireframes.svg", "README.md"],
+        "draft_markings_contain": ["not UI sign-off"],
+        "states_cover": ["oled", "led", "charging", "error"]
+      }
+    },
+    {
+      "id": "TV-7",
+      "requirement": "Display UI/UX — 無 display 映射 LED/status",
+      "tool": "emit_c01_uiux_package",
+      "input": { "answer_state": { "display_uiux": "led only status", "exposed_components": ["led", "button"] } },
+      "expect": { "status": "success", "states_cover": ["led"], "no_silent_omit": true }
+    },
+    {
+      "id": "TV-8",
+      "requirement": "Display UI/UX fail-fast — 無任何 status 描述",
+      "tool": "emit_c01_uiux_package",
+      "input": { "answer_state": { "exposed_components": [] } },
+      "expect": { "status": "missing", "missing_fields_contain": ["display_uiux"], "no_files": true }
+    },
+    {
+      "id": "TV-9",
+      "requirement": "readiness 雙軌回報",
+      "tool": "c01_readiness",
+      "input": { "folder_has": ["five core companion present", "Ai file bucket present", "CMF bucket absent", "Display UI_UX bucket absent"] },
+      "expect": {
+        "companion_readiness": { "readiness_pct": 100 },
+        "id_native_readiness": { "present": 1, "total": 3 },
+        "human_approved": false,
+        "backward_compatible": { "readiness_pct_present": true, "usable_present": true, "artifacts_present": true }
+      }
+    },
+    {
+      "id": "TV-10",
+      "requirement": "不偽造 — 無 Figma path 產 figma_import_spec.json",
+      "tool": "emit_c01_id_visual_package",
+      "input": { "figma_available": false, "answer_state": { "form_archetype": "wearable", "primary_face": "front", "exposed_components": ["led"], "cmf_direction": "playful" } },
+      "expect": { "status": "success", "files_contain": ["figma_import_spec.json"], "no_ai_file": true }
+    }
+]

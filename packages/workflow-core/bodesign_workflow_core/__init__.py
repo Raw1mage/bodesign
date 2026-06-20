@@ -160,6 +160,7 @@ from .c01_id_template import (
     validate_c01_outputs_binding,
 )
 from .c01_id_package import (
+    BucketResult,
     C01AnswerUpdateResult,
     C01ConceptImageResult,
     C01NextQuestionResult,
@@ -174,7 +175,10 @@ from .c01_id_package import (
     c01_next_question,
     c01_update_answers,
     emit_c01_concept_prompts,
+    emit_c01_cmf_package,
+    emit_c01_id_visual_package,
     emit_c01_rockbox_package,
+    emit_c01_uiux_package,
     generate_c01_concept_image,
 )
 from .c02_me_package import (
@@ -291,8 +295,12 @@ __all__ = [
     "c01_next_question",
     "c01_update_answers",
     "extract_part_candidates",
+    "BucketResult",
     "emit_c01_concept_prompts",
+    "emit_c01_cmf_package",
+    "emit_c01_id_visual_package",
     "emit_c01_rockbox_package",
+    "emit_c01_uiux_package",
     "emit_c02_enclosure_package",
     "export_c02_projection_svg",
     "export_c02_skp",

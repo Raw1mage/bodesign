@@ -15,6 +15,7 @@
 
 - 2026-06-13: initial draft created via plan-init.ts
 - 2026-06-13: 釐清後定調為「雙軌產出」。使用者確認：視覺風格選擇擬真 render，但在理解「擬真 render 與可編輯向量技術互斥」後，接受**擬真參考圖 + 扁平可編輯向量**並行；落地用途為設計師可編輯來源 SVG；整合位置併入現有 C01 工業設計流程。
+- 2026-06-17 (EXTEND, v2): 依 BR `issues/issue_20260617_c01_rockbox_style_id_deliverables.md` 擴大範圍。原 plan 只做 Ai file 向量稿一項；BR 要求 C01 能 from-zero 產出完整 Rockbox 形狀的 **ID-native 三 bucket**（`Ai file/` + `CMF/` + `Display UI_UX/`）draft deliverable，並擴充 `c01_readiness` 為**雙軌就緒度**（core companion 五件 vs optional ID-native package）。BR 的第 1 項（Ai file ID skeleton SVG）即本 plan 原訂的 `c01_emit_design_vector`，故併入同一 spec；新增 CMF / UIUX emitter 與 readiness 分軌為 v2 ADDED 範圍。
 
 ## Effective Requirement Description
 
