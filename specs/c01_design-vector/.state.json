@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "implementing",
+  "state": "living",
   "profile": [],
   "history": [
     {
@@ -34,6 +34,22 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "開始建置三 bucket emitter + readiness 雙軌；Phase 1 共用基礎起步"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-20T14:05:33.315Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "C01 ID-native 三 bucket（Ai file/CMF/Display UI_UX）+ readiness 雙軌全部實作完成；tasks.md 7 phases 全勾；56/56 測試綠燈；specs/architecture.md 已同步；收尾 event log 已寫入 specbase（issue_20260617）"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-20T14:05:53.556Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示「收尾畢業」。C01 ID-native 三 bucket 已 verified、56/56 測試綠燈、event log 收尾、architecture 同步完成。"
     }
   ]
 }

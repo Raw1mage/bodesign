@@ -1,0 +1,98 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Await host block diagram request",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [7],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["c03_emit_host_block_diagram called with model"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Validate model; fail-fast on missing center_part.name, empty peripherals, or invalid side",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["all required fields present and sides valid"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Resolve peripheral glyphs; map uncovered types to named dashed placeholders",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["glyphs and placeholders resolved"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Lay out center box and radial peripherals deterministically by side then declaration order",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["center centered and all peripherals placed by side"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Draw orthogonal buses from center to each peripheral with labels and legend",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["all buses drawn"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Stamp honest-boundary annotations; render reference_baseline diffs when present",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["boundary notes stamped"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A6",
+    "StepType": "normal",
+    "StepAction": "Write layered SVG; emit PNG if cairosvg present else mark unavailable",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [5],
+    "LinkOutputNumber": [7],
+    "LinkOutputType": "track",
+    "Condition": ["svg written and raster status resolved"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A7",
+    "StepType": "normal",
+    "StepAction": "If pptx requested orchestrate docxmcp shapes else skip; return result package",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [6],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["result returned; await next request"],
+    "SubGrafcet": []
+  }
+]

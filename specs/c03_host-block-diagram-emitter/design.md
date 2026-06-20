@@ -35,7 +35,7 @@
 - **DD-9**: 輸出路徑 `C03-EE/block/Host_Block_Diagram.{svg,png,pptx}`（與 partition 的
   `C03-EE/partition/` 平行命名）。
 
-## Risks
+## Risks / Trade-offs
 
 - **R1**: 放射狀 layout 的對稱演算法比 partition 的水平並列複雜，邊界 case（某側 0 個 peripheral、
   某側極多）需在 test-vectors 覆蓋，避免 overflow/重疊。緩解：test-vector 含 lopsided 分佈。

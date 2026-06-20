@@ -1,0 +1,30 @@
+{
+  "diagram_title": "Emit Host Block Diagram From Host Model",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Validate Host Model", "description": "檢查 center_part.name + peripherals 非空 + 每 peripheral name/side（enum top|bottom|left|right）齊全，缺項或非法 side fail-fast", "decomposition": null },
+    { "id": "A2", "title": "Resolve Peripheral Glyphs", "description": "周邊型別對樣式庫；未覆蓋者轉具名 placeholder（dashed 邊框，不靜默省略）", "decomposition": null },
+    { "id": "A3", "title": "Lay Out Center And Radial Peripherals", "description": "確定性放射狀版面：center 置中、peripherals 依 side 分組、組內依宣告序排列；無 RNG", "decomposition": null },
+    { "id": "A4", "title": "Draw Buses From Center", "description": "從 center 邊緣正交連線到各 peripheral + bus 標籤 + 圖例層", "decomposition": null },
+    { "id": "A5", "title": "Stamp Honest Boundary Annotations", "description": "自動寫 functional block diagram not a netlist / no RefDes.Pin to net / no DRC-SI claim；常開不可參數化；有 reference_baseline 則加渲染 derived-from + diffs + sourcing gates", "decomposition": null },
+    { "id": "A6", "title": "Emit Layered Vector And Raster", "description": "寫分層 SVG；cairosvg 在則出 PNG，缺則標 unavailable 不列 files", "decomposition": null },
+    { "id": "A7", "title": "Orchestrate Editable Slide Export", "description": "選配：經 mcp_call 驅動 docxmcp 產原生可編輯 PPTX shape；不可達標 unavailable 不偽造", "decomposition": null }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "Host Model JSON", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "Required Field Contract", "type": "control" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "Validated Model", "type": "output" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:mechanism", "label": "Glyph Style Library", "type": "mechanism" },
+    { "id": "AR5", "source": "A2:output", "target": "A3:input", "label": "Peripheral Glyphs And Placeholders", "type": "output" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A3:control", "label": "Deterministic Radial Layout Order", "type": "control" },
+    { "id": "AR7", "source": "A3:output", "target": "A4:input", "label": "Placed Center And Peripherals", "type": "output" },
+    { "id": "AR8", "source": "A4:output", "target": "A5:input", "label": "Wired Bus Layer", "type": "output" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A5:control", "label": "Honest Boundary Policy", "type": "control" },
+    { "id": "AR10", "source": "A5:output", "target": "A6:input", "label": "Annotated Layered Drawing", "type": "output" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A6:mechanism", "label": "Cairosvg Raster Toolchain", "type": "mechanism" },
+    { "id": "AR12", "source": "A6:output", "target": "A7:input", "label": "SVG And PNG Artifacts", "type": "output" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A7:mechanism", "label": "Docxmcp Via Mcp Call", "type": "mechanism" },
+    { "id": "AR14", "source": "A7:output", "target": "EXTERNAL", "label": "Host Block Diagram Package With Boundary Notes", "type": "output" },
+    { "id": "AR15", "source": "A6:output", "target": "EXTERNAL", "label": "Layered SVG PNG Deliverables", "type": "output" }
+  ]
+}

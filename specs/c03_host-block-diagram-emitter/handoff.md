@@ -5,14 +5,14 @@
 執行者為 **coding subagent**（user 明確指示「不要自己做」）。orchestrator 負責規劃、派工、審查、event log；
 不親手寫 emitter / test / skill 檔。
 
-## Required Reads（subagent 開工前必讀）
+## Required Reads
 
 1. `packages/workflow-core/bodesign_workflow_core/c03_partition_diagram.py`（鏡射範本，全檔 586 行）
 2. `tests/test_c03_partition_diagram.py`（test 鏡射範本）
 3. `services/mcp/server.py` line 365 + 935（handler + tool 註冊範本）
 4. 本 package 的 `spec.md` / `design.md` / `data-schema.json` / `test-vectors.json` / `tasks.md`
 
-## Stop Gates
+## Stop Gates In Force
 
 - **不得**修改 `emit_c03_partition_diagram` 既有行為（只新增 sibling，partition test 必須仍全綠）。
 - **不得**引入 RNG / 任何 silent fallback（缺欄位 fail-fast、未知 type → named placeholder）。

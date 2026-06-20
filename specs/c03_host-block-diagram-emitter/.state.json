@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-20T10:32:25.609Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-20T14:09:21.410Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "spec.md (GIVEN/WHEN/THEN)、design.md (DD-1..DD-9, Risks/Trade-offs)、data-schema.json、sequence.json (4 scenarios)、idef0.json + grafcet.json (drawmiat-validated) 完成；鏡射 c03_partition-diagram-emitter sibling 契約"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-20T14:13:51.245Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md (5 phases) + handoff.md (Required Reads / Stop Gates In Force) + test-vectors.json (8 cases) + errors.md (E-HB-001..007) + observability.md 完成；對齊 c03_partition-diagram-emitter sibling 執行藍圖"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-20T14:13:59.009Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "emitter + handler + tests 全部建置完成（鏡射 partition sibling）；Phase 1-4 全勾，Phase 5 收尾進行中"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-20T14:14:18.452Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "host-block emitter 全部實作完成（鏡射 partition sibling）；tasks.md 5 phases 全勾；test_c03_host_block_diagram.py 8 cases 全綠 + partition 回歸綠；idef0/grafcet drawmiat-validated；errors/observability/sequence/handoff 補齊；architecture 已同步；event log 已寫入（issue_20260619）"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-20T14:14:33.815Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示「收尾畢業」。host-block emitter 已 verified、8 tests 全綠 + partition 回歸綠、idef0/grafcet drawmiat-validated、event log 已寫、architecture 同步完成。"
+    }
+  ]
+}
