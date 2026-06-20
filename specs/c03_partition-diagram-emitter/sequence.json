@@ -1,0 +1,42 @@
+[
+  {
+    "title": "成功路徑：MODEL → breakout 分割圖",
+    "participants": ["Caller", "Partition Emitter", "Model Validator", "Glyph Library", "SVG Drawer", "Raster Toolchain", "docxmcp"],
+    "messages": [
+      { "from": "Caller", "to": "Partition Emitter", "label": "MSG1: c03_emit_partition_diagram(folder, model, emit_pptx?)", "componentRef": "A1" },
+      { "from": "Partition Emitter", "to": "Model Validator", "label": "MSG2: validate boards/role/tier + interconnect class/dir", "componentRef": "A1" },
+      { "from": "Model Validator", "to": "Glyph Library", "label": "MSG3: resolve module glyphs by type", "componentRef": "A2" },
+      { "from": "Glyph Library", "to": "SVG Drawer", "label": "MSG4: glyphs + named placeholders for uncovered types", "componentRef": "A2" },
+      { "from": "SVG Drawer", "to": "SVG Drawer", "label": "MSG5: deterministic layout boards/modules + pin-class lines + legend", "componentRef": "A3" },
+      { "from": "SVG Drawer", "to": "SVG Drawer", "label": "MSG6: stamp honest-boundary annotations layer", "componentRef": "A5" },
+      { "from": "SVG Drawer", "to": "Raster Toolchain", "label": "MSG7: rasterize SVG to PNG (cairosvg)", "componentRef": "A6" },
+      { "from": "Raster Toolchain", "to": "docxmcp", "label": "MSG8: (if emit_pptx) mcp_call → docxmcp native shapes", "componentRef": "A7" },
+      { "from": "docxmcp", "to": "Caller", "label": "MSG9: result {svg, png, pptx?, layers, counts, boundary_notes, placeholders}", "componentRef": "A7" }
+    ]
+  },
+  {
+    "title": "Fail-fast：MODEL 缺欄位",
+    "participants": ["Caller", "Partition Emitter", "Model Validator"],
+    "messages": [
+      { "from": "Caller", "to": "Partition Emitter", "label": "MSG1: c03_emit_partition_diagram(model missing role/class/dir)", "componentRef": "A1" },
+      { "from": "Partition Emitter", "to": "Model Validator", "label": "MSG2: validate", "componentRef": "A1" },
+      { "from": "Model Validator", "to": "Caller", "label": "MSG3: status=missing + field list (no diagram, no fabrication)", "componentRef": "A1" }
+    ]
+  },
+  {
+    "title": "PNG toolchain 缺失：誠實標 unavailable",
+    "participants": ["SVG Drawer", "Raster Toolchain", "Caller"],
+    "messages": [
+      { "from": "SVG Drawer", "to": "Raster Toolchain", "label": "MSG1: rasterize SVG", "componentRef": "A6" },
+      { "from": "Raster Toolchain", "to": "Caller", "label": "MSG2: png_rendered=false; PNG not listed in files; SVG still delivered", "componentRef": "A6" }
+    ]
+  },
+  {
+    "title": "PPTX 選項：docxmcp 不可達",
+    "participants": ["Partition Emitter", "docxmcp", "Caller"],
+    "messages": [
+      { "from": "Partition Emitter", "to": "docxmcp", "label": "MSG1: mcp_call(server=docxmcp) for editable shapes", "componentRef": "A7" },
+      { "from": "docxmcp", "to": "Caller", "label": "MSG2: unreachable → pptx_status=unavailable + reason; SVG/PNG still delivered (no fake .pptx)", "componentRef": "A7" }
+    ]
+  }
+]

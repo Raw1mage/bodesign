@@ -127,6 +127,21 @@ done — go produce it. Only after it passes do you announce completion or cross
 | "review/debug/understand an existing board or schematic" (no stage named) | **C03** (sch) and/or **C04** (PCB) |
 | "generate a report / HDD / CE file / ICD / manufacturing package / PDF" | the stage that owns the content, then its guide points at the **doc engine** |
 
+## Concept-diagram router — "which diagram do I emit?"
+
+When the task is to *draw a concept/structure diagram* (not analyse a real board), route by what the
+diagram depicts. Each is a distinct deterministic emitter — do not hand-author the SVG:
+
+| If the diagram depicts… | Emit via | Notes |
+|---|---|---|
+| **board-level partition / fan-out** (core↔carrier split, board-to-board pin classes, breakout) | `bodesign_c03_emit_partition_diagram` | MODEL = {boards, interconnect}; layered SVG (boards/modules/interconnect/legend/annotations); honest-boundary footer always on (design partition, **not** fab pinout). |
+| **host / MCU-centric functional block diagram** (center SoC/MCU + peripherals radiating to the four sides; buses on the connecting lines) | `bodesign_c03_emit_host_block_diagram` | MODEL = {center_part, peripherals[{name, side, bus?, type?}], reference_baseline?}; layered SVG (center/peripherals/buses/legend/annotations); unknown type → named placeholder (never dropped); optional `reference_baseline` renders a derived-from / diffs / sourcing-gates block (honesty model for derived products); honest-boundary footer always on (functional block diagram, **not** a netlist). |
+| **mechanical look & feel** (ID skeleton, CMF, exposed-component faces) | `bodesign_c01_emit_id_visual_package` | Layered, designer-editable ID skeleton SVG; not final industrial design. |
+| **physical placement** (real board outline, where parts land on copper) | `emit_layout` (C04 path) | Constraint-first; placement coordinates/stackup never fabricated. |
+| **software containers / processes** (C4, IDEF0, Grafcet) | `drawmiat` companion skill | C00/C01/C05 architecture diagrams. |
+
+All four are *concept/intent* projections, honestly gated — never a fab pinout, DRC, or SI claim.
+
 ## Engines (under `engines/`, invoked by stage guides — not read top-down)
 
 These are the migrated, fully-functional `kicad` and `kidoc` engines. **Do not invoke them

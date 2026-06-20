@@ -204,6 +204,16 @@ from .c03_mechanical_constraints import (
     C03MechanicalConstraintResult,
     export_c03_mechanical_constraints,
 )
+from .c03_partition_diagram import (
+    EmitPartitionResult,
+    PartitionModel,
+    emit_c03_partition_diagram,
+)
+from .c03_host_block_diagram import (
+    EmitHostBlockResult,
+    HostBlockModel,
+    emit_c03_host_block_diagram,
+)
 from .reference_crosscheck import (
     ReferenceCheck,
     crosscheck_nets,

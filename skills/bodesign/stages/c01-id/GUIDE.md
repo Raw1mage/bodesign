@@ -22,6 +22,15 @@ that human approves it, and the handoff doc states this plainly. Treat C01 as *"
 honest substitute for a designer's brief"* — enough to unblock C02–C05, not a pretence of
 finished design. This boundary is non-negotiable; see *Honesty notes* below.
 
+**Stage-ownership boundary — the *electrical* host architecture is C03's, not C01's.** C01 owns the
+*mechanical / user-facing* projection (ID skeleton, CMF, exposed-component faces via
+`bodesign_c01_emit_id_visual_package`). The **host / MCU-centric functional block diagram**
+(center SoC + peripherals + buses) and the **board-level partition / fan-out** diagram are
+**C03-EE deliverables** — emit them with `bodesign_c03_emit_host_block_diagram` and
+`bodesign_c03_emit_partition_diagram` respectively (see C03 GUIDE + SKILL.md concept-diagram
+router). C01 only declares the *interface constraints* those diagrams later realise; it does not
+draw the electrical block architecture.
+
 ## Required deliverables — Definition of Done
 
 Produce **all five** core artifacts in this stage before you report C01 done or hand off (see SKILL.md

@@ -362,6 +362,28 @@ def _h_c03_export_mech_constraints(a: dict) -> Any:
     return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
 
 
+def _h_c03_emit_partition_diagram(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c03_partition_diagram
+    emit_pptx = bool(a.get("emit_pptx", False))
+    mcp_call = None
+    if emit_pptx:
+        from mcp_delegate import call_external_mcp_tool
+        mcp_call = call_external_mcp_tool
+    return emit_c03_partition_diagram(a["folder"], a["model"], emit_pptx=emit_pptx,
+                                      mcp_call=mcp_call).to_dict()
+
+
+def _h_c03_emit_host_block_diagram(a: dict) -> Any:
+    from bodesign_workflow_core import emit_c03_host_block_diagram
+    emit_pptx = bool(a.get("emit_pptx", False))
+    mcp_call = None
+    if emit_pptx:
+        from mcp_delegate import call_external_mcp_tool
+        mcp_call = call_external_mcp_tool
+    return emit_c03_host_block_diagram(a["folder"], a["model"], emit_pptx=emit_pptx,
+                                       mcp_call=mcp_call).to_dict()
+
+
 # ── RCA spec gate over the `datasheets` skill's per-project extraction cache ──
 # Anti-hallucination guard: an electrical-spec claim must be grounded in a real cached
 # datasheet extraction (<project>/datasheets/extracted/), not stated from memory.
@@ -921,6 +943,14 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
      "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
+    {"name": "bodesign_c03_emit_partition_diagram", "handler": _h_c03_emit_partition_diagram,
+     "description": "Project a board-level partition MODEL (boards + board-to-board pin classes) into a layered, editable breakout concept SVG under C03-EE/partition/. `model` = {boards:[{name, role, tier?, modules:[{name, type, note?}]}], interconnect:[{class, dir, signals?, from_board?, to_board?}]}. Five named layers (boards/modules/interconnect/legend/annotations); each board a <g id='board-<name>'>, each module <g id='module-<board>-<n>'>, each interconnect <g id='net-<class>'>. Fails fast (status=missing + missing_fields) when a board.role / interconnect.class / interconnect.dir is absent — never fabricates a partition or substitutes a default. Unknown module types render as named placeholders and are reported in placeholders[] (never silently dropped). Always stamps the honest-boundary footer (design partition, not fab pinout / no RefDes.Pin→net / no DRC-SI claim); not parameterisable. Deterministic: same MODEL → byte-stable SVG. PNG raster is cairosvg-gated (png_rendered=false and PNG NOT listed in files when absent — no phantom). emit_pptx=true attempts an editable PPTX via the docxmcp bridge; unreachable → pptx_status=unavailable (never fabricates a .pptx). Design partition only — not a fab pinout, not a DRC/SI claim.",
+      "schema": {"type": "object", "properties": {"folder": _STR, "model": {"type": "object"}, "emit_pptx": {"type": "boolean"}},
+                 "required": ["folder", "model"]}},
+    {"name": "bodesign_c03_emit_host_block_diagram", "handler": _h_c03_emit_host_block_diagram,
+     "description": "Project a host/MCU-centric MODEL (a center SoC/MCU + peripherals radiating to the four sides) into a layered, editable functional block diagram SVG under C03-EE/block/. `model` = {center_part:{name, mpn?, type?}, peripherals:[{name, side(top|bottom|left|right), mpn?, bus?, type?}], reference_baseline?:{name, diffs?:[str], sourcing_gates?:[str]}, title?}. Five named layers (center/peripherals/buses/legend/annotations); center a <g id='center-<name>'> (solid blue), each peripheral <g id='peripheral-<name>'>, each bus <g id='bus-<name>'>. Fails fast (status=missing + missing_fields) when center_part.name / a peripheral.name / a peripheral.side is absent, or side is not in {top,bottom,left,right} (reported as peripherals[i].side(invalid:<v>)) — never fabricates or substitutes a default. Unknown peripheral types render as named dashed placeholders and are reported in placeholders[] (never silently dropped). Optional reference_baseline renders a 'derived from <name>' diff + sourcing-gates annotation block (omitted entirely when absent — no fabricated baseline) and is echoed in result.reference_baseline. Always stamps the honest-boundary footer (functional block diagram, not a netlist / no RefDes.Pin→net / no DRC-SI claim); not parameterisable. Deterministic: same MODEL → byte-stable SVG (no RNG; peripheral order = declaration order within each side). PNG raster is cairosvg-gated (png_rendered=false and PNG NOT listed in files when absent — no phantom). emit_pptx=true attempts an editable PPTX via the docxmcp bridge; unreachable → pptx_status=unavailable (never fabricates a .pptx). Functional block diagram only — not a netlist, not a fab pinout, not a DRC/SI claim.",
+     "schema": {"type": "object", "properties": {"folder": _STR, "model": {"type": "object"}, "emit_pptx": {"type": "boolean"}},
+                "required": ["folder", "model"]}},
     {"name": "bodesign_datasheet_lookup", "handler": _h_datasheet_lookup,
      "description": "Look up a part's cached datasheet extraction (by MPN) in the project's `datasheets` skill cache (<project>/datasheets/extracted/). RCA anti-hallucination guard: call this BEFORE stating an electrical spec for a part. Returns the structured extraction, or status 'absent' (acquire the PDF + run the datasheets skill first — do NOT state the value from memory). bodesign only reads/gates; capturing datasheets is the `datasheets` skill's job. Pass vault_root = <project>/datasheets (in the C00–C07 tree: <track>/c03-ee/01_refs/datasheets).",
      "schema": {"type": "object", "properties": {"mpn": _STR, "vault_root": _STR}, "required": ["mpn"]}},

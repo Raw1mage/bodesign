@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-19T07:00:58.304Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-19T07:08:13.365Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "proposal/spec/design + idef0/grafcet/sequence/data-schema 完成；idef0(7 activities/15 arrows)+grafcet(8 steps canonical) 經 drawmiat 驗證通過。依 BR issue_20260619 partition diagram emitter；對齊 c01_emit_id_visual_package 範式、資料/繪圖分離、honest-boundary 內建。"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-19T07:22:41.739Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "補齊 planned artifacts：tasks.md（7 phase）+ handoff.md（Required Reads/Stop Gates In Force）+ test-vectors.json（TV1-TV7 頂層陣列）+ errors.md（Error Catalogue E-PART-001..006）+ observability.md（Events/Metrics）。對齊 design DD-1..DD-10。"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-19T07:48:30.900Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "實作完成、9 tests OK（orchestrator 複驗），首批 tasks 已勾，進入 implementing；剩 7.4 收尾 event_record。"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-19T07:49:14.567Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "所有 tasks（phase 1-7 含 7.4 收尾 event）完成。9 tests OK（orchestrator 獨立複驗）。工具註冊、skill 路由、architecture.md 同步、event_record 收尾皆完成。"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-19T07:58:54.039Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示 graduate。verified 完成：9 tests OK、工具註冊、architecture.md 同步、event 收尾。"
+    }
+  ]
+}

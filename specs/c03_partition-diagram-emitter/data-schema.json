@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "c03_partition-diagram-emitter data contracts",
+  "description": "C03/C04 板級分割 breakout 概念圖 emitter 的資料契約：MODEL 輸入（boards + interconnect pin classes）、繪圖中間表示、工具回傳。MODEL→SVG 繪圖全程確定性 pure-python，無 LLM；PNG/PPTX toolchain-gated。",
+  "definitions": {
+    "BoardModule": {
+      "type": "object",
+      "description": "一塊板上的一個功能模組方塊。",
+      "properties": {
+        "name": { "type": "string", "description": "模組名（顯示於方塊）；缺失即 fail-fast" },
+        "type": { "type": "string", "description": "模組型別（對樣式庫；未覆蓋者轉 named placeholder，不靜默省略）" },
+        "note": { "type": "string", "description": "選填註記" }
+      },
+      "required": ["name", "type"]
+    },
+    "Board": {
+      "type": "object",
+      "description": "一塊板（核心板 / 載板）。",
+      "properties": {
+        "name": { "type": "string", "description": "板名，如 CCM / ECB；用於 group id board-<name>" },
+        "role": { "type": "string", "description": "板角色，如 core / carrier；缺失即 fail-fast，不以預設角色續跑" },
+        "tier": { "type": "string", "description": "層級/階，如 compute / expansion；用於版面分層" },
+        "modules": {
+          "type": "array",
+          "description": "該板的模組清單",
+          "items": { "$ref": "#/definitions/BoardModule" }
+        }
+      },
+      "required": ["name", "role", "modules"]
+    },
+    "Interconnect": {
+      "type": "object",
+      "description": "一條 board-to-board pin-class 互連。",
+      "properties": {
+        "class": { "type": "string", "description": "pin class，如 PCIe / USB / Power / I2C；缺失即 fail-fast" },
+        "signals": { "type": "array", "items": { "type": "string" }, "description": "選填代表訊號清單" },
+        "dir": {
+          "type": "string",
+          "enum": ["bidir", "core-to-carrier", "carrier-to-core", "in", "out"],
+          "description": "方向（決定箭頭朝向）；缺失即 fail-fast，不以預設方向續跑"
+        },
+        "from_board": { "type": "string", "description": "選填起始板名（多板 >2 時用以消歧）" },
+        "to_board": { "type": "string", "description": "選填目標板名" }
+      },
+      "required": ["class", "dir"]
+    },
+    "PartitionModel": {
+      "type": "object",
+      "description": "emitter 的唯一資料輸入（R2：MODEL 即工具參數，資料/繪圖分離）。",
+      "properties": {
+        "title": { "type": "string", "description": "圖標題，如 'CCM/ECB 模組 Breakout'" },
+        "boards": {
+          "type": "array",
+          "description": "板清單（支援 >2 板，版面自適應）",
+          "items": { "$ref": "#/definitions/Board" },
+          "minItems": 1
+        },
+        "interconnect": {
+          "type": "array",
+          "description": "board-to-board pin-class 互連清單",
+          "items": { "$ref": "#/definitions/Interconnect" }
+        }
+      },
+      "required": ["boards", "interconnect"]
+    },
+    "PlacedModule": {
+      "type": "object",
+      "description": "版面（A3）後一個模組的確定性座標（依宣告序，無 RNG）。",
+      "properties": {
+        "board": { "type": "string" },
+        "name": { "type": "string" },
+        "is_placeholder": { "type": "boolean", "description": "true = 型別未被樣式庫覆蓋，以 generic 方塊呈現" },
+        "x": { "type": "number" }, "y": { "type": "number" },
+        "w": { "type": "number" }, "h": { "type": "number" },
+        "group_id": { "type": "string", "description": "SVG group id，如 module-CCM-1" }
+      },
+      "required": ["board", "name", "is_placeholder", "x", "y", "group_id"]
+    },
+    "HonestBoundary": {
+      "type": "object",
+      "description": "honest-boundary footer 內容（DD-5，程式自動帶，不可關閉）。",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "固定三條：design partition, not fab pinout / no RefDes.Pin→net / no DRC-SI claim"
+        }
+      },
+      "required": ["notes"]
+    },
+    "EmitPartitionResult": {
+      "type": "object",
+      "description": "c03_emit_partition_diagram 工具回傳。",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "missing"],
+          "description": "missing = MODEL 缺欄位 fail-fast，不產圖"
+        },
+        "missing_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "status=missing 時列出缺項（board 名 / interconnect 索引 + 欄位）"
+        },
+        "svg_path": { "type": "string", "description": "分層 SVG 路徑（status=ok 時必有）" },
+        "png_rendered": { "type": "boolean", "description": "cairosvg 在時 true；false 時 PNG 不列 files（no phantom）" },
+        "pptx_status": {
+          "type": "string",
+          "enum": ["not-requested", "ok", "unavailable"],
+          "description": "PPTX 選項狀態；unavailable=docxmcp 不可達，不偽造 .pptx"
+        },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "圖層清單：boards/modules/interconnect/legend/annotations"
+        },
+        "boards_count": { "type": "integer" },
+        "modules_count": { "type": "integer" },
+        "interconnect_count": { "type": "integer" },
+        "placeholders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "用了 generic placeholder 的模組（不靜默省略）"
+        },
+        "boundary": { "$ref": "#/definitions/HonestBoundary" },
+        "files": {
+          "type": "array",
+          "description": "磁碟上真實存在的產出檔（PNG 缺 toolchain 時不列）",
+          "items": {
+            "type": "object",
+            "properties": { "rel": { "type": "string" }, "kind": { "type": "string" } },
+            "required": ["rel"]
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["status"]
+    }
+  }
+}

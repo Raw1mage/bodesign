@@ -1,0 +1,136 @@
+[
+  {
+    "$comment": "c03_partition-diagram-emitter test vectors — concrete input/expected-output pairs per spec.md Acceptance Checks. MODEL→SVG 全程確定性 pure-python。",
+    "id": "TV1",
+    "name": "MODEL 完整 → 五圖層分割 SVG",
+    "input": {
+      "folder": "<tmp>",
+      "model": {
+        "title": "CCM/ECB 模組 Breakout",
+        "boards": [
+          { "name": "CCM", "role": "core", "tier": "compute", "modules": [
+            { "name": "SoC", "type": "soc" }, { "name": "LPDDR", "type": "memory" }, { "name": "PMIC", "type": "power" }
+          ]},
+          { "name": "ECB", "role": "carrier", "tier": "expansion", "modules": [
+            { "name": "USB-C", "type": "connector" }, { "name": "Ethernet PHY", "type": "phy" }
+          ]}
+        ],
+        "interconnect": [
+          { "class": "PCIe", "signals": ["PERp", "PERn"], "dir": "bidir" },
+          { "class": "Power", "signals": ["VSYS"], "dir": "core-to-carrier" }
+        ]
+      }
+    },
+    "expect": {
+      "status": "ok",
+      "layers": ["boards", "modules", "interconnect", "legend", "annotations"],
+      "boards_count": 2,
+      "modules_count": 5,
+      "interconnect_count": 2,
+      "svg_contains_groups": ["board-CCM", "board-ECB", "module-CCM-1", "net-PCIe"],
+      "placeholders": []
+    }
+  },
+  {
+    "id": "TV2",
+    "name": "缺 interconnect.dir → fail-fast",
+    "input": {
+      "folder": "<tmp>",
+      "model": {
+        "boards": [ { "name": "CCM", "role": "core", "modules": [{ "name": "SoC", "type": "soc" }] } ],
+        "interconnect": [ { "class": "PCIe", "signals": ["PERp"] } ]
+      }
+    },
+    "expect": {
+      "status": "missing",
+      "missing_fields_contains": ["interconnect[0].dir"],
+      "no_svg": true
+    }
+  },
+  {
+    "id": "TV2b",
+    "name": "缺 board.role → fail-fast",
+    "input": {
+      "folder": "<tmp>",
+      "model": {
+        "boards": [ { "name": "CCM", "modules": [{ "name": "SoC", "type": "soc" }] } ],
+        "interconnect": [ { "class": "Power", "dir": "core-to-carrier" } ]
+      }
+    },
+    "expect": {
+      "status": "missing",
+      "missing_fields_contains": ["boards[0].role"],
+      "no_svg": true
+    }
+  },
+  {
+    "id": "TV3",
+    "name": "未覆蓋模組型別 → named placeholder（不靜默）",
+    "input": {
+      "folder": "<tmp>",
+      "model": {
+        "boards": [ { "name": "CCM", "role": "core", "modules": [{ "name": "Mystery", "type": "unobtanium" }] } ],
+        "interconnect": [ { "class": "Power", "dir": "core-to-carrier" } ]
+      }
+    },
+    "expect": {
+      "status": "ok",
+      "placeholders_contains": ["Mystery"],
+      "svg_contains_groups": ["module-CCM-1"]
+    }
+  },
+  {
+    "id": "TV4",
+    "name": "honest-boundary 三條自動帶",
+    "input_ref": "TV1.input",
+    "expect": {
+      "boundary_notes": [
+        "design partition, not fab pinout",
+        "no RefDes.Pin→net",
+        "no DRC-SI claim"
+      ],
+      "svg_annotations_layer_contains_all_three": true
+    }
+  },
+  {
+    "id": "TV5",
+    "name": "相同 MODEL → byte-stable SVG（確定性）",
+    "input_ref": "TV1.input",
+    "expect": {
+      "two_runs_svg_identical": true
+    }
+  },
+  {
+    "id": "TV6",
+    "name": "缺 cairosvg → png_rendered=false 且 PNG 不列 files",
+    "input_ref": "TV1.input",
+    "env": { "cairosvg": "absent" },
+    "expect": {
+      "status": "ok",
+      "png_rendered": false,
+      "files_excludes_png": true,
+      "svg_present": true
+    }
+  },
+  {
+    "id": "TV7",
+    "name": ">2 板版面自適應",
+    "input": {
+      "folder": "<tmp>",
+      "model": {
+        "boards": [
+          { "name": "CCM", "role": "core", "modules": [{ "name": "SoC", "type": "soc" }] },
+          { "name": "ECB", "role": "carrier", "modules": [{ "name": "USB", "type": "connector" }] },
+          { "name": "AUX", "role": "carrier", "modules": [{ "name": "Sensor", "type": "sensor" }] }
+        ],
+        "interconnect": [ { "class": "I2C", "dir": "bidir", "from_board": "CCM", "to_board": "AUX" } ]
+      }
+    },
+    "expect": {
+      "status": "ok",
+      "boards_count": 3,
+      "svg_contains_groups": ["board-CCM", "board-ECB", "board-AUX"],
+      "boards_non_overlapping": true
+    }
+  }
+]

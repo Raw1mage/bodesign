@@ -75,7 +75,14 @@ block diagram. **Use a functional/circuit block diagram (functional blocks + bus
 EE architecture — NOT a C4-model container diagram.** C4 (Context/Container/Component) is a
 *software*-architecture notation and is the wrong tool for describing a circuit; the same applies to
 C04. Power distribution may use IDEF0; signal/data flow a flow diagram — but the system/host
-architecture is a functional block diagram. Model these on the real examples — see
+architecture is a functional block diagram. **Do not hand-author this SVG** — for the host /
+MCU-centric form (center SoC + peripherals radiating to the four sides + buses) emit it with
+`bodesign_c03_emit_host_block_diagram` (MODEL = {center_part, peripherals[{name, side, bus?,
+type?}], reference_baseline?}); for a board-level core↔carrier split / fan-out use
+`bodesign_c03_emit_partition_diagram`. Both are deterministic, layered, honest-boundary-gated
+emitters (see SKILL.md concept-diagram router). For a **derived product**, pass
+`reference_baseline` so the diagram honestly carries the derived-from / diffs / sourcing-gates
+provenance. Model these on the real examples — see
 `thesmart_products/openmv/C03-EE/03_output/Design_Definition.md` and
 `thesmart_products/openmv/N6_board/C03_EE/{EE_Design_Specification,Architecture,Power_Tree,Interface_Definitions}.md`.
 

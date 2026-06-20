@@ -1,0 +1,30 @@
+{
+  "diagram_title": "Emit Partition Diagram From ICD Model",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Validate Partition Model", "description": "檢查 boards/role/tier/modules + interconnect class/dir 齊全，缺項 fail-fast", "decomposition": null },
+    { "id": "A2", "title": "Resolve Module Glyphs", "description": "模組型別對樣式庫；未覆蓋者轉具名 placeholder（不靜默省略）", "decomposition": null },
+    { "id": "A3", "title": "Lay Out Boards And Modules", "description": "確定性版面：板依宣告序排列、模組依宣告序填入板輪廓", "decomposition": null },
+    { "id": "A4", "title": "Draw Interconnect Pin Classes", "description": "pin-class 連線 + 方向箭頭 + 圖例層", "decomposition": null },
+    { "id": "A5", "title": "Stamp Honest Boundary Annotations", "description": "自動寫 design partition not fab pinout / no RefDes.Pin to net / no DRC-SI claim", "decomposition": null },
+    { "id": "A6", "title": "Emit Layered Vector And Raster", "description": "寫分層 SVG；cairosvg 在則出 PNG，缺則標 unavailable 不列 files", "decomposition": null },
+    { "id": "A7", "title": "Orchestrate Editable Slide Export", "description": "選配：經 mcp_call 驅動 docxmcp 產原生可編輯 PPTX shape；不可達標 unavailable", "decomposition": null }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "Partition Model JSON", "type": "input" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "Required Field Contract", "type": "control" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "label": "Validated Model", "type": "output" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:mechanism", "label": "Glyph Style Library", "type": "mechanism" },
+    { "id": "AR5", "source": "A2:output", "target": "A3:input", "label": "Module Glyphs And Placeholders", "type": "output" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A3:control", "label": "Deterministic Layout Order", "type": "control" },
+    { "id": "AR7", "source": "A3:output", "target": "A4:input", "label": "Placed Boards And Modules", "type": "output" },
+    { "id": "AR8", "source": "A4:output", "target": "A5:input", "label": "Wired Pin Class Layer", "type": "output" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A5:control", "label": "Honest Boundary Policy", "type": "control" },
+    { "id": "AR10", "source": "A5:output", "target": "A6:input", "label": "Annotated Layered Drawing", "type": "output" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A6:mechanism", "label": "Cairosvg Raster Toolchain", "type": "mechanism" },
+    { "id": "AR12", "source": "A6:output", "target": "A7:input", "label": "SVG And PNG Artifacts", "type": "output" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A7:mechanism", "label": "Docxmcp Via Mcp Call", "type": "mechanism" },
+    { "id": "AR14", "source": "A7:output", "target": "EXTERNAL", "label": "Partition Diagram Package With Boundary Notes", "type": "output" },
+    { "id": "AR15", "source": "A6:output", "target": "EXTERNAL", "label": "Layered SVG PNG Deliverables", "type": "output" }
+  ]
+}
