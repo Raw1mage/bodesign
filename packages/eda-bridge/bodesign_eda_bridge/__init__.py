@@ -10,6 +10,7 @@ from .kicad_emit import (
 )
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .bom_export import BomResult, export_bom, export_netlist
+from .dxf_dwg import dwg_to_dxf, dxf_to_dwg
 from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
 from .layout import LayoutResult, PCBNEW_AVAILABLE, emit_layout
@@ -73,6 +74,8 @@ __all__ = [
     "build_footprint_map",
     "build_kicad_native_extension_contract",
     "compose_schematic",
+    "dwg_to_dxf",
+    "dxf_to_dwg",
     "emit_fab_outputs",
     "export_bom",
     "export_netlist",

@@ -6,6 +6,22 @@ rationale is the plan-builder specs under `specs/`.
 
 ## [Unreleased]
 
+### 新增 — 本地 DXF↔DWG 轉換工具（LibreDWG + ezdxf）
+- 新增兩個 core-group MCP 工具 `bodesign_dxf_to_dwg` / `bodesign_dwg_to_dxf`，讓 bodesign 能**在本地**
+  做 CAD 互轉，不依賴任何線上轉檔 API 或 Autodesk 專有工具。
+- **轉換後端**：LibreDWG 0.13.3 從源碼**靜態編譯**（`dxf2dwg`/`dwg2dxf`/`dwgread`），烤入 `Dockerfile.core`
+  與 `Dockerfile`；`build-essential`/`pkg-config` 在同一 layer `purge` 以保留 binaries 而不增肥。輸出
+  為 AC1015（AutoCAD 2000）DWG，主流 CAD（AutoCAD/ZWCAD/BricsCAD）相容。
+- **正規化**（`dxf_to_dwg(normalize=True)`，預設開）：先用 ezdxf 把輸入重寫成乾淨的 R2000 DXF
+  （LWPOLYLINE/TEXT/layers/colors 保留），再交給 LibreDWG，取得最佳 DWG roundtrip fidelity；古老
+  AC1006/POLYLINE 格式會在此被升級，避免 roundtrip 失真。
+- **能力模組**：`packages/eda-bridge/bodesign_eda_bridge/dxf_dwg.py`，並用 `dwgread -O JSON` 解析
+  `_subclass` 回報轉出後的實體計數（polyline/vertex/text）。`requirements.txt` 加 `ezdxf`。
+- **No-fallback 紀律**：缺 LibreDWG binary 時回 `ok=false` 並提示 `rebuild image`，絕不靜默退化成
+  部分／失真轉換。
+- 端到端驗證：蘆洲成功段587地號 40:60 土地切割 DXF → DWG，`polyline2d:4 / vertex2d:50 / text:4`
+  幾何零損失，座標 x 範圍與源圖一致。
+
 ### 新增 — C00 PRD 以 docx 產出（重現 Rockbox Word 文件架構）
 - 把 C00 PRD 的產出從純 Markdown 升級為**可組成帶樣式 .docx** 的封裝，文件架構**重現真實
   Rockbox C07-PRD Word 檔**：封面區 + 改版紀錄表 + 12 個編號 Heading-1 章節 + 各章節內部的

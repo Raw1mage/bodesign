@@ -31,6 +31,23 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends kicad kicad-symbols kicad-footprints openscad \
  && rm -rf /var/lib/apt/lists/*
 
+# LibreDWG: build dxf2dwg/dwg2dxf/dwgread statically from source so DXF<->DWG
+# conversion has no runtime shared-lib deps. build-essential/pkg-config are
+# purged in the same layer to keep the binaries without the toolchain weight.
+ARG LIBREDWG_VERSION=0.13.3
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential pkg-config curl ca-certificates \
+ && curl -fsSL "https://ftp.gnu.org/gnu/libredwg/libredwg-${LIBREDWG_VERSION}.tar.xz" -o /tmp/libredwg.tar.xz \
+ && mkdir -p /tmp/libredwg && tar -xf /tmp/libredwg.tar.xz -C /tmp/libredwg --strip-components=1 \
+ && cd /tmp/libredwg \
+ && ./configure --disable-bindings --disable-python --disable-shared --enable-static --disable-dependency-tracking \
+ && make -j"$(nproc)" \
+ && install -m 0755 programs/dxf2dwg programs/dwg2dxf programs/dwgread /usr/local/bin/ \
+ && cd / && rm -rf /tmp/libredwg /tmp/libredwg.tar.xz \
+ && apt-get purge -y build-essential pkg-config \
+ && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
+
 # venv with system site-packages so the apt-installed pcbnew module is importable
 # alongside the pip-installed mcp/uvicorn/pygerber.
 RUN python3 -m venv --system-site-packages /opt/venv

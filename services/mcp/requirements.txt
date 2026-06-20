@@ -5,3 +5,5 @@ uvicorn
 # Tool capabilities additionally need: pygerber (gerber render), and the
 # system toolchain KiCad 9 (kicad-cli + pcbnew) + LibreOffice (soffice).
 pygerber
+# ezdxf normalizes DXF (R2000 + LWPOLYLINE) before the LibreDWG dxf2dwg roundtrip.
+ezdxf
