@@ -10,6 +10,7 @@ venv/
 .run/
 .logs/
 .artifacts/
+.work/
 
 # specbase KB index — transient SQLite WAL companions (the .sqlite itself is tracked)
 .specbase/*.sqlite-shm
