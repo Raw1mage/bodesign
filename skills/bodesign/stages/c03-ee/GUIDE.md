@@ -283,10 +283,66 @@ Source-of-truth = markdown/CSV/JSON you author or export; generated = engine/dia
 | Schematic | `generated/sch*/*.kicad_sch` + `symbols/` | source | KiCad; MPNs on properties |
 | Complete BOM | `BOM.csv` / `..._完整BOM.xlsx` | exported | ref/value/fp/MPN/qty/block |
 | Netlist | `..._網路表.xlsx` / `.net` | exported | full, or honest interface subset |
-| Pinmap | `..._GPIO_pinout.xlsx`, `..._介面pinmap.xlsx`, `Pin_Allocation.csv` | exported | ball→GPIO→function |
+| Pinmap | `C03_..._GPIO_pinout.xlsx`, `C03_Pin_Allocation.csv` | exported | ball→GPIO→function |
 | Netlist status | `Netlist_Status.md` | source | the honest connectivity boundary (when full netlist is blocked) |
-| Mechanical bridge | `Mechanical_Constraint_Export.json` | exported | C03→C02/C04; `approval=false` |
+| Mechanical bridge | `C03_Mechanical_Constraint_Export.json` | exported | C03→C02/C04; `approval=false` |
+| **Consolidated EE document** | **`<product>_電路設計文件.docx` / `C03_Circuit_Design.docx`** | **generated** | **ONE merged Word doc — see "Document consolidation rule" below** |
 | Analyzer runs | `analysis/<run>/*.json` + `manifest.json` | generated | keep; gitignored, manifest tracked |
+
+### Document consolidation rule (the single-doc + `img/` workflow — MANDATORY)
+
+The C03 Word deliverable is **one consolidated document**, not a scatter of per-section `.docx`
+files. An earlier C03 emitted nine separate `C03_架構.docx` / `C03_電源樹.docx` / `C03_介面定義.docx` …
+files plus a pile of loose `*.png` at the stage root — it was disorienting and created a
+"which file is canonical?" ambiguity. The rule, going forward:
+
+1. **One markdown source of truth → one docx.** Author a single merged markdown (e.g.
+   `02_build/<product>_完整設計文件.md`) whose chapters ARE the former per-section docs — design
+   definition, architecture, power tree, schematic figure set, interface definitions, module-port
+   ICD, core-module ICD, board partition, component dimensions, connectivity boundary. Render it to
+   ONE `.docx` at the stage root. **Do not** emit a separate docx per source `.md`.
+2. **All figures live in `<stage>/img/`.** Collect every deliverable PNG (block diagram, power
+   tree, per-subsystem schematics, pinout, processing flow) into a single `img/` folder at the
+   stage root. The markdown embeds them by relative path (`![cap](img/<name>.png)`); the renderer
+   embeds them into the docx. Do not leave loose figure PNGs scattered at the stage root.
+3. **Every figure is referenced + captioned.** A PNG that no document references is either folded
+   into the consolidated doc with an honest caption (what it shows, its source `.md`, its
+   draft/representative status) or removed. No orphan figures.
+4. **Honesty labels survive the merge.** Each chapter keeps its `draft` / `derived` /
+   `representative` / `consistency-only` / `not-run` markers — consolidation is a layout change, not
+   a status upgrade. Schematic figures stay labelled representative/topological, never "verified".
+5. **Render path.** Prefer `bodesign_emit_doc` (md → docx+pdf) when the worker has LibreOffice;
+   otherwise use the **docxmcp Mode A** path (the AGENTS-preferred route): stage `body.md` + `media/`
+   (or `img/`) + a minimal `manifest.json` (`workflow_state=decomposed`, `format=docx`) →
+   `docxmcp_document(action=assemble, doc_dir=<bare-token>, template=cht_template, clean_headings=…)`
+   → `docxmcp_document(action=add_front_matter, doc_dir=<bare-token>, cover_spec=…, include_toc=true)`
+   for the cover + Word TOC field. **Critical facade contract:** the `document` facade passes a bare
+   `tok_XXXX` as the **`doc_dir`** arg, NOT `token` — assemble/add_front_matter read `doc_dir` only,
+   so a `token=` call fails with a bare `--doc-dir` usage error. **Numbering:** `cht_template`
+   headings carry `numPr` auto-numbering (壹/一/（一）); if the markdown already writes decimal
+   chapter prefixes (第 N 章 / N.1), pass `clean_headings=true` to strip the template's numPr and
+   avoid double-numbering (壹、第 1 章 …). Cover blocks use cht style names `置中大大` / `置中大` /
+   `置中`; the TOC uses `TOC Heading`. **Verify before claiming done:** confirm `word/media/` holds
+   every figure, `numPr` count matches intent, the TOC field is present, and render a few pages to
+   images for a visual no-clip / no-double-number check. `ok=true` from a tool is not proof — the
+   embedded image count and a rendered page are.
+
+### File-naming rule — `C03_` prefix on every deliverable (MANDATORY)
+
+Every **formal deliverable** at the stage root — regardless of extension (`.docx`, `.csv`, `.json`,
+`.net`, `.svg`, …) — MUST carry the stage prefix `C03_` (generally `C0N_` for stage N). This makes a
+file identifiable as a C03 deliverable on sight, even detached from its folder, and removes the
+"which file belongs to which stage?" ambiguity when deliverables are copied into downstream packages
+or shared. Examples: `C03_電路設計文件.docx`, `C03_BOM.csv`, `C03_Pin_Allocation.csv`,
+`C03_Mechanical_Constraint_Export.json`, `C03_aiguard_power_frontend.svg`/`.net`.
+
+Scope of the rule:
+- **In scope:** every tracked deliverable that lives at the stage root (`<stage>/`).
+- **Out of scope:** build/intermediate artifacts under `02_build/` and external source under
+  `01_refs/` (and `img/` figure-library members, which are already grouped by folder). These are not
+  user-facing deliverables, so they are not required to carry the prefix.
+- When renaming an existing deliverable to add the prefix, `git mv` it and update every reference
+  (README delivery list, source markdown, sibling `.md`) in the same change — no dangling links.
 
 ## Gate / done-criteria
 
