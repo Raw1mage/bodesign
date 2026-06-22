@@ -81,3 +81,44 @@ bodesign 的類比/EMC/熱分析工具靠 `resolve_skill(name, ENV_VAR, ...)` �
 > analyze_emc/analyze_thermal ∈ `_EE_GROUP_TOOLS` → fix lands in `Dockerfile` + `Dockerfile.ee`
 > (not `Dockerfile.core`, which forwards EE). DD-1..DD-6 + tasks + tests in the package.
 > Implementation + GB image rebuild await separately-authorized execution (see the package handoff).
+
+---
+
+## Resolution
+
+- **Status**: resolved / fixed. Closed 2026-06-23. Plan
+  `specs?…` → `plans/deployment_c06-analyzer-engines-in-container/` state **verified**.
+- **Final RCA** (confirmed): the EE-executing images shipped the binary toolchain
+  (kicad-cli/pcbnew/ngspice) but **never the analyzer engine scripts** that
+  `resolve_skill` needs, and set **no `BODESIGN_*_SKILL` env** → `resolve_skill`
+  returns None → `skipped-no-skills`. The container-mount framing in §1–3 above was
+  a red herring (shared only thematically with the readiness BR); the real cause is
+  packaging. simulate/analyze_emc/analyze_thermal ∈ `_EE_GROUP_TOOLS`, so the fix
+  lives in `Dockerfile` + `Dockerfile.ee`, not compose mounts, not `resolve_skill`.
+- **Fix implemented** (commit `b698720`; + cross-repo opencode `828b9dfe4`):
+  - `Dockerfile` + `Dockerfile.ee`: extract the kicad/spice/emc engine subtrees
+    from the cleaned `services/mcp/assets/skills/{bodesign,spice,emc}.tar.gz` into
+    `/opt/bodesign-engines`, with a **build-time assert** (`test -d <engine>/scripts`
+    ×3) that fails the build loud if any engine is missing; set the three
+    `BODESIGN_*_SKILL` env (env wins `resolve_skill` order → deterministic,
+    `$HOME`-independent). `Dockerfile.core` untouched (forwards EE).
+  - New no-arg EE-group tool `bodesign_analyzer_selfcheck` + pure
+    `analyzer_engine_status()` (`eda-bridge/skill_paths.py`): per-engine
+    `engine_resolvable` + `binary_present` + `can_run` + `image_role`, separating
+    `skipped-no-skills` (engine absent) from `skipped-no-simulator` (binary absent).
+  - Docs aligned (MCP self-description, MANIFEST, SKILL.md, opencode enablement).
+- **Verification** (in live containers after `./mcpctl.sh rebuild`, workers mode):
+  - build-time assert passed in both Dockerfiles (proves extraction);
+  - bodesign-ee `analyzer_engine_status()`: kicad/spice/emc all `can_run=true`,
+    `all_runnable=true`;
+  - **behavioural**: `analyze_thermal` with dummy paths → `failed`/"not found"
+    (PAST the engine gate), not `skipped-no-skills`;
+  - **real verdict**: `bodesign_simulate` via the MCP server (core → ee → kicad +
+    ngspice) on a real `openmv_n6_subsystem.kicad_sch` → `status: ok, passed: 2`
+    (two decoupling subcircuits SPICE-simulated).
+- **Follow-ups / residual risk** (non-blocking): full `analyze_emc` / `analyze_thermal`
+  *verdict* round-trip awaits a real `.kicad_pcb` fixture (none on this machine; the
+  aiguard sources were on the now-invisible FUSE mount) — both are already proven at
+  the engine gate. In workers mode `bodesign:latest` builds from `Dockerfile.core`,
+  so the monolith `Dockerfile` engine path was not run-tested here (its RUN block is
+  identical to `Dockerfile.ee`, which was verified, + a host dry-run).

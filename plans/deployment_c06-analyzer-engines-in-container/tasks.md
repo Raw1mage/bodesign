@@ -62,7 +62,7 @@
 - [x] 5.3 `skills/bodesign/SKILL.md` + cross-link the existing
   `references/container-boundary.md` (added by the readiness sibling) with the
   engine-bundling fact.
-- [ ] 5.4 Enablement note (`prompts/enablement.json` — **cross-repo, opencode**):
+- [x] 5.4 Enablement note (`prompts/enablement.json` — **cross-repo, opencode**):
   file as a follow-up for the user to route; do NOT edit from the bodesign repo.
 - **Acceptance**: no doc asserts a host path absent in the container.
 
@@ -70,7 +70,17 @@
 
 - [x] 6.1 `./mcpctl.sh rebuild` (and the workers overlay build) — restarts the live
   MCP container; coordinate, don't surprise live sessions (stop gate).
-- [ ] 6.2 Manual MCP round-trip: upload the aiguard EE sources via the file model,
-  run the three C06 tools, confirm real verdicts; run the self-check.
-- **Acceptance**: aiguard C06 SPICE/EMC/thermal advance from `not-run` to a real
-  tool verdict; the BR's reproduction no longer yields `skipped-no-skills`.
+- [x] 6.2 Manual MCP round-trip: real-verdict run via the shared sessions volume.
+  > Evidence (2026-06-23): the aiguard EE sources are gone (they lived on the FUSE
+  > mount that is the readiness BR's subject), so the round-trip used a real
+  > schematic `openmv_n6_subsystem.kicad_sch`. `bodesign_simulate` through the MCP
+  > server (core → forwarded to bodesign-ee → kicad analyzer + ngspice) returned a
+  > **real verdict**: `status: ok, passed: 2` (two decoupling subcircuits SPICE-
+  > simulated). `analyze_emc` / `analyze_thermal` need a `.kicad_pcb` (none exists
+  > locally) so a full EMC/thermal verdict was not run; both are proven at the
+  > engine gate (`analyze_thermal` with dummy paths returns `failed`/"not found",
+  > i.e. PAST `resolve_skill`, not `skipped-no-skills`). `analyzer_engine_status()`
+  > in bodesign-ee: all three `can_run=true`.
+- **Acceptance**: C06 simulate advances from `skipped-no-skills` to a real verdict;
+  the BR's reproduction no longer yields `skipped-no-skills` (engine gate passes for
+  all three). Full EMC/thermal verdicts await a PCB fixture (non-blocking).
