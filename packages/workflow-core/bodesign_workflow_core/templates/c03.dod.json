@@ -1,26 +1,99 @@
 {
   "stage": "c03",
   "guide": "skills/bodesign/stages/c03-ee/GUIDE.md",
-  "base": "stage-folder",
-  "honest_states": ["draft", "blocked"],
+  "base": "project-root",
+  "honest_states": [
+    "draft",
+    "blocked"
+  ],
   "deliverables": [
-    {"id": "design_definition", "title": "Design definition + architecture", "guide_row": 1,
-     "any_of": ["Design_Definition.md", "EE_Design_Specification.md", "Architecture_and_BOM.md"],
-     "required": true},
-    {"id": "power_tree", "title": "Power tree", "guide_row": 2,
-     "any_of": ["Power_Tree.md"], "required": true},
-    {"id": "schematic", "title": "Schematic", "guide_row": 3,
-     "any_of": ["generated/**/*.kicad_sch", "generated/sch*/*.kicad_sch", "*.kicad_sch"],
-     "required": true, "honest_states": ["draft", "blocked", "external-needed"]},
-    {"id": "bom", "title": "Complete BOM", "guide_row": 4,
-     "any_of": ["BOM.csv", "*_完整BOM.xlsx", "*BOM*.csv", "*BOM*.xlsx"], "required": true},
-    {"id": "netlist", "title": "Netlist", "guide_row": 5,
-     "any_of": ["*_網路表.xlsx", "*.net", "*netlist*.csv"], "required": true},
-    {"id": "pinmap", "title": "GPIO/interface pinmap", "guide_row": 6,
-     "any_of": ["*_GPIO_pinout.xlsx", "Pin_Allocation.csv", "*pinmap*.csv"], "required": true},
-    {"id": "netlist_status", "title": "Netlist status", "guide_row": 7,
-     "any_of": ["Netlist_Status.md"], "required": false},
-    {"id": "mech_bridge", "title": "Mechanical bridge", "guide_row": 8,
-     "any_of": ["Mechanical_Constraint_Export.json"], "required": true}
+    {
+      "id": "design_definition",
+      "title": "Design definition + architecture",
+      "guide_row": 1,
+      "any_of": [
+        "C03-EE/Design_Definition.md",
+        "C03-EE/EE_Design_Specification.md",
+        "C03-EE/Architecture_and_BOM.md"
+      ],
+      "required": true
+    },
+    {
+      "id": "power_tree",
+      "title": "Power tree",
+      "guide_row": 2,
+      "any_of": [
+        "C03-EE/Power_Tree.md"
+      ],
+      "required": true
+    },
+    {
+      "id": "schematic",
+      "title": "Schematic",
+      "guide_row": 3,
+      "any_of": [
+        "C03-EE/generated/**/*.kicad_sch",
+        "C03-EE/generated/sch*/*.kicad_sch",
+        "C03-EE/*.kicad_sch"
+      ],
+      "required": true,
+      "honest_states": [
+        "draft",
+        "blocked",
+        "external-needed"
+      ]
+    },
+    {
+      "id": "bom",
+      "title": "Complete BOM",
+      "guide_row": 4,
+      "any_of": [
+        "C03-EE/BOM.csv",
+        "C03-EE/*_完整BOM.xlsx",
+        "C03-EE/*BOM*.csv",
+        "C03-EE/*BOM*.xlsx"
+      ],
+      "required": true
+    },
+    {
+      "id": "netlist",
+      "title": "Netlist",
+      "guide_row": 5,
+      "any_of": [
+        "C03-EE/*_網路表.xlsx",
+        "C03-EE/*.net",
+        "C03-EE/*netlist*.csv"
+      ],
+      "required": true
+    },
+    {
+      "id": "pinmap",
+      "title": "GPIO/interface pinmap",
+      "guide_row": 6,
+      "any_of": [
+        "C03-EE/*_GPIO_pinout.xlsx",
+        "C03-EE/Pin_Allocation.csv",
+        "C03-EE/*pinmap*.csv"
+      ],
+      "required": true
+    },
+    {
+      "id": "netlist_status",
+      "title": "Netlist status",
+      "guide_row": 7,
+      "any_of": [
+        "C03-EE/Netlist_Status.md"
+      ],
+      "required": false
+    },
+    {
+      "id": "mech_bridge",
+      "title": "Mechanical bridge",
+      "guide_row": 8,
+      "any_of": [
+        "C03-EE/Mechanical_Constraint_Export.json"
+      ],
+      "required": true
+    }
   ]
 }

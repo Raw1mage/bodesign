@@ -1,20 +1,65 @@
 {
   "stage": "c05",
   "guide": "skills/bodesign/stages/c05-fw/GUIDE.md",
-  "base": "stage-folder",
-  "honest_states": ["draft", "blocked"],
+  "base": "project-root",
+  "honest_states": [
+    "draft",
+    "blocked"
+  ],
   "deliverables": [
-    {"id": "functional_spec", "title": "Functional spec", "guide_row": 1,
-     "any_of": ["Functional_Spec.md"], "required": true},
-    {"id": "module_architecture", "title": "Module architecture", "guide_row": 2,
-     "any_of": ["Module_Architecture.md"], "required": true},
-    {"id": "state_machine", "title": "State machine", "guide_row": 3,
-     "any_of": ["State_Machine.md"], "required": true},
-    {"id": "task_breakdown", "title": "Task breakdown", "guide_row": 4,
-     "any_of": ["Task_Breakdown.md"], "required": true},
-    {"id": "pin_map_bridge", "title": "Pin-map bridge", "guide_row": 5,
-     "any_of": ["Pin_Map_Bridge.json"], "required": true},
-    {"id": "build_notes", "title": "Build notes", "guide_row": 6,
-     "any_of": ["Firmware_Build_Notes.md"], "required": true}
+    {
+      "id": "functional_spec",
+      "title": "Functional spec",
+      "guide_row": 1,
+      "any_of": [
+        "C05-FW/Functional_Spec.md"
+      ],
+      "required": true
+    },
+    {
+      "id": "module_architecture",
+      "title": "Module architecture",
+      "guide_row": 2,
+      "any_of": [
+        "C05-FW/Module_Architecture.md"
+      ],
+      "required": true
+    },
+    {
+      "id": "state_machine",
+      "title": "State machine",
+      "guide_row": 3,
+      "any_of": [
+        "C05-FW/State_Machine.md"
+      ],
+      "required": true
+    },
+    {
+      "id": "task_breakdown",
+      "title": "Task breakdown",
+      "guide_row": 4,
+      "any_of": [
+        "C05-FW/Task_Breakdown.md"
+      ],
+      "required": true
+    },
+    {
+      "id": "pin_map_bridge",
+      "title": "Pin-map bridge",
+      "guide_row": 5,
+      "any_of": [
+        "C05-FW/Pin_Map_Bridge.json"
+      ],
+      "required": true
+    },
+    {
+      "id": "build_notes",
+      "title": "Build notes",
+      "guide_row": 6,
+      "any_of": [
+        "C05-FW/Firmware_Build_Notes.md"
+      ],
+      "required": true
+    }
   ]
 }

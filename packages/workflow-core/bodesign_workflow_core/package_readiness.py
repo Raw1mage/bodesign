@@ -21,16 +21,16 @@ from .readiness_common import boundary_next_step, root_guard
 from .guide_dod import assess_guide_dod
 
 
-_STAGES = ["c00", "c01", "c02", "c03", "c04", "c05", "c06", "c07"]
-
-
-def _stage_subdir(root: Path, stage: str) -> Path | None:
-    """The project subfolder for a stage (e.g. 'c01' -> 'C01-ID/'), or None if the
-    stage hasn't been started in this package."""
-    for p in sorted(root.glob(f"{stage.upper()}*")):
-        if p.is_dir():
-            return p
-    return None
+# Stage -> its project subfolder. All DoD manifests are PROJECT-ROOT-relative (paths
+# carry the stage-folder prefix, e.g. "C05-FW/Functional_Spec.md"), matching how each
+# cXX_readiness resolves files (root / <STAGE>/<file>). So the roll-up passes the
+# project root for every stage; the only per-stage condition is whether the stage has
+# been started (its folder exists).
+_STAGE_FOLDER = {
+    "c00": "C00-PRD", "c01": "C01-ID", "c02": "C02-ME", "c03": "C03-EE",
+    "c04": "C04-Layout", "c05": "C05-FW", "c06": "C06-Verification", "c07": "C07-MFG",
+}
+_STAGES = list(_STAGE_FOLDER)
 
 # POC deliverable checklist (electronics-core scope). Each entry:
 #   key, name, section_keywords (match a C0* folder), match_roles / match_name (match files),
@@ -226,20 +226,17 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
     # folder yet is simply absent from the roll-up (not penalized).
     root_path = Path(folder)
     for stage in _STAGES:
+        if not (root_path / _STAGE_FOLDER[stage]).exists():
+            continue  # stage not started in this package
         stage_ok = None  # overall done-gate for the stage (may exceed the file manifest)
         if stage == "c00":
-            if not (root_path / "C00-PRD").exists():
-                continue
+            # c00's real gate includes fake-complete + conditional-RF, not just files.
             gc = c00_result.guide_compliance if (c00_result and c00_result.guide_compliance) \
                 else assess_guide_dod(root_path, "c00")
-            # c00's real gate includes fake-complete + conditional-RF, not just files.
             if c00_result is not None:
                 stage_ok = c00_result.dod_ok
         else:
-            base = _stage_subdir(root_path, stage)
-            if base is None:
-                continue
-            gc = assess_guide_dod(base, stage)
+            gc = assess_guide_dod(root_path, stage)
         if gc and gc.get("deliverables"):
             readiness.guide_compliance[stage] = gc
             if stage_ok is None:

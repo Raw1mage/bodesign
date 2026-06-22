@@ -47,19 +47,24 @@ class CheckerTests(unittest.TestCase):
         self.assertFalse(r["dod_ok"])
         self.assertEqual(len(r["missing_blocking"]), 6)
 
+    def _mk(self, *rels):
+        for rel in rels:
+            p = self.t / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("x")
+
     def test_complete_stage_green(self):
-        for fn in ["Functional_Spec.md", "Module_Architecture.md", "State_Machine.md",
-                   "Task_Breakdown.md", "Pin_Map_Bridge.json", "Firmware_Build_Notes.md"]:
-            (self.t / fn).write_text("x")
+        # Manifests are project-root-relative: files live under <root>/C05-FW/.
+        self._mk(*[f"C05-FW/{fn}" for fn in ["Functional_Spec.md", "Module_Architecture.md",
+                   "State_Machine.md", "Task_Breakdown.md", "Pin_Map_Bridge.json", "Firmware_Build_Notes.md"]])
         r = guide_dod.assess_guide_dod(self.t, "c05")
         self.assertTrue(r["dod_ok"])
         self.assertEqual(r["missing_blocking"], [])
 
     def test_honest_status_override_not_blocking(self):
-        # c02 enclosure_export missing but honestly not-run -> not blocking
-        for fn in ["Mechanical_Constraints.json", "Mechanical_Assumptions.md", "Enclosure.scad",
-                   "Assembly_Notes.md", "Print_Settings.md", "Vendor_Handoff.md", "SketchUp_Import_Guide.md"]:
-            (self.t / fn).write_text("x")
+        self._mk(*[f"C02-ME/{fn}" for fn in ["Mechanical_Constraints.json", "Mechanical_Assumptions.md",
+                   "Enclosure.scad", "Assembly_Notes.md", "Print_Settings.md", "Vendor_Handoff.md",
+                   "SketchUp_Import_Guide.md"]])
         (self.t / "dod_status.json").write_text(json.dumps(
             {"enclosure_export": {"status": "not-run", "reason": "no OpenSCAD toolchain"}}))
         r = guide_dod.assess_guide_dod(self.t, "c02", conditions={"toolchain": True})
@@ -68,25 +73,19 @@ class CheckerTests(unittest.TestCase):
         self.assertTrue(r["dod_ok"])
 
     def test_conditional_skipped_when_unknown(self):
-        # c06 evt_findings (condition board_brought_up) is n-a when not signalled
-        for fn in ["Verification_Summary.json", "Test_Plan.md", "Bring_Up_Checklist.md"]:
-            (self.t / fn).write_text("x")
-        (self.t / "analysis").mkdir()
-        (self.t / "analysis" / "cross_verify.json").write_text("{}")
+        self._mk("C06-Verification/Verification_Summary.json", "C06-Verification/Test_Plan.md",
+                 "C06-Verification/Bring_Up_Checklist.md", "C06-Verification/analysis/cross_verify.json")
         r = guide_dod.assess_guide_dod(self.t, "c06")
         statuses = {d["id"]: d["status"] for d in r["deliverables"]}
         self.assertEqual(statuses["evt_findings"], "n-a")
         self.assertTrue(r["dod_ok"])
 
     def test_all_of_requires_every_file(self):
-        # c04 layout_placement needs BOTH files
-        (self.t / "Layout_Constraints.json").write_text("{}")
-        r = guide_dod.assess_guide_dod(self.t, "c04")
-        statuses = {d["id"]: d["status"] for d in r["deliverables"]}
+        self._mk("C04-Layout/Layout_Constraints.json")
+        statuses = {d["id"]: d["status"] for d in guide_dod.assess_guide_dod(self.t, "c04")["deliverables"]}
         self.assertEqual(statuses["layout_placement"], "missing")  # Placement_Constraints.md absent
-        (self.t / "Placement_Constraints.md").write_text("x")
-        r2 = guide_dod.assess_guide_dod(self.t, "c04")
-        statuses2 = {d["id"]: d["status"] for d in r2["deliverables"]}
+        self._mk("C04-Layout/Placement_Constraints.md")
+        statuses2 = {d["id"]: d["status"] for d in guide_dod.assess_guide_dod(self.t, "c04")["deliverables"]}
         self.assertEqual(statuses2["layout_placement"], "present")
 
 
@@ -144,6 +143,47 @@ class C00ReadinessDodTests(unittest.TestCase):
         self._write_state({"a": {"value": "5V 2A USB-C", "state": "answered"}}, include_rf=False)
         r = assess_c00_prd_readiness(self.t).to_dict()
         self.assertTrue(r["dod_ok"], r.get("warnings"))
+
+
+class PerStageBaseAgreementTests(unittest.TestCase):
+    """Regression for issue_20260623_guide_compliance_wrong_base_false_missing: the
+    bundled guide_compliance block must resolve deliverables against the SAME base as
+    the main readiness block (project root + stage folder), so a compliant stage is
+    NOT a false RED, and the two blocks AGREE."""
+
+    def setUp(self):
+        PRIVATE.mkdir(parents=True, exist_ok=True)
+        self.t = Path(tempfile.mkdtemp(prefix="dod-base-", dir=PRIVATE))
+
+    def tearDown(self):
+        shutil.rmtree(self.t, ignore_errors=True)
+
+    def test_c05_present_files_not_false_red_and_blocks_agree(self):
+        from bodesign_workflow_core import assess_c05_fw_readiness
+        c05 = self.t / "C05-FW"
+        c05.mkdir()
+        for fn in ["Functional_Spec.md", "Module_Architecture.md", "State_Machine.md",
+                   "Task_Breakdown.md", "Pin_Map_Bridge.json", "Firmware_Build_Notes.md"]:
+            (c05 / fn).write_text("x")
+        r = assess_c05_fw_readiness(self.t).to_dict()
+        # guide_compliance must NOT report present files as missing (the false RED bug)
+        self.assertTrue(r["guide_compliance"]["dod_ok"], r["guide_compliance"]["missing_blocking"])
+        self.assertEqual(r["guide_compliance"]["missing_blocking"], [])
+        self.assertTrue(r["dod_ok"])
+        # ...and it must AGREE with the main block (which sees the files present)
+        self.assertIn("Functional_Spec", r["present_sections"])
+        self.assertIn("Pin_Map_Bridge", r["present_sections"])
+
+    def test_package_rollup_uses_project_root(self):
+        from bodesign_workflow_core import assess_package_readiness
+        c05 = self.t / "C05-FW"
+        c05.mkdir()
+        for fn in ["Functional_Spec.md", "Module_Architecture.md", "State_Machine.md",
+                   "Task_Breakdown.md", "Pin_Map_Bridge.json", "Firmware_Build_Notes.md"]:
+            (c05 / fn).write_text("x")
+        r = assess_package_readiness(self.t).to_dict()
+        self.assertIn("c05", r["guide_compliance"])
+        self.assertNotIn("c05", r["dod_missing"])  # c05 fully present -> not flagged
 
 
 if __name__ == "__main__":
