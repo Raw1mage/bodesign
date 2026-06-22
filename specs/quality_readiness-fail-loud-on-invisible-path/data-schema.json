@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "quality_readiness-fail-loud-on-invisible-path data contracts",
+  "description": "Additive fields introduced across the readiness family to make an invisible/nonexistent root distinguishable from a genuinely-empty folder. All additions are backward compatible (defaults preserve the prior shape for visible folders).",
+  "definitions": {
+    "RootGuardResult": {
+      "description": "readiness_common.root_guard(folder) return tuple, expressed as an object. visible = Path(folder).exists(); warning is set iff not visible.",
+      "type": "object",
+      "required": ["root", "visible", "warning"],
+      "properties": {
+        "root": {"type": "string", "description": "str(Path(folder))"},
+        "visible": {"type": "boolean"},
+        "warning": {"type": ["string", "null"], "description": "'Folder not found / not visible to the bodesign container: <root>' when not visible, else null"}
+      }
+    },
+    "ProjectFolderIndexAdditions": {
+      "description": "New keys on ProjectFolderIndex.to_dict() (project_ingest.py).",
+      "type": "object",
+      "required": ["root_exists"],
+      "properties": {
+        "root_exists": {"type": "boolean", "description": "False only when base.exists() is False; distinguishes invisible root from scanned-but-empty (root_exists=True, files=[])"},
+        "warnings": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "ReadinessSignalAdditions": {
+      "description": "Additive keys present on EVERY readiness to_dict() (package + c00..c06). INV-4: for a visible folder root_visible=true and warnings=[], and all prior keys are unchanged (strict superset).",
+      "type": "object",
+      "required": ["root_visible", "warnings"],
+      "properties": {
+        "root_visible": {"type": "boolean", "description": "False when the root is not visible to the container"},
+        "warnings": {"type": "array", "items": {"type": "string"}, "description": "Boundary explanation when root_visible is false; [] otherwise"}
+      }
+    },
+    "ReadinessStatusSentinel": {
+      "description": "Where a readiness result carries a free-form status string (c04/c05/c06) the invisible-root sentinel is 'path-not-visible', distinct from the existing 'missing'/'blocked'/drafted vocabulary. c00 uses status 'path-not-visible' in its structured form (and still raises C00TemplateError for a missing answer_state.json inside a VISIBLE folder).",
+      "type": "string",
+      "enum": ["path-not-visible", "missing", "blocked", "present", "partial", "external"]
+    }
+  }
+}

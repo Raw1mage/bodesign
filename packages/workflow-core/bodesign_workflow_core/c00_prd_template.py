@@ -9,9 +9,11 @@ fallback templates, fill missing fields, or mark human approval.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .readiness_common import boundary_next_step, root_guard
 
 
 # RB-2: runtime-depended templates are owned by the package (a draft `plans/`
@@ -88,6 +90,8 @@ class C00ReadinessResult:
     sections: list[dict[str, Any]]
     document_gates: list[dict[str, Any]]
     downstream_handoff_gates: list[dict[str, Any]]
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -99,6 +103,8 @@ class C00ReadinessResult:
             "sections": self.sections,
             "document_gates": self.document_gates,
             "downstream_handoff_gates": self.downstream_handoff_gates,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "readiness_computed": True,
             "prd_emitted": False,
             "human_approved": False,
@@ -177,7 +183,18 @@ def scaffold_c00_prd_package(
 
 
 def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
-    root = Path(folder)
+    # Unify with the readiness-family contract (DD-4, structured form): a root the container
+    # cannot see returns a distinguishable root_visible:false result, not a raised
+    # C00TemplateError. A genuinely-missing answer_state.json inside a *visible* folder still
+    # raises (artifact-missing is a real, loud signal) — that path is unchanged.
+    root, visible, warning = root_guard(folder)
+    if not visible:
+        return C00ReadinessResult(
+            folder=str(root), readiness_pct=0, status="path-not-visible",
+            next_question=boundary_next_step(folder), field_counts={}, sections=[],
+            document_gates=[], downstream_handoff_gates=[],
+            root_visible=False, warnings=[warning] if warning else [],
+        )
     state = _read_answer_state(root / "C00-PRD" / "answer_state.json")
     rubric = load_c00_prd_rubric().data
     scoring = rubric["scoring_policy"]

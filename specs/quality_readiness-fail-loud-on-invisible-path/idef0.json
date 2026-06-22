@@ -1,0 +1,50 @@
+{
+  "diagram_title": "Fail Loud On Invisible Readiness Path",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Guard Root Visibility",
+      "description": "readiness_common.root_guard(folder): the single chokepoint. Returns (root, visible, warning). visible = Path(folder).exists(); warning is the boundary string when not visible. Pure, read-only, no fallback. boundary_next_step(path) builds the mount-or-file-model instruction.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Ingest With Explicit Root State",
+      "description": "project_ingest.ingest_project_folder: on not base.exists() set root_exists=False (distinct from scanned-but-empty: root_exists=True, files==[]) and append the 'not visible' warning; surface both via ProjectFolderIndex.to_dict().",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Assess Package Readiness",
+      "description": "assess_package_readiness calls root_guard first; on invisible root returns early a PackageReadiness with root_visible=False, warnings, boundary next_step, readiness_pct=0 — never scoring deliverables as missing. Visible root path is unchanged.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Assess Per-Stage Readiness",
+      "description": "c00/c01/c02/c04/c05/c06 readiness fns call root_guard first; invisible root returns a distinct status='path-not-visible' + root_visible=False + warning. c00 keeps raising C00TemplateError when answer_state.json is missing inside a VISIBLE folder (separate loud signal).",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Surface Boundary To Output And Docs",
+      "description": "Every readiness to_dict() emits root_visible + warnings (additive superset). render_readiness_markdown shows a 'folder not visible' banner. MCP server INSTRUCTIONS qualify host-path-must-be-mounted + file-model + big-tree exclude guidance; skill references/container-boundary.md + SKILL.md pointer sediment the boundary.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {"id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "folder path (host or token doc_dir)", "type": "input"},
+    {"id": "AR2", "source": "EXTERNAL", "target": "A1:control", "label": "honesty model — no false clean, no fallback (AGENTS §2.1, red line #11)", "type": "control"},
+    {"id": "AR3", "source": "A1:output", "target": "A2:control", "label": "(root, visible, warning)", "type": "output"},
+    {"id": "AR4", "source": "A1:output", "target": "A3:control", "label": "(root, visible, warning)", "type": "output"},
+    {"id": "AR5", "source": "A1:output", "target": "A4:control", "label": "(root, visible, warning)", "type": "output"},
+    {"id": "AR6", "source": "A2:output", "target": "A3:input", "label": "ProjectFolderIndex(root_exists, warnings)", "type": "output"},
+    {"id": "AR7", "source": "A3:output", "target": "A5:input", "label": "PackageReadiness(root_visible, warnings)", "type": "output"},
+    {"id": "AR8", "source": "A4:output", "target": "A5:input", "label": "per-stage result(root_visible, warnings)", "type": "output"},
+    {"id": "AR9", "source": "EXTERNAL", "target": "A5:control", "label": "backward-compat: visible folder = superset of old shape", "type": "control"},
+    {"id": "AR10", "source": "EXTERNAL", "target": "A3:mechanism", "label": "readiness_common / project_ingest / package_readiness / cNN_*.py", "type": "mechanism"},
+    {"id": "AR11", "source": "EXTERNAL", "target": "A5:mechanism", "label": "services/mcp/server.py INSTRUCTIONS + skill references", "type": "mechanism"},
+    {"id": "AR12", "source": "A5:output", "target": "EXTERNAL", "label": "distinguishable signal to agent (root_visible:false | scored)", "type": "output"}
+  ]
+}

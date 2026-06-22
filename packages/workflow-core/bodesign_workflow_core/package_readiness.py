@@ -17,6 +17,8 @@ from pathlib import Path
 
 from bodesign_reverse_core import ingest_project_folder
 
+from .readiness_common import boundary_next_step, root_guard
+
 # POC deliverable checklist (electronics-core scope). Each entry:
 #   key, name, section_keywords (match a C0* folder), match_roles / match_name (match files),
 #   producer, required (counts toward readiness%), next_action (when not present).
@@ -78,6 +80,11 @@ class PackageReadiness:
     # recommended_owner. An open blocker blocks the milestone's all-clear even when every
     # deliverable is present — see references/cross-stage-reconciliation.md.
     open_blockers: list[dict] = field(default_factory=list)
+    # Fail-loud-on-invisible-path: when the target folder is not visible to the bodesign
+    # container, root_visible is False and warnings carries the boundary explanation. A 0%
+    # readiness with root_visible False is the "path not seen" case, NOT "deliverables missing".
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -85,6 +92,8 @@ class PackageReadiness:
             "readiness_pct": self.readiness_pct, "next_step": self.next_step, "summary": self.summary,
             "external_sections": self.external_sections,
             "open_blockers": self.open_blockers,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "deliverables": [
                 {"key": d.key, "name": d.name, "producer": d.producer, "required": d.required,
                  "status": d.status, "files": d.files, "next_action": d.next_action}
@@ -105,6 +114,18 @@ def _matches(rel_path: str, item: dict) -> bool:
 
 
 def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> PackageReadiness:
+    # Fail loud on an invisible/non-existent root before scoring anything. An empty index from
+    # an unmounted host path must NOT be scored as 0% with every deliverable "missing" — that is
+    # indistinguishable from a genuinely-empty folder and silently misleads the caller.
+    _root, visible, warning = root_guard(folder)
+    if not visible:
+        return PackageReadiness(
+            folder=str(folder), milestone=milestone, readiness_pct=0,
+            next_step=boundary_next_step(folder), root_visible=False,
+            warnings=[warning] if warning else [],
+            summary=f"{milestone}: folder not visible to the bodesign container — readiness not assessed.",
+        )
+
     index = ingest_project_folder(folder)
     files = [(f.rel_path, f.role) for f in index.files]
     readiness = PackageReadiness(folder=str(folder), milestone=milestone)
@@ -185,6 +206,13 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
 
 
 def render_readiness_markdown(r: PackageReadiness) -> str:
+    if not r.root_visible:
+        return "\n".join([
+            f"# Package readiness — {r.milestone}", "",
+            f"> ⚠ **Folder not visible to the bodesign container:** `{r.folder}`", "",
+            *[f"> {w}" for w in r.warnings],
+            "", f"**Next step:** {r.next_step}",
+        ])
     lines = [f"# Package readiness — {r.milestone}", "", f"- Folder: `{r.folder}`",
              f"- Readiness: **{r.readiness_pct}%** ({r.summary})", f"- **Next step:** {r.next_step}", "",
              "| Deliverable | Producer | Required | Status | Files / next action |", "|---|---|---|---|---|"]

@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .readiness_common import boundary_next_step, root_guard
+
 
 C01_OUTPUTS = {
     "ai_file": Path("C01-ID") / "Ai file" / "Design_Direction.md",
@@ -145,6 +147,8 @@ class C01PackageReadiness:
     human_approved: bool = False
     companion_readiness: dict[str, Any] | None = None
     id_native_readiness: dict[str, Any] | None = None
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -155,6 +159,8 @@ class C01PackageReadiness:
             "answer_state_path": self.answer_state_path,
             "field_gaps": self.field_gaps,
             "human_approved": self.human_approved,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "artifacts": [
                 {"key": a.key, "rel_path": a.rel_path, "status": a.status, "next_action": a.next_action}
                 for a in self.artifacts
@@ -416,7 +422,12 @@ def c01_confirm_reference_cue(
 
 
 def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
-    root = Path(folder)
+    root, visible, warning = root_guard(folder)
+    if not visible:
+        return C01PackageReadiness(
+            str(root), 0, False, boundary_next_step(folder),
+            root_visible=False, warnings=[warning] if warning else [],
+        )
     artifacts: list[C01PackageArtifact] = []
     present = 0
     for key, rel_path in C01_OUTPUTS.items():

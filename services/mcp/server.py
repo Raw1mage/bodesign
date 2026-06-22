@@ -41,7 +41,16 @@ INSTRUCTIONS = (
     "(Content-Type application/x-tar or gzip) or call bodesign_stage_dir with an inline "
     "{relpath:{content,encoding}} map -> {token, doc_dir, files}. Pass `token` to any tool: its path "
     "args resolve inside the token's doc_dir and the result lists produced files as {rel, url}; fetch "
-    "via GET /files/{token}/blob/{rel}. Tools also accept plain host paths (local same-host UDS).\n\n"
+    "via GET /files/{token}/blob/{rel}.\n\n"
+    "HOST PATHS vs FILE MODEL: tools also accept a plain host path, but ONLY if that path is inside "
+    "the container's mount namespace (bodesign runs in Docker and mounts only .run / sessions / "
+    "vault). Any path outside those mounts — an unmounted Google-Drive/FUSE mount, or a typo — is "
+    "INVISIBLE to the container. The readiness family fails loud on this: it returns "
+    "`root_visible: false` + a `warnings` entry instead of a misleading `readiness_pct: 0`. For any "
+    "tree that is not under a container mount, use the file model (tar -> token -> doc_dir) and pass "
+    "the token. For readiness scoring you only need the text/json deliverables — exclude heavy "
+    "binaries (`.glb`, `*_viewer.html`, PNG/JPG, generated KiCad output) to keep the upload small "
+    "(a 46 MB tree times out; the text/json subset is tens of KB).\n\n"
     "No send-to-fab output without deterministic validation + explicit approval."
 )
 
@@ -1179,6 +1188,47 @@ def _forward_to_worker(url: str, name: str, arguments: dict, group: str = "?") -
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
 # local same-host UDS mode).
 PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "in_path", "out_path", "output_path", "report_path", "corpus_dir", "schematic_path", "pcb_path", "gerber_dir", "drill_dir")
+
+# ── Schema steering for the container boundary (client-behavior fix) ──────────
+# Transfer is solved by /files; the residual problem is CLIENT BEHAVIOR — an agent
+# must know, AT CALL TIME, that a bodesign path arg has to be container-visible and
+# that an unmounted tree goes through the file-model `token`. The server INSTRUCTIONS
+# and the skill say this, but neither is guaranteed to be in context when the model
+# fills a call; the per-tool inputSchema IS. So every path-taking tool advertises an
+# optional `token` (the dispatch above already resolves it generically) and carries a
+# described `folder`. This is injected centrally rather than in 32 literals.
+_FOLDER_DESC = (
+    "Project folder. MUST be visible to the bodesign container: a path under a container mount "
+    "(.run / sessions / vault), OR — for a tree that is NOT mounted (a host / Google-Drive / FUSE "
+    "path) — set `token` (from bodesign_stage_dir or POST /files) and give this RELATIVE to that "
+    "token's tree (\".\" = tree root). A raw unmounted host path is INVISIBLE here; readiness then "
+    "returns root_visible:false. Do NOT pass a bare token as folder — pass it in the `token` arg."
+)
+_TOKEN_PROP = {
+    "type": "string",
+    "description": (
+        "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg "
+        "(folder, out_dir, …) resolves INSIDE the token's uploaded tree (doc_dir), and produced "
+        "files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a "
+        "container mount — it is how you operate on host/Google-Drive trees the container can't see."
+    ),
+}
+
+
+def _steer_path_schemas() -> None:
+    """Add the boundary-aware `folder` description + optional `token` to every path-taking tool."""
+    for spec in TOOLS:
+        schema = spec.get("schema")
+        props = schema.get("properties") if isinstance(schema, dict) else None
+        if not isinstance(props, dict) or not any(k in props for k in PATH_ARG_KEYS):
+            continue
+        folder = props.get("folder")
+        if isinstance(folder, dict) and "description" not in folder:
+            props["folder"] = {**folder, "description": _FOLDER_DESC}
+        props.setdefault("token", _TOKEN_PROP)
+
+
+_steer_path_schemas()
 
 
 def _snapshot(doc_dir: Path) -> dict:

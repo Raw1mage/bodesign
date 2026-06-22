@@ -1,0 +1,41 @@
+[
+  {
+    "id": "SEQ1",
+    "name": "Readiness call against an invisible (unmounted) host path — fail loud",
+    "requirementRefs": ["INV-1", "INV-2", "INV-3"],
+    "participants": [
+      {"id": "P1", "name": "Agent / Orchestrator", "componentRef": null},
+      {"id": "P2", "name": "bodesign MCP tool handler", "componentRef": "A3"},
+      {"id": "P3", "name": "root_guard (readiness_common)", "componentRef": "A1"},
+      {"id": "P4", "name": "Container filesystem", "componentRef": null}
+    ],
+    "messages": [
+      {"id": "MSG1", "from": "P1", "to": "P2", "label": "bodesign_*_readiness(folder=/unmounted/host/path)", "kind": "sync"},
+      {"id": "MSG2", "from": "P2", "to": "P3", "label": "root_guard(folder)", "kind": "sync"},
+      {"id": "MSG3", "from": "P3", "to": "P4", "label": "Path(folder).exists()", "kind": "sync"},
+      {"id": "MSG4", "from": "P4", "to": "P3", "label": "False (path not in container mount namespace)", "kind": "reply"},
+      {"id": "MSG5", "from": "P3", "to": "P2", "label": "(root, visible=False, warning)", "kind": "reply"},
+      {"id": "MSG6", "from": "P2", "to": "P2", "label": "early return: root_visible=False, warnings=[warning], status=path-not-visible, next_step=boundary", "kind": "self"},
+      {"id": "MSG7", "from": "P2", "to": "P1", "label": "result {root_visible:false, warnings, readiness_pct:0, next_step: use mounted path or file model}", "kind": "reply"}
+    ]
+  },
+  {
+    "id": "SEQ2",
+    "name": "Readiness call against a visible folder — unchanged scoring (backward compatible)",
+    "requirementRefs": ["INV-4"],
+    "participants": [
+      {"id": "P1", "name": "Agent / Orchestrator", "componentRef": null},
+      {"id": "P2", "name": "bodesign MCP tool handler", "componentRef": "A3"},
+      {"id": "P3", "name": "root_guard (readiness_common)", "componentRef": "A1"},
+      {"id": "P5", "name": "ingest + checklist scorer", "componentRef": "A2"}
+    ],
+    "messages": [
+      {"id": "MSG1", "from": "P1", "to": "P2", "label": "bodesign_package_readiness(folder=/mounted/project)", "kind": "sync"},
+      {"id": "MSG2", "from": "P2", "to": "P3", "label": "root_guard(folder)", "kind": "sync"},
+      {"id": "MSG3", "from": "P3", "to": "P2", "label": "(root, visible=True, None)", "kind": "reply"},
+      {"id": "MSG4", "from": "P2", "to": "P5", "label": "ingest_project_folder + score POC_CHECKLIST", "kind": "sync"},
+      {"id": "MSG5", "from": "P5", "to": "P2", "label": "deliverable statuses + readiness_pct", "kind": "reply"},
+      {"id": "MSG6", "from": "P2", "to": "P1", "label": "result {root_visible:true, warnings:[], ...prior keys unchanged}", "kind": "reply"}
+    ]
+  }
+]

@@ -55,6 +55,10 @@ class IngestedFile:
 @dataclass(slots=True)
 class ProjectFolderIndex:
     root: str
+    # Whether the root path is visible/reachable to this process. bodesign MCP runs
+    # containerized; an unmounted host path (FUSE mount, typo) is NOT visible. This must
+    # stay distinguishable from "scanned but genuinely empty" (root_exists True, files []).
+    root_exists: bool = True
     file_count: int = 0
     role_counts: dict[str, int] = field(default_factory=dict)
     sections: list[str] = field(default_factory=list)  # C01.. style top folders if present
@@ -65,6 +69,7 @@ class ProjectFolderIndex:
     def to_dict(self) -> dict[str, object]:
         return {
             "root": self.root,
+            "root_exists": self.root_exists,
             "file_count": self.file_count,
             "role_counts": self.role_counts,
             "sections": self.sections,
@@ -97,7 +102,11 @@ def ingest_project_folder(root: str | Path, max_files: int = 20000) -> ProjectFo
     base = Path(root)
     index = ProjectFolderIndex(root=str(base))
     if not base.exists():
-        index.warnings.append(f"Folder not found: {base}")
+        # Fail-loud, distinguishable signal: the root is not visible to this process
+        # (unmounted host path inside the container, or a genuinely absent path). Callers
+        # MUST check root_exists rather than treating an empty `files` list as "empty folder".
+        index.root_exists = False
+        index.warnings.append(f"Folder not found / not visible to the bodesign container: {base}")
         return index
 
     # Top-level C0* style sections (reference/product document architecture).

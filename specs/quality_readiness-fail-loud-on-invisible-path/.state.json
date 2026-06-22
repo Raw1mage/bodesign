@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-22T16:44:27.990Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-06-22T17:19:05.762Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Design + contracts complete: spec.md (Purpose/Requirements/Scenarios/Acceptance), design.md headings, idef0/grafcet/sequence/data-schema authored and drawmiat-validated. DD-4 resolved."
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-06-22T17:20:34.202Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md, handoff.md (Required Reads + Stop Gates In Force), errors.md, observability.md, test-vectors.json all present."
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-22T17:20:37.806Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Implementation landed across ingest + readiness family + docs; tests green."
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-06-22T17:23:10.256Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "All tasks checked. Evidence: 9 new unit tests green + unchanged c00 data-error test; full readiness regression passes (only pre-existing httpx/mcp_delegate env gaps). Live MCP round-trip: invisible path -> root_visible:false+warnings+boundary next_step; file-model tree -> root_visible:true real 67% scoring; pre-restart container reproduced the bug."
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-06-22T17:40:17.478Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "User-confirmed graduation (畢業). Verified: 9 unit tests + live MCP round-trip (invisible→root_visible:false, file-model→true scoring); full artifact set present."
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "Steps": [
+    {
+      "StepNumber": 0,
+      "ModuleRef": "A1",
+      "StepType": "initial",
+      "StepAction": "Await readiness call (folder path: host path or token doc_dir)",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 1,
+      "ModuleRef": "A1",
+      "StepType": "normal",
+      "StepAction": "root_guard(folder): visible = Path(folder).exists(); build warning if not",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 2,
+      "ModuleRef": "A3",
+      "StepType": "normal",
+      "StepAction": "Visible: ingest_project_folder + score checklist -> root_visible=true, warnings=[]",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 3,
+      "ModuleRef": "A4",
+      "StepType": "normal",
+      "StepAction": "Invisible: early-return root_visible=false, warnings=[boundary], status=path-not-visible, pct=0",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    },
+    {
+      "StepNumber": 4,
+      "ModuleRef": "A5",
+      "StepType": "normal",
+      "StepAction": "Surface result via to_dict() (root_visible + warnings); markdown banner when invisible",
+      "LinkInputType": [],
+      "LinkInputNumber": [],
+      "LinkOutputNumber": [],
+      "LinkOutputType": "track",
+      "Condition": [],
+      "SubGrafcet": []
+    }
+  ],
+  "Gates": [
+    {
+      "GateId": "G1",
+      "GateNumber": 1,
+      "GateType": "divergence_or",
+      "Owner": { "Kind": "source", "StepNumber": 1 },
+      "Inputs": [ { "Port": "I1", "From": "S1O1" } ],
+      "Outputs": [ { "Port": "O1", "To": "S2I1" }, { "Port": "O2", "To": "S3I1" } ]
+    },
+    {
+      "GateId": "G2",
+      "GateNumber": 2,
+      "GateType": "convergence_or",
+      "Owner": { "Kind": "target", "StepNumber": 4 },
+      "Inputs": [ { "Port": "I1", "From": "S2O1" }, { "Port": "I2", "From": "S3O1" } ],
+      "Outputs": [ { "Port": "O1", "To": "S4I1" } ]
+    }
+  ],
+  "Edges": [
+    { "EdgeId": "S0O1S1I1", "From": "S0O1", "To": "S1I1", "Condition": "readiness_call_received" },
+    { "EdgeId": "S1O1G1I1", "From": "S1O1", "To": "G1I1", "Condition": "visibility_computed" },
+    { "EdgeId": "G1O1S2I1", "From": "G1O1", "To": "S2I1", "Condition": "root_visible" },
+    { "EdgeId": "G1O2S3I1", "From": "G1O2", "To": "S3I1", "Condition": "root_not_visible" },
+    { "EdgeId": "S2O1G2I1", "From": "S2O1", "To": "G2I1", "Condition": "deliverables_scored" },
+    { "EdgeId": "S3O1G2I2", "From": "S3O1", "To": "G2I2", "Condition": "boundary_signal_built" },
+    { "EdgeId": "G2O1S4I1", "From": "G2O1", "To": "S4I1", "Condition": "result_ready" },
+    { "EdgeId": "S4O1S0I2", "From": "S4O1", "To": "S0I2", "Condition": "result_returned_to_caller" }
+  ]
+}

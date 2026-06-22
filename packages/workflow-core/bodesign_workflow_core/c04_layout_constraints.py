@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from .c03_mechanical_constraints import C03_OUTPUT
+from .readiness_common import boundary_next_step, root_guard
 
 C04_FOLDER = Path("C04-Layout")
 C04_CONSTRAINTS_OUTPUT = C04_FOLDER / "Layout_Constraints.json"
@@ -48,6 +49,8 @@ class C04LayoutReadiness:
     placement_doc_present: bool
     status: str
     next_step: str
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -58,6 +61,8 @@ class C04LayoutReadiness:
             "placement_doc_present": self.placement_doc_present,
             "status": self.status,
             "next_step": self.next_step,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "board_ready": False,
             "gerber_ready": False,
             "layout_approval": False,
@@ -208,7 +213,14 @@ def emit_c04_layout_package(
 
 
 def assess_c04_layout_readiness(folder: str | Path) -> C04LayoutReadiness:
-    root = Path(folder)
+    root, visible, warning = root_guard(folder)
+    if not visible:
+        return C04LayoutReadiness(
+            folder=str(root), present_groups=[], pending=list(_LAYOUT_OWNED_PENDING),
+            constraints_present=False, placement_doc_present=False,
+            status="path-not-visible", next_step=boundary_next_step(folder),
+            root_visible=False, warnings=[warning] if warning else [],
+        )
     constraints_path = root / C04_CONSTRAINTS_OUTPUT
     placement_path = root / C04_PLACEMENT_OUTPUT
     constraints = _load_json(constraints_path) or {}

@@ -1,0 +1,51 @@
+[
+  {
+    "$comment": "quality_readiness-fail-loud-on-invisible-path test vectors — concrete input/expected pairs per spec.md Acceptance Checks. Mirrors tests/test_readiness_invisible_path.py. Deterministic, read-only.",
+    "id": "TV1",
+    "name": "invisible root -> distinguishable, loud (package readiness)",
+    "input": {"fn": "assess_package_readiness", "folder": "/nonexistent/bodesign/invisible/path/xyz123"},
+    "expect": {"root_visible": false, "warnings_nonempty": true, "readiness_pct": 0, "next_step_contains": "file model"}
+  },
+  {
+    "id": "TV2",
+    "name": "ingest distinguishes invisible root from scanned-but-empty",
+    "input": {"fn": "ingest_project_folder", "cases": ["/nonexistent/path", "<existing empty dir>"]},
+    "expect": {"nonexistent": {"root_exists": false, "warnings_nonempty": true, "file_count": 0}, "empty_dir": {"root_exists": true, "warnings": [], "file_count": 0}}
+  },
+  {
+    "id": "TV3",
+    "name": "visible folder -> backward-compatible superset",
+    "input": {"fn": "assess_package_readiness", "folder": "<existing empty dir>"},
+    "expect": {"root_visible": true, "warnings": [], "keys_superset_of": ["folder", "milestone", "readiness_pct", "next_step", "summary", "external_sections", "open_blockers", "deliverables"]}
+  },
+  {
+    "id": "TV4",
+    "name": "per-stage c04/c05/c06 invisible root -> status path-not-visible",
+    "input": {"fns": ["assess_c04_layout_readiness", "assess_c05_fw_readiness", "assess_c06_readiness"], "folder": "/nonexistent/path"},
+    "expect": {"root_visible": false, "warnings_nonempty": true, "status": "path-not-visible"}
+  },
+  {
+    "id": "TV5",
+    "name": "c00 invisible root -> structured root_visible:false (not a raise)",
+    "input": {"fn": "assess_c00_prd_readiness", "folder": "/nonexistent/path"},
+    "expect": {"root_visible": false, "warnings_nonempty": true, "status": "path-not-visible", "raises": false}
+  },
+  {
+    "id": "TV6",
+    "name": "c00 visible folder, missing answer_state.json -> still raises (preserved)",
+    "input": {"fn": "assess_c00_prd_readiness", "folder": "<existing folder without C00-PRD/answer_state.json>"},
+    "expect": {"raises": "C00TemplateError"}
+  },
+  {
+    "id": "TV7",
+    "name": "c01 invisible root -> root_visible:false, not usable",
+    "input": {"fn": "assess_c01_package_readiness", "folder": "/nonexistent/path"},
+    "expect": {"root_visible": false, "warnings_nonempty": true, "usable": false}
+  },
+  {
+    "id": "TV8",
+    "name": "c02 inline constraints (no path) are unaffected by the guard",
+    "input": {"fn": "assess_c02_constraint_readiness", "constraints": {"board_outline": {"w": 10, "h": 10}}, "folder": null},
+    "expect": {"root_visible": true}
+  }
+]

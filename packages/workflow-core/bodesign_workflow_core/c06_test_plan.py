@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .readiness_common import boundary_next_step, root_guard
+
 C06_FOLDER = Path("C06-Verification")
 C06_SUMMARY = C06_FOLDER / "Verification_Summary.json"
 C06_TEST_PLAN = C06_FOLDER / "Test_Plan.md"
@@ -68,6 +70,8 @@ class C06Readiness:
     has_failures: bool
     status: str
     next_step: str
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -78,6 +82,8 @@ class C06Readiness:
             "has_failures": self.has_failures,
             "status": self.status,
             "next_step": self.next_step,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "certified": False,
             "evt_dvt_passed": False,
         }
@@ -195,7 +201,12 @@ def assemble_c06_test_plan(
 
 
 def assess_c06_readiness(folder: str | Path) -> C06Readiness:
-    root = Path(folder)
+    root, visible, warning = root_guard(folder)
+    if not visible:
+        return C06Readiness(
+            str(root), {}, 0, [], False, "path-not-visible", boundary_next_step(folder),
+            root_visible=False, warnings=[warning] if warning else [],
+        )
     summary_path = root / C06_SUMMARY
     if not summary_path.exists():
         return C06Readiness(str(root), {}, 0, list(_CHECKS), False,

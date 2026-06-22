@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .readiness_common import boundary_next_step, root_guard
+
 
 REQUIRED_FOR_CAD = (
     "board_outline",
@@ -70,6 +72,8 @@ class C02ConstraintReadiness:
     can_create_printable_draft: bool
     next_step: str
     items: list[C02ConstraintItem] = field(default_factory=list)
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -79,6 +83,8 @@ class C02ConstraintReadiness:
             "can_place_openings": self.can_place_openings,
             "can_create_printable_draft": self.can_create_printable_draft,
             "next_step": self.next_step,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "items": [item.to_dict() for item in self.items],
         }
 
@@ -608,6 +614,18 @@ def assess_c02_constraint_readiness(
     `C02-ME/Mechanical_Constraints.json`. Missing data is reported as blockers;
     no dimensions are guessed.
     """
+    # When constraints are read from a folder (not passed inline), fail loud if that folder is
+    # not visible to the container — otherwise _load_constraints silently returns {} and every
+    # constraint reads as a blocker, indistinguishable from a genuinely-empty constraint set.
+    if constraints is None and folder is not None:
+        _root, visible, warning = root_guard(folder)
+        if not visible:
+            return C02ConstraintReadiness(
+                readiness_level="path-not-visible", readiness_pct=0,
+                can_generate_cad_source=False, can_place_openings=False,
+                can_create_printable_draft=False, next_step=boundary_next_step(folder),
+                items=[], root_visible=False, warnings=[warning] if warning else [],
+            )
     data = constraints if constraints is not None else _load_constraints(folder)
     items = [
         _item("board_outline", data, "C04 layout / EE", "Board outline is required before any enclosure source can be generated.", ["cad_source", "stl", "skp", "step"]),

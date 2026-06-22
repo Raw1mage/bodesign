@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .readiness_common import boundary_next_step, root_guard
+
 C05_FOLDER = Path("C05-FW")
 C05_FUNCTIONAL = C05_FOLDER / "Functional_Spec.md"
 C05_MODULES = C05_FOLDER / "Module_Architecture.md"
@@ -40,6 +42,8 @@ class C05FwReadiness:
     pin_bridge_present: bool
     status: str
     next_step: str
+    root_visible: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -50,6 +54,8 @@ class C05FwReadiness:
             "pin_bridge_present": self.pin_bridge_present,
             "status": self.status,
             "next_step": self.next_step,
+            "root_visible": self.root_visible,
+            "warnings": list(self.warnings),
             "firmware_code": False,
             "fw_team_owned": True,
         }
@@ -220,7 +226,14 @@ def scaffold_c05_fw_spec(
 
 
 def assess_c05_fw_readiness(folder: str | Path) -> C05FwReadiness:
-    root = Path(folder)
+    root, visible, warning = root_guard(folder)
+    if not visible:
+        return C05FwReadiness(
+            folder=str(root), present_sections=[], pending=[],
+            functional_present=False, pin_bridge_present=False,
+            status="path-not-visible", next_step=boundary_next_step(folder),
+            root_visible=False, warnings=[warning] if warning else [],
+        )
     sections = {
         "Functional_Spec": root / C05_FUNCTIONAL,
         "Module_Architecture": root / C05_MODULES,

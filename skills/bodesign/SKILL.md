@@ -38,6 +38,11 @@ stage's guide only when you are actually crossing a handoff.
 
 1. **Read the honesty model** — `references/honesty-model.md`. It is non-negotiable and applies
    to every stage. If you internalise nothing else, internalise this.
+1a. **Know the container boundary** — `references/container-boundary.md`. bodesign MCP runs in
+   Docker and only sees `.run`/sessions/vault; a host path outside those mounts is invisible.
+   Readiness tools report `root_visible: false` for it — never read a `readiness_pct: 0` as
+   "deliverables missing" without checking `root_visible` first. Unmounted trees go through the
+   file model (tar → token → doc_dir).
 2. **Locate the stage** using the router below.
 3. **Open that stage's `GUIDE.md`** and follow its SOP.
 4. **Respect the handoff** — produce the artifacts the next stage needs, in the agreed format.
