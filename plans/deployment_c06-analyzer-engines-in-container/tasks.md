@@ -84,3 +84,17 @@
 - **Acceptance**: C06 simulate advances from `skipped-no-skills` to a real verdict;
   the BR's reproduction no longer yields `skipped-no-skills` (engine gate passes for
   all three). Full EMC/thermal verdicts await a PCB fixture (non-blocking).
+
+## 7. Cross-engine import fix (DD-7 — emc synthesis end-to-end)
+
+- [x] 7.1 `pcb_verify.py`: run the emc subprocess with the kicad engine's `scripts/`
+  on `PYTHONPATH` (`_engine_env` helper) so `emc_formulas`'s `kicad_utils` import
+  resolves in the bundled split-dir layout.
+- [x] 7.2 `pcb_verify.py`: surface the emc subprocess stderr in the failure warning
+  (fail-loud-with-cause) instead of bare "produced no output".
+- [x] 7.3 Tests: host-runnable `EngineEnvTests` (PYTHONPATH wiring) + widen the
+  integration skip-guard to the bundled layout (`resolve_skill`) so
+  `test_emc_and_thermal_on_generated_board` actually runs in-container.
+- **Acceptance**: in the rebuilt ee image, `test_pcb_verify` runs 4/4 OK incl.
+  `test_emc_and_thermal_on_generated_board` (`analyze_emc` → `ok` with findings) —
+  no longer `failed: produced no output`. ✓ verified 2026-06-23.

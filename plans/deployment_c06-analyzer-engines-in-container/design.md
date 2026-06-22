@@ -106,6 +106,21 @@ already-cleaned `services/mcp/assets/skills/*.tar.gz` distributables are.
   that the image self-bundles, so agents stop being told a path absent in the
   container. Cross-link the `container-boundary.md` reference added by the
   readiness sibling.
+- **DD-7** (added 2026-06-23, completes the engine-runnable promise; ref BR
+  `issue_20260623_analyze_emc_synthesis_drops_findings`): the bundled split-dir
+  layout (`/opt/bodesign-engines/{emc, bodesign/engines/kicad}`) exposed a
+  **cross-engine import** — the emc analyzer's `emc_formulas` imports `kicad_utils`
+  from the **kicad** engine, which is not on the emc subprocess's `sys.path`, so
+  `analyze_emc.py` crashed with `ModuleNotFoundError` and wrote nothing → surfaced
+  as `analyze_emc` "failed: produced no output". The engine *gate* (`resolve_skill`)
+  passed; synthesis failed one step later — a gap the initial C06 verification
+  missed because it never ran a full emc verdict (only simulate + the emc/thermal
+  gate). Fix in `pcb_verify.py`: run the emc subprocess with the kicad engine's
+  `scripts/` dir prepended to `PYTHONPATH` (`_engine_env` helper), and surface the
+  subprocess stderr in the failure warning (fail-loud-with-cause) instead of a bare
+  "produced no output". The integration test's skip-guard also widened to recognize
+  the bundled layout (`resolve_skill`) — checking only legacy `~/.claude/skills` is
+  what let this slip past CI.
 
 ## Risks / Trade-offs
 

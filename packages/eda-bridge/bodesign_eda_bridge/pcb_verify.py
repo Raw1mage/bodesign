@@ -13,9 +13,28 @@ EMC lab, but it flags layout-level risks before prototyping. Degrades gracefully
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
+import os
 import subprocess
 
 from .skill_paths import resolve_skill
+
+
+def _engine_env(*extra_scripts: Path) -> dict:
+    """Subprocess env with the given engine `scripts/` dirs prepended to PYTHONPATH.
+
+    The `emc` engine's `emc_formulas` imports `kicad_utils` from the *kicad* engine
+    (a cross-engine dependency). When emc/kicad live in separate bundled dirs (the
+    container layout, /opt/bodesign-engines/{emc,bodesign/engines/kicad}), the emc
+    subprocess's sys.path only contains its own scripts dir, so that import fails
+    with ModuleNotFoundError and the analyzer writes nothing. Putting the kicad
+    scripts dir on PYTHONPATH makes the cross-engine import resolve.
+    """
+    env = dict(os.environ)
+    parts = [str(p) for p in extra_scripts]
+    if env.get("PYTHONPATH"):
+        parts.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+    return env
 
 
 @dataclass(slots=True)
@@ -63,11 +82,15 @@ def analyze_emc(
         return PcbVerifyResult("emc", "failed", warnings=["kicad analyzers did not produce schematic/pcb JSON."])
     sch_json, pcb_json = prep
     report = out_root / "emc.json"
-    subprocess.run(["python3", str(emc / "scripts" / "analyze_emc.py"), "--schematic", str(sch_json),
-                    "--pcb", str(pcb_json), "--output", str(report), "--standard", standard],
-                   capture_output=True, text=True)
+    proc = subprocess.run(["python3", str(emc / "scripts" / "analyze_emc.py"), "--schematic", str(sch_json),
+                           "--pcb", str(pcb_json), "--output", str(report), "--standard", standard],
+                          capture_output=True, text=True, env=_engine_env(kicad / "scripts"))
     if not report.exists():
-        return PcbVerifyResult("emc", "failed", warnings=["analyze_emc produced no output."])
+        # Fail loud WITH the cause: surface the analyzer's own diagnostic instead of a
+        # bare "produced no output" that hides a real (e.g. import) error.
+        diag = (proc.stderr or proc.stdout or "").strip().splitlines()
+        detail = diag[-1] if diag else "no diagnostic output"
+        return PcbVerifyResult("emc", "failed", warnings=[f"analyze_emc produced no output: {detail}"])
     data = json.loads(report.read_text(encoding="utf-8"))
     findings = data.get("findings", [])
     top = [{"rule_id": f.get("rule_id"), "severity": f.get("severity"), "summary": (f.get("summary") or "")[:100]}

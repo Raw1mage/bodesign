@@ -17,9 +17,12 @@ FP_DIR = Path(os.environ.get("KICAD_FOOTPRINT_DIR", "/usr/share/kicad/footprints
 HAS_SYMBOLS = (SYMBOL_DIR / "Device.kicad_sym").exists()
 HAS_FP = (FP_DIR / "Resistor_SMD.pretty").exists()
 HAS_CLI = shutil.which("kicad-cli") is not None
-SKILLS = Path(os.environ.get("BODESIGN_SKILLS_HOME", Path.home() / ".claude" / "skills"))
-HAS_KICAD_SKILL = (SKILLS / "kicad" / "scripts").is_dir()
-HAS_EMC_SKILL = (SKILLS / "emc" / "scripts").is_dir()
+# Recognize BOTH the legacy ~/.claude/skills layout AND the bundled/env-pointed
+# container layout (BODESIGN_*_SKILL → /opt/bodesign-engines/...). Checking only the
+# legacy path is what let the cross-engine-import regression slip past CI.
+from bodesign_eda_bridge import resolve_skill
+HAS_KICAD_SKILL = resolve_skill("kicad", "BODESIGN_KICAD_SKILL") is not None
+HAS_EMC_SKILL = resolve_skill("emc", "BODESIGN_EMC_SKILL") is not None
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 
 SPEC = {
@@ -60,6 +63,33 @@ class PcbVerifyTests(unittest.TestCase):
         thermal = analyze_thermal(sch, board, self.work / "thermal")
         self.assertEqual("ok", thermal.status)
         self.assertIn("thermal_score", thermal.summary)
+
+
+class EngineEnvTests(unittest.TestCase):
+    """Regression for the cross-engine import bug: the emc analyzer imports
+    kicad_utils from the kicad engine, so analyze_emc must run the emc subprocess
+    with the kicad scripts dir on PYTHONPATH. Host-runnable (no engines needed)."""
+
+    def test_engine_env_prepends_kicad_scripts(self):
+        from bodesign_eda_bridge.pcb_verify import _engine_env
+        kicad_scripts = Path("/opt/bodesign-engines/bodesign/engines/kicad/scripts")
+        env = _engine_env(kicad_scripts)
+        self.assertEqual(env["PYTHONPATH"].split(os.pathsep)[0], str(kicad_scripts))
+
+    def test_engine_env_preserves_existing_pythonpath(self):
+        from bodesign_eda_bridge.pcb_verify import _engine_env
+        prev = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = "/already/here"
+        try:
+            env = _engine_env(Path("/k/scripts"))
+            parts = env["PYTHONPATH"].split(os.pathsep)
+            self.assertEqual(parts[0], "/k/scripts")
+            self.assertIn("/already/here", parts)
+        finally:
+            if prev is None:
+                os.environ.pop("PYTHONPATH", None)
+            else:
+                os.environ["PYTHONPATH"] = prev
 
 
 if __name__ == "__main__":
