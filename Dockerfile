@@ -60,11 +60,31 @@ RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt
 COPY packages /app/packages
 COPY services /app/services
 
+# Bundle the analyzer engine SCRIPTS (kicad/spice/emc) the C06 verification tools
+# resolve via resolve_skill(). The image already ships the BINARIES (kicad-cli /
+# ngspice); these are the engine scripts that drive them. Without them,
+# simulate / analyze_emc / analyze_thermal return `skipped-no-skills` and C06
+# SPICE/EMC/thermal can never run. Source = the cleaned, distribution-ready
+# tarballs (NOT the raw skills/ tree, which is incomplete + unscrubbed). Only the
+# engine subtrees are extracted. Build FAILS LOUD if any scripts/ dir is missing,
+# so a silently-broken image is never produced.
+RUN set -eu; \
+    mkdir -p /opt/bodesign-engines; \
+    tar xzf /app/services/mcp/assets/skills/bodesign.tar.gz -C /opt/bodesign-engines bodesign/engines/kicad; \
+    tar xzf /app/services/mcp/assets/skills/spice.tar.gz    -C /opt/bodesign-engines spice; \
+    tar xzf /app/services/mcp/assets/skills/emc.tar.gz      -C /opt/bodesign-engines emc; \
+    test -d /opt/bodesign-engines/bodesign/engines/kicad/scripts; \
+    test -d /opt/bodesign-engines/spice/scripts; \
+    test -d /opt/bodesign-engines/emc/scripts
+
 # All bodesign namespace packages + the MCP server on the path.
 ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/component-knowledge:/app/packages/component-kb:/app/packages/doc-core:/app/packages/source-core:/app/packages/reverse-core:/app/packages/gerber-core:/app/packages/eda-bridge:/app/packages/workflow-core:/app/packages/storage-core:/app/packages/kicad-plugin:/app/services/mcp:/app" \
     KICAD_SYMBOL_DIR=/usr/share/kicad/symbols \
     KICAD_FOOTPRINT_DIR=/usr/share/kicad/footprints \
-    BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions
+    BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions \
+    BODESIGN_KICAD_SKILL=/opt/bodesign-engines/bodesign/engines/kicad \
+    BODESIGN_SPICE_SKILL=/opt/bodesign-engines/spice \
+    BODESIGN_EMC_SKILL=/opt/bodesign-engines/emc
 
 ENTRYPOINT ["python", "/app/services/mcp/server.py"]
 CMD ["--transport", "stdio"]

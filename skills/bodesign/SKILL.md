@@ -179,8 +179,11 @@ deliberate and bidirectional:
 - **skill → MCP** for **generation**: when the MCP is reachable (you will see tools prefixed
   `bodesign_`), use it to *create* artifacts instead of hand-authoring them.
 - **MCP → skill** for **analysis**: the MCP's `bodesign_simulate` / `bodesign_analyze_emc` /
-  `bodesign_analyze_thermal` *call these very engines* (`engines/kicad`, via `BODESIGN_KICAD_SKILL`
-  → it resolves `~/.claude/skills/bodesign/engines/kicad`). So the analyzer logic lives here, once.
+  `bodesign_analyze_thermal` *call these very engines* (`engines/kicad` + `spice`/`emc`, via
+  `BODESIGN_KICAD_SKILL` / `BODESIGN_SPICE_SKILL` / `BODESIGN_EMC_SKILL`). So the analyzer logic
+  lives here, once. The **container image self-bundles** these engines under `/opt/bodesign-engines`
+  and sets those env vars (so C06 runs without a host install); on a non-containerized host they
+  resolve to `~/.claude/skills/bodesign/engines/kicad` (+ `~/.claude/skills/{spice,emc}`).
 
 **Generation is not validation.** Whatever the MCP emits is still `draft`/`pending` until you run
 the local analyzers (`analyze_schematic.py` / `analyze_pcb.py`) and the gates over it, exactly as

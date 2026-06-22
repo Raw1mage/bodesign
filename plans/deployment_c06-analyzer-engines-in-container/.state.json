@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "planned",
+  "state": "implementing",
   "profile": [],
   "history": [
     {
@@ -26,6 +26,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "all 13 planned-state artifacts authored (proposal/spec/design/idef0/grafcet/sequence/data-schema/tasks/handoff/errors/observability/test-vectors); plan-only package ready for a separately-authorized implementation + image-rebuild pass"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-06-22T19:07:03.276Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user authorized implementation; starting Dockerfile + Dockerfile.ee engine bundling + env + self-check + doc alignment (image rebuild gated on user confirm)"
     }
   ]
 }

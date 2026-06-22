@@ -19,6 +19,7 @@ from .impedance import solve_impedance
 from .pin_allocation import PinAllocation, PinAllocationRow, build_pin_allocation, render_pin_allocation_csv, render_pin_allocation_md
 from .simulate import SimResult, simulate_schematic
 from .pcb_verify import PcbVerifyResult, analyze_emc, analyze_thermal
+from .skill_paths import analyzer_engine_status, resolve_skill
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints
 from .routing import (
     autoroute,
@@ -34,6 +35,8 @@ from .routing import (
 )
 
 __all__ = [
+    "analyzer_engine_status",
+    "resolve_skill",
     "autoroute",
     "drc_gate",
     "length_match_bus",

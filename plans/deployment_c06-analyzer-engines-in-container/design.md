@@ -92,6 +92,14 @@ already-cleaned `services/mcp/assets/skills/*.tar.gz` distributables are.
   existing diagnostics/health path rather than a new heavyweight tool (exact host
   decided in tasks). Honest `skipped-no-simulator` (binary genuinely absent) stays
   distinct from `skipped-no-skills` (engine script absent — the bug fixed here).
+  - **DD-5 host (resolved, implemented 2026-06-23)**: a dedicated no-arg **EE-group**
+    MCP tool `bodesign_analyzer_selfcheck` (not an extension of
+    `bodesign_vault_diagnostics`), backed by the pure `analyzer_engine_status()`
+    helper in `eda-bridge/skill_paths.py`. EE-group so it routes to the process that
+    actually runs the analyzers (monolith local, or forwarded to `bodesign-ee`);
+    the lean core reports `image_role: core`. Returns per-engine
+    `{engine_resolvable, binary, binary_present, resolved_path, can_run}` +
+    `image_role` + `all_runnable`.
 - **DD-6**: Correct docs asserting a default engine path: `server.py` instruction
   (`BODESIGN_KICAD_SKILL (default ~/.claude/skills/...)`), `MANIFEST.md`,
   `skills/bodesign/SKILL.md`, and enablement — state the real in-container path /

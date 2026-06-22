@@ -14,7 +14,11 @@ ticket refs).
 > `engines/kicad` and `engines/kidoc`). Prefer installing `bodesign.tar.gz`: it
 > carries the C00–C07 workflow, drives this MCP's `bodesign_*` generation tools,
 > and the MCP's verification tools resolve its analyzer via `BODESIGN_KICAD_SKILL`
-> (default `~/.claude/skills/bodesign/engines/kicad`). The standalone
+> (`~/.claude/skills/bodesign/engines/kicad` on a host install). The bodesign
+> **container image self-bundles** the kicad/spice/emc analyzer engines (under
+> `/opt/bodesign-engines`) and sets `BODESIGN_KICAD_SKILL` / `BODESIGN_SPICE_SKILL`
+> / `BODESIGN_EMC_SKILL`, so C06 simulate/EMC/thermal run without a host skill
+> install — these tarballs are for host/standalone use. The standalone
 > `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use only.
 
 ## Install

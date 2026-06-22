@@ -36,7 +36,10 @@ INSTRUCTIONS = (
     "PAIRS WITH the companion `bodesign` skill (the C00-C07 workflow brain + the kicad/kidoc "
     "analysis+doc engines): the skill drives these tools to generate, and the verification tools "
     "(bodesign_simulate / analyze_emc / analyze_thermal) call the skill's engines back via "
-    "BODESIGN_KICAD_SKILL (default ~/.claude/skills/bodesign/engines/kicad).\n\n"
+    "BODESIGN_KICAD_SKILL / BODESIGN_SPICE_SKILL / BODESIGN_EMC_SKILL. The container image "
+    "self-bundles these analyzer engines (under /opt/bodesign-engines) and sets those env vars, so "
+    "C06 simulate/EMC/thermal run out of the box; the ~/.claude/skills/... default only applies to a "
+    "non-containerized host install.\n\n"
     "FILE MODEL (docxmcp-style): upload a whole project tree as a tarball to POST /files "
     "(Content-Type application/x-tar or gzip) or call bodesign_stage_dir with an inline "
     "{relpath:{content,encoding}} map -> {token, doc_dir, files}. Pass `token` to any tool: its path "
@@ -464,6 +467,21 @@ def _h_vault_queue(a: dict) -> Any:
 def _h_vault_diagnostics(a: dict) -> Any:
     return _vault_guard(lambda: _vault_api().vault_diagnostics(
         limit=int(a.get("limit", 20)), vault_dir=a.get("vault_dir")))
+
+
+def _h_analyzer_selfcheck(a: dict) -> Any:
+    from bodesign_eda_bridge import analyzer_engine_status
+    engines = analyzer_engine_status()
+    role = ("monolith" if "all" in SERVED_GROUPS
+            else "ee" if "ee" in SERVED_GROUPS
+            else sorted(SERVED_GROUPS)[0] if SERVED_GROUPS else "core")
+    return {
+        "ok": True,
+        "image_role": role,
+        "engines": engines,
+        "summary": {e["engine"]: e["can_run"] for e in engines},
+        "all_runnable": all(e["can_run"] for e in engines),
+    }
 
 
 # ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
@@ -984,6 +1002,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_vault_diagnostics", "handler": _h_vault_diagnostics,
      "description": "Diagnose the live server-side Component Vault through the supported storage boundary: reports configured vault dir, db presence/size, queue_count, queue preview, and the safe compose-run diagnostic command. It never falls back to a temporary vault or Docker host volume path. Contract identical to GET /vault/diagnostics.",
      "schema": {"type": "object", "properties": {"limit": {"type": "integer"}, "vault_dir": _STR}}},
+    {"name": "bodesign_analyzer_selfcheck", "handler": _h_analyzer_selfcheck,
+     "description": "Deployment self-check for the C06 analyzer engines (kicad/spice/emc): per engine reports engine_resolvable (the analyzer SCRIPTS are bundled + resolvable via BODESIGN_*_SKILL) and binary_present (kicad-cli / ngspice on PATH), plus can_run, resolved_path, image_role (monolith/ee/core), and all_runnable. Answers 'can simulate/analyze_emc/analyze_thermal actually run in this process?' without a docker exec probe. Distinguishes a missing engine script (would cause skipped-no-skills) from a missing binary (skipped-no-simulator). EE-group: runs on the monolith locally, or forwards to the bodesign-ee worker; the lean core reports image_role=core (engines absent by design — it forwards EE).",
+     "schema": {"type": "object", "properties": {}}},
     {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
      "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},
@@ -1100,6 +1121,7 @@ _EE_GROUP_TOOLS = {
     "bodesign_simulate",
     "bodesign_analyze_emc",
     "bodesign_analyze_thermal",
+    "bodesign_analyzer_selfcheck",
     "bodesign_export_bom",
     "bodesign_export_netlist",
     "bodesign_render_companion",
