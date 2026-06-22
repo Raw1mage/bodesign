@@ -1,0 +1,17 @@
+# GitGuardian / ggshield configuration
+# https://docs.gitguardian.com/ggshield-docs/reference/secret/scan
+version: 2
+
+secret:
+  ignored-paths:
+    # CMF design tokens (Color / Material / Finish industrial-design vocabulary,
+    # emitted by C01 bodesign_c01_emit_cmf_package). The "tokens" here are design
+    # parameters (material_family / finish / colour routes / RF-transparent zones /
+    # gasket-sealing notes), NOT credentials. Flagged only by the generic `token`
+    # keyword heuristic — confirmed false positive.
+    - "**/cmf_tokens.json"
+    - "**/C01-ID/CMF/**"
+
+  ignored-matches:
+    - name: CMF design tokens (Color/Material/Finish) — design vocabulary, not a credential
+      match: cmf_tokens
