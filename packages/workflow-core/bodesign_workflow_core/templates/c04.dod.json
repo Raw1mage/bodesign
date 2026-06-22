@@ -1,0 +1,26 @@
+{
+  "stage": "c04",
+  "guide": "skills/bodesign/stages/c04-layout/GUIDE.md",
+  "base": "stage-folder",
+  "honest_states": ["drafted", "pending", "not-run", "blocked"],
+  "deliverables": [
+    {"id": "layout_placement", "title": "Layout + placement constraints", "guide_row": 1,
+     "all_of": ["Layout_Constraints.json", "Placement_Constraints.md"], "required": true},
+    {"id": "stackup_routing", "title": "Stackup + routing rules", "guide_row": 2,
+     "all_of": ["Stackup.md", "Routing_Rules.md"], "required": true},
+    {"id": "routed_board", "title": "Routed board + DRC report", "guide_row": 3,
+     "all_of": ["*.kicad_pcb", "*.drc.rpt"], "required": true,
+     "honest_states": ["pending", "not-run"]},
+    {"id": "gerbers_drill", "title": "Gerbers + drill", "guide_row": 4,
+     "all_of": ["gerbers/", "drill/"], "required": true,
+     "honest_states": ["pending", "not-run"]},
+    {"id": "assembly_package", "title": "Assembly package (CPL/IPC-2581/drawing)", "guide_row": 5,
+     "any_of": ["*CPL*.csv", "*.ipc2581*", "*assembly*draw*"], "required": true,
+     "honest_states": ["pending", "not-run"]},
+    {"id": "copper_renders", "title": "Per-layer copper PNGs + fab view", "guide_row": 6,
+     "any_of": ["copper_layers/", "renders/"], "bucket": "02_build", "required": true,
+     "honest_states": ["pending", "not-run"]},
+    {"id": "lengthmatch_si", "title": "Length-match + SI reports", "guide_row": 7,
+     "any_of": ["*.lengthmatch.json", "*.si.json"], "required": false, "condition": "high_speed"}
+  ]
+}

@@ -36,6 +36,11 @@ vendor signs off; `me_approved` stays `false`.
 
 ## Required deliverables — Definition of Done
 
+> **`readiness_pct: 100` ≠ done.** The readiness tools enforce this table as a machine-checkable
+> manifest: the real gate is **`dod_ok: true`** in the readiness output — true only when every row
+> below is `present` (or honestly deferred via a `dod_status.json` entry) and no `answered` field is
+> fake-complete (a `TBC`/placeholder value). Read the `guide_compliance` block, not the bare percent.
+
 Produce **all** of these before you report C02 done or hand off (see SKILL.md § "Definition of
 Done"). Each exists on disk **or** carries an explicit `draft`/`pending`/`not-run` status with a
 reason + owner — silent absence is not allowed. (`me_approved` stays `false`; that is honest, not a

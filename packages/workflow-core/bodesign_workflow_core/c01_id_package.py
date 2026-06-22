@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import guide_compliance_for
 
 
 C01_OUTPUTS = {
@@ -170,6 +171,10 @@ class C01PackageReadiness:
             out["companion_readiness"] = self.companion_readiness
         if self.id_native_readiness is not None:
             out["id_native_readiness"] = self.id_native_readiness
+        gc = guide_compliance_for(self.folder, "c01", root_visible=self.root_visible)
+        if gc is not None:
+            out["guide_compliance"] = gc
+            out["dod_ok"] = bool(gc.get("dod_ok"))
         return out
 
 

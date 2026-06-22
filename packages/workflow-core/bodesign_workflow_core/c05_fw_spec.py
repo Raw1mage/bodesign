@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import guide_compliance_for
 
 C05_FOLDER = Path("C05-FW")
 C05_FUNCTIONAL = C05_FOLDER / "Functional_Spec.md"
@@ -46,7 +47,7 @@ class C05FwReadiness:
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "folder": self.folder,
             "present_sections": list(self.present_sections),
             "pending": list(self.pending),
@@ -59,6 +60,11 @@ class C05FwReadiness:
             "firmware_code": False,
             "fw_team_owned": True,
         }
+        gc = guide_compliance_for(self.folder, "c05", root_visible=self.root_visible)
+        if gc is not None:
+            d["guide_compliance"] = gc
+            d["dod_ok"] = bool(gc.get("dod_ok"))
+        return d
 
 
 @dataclass(slots=True)

@@ -117,6 +117,18 @@ required items are present / partial / missing) in your completion report:
 If the check says a required item is missing and you have not marked it honestly blocked, you are not
 done — go produce it. Only after it passes do you announce completion or cross the handoff.
 
+> **`readiness_pct: 100` is NOT "done". Read `dod_ok` + `guide_compliance`.** The readiness
+> tools now enforce each stage's GUIDE.md "Required deliverables — Definition of Done" as a
+> machine-checkable manifest. The real done-gate is **`dod_ok: true`** — it is true only when every
+> GUIDE Required-deliverable is `present` (or honestly deferred via a `dod_status.json` entry) AND no
+> `answered` field is *fake-complete* (state `answered` but value is a placeholder like `TBC`/`待補`).
+> A required deliverable that is silently absent, a flipped `include_rf=false` while a radio part is in
+> the BOM, or a `TBC` hiding under `answered` each flip `dod_ok` to **false** and are named in
+> `guide_compliance` with their GUIDE row. So: **self-verify against the guide's DoD manifest** (the
+> `guide_compliance` block), not the bare `readiness_pct`. A high percentage with `dod_ok: false` means
+> the deliverables do not yet meet the GUIDE — fix what `guide_compliance.missing_blocking` / the
+> `fake_complete_fields` list names, or record an honest status; never report done on a fake green.
+
 ## Router — "which stage am I in?"
 
 | If the task is about… | Go to |

@@ -24,6 +24,7 @@ from typing import Any
 
 from .c03_mechanical_constraints import C03_OUTPUT
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import guide_compliance_for
 
 C04_FOLDER = Path("C04-Layout")
 C04_CONSTRAINTS_OUTPUT = C04_FOLDER / "Layout_Constraints.json"
@@ -53,7 +54,7 @@ class C04LayoutReadiness:
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "folder": self.folder,
             "present_groups": list(self.present_groups),
             "pending": list(self.pending),
@@ -67,6 +68,11 @@ class C04LayoutReadiness:
             "gerber_ready": False,
             "layout_approval": False,
         }
+        gc = guide_compliance_for(self.folder, "c04", root_visible=self.root_visible)
+        if gc is not None:
+            d["guide_compliance"] = gc
+            d["dod_ok"] = bool(gc.get("dod_ok"))
+        return d
 
 
 @dataclass(slots=True)

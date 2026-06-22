@@ -1,0 +1,22 @@
+{
+  "diagram_title": "Enforce GUIDE Definition-of-Done in the readiness family",
+  "node_reference": "A0",
+  "activities": [
+    {"id": "A1", "title": "Maintain per-stage DoD manifest (mirror GUIDE table)"},
+    {"id": "A2", "title": "Check deliverables vs manifest"},
+    {"id": "A3", "title": "Detect fake-complete + conditional violations"},
+    {"id": "A4", "title": "Emit guide_compliance + dod_ok into readiness"}
+  ],
+  "arrows": [
+    {"id": "i1", "type": "input", "source": "EXTERNAL", "target": "A1:input", "label": "stage GUIDE.md Required-deliverables table (human SSOT)"},
+    {"id": "c1", "type": "control", "source": "EXTERNAL", "target": "A1:control", "label": "DD-1: JSON mirrors GUIDE, no runtime md parse"},
+    {"id": "o1", "type": "output", "source": "A1:output", "target": "A2:control", "label": "templates/<stage>.dod.json (any_of/all_of/condition)"},
+    {"id": "i2", "type": "input", "source": "EXTERNAL", "target": "A2:input", "label": "project folder / stage base dir + dod_status.json"},
+    {"id": "m2", "type": "mechanism", "source": "EXTERNAL", "target": "A2:mechanism", "label": "assess_guide_dod() shared checker"},
+    {"id": "o2", "type": "output", "source": "A2:output", "target": "A4:input", "label": "per-deliverable present|honest-status|missing|n-a"},
+    {"id": "i3", "type": "input", "source": "EXTERNAL", "target": "A3:input", "label": "answer_state fields + include_rf + BOM"},
+    {"id": "c3", "type": "control", "source": "EXTERNAL", "target": "A3:control", "label": "DD-4/-5: placeholder precision; flag cannot skip required"},
+    {"id": "o3", "type": "output", "source": "A3:output", "target": "A4:input", "label": "fake_complete_fields + RF violation"},
+    {"id": "o4", "type": "output", "source": "A4:output", "target": "EXTERNAL", "label": "dod_ok (real done-gate) + guide_compliance block"}
+  ]
+}

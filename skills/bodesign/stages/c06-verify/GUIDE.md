@@ -27,6 +27,11 @@ What C06 does **not** own:
 
 ## Required deliverables — Definition of Done
 
+> **`readiness_pct: 100` ≠ done.** The readiness tools enforce this table as a machine-checkable
+> manifest: the real gate is **`dod_ok: true`** in the readiness output — true only when every row
+> below is `present` (or honestly deferred via a `dod_status.json` entry) and no `answered` field is
+> fake-complete (a `TBC`/placeholder value). Read the `guide_compliance` block, not the bare percent.
+
 Produce **all** of these at the stage root before you report C06 done or hand off
 (see SKILL.md § "Definition of Done"; debug overlays/scripts go in `02_build/`). Each exists **or**
 carries an honest `not-run`/`blocked` status with a reason. A record where SPICE/EMC/thermal are

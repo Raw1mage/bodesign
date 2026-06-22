@@ -34,6 +34,11 @@ guessing. Ambiguity doesn't stay here; it propagates as a wrong decision downstr
 
 ## Required deliverables — Definition of Done
 
+> **`readiness_pct: 100` ≠ done.** The readiness tools enforce this table as a machine-checkable
+> manifest: the real gate is **`dod_ok: true`** in the readiness output — true only when every row
+> below is `present` (or honestly deferred via a `dod_status.json` entry) and no `answered` field is
+> fake-complete (a `TBC`/placeholder value). Read the `guide_compliance` block, not the bare percent.
+
 Produce **all** of these in this stage before you report C00 done or hand off (see SKILL.md
 § "Definition of Done"). Each must exist on disk **or** carry an explicit `blocked`/`external-needed`
 status with a reason + owner — silent absence is not allowed.

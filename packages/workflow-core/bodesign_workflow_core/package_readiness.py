@@ -18,6 +18,19 @@ from pathlib import Path
 from bodesign_reverse_core import ingest_project_folder
 
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import assess_guide_dod
+
+
+_STAGES = ["c00", "c01", "c02", "c03", "c04", "c05", "c06", "c07"]
+
+
+def _stage_subdir(root: Path, stage: str) -> Path | None:
+    """The project subfolder for a stage (e.g. 'c01' -> 'C01-ID/'), or None if the
+    stage hasn't been started in this package."""
+    for p in sorted(root.glob(f"{stage.upper()}*")):
+        if p.is_dir():
+            return p
+    return None
 
 # POC deliverable checklist (electronics-core scope). Each entry:
 #   key, name, section_keywords (match a C0* folder), match_roles / match_name (match files),
@@ -85,6 +98,12 @@ class PackageReadiness:
     # readiness with root_visible False is the "path not seen" case, NOT "deliverables missing".
     root_visible: bool = True
     warnings: list[str] = field(default_factory=list)
+    # Per-stage GUIDE Definition-of-Done roll-up (quality_readiness-enforces-guide-
+    # definition-of-done). `dod_ok` is the real done-gate across started stages —
+    # `readiness_pct: 100` on the loose keyword checklist no longer implies done.
+    guide_compliance: dict = field(default_factory=dict)
+    dod_ok: bool = True
+    dod_missing: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -94,6 +113,9 @@ class PackageReadiness:
             "open_blockers": self.open_blockers,
             "root_visible": self.root_visible,
             "warnings": list(self.warnings),
+            "guide_compliance": self.guide_compliance,
+            "dod_ok": self.dod_ok,
+            "dod_missing": list(self.dod_missing),
             "deliverables": [
                 {"key": d.key, "name": d.name, "producer": d.producer, "required": d.required,
                  "status": d.status, "files": d.files, "next_action": d.next_action}
@@ -156,6 +178,7 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
     # the PRD as merely present/missing: when a C00 answer-state exists, the prd status
     # reflects how complete the PRD actually is (100% answered -> present, else partial),
     # and its next action becomes the C00 next-best question.
+    c00_result = None
     prd_state = Path(folder) / "C00-PRD" / "answer_state.json"
     if prd_state.exists():
         try:
@@ -163,6 +186,7 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
             c00 = assess_c00_prd_readiness(folder)
         except Exception:
             c00 = None
+        c00_result = c00
         if c00 is not None:
             for d in readiness.deliverables:
                 if d.key == "prd":
@@ -196,10 +220,41 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
         )
     else:
         readiness.next_step = pending[0].next_action if pending else "All tracked deliverables present for this milestone."
+    # GUIDE Definition-of-Done roll-up across started stages. c00 uses the project
+    # root as base (its manifest paths are C00-PRD/...) and reuses the RF-aware c00
+    # readiness result; c01..c07 each use their own C0N* subfolder. A stage with no
+    # folder yet is simply absent from the roll-up (not penalized).
+    root_path = Path(folder)
+    for stage in _STAGES:
+        stage_ok = None  # overall done-gate for the stage (may exceed the file manifest)
+        if stage == "c00":
+            if not (root_path / "C00-PRD").exists():
+                continue
+            gc = c00_result.guide_compliance if (c00_result and c00_result.guide_compliance) \
+                else assess_guide_dod(root_path, "c00")
+            # c00's real gate includes fake-complete + conditional-RF, not just files.
+            if c00_result is not None:
+                stage_ok = c00_result.dod_ok
+        else:
+            base = _stage_subdir(root_path, stage)
+            if base is None:
+                continue
+            gc = assess_guide_dod(base, stage)
+        if gc and gc.get("deliverables"):
+            readiness.guide_compliance[stage] = gc
+            if stage_ok is None:
+                stage_ok = gc.get("dod_ok", True)
+            if not stage_ok:
+                readiness.dod_missing.append(stage)
+    readiness.dod_ok = not readiness.dod_missing
+
     blocker_note = f" {len(open_blockers)} open reconciliation blocker(s)." if open_blockers else ""
+    dod_note = (f" GUIDE DoD NOT met in: {', '.join(readiness.dod_missing)} "
+                f"(readiness_pct is keyword-level; dod_ok is the real gate)."
+                if readiness.dod_missing else "")
     readiness.summary = (
         f"{milestone}: {len(present_required)}/{len(required)} required deliverables present "
-        f"({readiness.readiness_pct}%).{blocker_note} "
+        f"({readiness.readiness_pct}%).{blocker_note}{dod_note} "
         f"External (not bodesign): {', '.join(readiness.external_sections) or 'none'}."
     )
     return readiness

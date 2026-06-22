@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import guide_compliance_for
 
 C06_FOLDER = Path("C06-Verification")
 C06_SUMMARY = C06_FOLDER / "Verification_Summary.json"
@@ -74,7 +75,7 @@ class C06Readiness:
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "folder": self.folder,
             "check_statuses": dict(self.check_statuses),
             "run_count": self.run_count,
@@ -87,6 +88,11 @@ class C06Readiness:
             "certified": False,
             "evt_dvt_passed": False,
         }
+        gc = guide_compliance_for(self.folder, "c06", root_visible=self.root_visible)
+        if gc is not None:
+            d["guide_compliance"] = gc
+            d["dod_ok"] = bool(gc.get("dod_ok"))
+        return d
 
 
 @dataclass(slots=True)

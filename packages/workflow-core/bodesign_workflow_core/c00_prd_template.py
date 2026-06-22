@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import assess_guide_dod, is_placeholder_value
 
 
 # RB-2: runtime-depended templates are owned by the package (a draft `plans/`
@@ -92,6 +93,9 @@ class C00ReadinessResult:
     downstream_handoff_gates: list[dict[str, Any]]
     root_visible: bool = True
     warnings: list[str] = field(default_factory=list)
+    guide_compliance: dict[str, Any] = field(default_factory=dict)
+    dod_ok: bool = True
+    fake_complete_fields: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -105,6 +109,13 @@ class C00ReadinessResult:
             "downstream_handoff_gates": self.downstream_handoff_gates,
             "root_visible": self.root_visible,
             "warnings": list(self.warnings),
+            # DoD enforcement (quality_readiness-enforces-guide-definition-of-done):
+            # `readiness_pct: 100` is NOT done — `dod_ok` is the real gate. It is true
+            # only when every GUIDE Required-deliverable is present (or honestly
+            # deferred) AND no `answered` field is fake-complete.
+            "guide_compliance": self.guide_compliance,
+            "dod_ok": self.dod_ok,
+            "fake_complete_fields": list(self.fake_complete_fields),
             "readiness_computed": True,
             "prd_emitted": False,
             "human_approved": False,
@@ -182,6 +193,36 @@ def scaffold_c00_prd_package(
     )
 
 
+import re as _re
+
+# Conditional-RF (DD-5): radio parts in the PRD imply an RF appendix is required.
+_RADIO_RE = _re.compile(
+    r"(?i)wi-?fi|bluetooth|\bble\b|\blora\b|zigbee|\bnfc\b|cellular|\blte\b|nb-iot|"
+    r"\b802\.11\b|\bant\b|thread\b|matter\b|cyw43|esp32|esp8266|nrf5[12]|sx12[0-9]{2}|"
+    r"\brf\b transceiver|radio"
+)
+
+
+def _detect_radio(state: dict[str, Any]) -> str | None:
+    """Scan answer_state field values for a radio/wireless signature. Returns the
+    first matched token (evidence) or None. Drives the conditional-RF gate."""
+    for _fn, doc in state.get("documents", {}).items():
+        if not isinstance(doc, dict):
+            continue
+        for sec in doc.get("sections") or []:
+            for _k, v in (sec.get("fields") or {}).items():
+                val = v.get("value") if isinstance(v, dict) else v
+                s = val if isinstance(val, str) else json.dumps(val, ensure_ascii=False) if val else ""
+                m = _RADIO_RE.search(s or "")
+                if m:
+                    return m.group(0)
+    return None
+
+
+def _collect_fake_complete(sections: list[dict[str, Any]]) -> list[str]:
+    return [f["key"] for sec in sections for f in sec.get("fields", []) if f.get("fake_complete")]
+
+
 def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
     # Unify with the readiness-family contract (DD-4, structured form): a root the container
     # cannot see returns a distinguishable root_visible:false result, not a raised
@@ -214,6 +255,33 @@ def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
     status = "ready" if total_fields and completed_fields == total_fields else "blocked"
     if status != "ready" and field_counts.get("partial", 0) and not field_counts.get("blocking", 0):
         status = "partial"
+
+    # GUIDE Definition-of-Done enforcement (DD-2/-5/-6). Conditional-RF: an RF
+    # appendix is required if include_rf is set OR a radio part is detected; a radio
+    # part with include_rf=false is a violation (a flag cannot skip a required item).
+    fake_complete_fields = _collect_fake_complete(sections)
+    include_rf = bool(state.get("include_rf"))
+    radio = _detect_radio(state)
+    rf_required = include_rf or bool(radio)
+    guide = assess_guide_dod(root, "c00", conditions={"rf": rf_required})
+    extra_warnings: list[str] = []
+    if radio and not include_rf:
+        guide["dod_ok"] = False
+        guide.setdefault("missing_blocking", []).append("rf_appendix_conditional")
+        extra_warnings.append(
+            f"RF appendix required: radio part detected ('{radio}') but include_rf=false — "
+            "do not skip the RF Definition-of-Done by leaving the flag off."
+        )
+    if fake_complete_fields:
+        extra_warnings.append(
+            "fake-complete fields (state=answered but value is a placeholder like TBC): "
+            + ", ".join(fake_complete_fields)
+        )
+    dod_ok = bool(guide.get("dod_ok")) and not fake_complete_fields and status == "ready"
+    # A real done-state requires the DoD to pass too; surface it in status.
+    if status == "ready" and not (guide.get("dod_ok") and not fake_complete_fields):
+        status = "blocked"
+
     return C00ReadinessResult(
         folder=str(root),
         readiness_pct=readiness_pct,
@@ -223,6 +291,10 @@ def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
         sections=sections,
         document_gates=document_gates,
         downstream_handoff_gates=downstream_gates,
+        warnings=extra_warnings,
+        guide_compliance=guide,
+        dod_ok=dod_ok,
+        fake_complete_fields=fake_complete_fields,
     )
 
 
@@ -671,10 +743,19 @@ def _assess_field(
         status = "blocking"
     else:
         raise C00TemplateError(f"C00 answer_state field {name} has unknown state: {state}")
+    # Fake-complete detection (DD-4): a field marked `answered` (claiming real
+    # human content) whose VALUE is a placeholder (TBC / 待補 / empty) is hollow —
+    # downgrade to blocking so it can never inflate readiness. `accepted-risk` is
+    # exempt: it explicitly documents a gap, so a placeholder value there is honest.
+    fake_complete = False
+    if state == "answered" and is_placeholder_value(value.get("value")):
+        status = "blocking"
+        fake_complete = True
     return {
         "key": name,
         "state": state,
         "status": status,
+        "fake_complete": fake_complete,
         "owner": value.get("owner"),
         "source": value.get("source"),
         "handoff_targets": value.get("handoff_targets") or [],

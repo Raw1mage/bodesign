@@ -38,6 +38,11 @@ warn.** See `../../references/honesty-model.md` rule 5 and the C04 paragraph the
 
 ## Required deliverables — Definition of Done
 
+> **`readiness_pct: 100` ≠ done.** The readiness tools enforce this table as a machine-checkable
+> manifest: the real gate is **`dod_ok: true`** in the readiness output — true only when every row
+> below is `present` (or honestly deferred via a `dod_status.json` entry) and no `answered` field is
+> fake-complete (a `TBC`/placeholder value). Read the `guide_compliance` block, not the bare percent.
+
 Produce **all** of these before you report C04 done or hand off (see SKILL.md § "Definition of
 Done"; deliverables land at the stage root, rendered previews in `02_build/`). Each exists **or** carries
 an explicit `drafted`/`pending`/`not-run` status with a reason — fab outputs stay `pending` until

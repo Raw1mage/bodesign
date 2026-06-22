@@ -1,0 +1,19 @@
+{
+  "stage": "c01",
+  "guide": "skills/bodesign/stages/c01-id/GUIDE.md",
+  "base": "stage-folder",
+  "honest_states": ["draft", "blocked"],
+  "deliverables": [
+    {"id": "design_direction", "title": "Design direction", "guide_row": 1,
+     "any_of": ["Design_Direction.md", "Ai file/Design_Direction.md"], "required": true},
+    {"id": "cmf_direction", "title": "CMF direction", "guide_row": 2,
+     "any_of": ["CMF_Direction.md", "CMF/CMF_Direction.md"], "required": true},
+    {"id": "uiux_requirements", "title": "Display UI/UX requirements", "guide_row": 3,
+     "any_of": ["UIUX_Requirements.md", "Display UIUX/UIUX_Requirements.md",
+                "Display UI_UX/UIUX_Requirements.md"], "required": true},
+    {"id": "interface_constraints", "title": "Interface constraints", "guide_row": 4,
+     "any_of": ["Interface_Constraints.json"], "required": true},
+    {"id": "handoff", "title": "ID-designer handoff", "guide_row": 5,
+     "any_of": ["Handoff_to_ID_Designer.md"], "required": true}
+  ]
+}

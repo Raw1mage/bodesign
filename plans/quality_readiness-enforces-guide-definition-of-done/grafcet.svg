@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="674" height="980" viewBox="2.00 0.00 33.72 49.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="2.00" y="0.00" width="33.72" height="49.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1G2I1" data-segment-ids="S0O1G2I1:1S" d="M 22.36 7.00 L 22.36 13.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1S1I1" data-segment-ids="G2O1S1I1:1S" d="M 22.36 13.00 L 22.36 15.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1S2I1" data-segment-ids="S1O1S2I1:1S" d="M 22.36 18.00 L 22.36 22.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1G1I1" data-segment-ids="S2O1G1I1:1S" d="M 22.36 25.00 L 22.36 27.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1S3I1" data-segment-ids="G1O1S3I1:1S" d="M 10.00 27.00 L 10.00 31.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O2S4I1" data-segment-ids="G1O2S4I1:1S" d="M 22.36 27.00 L 22.36 31.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1G3I1" data-segment-ids="S3O1G3I1:1S" d="M 10.00 34.00 L 10.00 38.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S5I1" data-segment-ids="G3O1S5I1:1S" d="M 22.36 38.00 L 22.36 40.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1G3I2" data-segment-ids="S4O1G3I2:1S" d="M 22.36 34.00 L 22.36 38.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1G2I2" data-segment-ids="S5O1G2I2:1S S5O1G2I2:2W S5O1G2I2:3N S5O1G2I2:4E S5O1G2I2:5S" d="M 22.36 43.00 L 22.36 44.50 Q 22.36 45.00 21.86 45.00 L 6.50 45.00 Q 6.00 45.00 6.00 44.50 L 6.00 9.50 Q 6.00 9.00 6.50 9.00 L 17.86 9.00 Q 18.36 9.00 18.36 9.50 L 18.36 13.00"/>
+<rect class="step" x="20.36" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="20.61" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="22.36" y="5.50">0</text>
+<rect class="step" x="20.36" y="15.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="22.36" y="16.50">1</text>
+<rect class="step" x="20.36" y="22.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="22.36" y="23.50">2</text>
+<rect class="step" x="8.00" y="31.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="10.00" y="32.50">3</text>
+<rect class="step" x="20.36" y="31.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="22.36" y="32.50">4</text>
+<rect class="step" x="20.36" y="40.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="22.36" y="41.50">5</text>
+<line class="assoc" x1="24.36" y1="5.50" x2="25.36" y2="5.50"/>
+<rect class="action" x="25.36" y="4.07" width="6.36" height="2.86"/>
+<text class="action-label" x="28.54" y="5.09"><tspan x="28.54" dy="0">Load stage DoD manifest</tspan><tspan x="28.54" dy="0.82">(mirror of GUIDE table)</tspan></text>
+<line class="assoc" x1="24.36" y1="16.50" x2="25.36" y2="16.50"/>
+<rect class="action" x="25.36" y="15.07" width="6.36" height="2.86"/>
+<text class="action-label" x="28.54" y="15.68"><tspan x="28.54" dy="0">Check each deliverable:</tspan><tspan x="28.54" dy="0.82">file present / honest-</tspan><tspan x="28.54" dy="0.82">status / missing / n-a</tspan></text>
+<line class="assoc" x1="24.36" y1="23.50" x2="25.36" y2="23.50"/>
+<rect class="action" x="25.36" y="22.07" width="6.36" height="2.86"/>
+<text class="action-label" x="28.54" y="22.68"><tspan x="28.54" dy="0">Detect fake-complete</tspan><tspan x="28.54" dy="0.82">(answered+placeholder)</tspan><tspan x="28.54" dy="0.82">+ conditional-RF violation</tspan></text>
+<line class="assoc" x1="12.00" y1="32.50" x2="13.00" y2="32.50"/>
+<rect class="action" x="13.00" y="31.07" width="6.36" height="2.86"/>
+<text class="action-label" x="16.18" y="31.68"><tspan x="16.18" dy="0">dod_ok=true: all present/</tspan><tspan x="16.18" dy="0.82">deferred, no fake-</tspan><tspan x="16.18" dy="0.82">complete, no RF violation</tspan></text>
+<line class="assoc" x1="24.36" y1="32.50" x2="25.36" y2="32.50"/>
+<rect class="action" x="25.36" y="31.07" width="6.36" height="2.86"/>
+<text class="action-label" x="28.54" y="31.68"><tspan x="28.54" dy="0">dod_ok=false: name missing_</tspan><tspan x="28.54" dy="0.82">blocking + fake_complete_</tspan><tspan x="28.54" dy="0.82">fields + GUIDE row</tspan></text>
+<line class="assoc" x1="24.36" y1="41.50" x2="25.36" y2="41.50"/>
+<rect class="action" x="25.36" y="40.07" width="6.36" height="2.86"/>
+<text class="action-label" x="28.54" y="40.68"><tspan x="28.54" dy="0">Emit guide_compliance</tspan><tspan x="28.54" dy="0.82">+ dod_ok in readiness;</tspan><tspan x="28.54" dy="0.82">await next call</tspan></text>
+<line class="gate" x1="16.36" y1="13.00" x2="24.36" y2="13.00"/>
+<line class="gate" x1="8.00" y1="27.00" x2="24.36" y2="27.00"/>
+<line class="gate" x1="8.00" y1="38.00" x2="24.36" y2="38.00"/>
+<line class="gate" x1="21.36" y1="9.00" x2="23.36" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1G2I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="23.76" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1G2I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="23.76" dy="0">readiness called for a stage/package</tspan></text>
+<line class="gate" x1="21.36" y1="20.00" x2="23.36" y2="20.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label" x="23.76" y="20.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="23.76" dy="0">manifest loaded</tspan></text>
+<line class="gate" x1="9.00" y1="29.00" x2="11.00" y2="29.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label-left" x="5.80" y="28.66" data-label-kind="condition-stub" data-edge-id="edge:G1O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="5.80" dy="0">deliverables</tspan><tspan x="5.80" dy="0.68">assessed</tspan></text>
+<line class="gate" x1="21.36" y1="29.00" x2="23.36" y2="29.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label" x="23.76" y="29.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="23.76" dy="0">deliverables assessed</tspan></text>
+<line class="gate" x1="9.00" y1="36.00" x2="11.00" y2="36.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1G3I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label-left" x="5.80" y="36.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1G3I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="5.80" dy="0">no blocking gap</tspan></text>
+<line class="gate" x1="21.36" y1="36.00" x2="23.36" y2="36.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1G3I2" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="23.76" y="36.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1G3I2" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="23.76" dy="0">blocking gap found</tspan></text>
+<line class="gate" x1="17.36" y1="11.00" x2="19.36" y2="11.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1G2I2" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"/>
+<text class="gate-label-left" x="16.96" y="11.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1G2I2" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"><tspan x="16.96" dy="0">agent reads dod_ok, not bare readiness_pct</tspan></text>
+</svg>

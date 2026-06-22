@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "quality_readiness-enforces-guide-definition-of-done data contracts",
+  "description": "The DoD manifest format, the guide_compliance output, and the additive readiness keys. All additions are backward compatible (existing readiness keys unchanged).",
+  "definitions": {
+    "DodManifest": {
+      "description": "templates/<stage>.dod.json — the machine mirror of a GUIDE Required-deliverables table (DD-1).",
+      "type": "object",
+      "required": ["stage", "deliverables"],
+      "properties": {
+        "stage": {"type": "string"},
+        "guide": {"type": "string", "description": "path to the human GUIDE.md SSOT"},
+        "base": {"type": "string", "enum": ["project-root", "stage-folder"]},
+        "honest_states": {"type": "array", "items": {"type": "string"}},
+        "deliverables": {"type": "array", "items": {"$ref": "#/definitions/DodDeliverable"}}
+      }
+    },
+    "DodDeliverable": {
+      "type": "object",
+      "required": ["id", "guide_row"],
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "guide_row": {"type": "integer", "description": "the row in the GUIDE table this mirrors (sync anchor)"},
+        "any_of": {"type": "array", "items": {"type": "string"}, "description": "alternative paths (literal or glob); first match = present"},
+        "all_of": {"type": "array", "items": {"type": "string"}, "description": "a GUIDE row requiring several files; present iff all match"},
+        "required": {"type": "boolean", "default": true},
+        "condition": {"type": "string", "enum": ["rf", "toolchain", "high_speed", "board_brought_up", "c04_frozen"]},
+        "bucket": {"type": "string", "description": "e.g. '02_build' — constrains the file location"},
+        "honest_states": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "DodStatusOverride": {
+      "description": "<base>/dod_status.json — an auditable way to mark a deliverable honestly deferred without faking a file (DD-3).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {"type": "string"},
+          "reason": {"type": "string"},
+          "owner": {"type": "string"}
+        }
+      }
+    },
+    "GuideCompliance": {
+      "description": "Additive on every readiness to_dict(). dod_ok is the real done-gate.",
+      "type": "object",
+      "required": ["dod_ok", "deliverables", "missing_blocking"],
+      "properties": {
+        "dod_ok": {"type": "boolean"},
+        "missing_blocking": {"type": "array", "items": {"type": "string"}},
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "title": {"type": "string"},
+              "guide_row": {"type": "integer"},
+              "status": {"type": "string", "enum": ["present", "honest-status", "missing", "n-a"]},
+              "evidence": {"type": "string"},
+              "blocking": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "ReadinessAdditions": {
+      "description": "New keys on stage readiness to_dict(): c00 carries fake_complete_fields; all carry guide_compliance + dod_ok. package_readiness carries dod_missing (list of stages).",
+      "type": "object",
+      "properties": {
+        "guide_compliance": {"$ref": "#/definitions/GuideCompliance"},
+        "dod_ok": {"type": "boolean", "description": "the real done-gate; true only when DoD passes AND (c00) no fake-complete / RF violation"},
+        "fake_complete_fields": {"type": "array", "items": {"type": "string"}, "description": "c00: answered fields whose value is a placeholder"},
+        "dod_missing": {"type": "array", "items": {"type": "string"}, "description": "package: stages whose GUIDE DoD is not met"}
+      }
+    }
+  }
+}

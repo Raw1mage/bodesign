@@ -1,0 +1,19 @@
+{
+  "stage": "c06",
+  "guide": "skills/bodesign/stages/c06-verify/GUIDE.md",
+  "base": "stage-folder",
+  "honest_states": ["not-run", "blocked"],
+  "deliverables": [
+    {"id": "verification_summary", "title": "Verification summary (machine-readable)", "guide_row": 1,
+     "any_of": ["Verification_Summary.json"], "required": true},
+    {"id": "test_plan", "title": "Test plan", "guide_row": 2,
+     "any_of": ["Test_Plan.md"], "required": true},
+    {"id": "bring_up_checklist", "title": "Bring-up checklist", "guide_row": 3,
+     "any_of": ["Bring_Up_Checklist.md"], "required": true},
+    {"id": "cross_check", "title": "Reference cross-check run", "guide_row": 4,
+     "any_of": ["analysis/**/cross_verify.json", "02_build/analysis/**/cross_verify.json"],
+     "required": true, "honest_states": ["not-run", "blocked"]},
+    {"id": "evt_findings", "title": "EVT bring-up findings", "guide_row": 5,
+     "any_of": ["EVT_Bringup_Findings.md"], "required": true, "condition": "board_brought_up"}
+  ]
+}

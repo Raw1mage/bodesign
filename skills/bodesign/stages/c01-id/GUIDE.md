@@ -33,6 +33,11 @@ draw the electrical block architecture.
 
 ## Required deliverables — Definition of Done
 
+> **`readiness_pct: 100` ≠ done.** The readiness tools enforce this table as a machine-checkable
+> manifest: the real gate is **`dod_ok: true`** in the readiness output — true only when every row
+> below is `present` (or honestly deferred via a `dod_status.json` entry) and no `answered` field is
+> fake-complete (a `TBC`/placeholder value). Read the `guide_compliance` block, not the bare percent.
+
 Produce **all five** core artifacts in this stage before you report C01 done or hand off (see SKILL.md
 § "Definition of Done"). Each exists on disk **or** carries an explicit `draft`/`blocked` status with a
 reason — silent absence is not allowed. (C01 artifacts stay `draft` until a human ID designer approves;

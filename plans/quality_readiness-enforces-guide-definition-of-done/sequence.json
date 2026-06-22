@@ -1,0 +1,42 @@
+[
+  {
+    "id": "SEQ1",
+    "name": "c00 readiness: fake-complete + conditional-RF make dod_ok false",
+    "requirementRefs": ["FC-1", "RF-1"],
+    "participants": [
+      {"id": "P1", "name": "Agent / Orchestrator", "componentRef": null},
+      {"id": "P2", "name": "assess_c00_prd_readiness", "componentRef": "A3"},
+      {"id": "P3", "name": "is_placeholder_value", "componentRef": "A3"},
+      {"id": "P4", "name": "assess_guide_dod (c00 manifest)", "componentRef": "A2"}
+    ],
+    "messages": [
+      {"id": "M1", "from": "P1", "to": "P2", "label": "bodesign_c00_readiness(folder)", "kind": "sync"},
+      {"id": "M2", "from": "P2", "to": "P3", "label": "for each answered field: placeholder(value)?", "kind": "sync"},
+      {"id": "M3", "from": "P3", "to": "P2", "label": "'MPNs TBC' -> true (fake-complete); 'STM32 Neural' -> false", "kind": "reply"},
+      {"id": "M4", "from": "P2", "to": "P2", "label": "detect radio part; include_rf=false -> RF violation", "kind": "self"},
+      {"id": "M5", "from": "P2", "to": "P4", "label": "assess_guide_dod(root, c00, conditions={rf:true})", "kind": "sync"},
+      {"id": "M6", "from": "P4", "to": "P2", "label": "deliverables present/missing", "kind": "reply"},
+      {"id": "M7", "from": "P2", "to": "P1", "label": "{dod_ok:false, fake_complete_fields:[...], guide_compliance, warnings}", "kind": "reply"}
+    ]
+  },
+  {
+    "id": "SEQ2",
+    "name": "package roll-up: per-stage DoD across started stages",
+    "requirementRefs": ["DOD-1", "ROLLUP-1"],
+    "participants": [
+      {"id": "P1", "name": "Agent", "componentRef": null},
+      {"id": "P5", "name": "assess_package_readiness", "componentRef": "A4"},
+      {"id": "P4", "name": "assess_guide_dod (per stage)", "componentRef": "A2"},
+      {"id": "P6", "name": "stage folder + dod_status.json", "componentRef": "A2"}
+    ],
+    "messages": [
+      {"id": "M1", "from": "P1", "to": "P5", "label": "bodesign_package_readiness(folder)", "kind": "sync"},
+      {"id": "M2", "from": "P5", "to": "P5", "label": "for each started stage: locate C0N* subdir", "kind": "self"},
+      {"id": "M3", "from": "P5", "to": "P4", "label": "assess_guide_dod(stage_base, cNN)", "kind": "sync"},
+      {"id": "M4", "from": "P4", "to": "P6", "label": "match any_of/all_of; check dod_status.json", "kind": "sync"},
+      {"id": "M5", "from": "P6", "to": "P4", "label": "present | honest-status | missing | n-a", "kind": "reply"},
+      {"id": "M6", "from": "P4", "to": "P5", "label": "stage dod_ok + missing_blocking", "kind": "reply"},
+      {"id": "M7", "from": "P5", "to": "P1", "label": "{dod_ok, dod_missing:[stages], guide_compliance:{stage:...}}", "kind": "reply"}
+    ]
+  }
+]

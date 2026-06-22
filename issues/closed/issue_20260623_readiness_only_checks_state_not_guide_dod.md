@@ -68,3 +68,42 @@ bodesign 的 `cXX_readiness` / `package_readiness` 工具只檢查 **answer_stat
 - aiguard C00 的不合格已記錄,待修復 plan 批准後逐項補(結構重整、TBC→drafted、補圖、補 RF)。
 - 這是 readiness 工具三部曲的延伸:前兩個(路徑可見性、analyzer 掛載)修的是「跑不跑得動」;本 issue 修的是「跑出來的綠燈是不是真的」——更根本。
 - 未開遠端 GitHub issue(local-first)。
+
+---
+
+## Resolution
+
+- **Status**: resolved / fixed。Closed 2026-06-23。Plan
+  `plans/quality_readiness-enforces-guide-definition-of-done/` 狀態 **verified**。
+- **Final RCA**(確認雙根因):**A** AI 行為(把 readiness 數字當驗收 oracle、沒開 guide)+
+  **B** 產品設計(唯一可機檢的閘只覆蓋最薄的「欄位 state」一層)。修 B —— 讓略過 guide 在機器上
+  變紅燈而非假綠燈。
+- **Fix implemented**(治本,全做):
+  1. **共用 checker** `packages/workflow-core/bodesign_workflow_core/guide_dod.py`:
+     `assess_guide_dod(base, stage, conditions)` 把每階 GUIDE「Required deliverables」表當
+     machine-checkable manifest 驗(present / honest-status / missing / n-a),支援
+     `any_of`/`all_of`/`condition`/`bucket` 與 `dod_status.json` 誠實延遲覆寫。
+  2. **8 個 manifest** `templates/c00..c07.dod.json` —— 逐 GUIDE 表列鏡像(帶 `guide_row`)。
+  3. **fake-complete 偵測**:`answered` 但值是 placeholder(`TBC`/`待補`/空)→ 降為 blocking +
+     `fake_complete: true`(`accepted-risk` 豁免)。pattern 刻意保守(bounded EN token + 特定多字
+     CJK 詞,**不含裸 待** —— 因 待 出現在 待機/期待 等正常詞)。
+  4. **conditional-RF**:PRD 偵測到 radio 零件但 `include_rf=false` → blocking(旗標不能跳過必需
+     交付物)。
+  5. **接線**:`guide_compliance` + `dod_ok` 加進 c00/c01/c04/c05/c06 readiness 與 `package_readiness`
+     的逐階 roll-up(涵蓋無 readiness 工具的 c02/c03/c07);c00 另帶 `fake_complete_fields`,package
+     帶 `dod_missing`。
+  6. **文件對齊(DD-7)**:`SKILL.md` + 8 個 `GUIDE.md` 明寫「`readiness_pct:100` ≠ done;done =
+     `dod_ok` + honesty;self-verify 對照 guide 的 DoD manifest」。
+- **Verification**:
+  - `tests/test_guide_dod.py` **12/12** green(host + 重 build 後容器內);既有 readiness 測試
+    **70** 支無回歸。
+  - 真實 `.work/aiguard` C00:`key_parts_or_references`(值含「…MPNs/stock TBC…」)被抓為
+    fake-complete、`dod_ok:false`;對照 `STM32…Neural-ART`/`802.11`/`待機電流` **不誤判**。
+  - `package_readiness` 對 `.work/aiguard` 回 `dod_missing=[c02,c04,c05,c06]`。
+  - 8 個 manifest 已 bundled 進重 build 的 image;skill 投影已 `opencode skill resync`。
+- **Follow-ups / residual risk**(非阻斷):本次以 generated/`.work` fixture 驗證;待 FUSE 上的真實
+  aiguard tree 可見時,再對其原始「6 個 TBC-answered + 缺圖 + 漏 RF」案例端對端確認 `dod_ok:false`。
+  manifest 與 GUIDE 表需手動保持同步(每 deliverable 帶 `guide_row`,有測試守);若日後 GUIDE 改表,
+  一併更新 manifest。
+- **三部曲收尾**:readiness 路徑可見性 + analyzer 掛載 + analyze_emc 合成 + 本 issue(綠燈真不真),
+  C06/readiness 四個缺陷皆已修並驗。

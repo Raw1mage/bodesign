@@ -1,0 +1,18 @@
+{
+  "stage": "c07",
+  "guide": "skills/bodesign/stages/c07-mfg/GUIDE.md",
+  "base": "stage-folder",
+  "honest_states": ["pending", "available", "blocked"],
+  "deliverables": [
+    {"id": "mfg_transfer", "title": "Manufacturing-transfer record", "guide_row": 1,
+     "any_of": ["Manufacturing_Transfer.md"], "required": true},
+    {"id": "fab_package", "title": "Fab-output package", "guide_row": 2,
+     "any_of": ["gerber/", "gerbers/"], "required": true,
+     "condition": "c04_frozen", "honest_states": ["pending"]},
+    {"id": "mfg_bom_cpl", "title": "Manufacturing BOM / CPL", "guide_row": 3,
+     "any_of": ["mfg_bom.csv", "*CPL*.csv"], "required": true,
+     "condition": "c04_frozen", "honest_states": ["pending"]},
+    {"id": "cost_dfm", "title": "Cost / qty / cert targets + DFM checklist", "guide_row": 4,
+     "any_of": ["Manufacturing_Transfer.md", "DFM_Checklist.md"], "required": true}
+  ]
+}
