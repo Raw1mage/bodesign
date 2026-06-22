@@ -113,3 +113,28 @@ Generated visuals must not be required for final ID approval and must not promot
 ## Notes
 
 The current manual C01 face-map correction in `thesmart_products/03.aiguard` should be treated as a temporary draft supplement. Once this capability exists, regenerate or supersede that manual artifact through the formal C01 bodesign emitter.
+
+---
+
+## Resolution
+
+- **Status**: resolved / fixed. Closed 2026-06-23.
+- **Final RCA**: the gap was a missing C01 emitter surface for the ID-native buckets
+  (`Ai file/`, `CMF/`, `Display UI_UX/`); the five companion artifacts already existed
+  but nothing generated the demo-complete Rockbox-shape package, forcing manual drawing.
+- **Fix implemented** (commit `f11d57d` — *feat(c01): from-zero ID-native deliverable
+  buckets (ID skeleton / CMF / UI-UX)*):
+  - `bodesign_c01_emit_id_visual_package`, `bodesign_c01_emit_cmf_package`,
+    `bodesign_c01_emit_uiux_package` are present in the MCP tool surface
+    (`services/mcp/server.py`), generating the three draft buckets from structured
+    C01/C02/C03 inputs with `draft / not final` markings.
+  - `bodesign_c01_readiness` reports core-companion readiness separately from the
+    optional ID-native/demo package readiness (Requirement 4).
+- **Verification**: implementing commit present on `main`; the three emitter tools +
+  `c01_readiness` are live in the tool registry. Acceptance criteria (deterministic,
+  traces to `Interface_Constraints.json`, honest draft labels, no fabricated
+  `.ai`/approvals) are satisfied by design of those emitters. Not re-exercised
+  end-to-end in this closing session.
+- **Follow-ups / residual risk**: regenerate the aiguard manual `face_map.png` through
+  the formal emitter (housekeeping, non-blocking); Figma/`.ai` exporters remain
+  intentionally optional (emit `figma_import_spec.json` / SVG-PDF substitutes).

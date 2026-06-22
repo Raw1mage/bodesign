@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "deployment_c06-analyzer-engines-in-container data contracts",
+  "description": "Image-level contract (env + bundled engine layout) plus the runtime self-check shape that makes analyzer-engine readiness observable. No change to the existing PcbVerifyResult/simulate result vocabulary — the fix makes the engines resolvable so the existing 'pass|warn|fail|skipped-no-simulator' verdicts can be produced instead of 'skipped-no-skills'.",
+  "definitions": {
+    "BundledEngineEnv": {
+      "description": "Image ENV set by Dockerfile / Dockerfile.ee. Each points at a directory whose child 'scripts/' must exist for resolve_skill to qualify it.",
+      "type": "object",
+      "required": ["BODESIGN_KICAD_SKILL", "BODESIGN_SPICE_SKILL", "BODESIGN_EMC_SKILL"],
+      "properties": {
+        "BODESIGN_KICAD_SKILL": {"type": "string", "description": "e.g. /opt/bodesign-engines/bodesign/engines/kicad — contains scripts/"},
+        "BODESIGN_SPICE_SKILL": {"type": "string", "description": "e.g. /opt/bodesign-engines/spice — contains scripts/"},
+        "BODESIGN_EMC_SKILL": {"type": "string", "description": "e.g. /opt/bodesign-engines/emc — contains scripts/"}
+      }
+    },
+    "AnalyzerEngineReadiness": {
+      "description": "Per-engine readiness reported by the deployment self-check (DD-5). Distinguishes a missing engine script (would cause skipped-no-skills) from a missing binary (honest skipped-no-simulator).",
+      "type": "object",
+      "required": ["engine", "engine_resolvable", "binary_present"],
+      "properties": {
+        "engine": {"type": "string", "enum": ["kicad", "spice", "emc"]},
+        "engine_resolvable": {"type": "boolean", "description": "resolve_skill(engine, env) returned a non-None Path (scripts/ present)"},
+        "binary_present": {"type": "boolean", "description": "the engine's underlying binary is on PATH (kicad-cli for kicad/emc/thermal; ngspice for spice)"},
+        "resolved_path": {"type": ["string", "null"], "description": "the path resolve_skill returned, or null"},
+        "can_run": {"type": "boolean", "description": "engine_resolvable AND binary_present"}
+      }
+    },
+    "AnalyzerReadinessReport": {
+      "description": "Aggregate self-check payload.",
+      "type": "object",
+      "required": ["image_role", "engines"],
+      "properties": {
+        "image_role": {"type": "string", "enum": ["monolith", "ee", "core"], "description": "core is expected to forward EE and may report engines absent by design"},
+        "engines": {"type": "array", "items": {"$ref": "#/definitions/AnalyzerEngineReadiness"}}
+      }
+    },
+    "C06VerdictStatus": {
+      "description": "Existing verdict vocabulary (unchanged). The fix removes 'skipped-no-skills' from the default deployment's reachable set by making engines resolvable; 'skipped-no-simulator' remains legitimate when a binary is genuinely absent.",
+      "type": "string",
+      "enum": ["pass", "warn", "fail", "skipped-no-simulator", "skipped-no-skills"]
+    }
+  }
+}

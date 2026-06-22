@@ -76,3 +76,22 @@ skill 目前沒講「使用者要分割/介面/breakout 概念圖時走哪」。
 - 交付物:`03.aiguard/C00-PRD/C00_CCM_ECB模組Breakout.pptx`(90 原生可編輯 shape,lint ready:true)
 - 參考實作:`03.aiguard/C00-PRD/02_build/tools/gen_breakout.py`(SVG/PNG)、`gen_breakout_pptx.py`(資料→docxmcp ops)—— 資料/繪圖已分離,可作為 `c03_emit_partition_diagram` 的演算法藍本。
 - 相關 docxmcp 摩擦 BR:`issues/issue_20260619_docxmcp_pptx_addshape_friction.md`(若 bodesign emitter 內部走 mcp_call,可一併規避該層摩擦,讓使用者完全無感)。
+
+---
+
+## Resolution
+
+- **Status**: resolved（feature 已實作並 graduate）。Closed 2026-06-23.
+- **Final RCA**: 確認為 capability gap —— 資料源(ICD / `c03_export_mechanical_constraints`)
+  齊全,只缺一個把結構化分割資料投影成概念圖的 emitter 入口。
+- **Fix implemented**(commit `1595ff3` — *feat(c03): partition + host-block
+  concept-diagram emitters*；spec graduate `77bd076`):
+  - 新增 `bodesign_c03_emit_partition_diagram`(R1 主請求)+ `bodesign_c03_emit_host_block_diagram`,
+    已在 MCP tool surface(`services/mcp/server.py`)。
+  - 對應 spec 已 graduate 進 `/specs/`:`specs/c03_partition-diagram-emitter/` +
+    `specs/c03_host-block-diagram-emitter/`(資料/繪圖分離、MODEL 即參數 — 對應 R2)。
+- **Verification**: 實作 commit 與兩個 graduated spec 均在 `main`;`c03_emit_partition_diagram`
+  已在工具註冊表可見。本次 closing session 未再端對端重跑 emitter。
+- **Follow-ups / residual risk**: skill 的「概念圖路由」段(R3,四類圖各走哪個工具)若尚未補,
+  屬非阻斷文件項;相關 docxmcp add_shape 摩擦另由
+  `issue_20260619_docxmcp_pptx_addshape_friction.md` 追蹤。

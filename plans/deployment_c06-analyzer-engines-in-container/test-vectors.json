@@ -1,0 +1,57 @@
+[
+  {
+    "$comment": "deployment_c06-analyzer-engines-in-container test vectors — concrete input/expected pairs per spec.md Acceptance Checks. These are image-build + in-container assertions (not pure unit tests), to be run during the implementation pass.",
+    "id": "TV1",
+    "name": "built EE images expose the three engine env vars pointing at scripts-bearing dirs",
+    "input": {"check": "image_env", "images": ["bodesign:latest", "bodesign-ee:latest"]},
+    "expect": {"BODESIGN_KICAD_SKILL_scripts_dir": true, "BODESIGN_SPICE_SKILL_scripts_dir": true, "BODESIGN_EMC_SKILL_scripts_dir": true}
+  },
+  {
+    "id": "TV2",
+    "name": "build fails loud when an engine scripts/ dir is absent",
+    "input": {"check": "build_assert", "simulate": "remove spice.tar.gz extraction"},
+    "expect": {"build_exit_code_nonzero": true, "message_contains": "scripts"}
+  },
+  {
+    "id": "TV3",
+    "name": "resolve_skill non-None for all three engines inside a built image",
+    "input": {"check": "resolve_skill", "image": "bodesign-ee:latest", "engines": [["kicad", "BODESIGN_KICAD_SKILL"], ["spice", "BODESIGN_SPICE_SKILL"], ["emc", "BODESIGN_EMC_SKILL"]]},
+    "expect": {"all_non_none": true}
+  },
+  {
+    "id": "TV4",
+    "name": "simulate against the BR fixture is never skipped-no-skills",
+    "input": {"check": "tool_run", "tool": "bodesign_simulate", "fixture": ["aiguard_power.kicad_sch", "aiguard_power_routed.kicad_pcb"]},
+    "expect": {"status_in": ["pass", "warn", "fail", "skipped-no-simulator"], "status_not": "skipped-no-skills"}
+  },
+  {
+    "id": "TV5",
+    "name": "analyze_emc + analyze_thermal against the BR fixture are never skipped-no-skills",
+    "input": {"check": "tool_run", "tools": ["bodesign_analyze_emc", "bodesign_analyze_thermal"], "fixture": ["aiguard_power.kicad_sch", "aiguard_power_routed.kicad_pcb"]},
+    "expect": {"each_status_not": "skipped-no-skills"}
+  },
+  {
+    "id": "TV6",
+    "name": "self-check reports per-engine readiness on a built EE image",
+    "input": {"check": "self_check", "image": "bodesign-ee:latest"},
+    "expect": {"engines": [{"engine": "kicad", "engine_resolvable": true, "binary_present": true}, {"engine": "spice", "engine_resolvable": true, "binary_present": true}, {"engine": "emc", "engine_resolvable": true, "binary_present": true}], "image_role": "ee"}
+  },
+  {
+    "id": "TV7",
+    "name": "lean core unchanged — forwards EE, carries no engine",
+    "input": {"check": "image_env", "image": "bodesign-core (Dockerfile.core)"},
+    "expect": {"engines_bundled": false, "forwards_ee": true, "image_role": "core"}
+  },
+  {
+    "id": "TV8",
+    "name": "no ~/.claude/skills runtime bind-mount introduced as the correctness path",
+    "input": {"check": "compose_grep", "files": ["docker-compose.yml", "docker-compose.workers.yml"]},
+    "expect": {"home_claude_skills_mount_present": false}
+  },
+  {
+    "id": "TV9",
+    "name": "docs no longer assert a host-only default engine path",
+    "input": {"check": "doc_grep", "files": ["services/mcp/server.py", "services/mcp/assets/skills/MANIFEST.md", "skills/bodesign/SKILL.md"]},
+    "expect": {"states_real_container_path_or_self_bundle": true}
+  }
+]

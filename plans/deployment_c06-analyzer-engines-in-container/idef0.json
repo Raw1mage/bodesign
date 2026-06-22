@@ -1,0 +1,24 @@
+{
+  "diagram_title": "Make C06 analyzer engines runnable in the bodesign container",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Bundle analyzer engine scripts into EE images" },
+    { "id": "A2", "title": "Wire BODESIGN_*_SKILL env to bundled engines" },
+    { "id": "A3", "title": "Resolve engine at C06 tool runtime" },
+    { "id": "A4", "title": "Self-check & report analyzer readiness" }
+  ],
+  "arrows": [
+    { "id": "i1", "type": "input", "source": "EXTERNAL", "target": "A1:input", "label": "cleaned assets/skills/*.tar.gz (bodesign/spice/emc)" },
+    { "id": "c1", "type": "control", "source": "EXTERNAL", "target": "A1:control", "label": "extract tarballs, not raw skills tree (DD-2)" },
+    { "id": "m1", "type": "mechanism", "source": "EXTERNAL", "target": "A1:mechanism", "label": "Dockerfile + Dockerfile.ee build (DD-4)" },
+    { "id": "o1", "type": "output", "source": "A1:output", "target": "A2:input", "label": "/opt/bodesign-engines/{kicad,spice,emc}/scripts" },
+    { "id": "c2", "type": "control", "source": "EXTERNAL", "target": "A2:control", "label": "env wins resolve_skill order; $HOME-independent (DD-3)" },
+    { "id": "o2", "type": "output", "source": "A2:output", "target": "A3:control", "label": "BODESIGN_KICAD/SPICE/EMC_SKILL set in image" },
+    { "id": "i3", "type": "input", "source": "EXTERNAL", "target": "A3:input", "label": "simulate / analyze_emc / analyze_thermal call + .kicad_sch/.kicad_pcb" },
+    { "id": "m3", "type": "mechanism", "source": "EXTERNAL", "target": "A3:mechanism", "label": "resolve_skill + kicad-cli/pcbnew/ngspice binaries" },
+    { "id": "o3", "type": "output", "source": "A3:output", "target": "EXTERNAL", "label": "real verdict (pass/warn/fail) — never skipped-no-skills" },
+    { "id": "o3b", "type": "output", "source": "A3:output", "target": "A4:input", "label": "engine-resolvable + binary-present signals" },
+    { "id": "c4", "type": "control", "source": "EXTERNAL", "target": "A4:control", "label": "skipped-no-skills (bug) vs skipped-no-simulator (honest) (DD-5)" },
+    { "id": "o4", "type": "output", "source": "A4:output", "target": "EXTERNAL", "label": "one-call readiness report (no docker exec)" }
+  ]
+}

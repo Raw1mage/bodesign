@@ -1,0 +1,59 @@
+[
+  {
+    "id": "SEQ1",
+    "name": "C06 tool runs in a correctly-built EE image (the fix)",
+    "requirementRefs": ["EE-1", "RES-1"],
+    "participants": [
+      {"id": "P1", "name": "Agent / Orchestrator", "componentRef": null},
+      {"id": "P2", "name": "bodesign EE tool handler", "componentRef": "A3"},
+      {"id": "P3", "name": "resolve_skill (skill_paths)", "componentRef": "A3"},
+      {"id": "P4", "name": "bundled engine /opt/bodesign-engines", "componentRef": "A1"},
+      {"id": "P5", "name": "kicad-cli / ngspice binary", "componentRef": "A3"}
+    ],
+    "messages": [
+      {"id": "MSG1", "from": "P1", "to": "P2", "label": "bodesign_simulate(.kicad_sch, .kicad_pcb)", "kind": "sync"},
+      {"id": "MSG2", "from": "P2", "to": "P3", "label": "resolve_skill('kicad', BODESIGN_KICAD_SKILL); resolve_skill('spice', BODESIGN_SPICE_SKILL)", "kind": "sync"},
+      {"id": "MSG3", "from": "P3", "to": "P4", "label": "env value set -> check <path>/scripts exists", "kind": "sync"},
+      {"id": "MSG4", "from": "P4", "to": "P3", "label": "scripts/ present -> Path", "kind": "reply"},
+      {"id": "MSG5", "from": "P3", "to": "P2", "label": "engine Path (non-None)", "kind": "reply"},
+      {"id": "MSG6", "from": "P2", "to": "P5", "label": "invoke engine -> run ngspice/kicad-cli", "kind": "sync"},
+      {"id": "MSG7", "from": "P5", "to": "P2", "label": "simulation output", "kind": "reply"},
+      {"id": "MSG8", "from": "P2", "to": "P1", "label": "real verdict {status: pass|warn|fail} — never skipped-no-skills", "kind": "reply"}
+    ]
+  },
+  {
+    "id": "SEQ2",
+    "name": "Deployment self-check distinguishes missing engine vs missing binary",
+    "requirementRefs": ["OBS-1"],
+    "participants": [
+      {"id": "P1", "name": "Operator / Agent", "componentRef": null},
+      {"id": "P6", "name": "self-check (diagnostics/health)", "componentRef": "A4"},
+      {"id": "P3", "name": "resolve_skill", "componentRef": "A3"},
+      {"id": "P5", "name": "binary on PATH", "componentRef": "A3"}
+    ],
+    "messages": [
+      {"id": "MSG1", "from": "P1", "to": "P6", "label": "analyzer readiness?", "kind": "sync"},
+      {"id": "MSG2", "from": "P6", "to": "P3", "label": "resolve_skill(kicad/spice/emc)", "kind": "sync"},
+      {"id": "MSG3", "from": "P3", "to": "P6", "label": "engine-resolvable: true/false", "kind": "reply"},
+      {"id": "MSG4", "from": "P6", "to": "P5", "label": "which kicad-cli / ngspice", "kind": "sync"},
+      {"id": "MSG5", "from": "P5", "to": "P6", "label": "binary-present: true/false", "kind": "reply"},
+      {"id": "MSG6", "from": "P6", "to": "P1", "label": "per-engine {engine_resolvable, binary_present} -> skipped-no-skills vs skipped-no-simulator distinguishable", "kind": "reply"}
+    ]
+  },
+  {
+    "id": "SEQ3",
+    "name": "Pre-fix (regression baseline): engine absent -> skipped-no-skills",
+    "requirementRefs": ["EE-1"],
+    "participants": [
+      {"id": "P1", "name": "Agent", "componentRef": null},
+      {"id": "P2", "name": "bodesign EE tool handler", "componentRef": "A3"},
+      {"id": "P3", "name": "resolve_skill", "componentRef": "A3"}
+    ],
+    "messages": [
+      {"id": "MSG1", "from": "P1", "to": "P2", "label": "bodesign_analyze_emc(...)", "kind": "sync"},
+      {"id": "MSG2", "from": "P2", "to": "P3", "label": "resolve_skill('kicad'); resolve_skill('emc')", "kind": "sync"},
+      {"id": "MSG3", "from": "P3", "to": "P2", "label": "None (no scripts in image, no env)", "kind": "reply"},
+      {"id": "MSG4", "from": "P2", "to": "P1", "label": "skipped-no-skills (the bug this spec removes)", "kind": "reply"}
+    ]
+  }
+]

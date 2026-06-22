@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="652" height="980" viewBox="2.00 0.00 32.60 49.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="2.00" y="0.00" width="32.60" height="49.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1S1I1" data-segment-ids="S0O1S1I1:1S" d="M 21.80 7.00 L 21.80 11.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1G2I1" data-segment-ids="S1O1G2I1:1S" d="M 21.80 14.00 L 21.80 20.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1S2I1" data-segment-ids="G2O1S2I1:1S" d="M 21.80 20.00 L 21.80 22.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1G1I1" data-segment-ids="S2O1G1I1:1S" d="M 21.80 25.00 L 21.80 27.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1S3I1" data-segment-ids="G1O1S3I1:1S" d="M 10.00 27.00 L 10.00 31.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O2S4I1" data-segment-ids="G1O2S4I1:1S" d="M 21.80 27.00 L 21.80 31.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1G3I1" data-segment-ids="S3O1G3I1:1S" d="M 10.00 34.00 L 10.00 38.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S5I1" data-segment-ids="G3O1S5I1:1S" d="M 21.80 38.00 L 21.80 40.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1G3I2" data-segment-ids="S4O1G3I2:1S" d="M 21.80 34.00 L 21.80 38.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1G2I2" data-segment-ids="S5O1G2I2:1S S5O1G2I2:2W S5O1G2I2:3N S5O1G2I2:4E S5O1G2I2:5S" d="M 21.80 43.00 L 21.80 44.50 Q 21.80 45.00 21.30 45.00 L 6.50 45.00 Q 6.00 45.00 6.00 44.50 L 6.00 16.50 Q 6.00 16.00 6.50 16.00 L 17.30 16.00 Q 17.80 16.00 17.80 16.50 L 17.80 20.00"/>
+<rect class="step" x="19.80" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="20.05" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="21.80" y="5.50">0</text>
+<rect class="step" x="19.80" y="11.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="21.80" y="12.50">1</text>
+<rect class="step" x="19.80" y="22.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="21.80" y="23.50">2</text>
+<rect class="step" x="8.00" y="31.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="10.00" y="32.50">3</text>
+<rect class="step" x="19.80" y="31.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="21.80" y="32.50">4</text>
+<rect class="step" x="19.80" y="40.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="21.80" y="41.50">5</text>
+<line class="assoc" x1="23.80" y1="5.50" x2="24.80" y2="5.50"/>
+<rect class="action" x="24.80" y="4.07" width="5.80" height="2.86"/>
+<text class="action-label" x="27.70" y="4.68"><tspan x="27.70" dy="0">Image build: extract</tspan><tspan x="27.70" dy="0.82">cleaned engine tarballs</tspan><tspan x="27.70" dy="0.82">to /opt/bodesign-engines</tspan></text>
+<line class="assoc" x1="23.80" y1="12.50" x2="24.80" y2="12.50"/>
+<rect class="action" x="24.80" y="11.07" width="5.80" height="2.86"/>
+<text class="action-label" x="27.70" y="11.68"><tspan x="27.70" dy="0">Set BODESIGN_KICAD/</tspan><tspan x="27.70" dy="0.82">SPICE/EMC_SKILL env</tspan><tspan x="27.70" dy="0.82">-&gt; bundled scripts dirs</tspan></text>
+<line class="assoc" x1="23.80" y1="23.50" x2="24.80" y2="23.50"/>
+<rect class="action" x="24.80" y="22.07" width="5.80" height="2.86"/>
+<text class="action-label" x="27.70" y="22.68"><tspan x="27.70" dy="0">C06 tool invoked;</tspan><tspan x="27.70" dy="0.82">resolve_skill(name,</tspan><tspan x="27.70" dy="0.82">env) runs</tspan></text>
+<line class="assoc" x1="12.00" y1="32.50" x2="13.00" y2="32.50"/>
+<rect class="action" x="13.00" y="31.07" width="5.80" height="2.86"/>
+<text class="action-label" x="15.90" y="31.68"><tspan x="15.90" dy="0">Run analyzer engine</tspan><tspan x="15.90" dy="0.82">-&gt; emit real verdict</tspan><tspan x="15.90" dy="0.82">(pass/warn/fail)</tspan></text>
+<line class="assoc" x1="23.80" y1="32.50" x2="24.80" y2="32.50"/>
+<rect class="action" x="24.80" y="31.07" width="5.80" height="2.86"/>
+<text class="action-label" x="27.70" y="31.68"><tspan x="27.70" dy="0">Honest skip: skipped-</tspan><tspan x="27.70" dy="0.82">no-simulator (binary</tspan><tspan x="27.70" dy="0.82">genuinely absent)</tspan></text>
+<line class="assoc" x1="23.80" y1="41.50" x2="24.80" y2="41.50"/>
+<rect class="action" x="24.80" y="40.07" width="5.80" height="2.86"/>
+<text class="action-label" x="27.70" y="40.68"><tspan x="27.70" dy="0">Self-check reports</tspan><tspan x="27.70" dy="0.82">per-engine readiness;</tspan><tspan x="27.70" dy="0.82">idle, ready for next call</tspan></text>
+<line class="gate" x1="15.80" y1="20.00" x2="23.80" y2="20.00"/>
+<line class="gate" x1="8.00" y1="27.00" x2="23.80" y2="27.00"/>
+<line class="gate" x1="8.00" y1="38.00" x2="23.80" y2="38.00"/>
+<line class="gate" x1="20.80" y1="9.00" x2="22.80" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="23.20" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="23.20" dy="0">docker build (Dockerfile / Dockerfile.ee)</tspan></text>
+<line class="gate" x1="20.80" y1="16.00" x2="22.80" y2="16.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1G2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label" x="23.20" y="16.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1G2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="23.20" dy="0">engine scripts present in image</tspan></text>
+<line class="gate" x1="9.00" y1="29.00" x2="11.00" y2="29.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label-left" x="8.60" y="28.32" data-label-kind="condition-stub" data-edge-id="edge:G1O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="8.60" dy="0">simulate / analyze_</tspan><tspan x="8.60" dy="0.68">emc / analyze_</tspan><tspan x="8.60" dy="0.68">thermal called</tspan></text>
+<line class="gate" x1="20.80" y1="29.00" x2="22.80" y2="29.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label" x="23.20" y="28.32" data-label-kind="condition-stub" data-edge-id="edge:G1O2S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="23.20" dy="0">simulate / analyze_</tspan><tspan x="23.20" dy="0.68">emc / analyze_</tspan><tspan x="23.20" dy="0.68">thermal called</tspan></text>
+<line class="gate" x1="9.00" y1="36.00" x2="11.00" y2="36.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1G3I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label-left" x="8.60" y="35.66" data-label-kind="condition-stub" data-edge-id="edge:S3O1G3I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="8.60" dy="0">engine resolvable</tspan><tspan x="8.60" dy="0.68">AND binary present</tspan></text>
+<line class="gate" x1="20.80" y1="36.00" x2="22.80" y2="36.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1G3I2" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="23.20" y="36.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1G3I2" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="23.20" dy="0">engine resolvable AND binary missing</tspan></text>
+<line class="gate" x1="16.80" y1="18.00" x2="18.80" y2="18.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1G2I2" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"/>
+<text class="gate-label-left" x="16.40" y="17.32" data-label-kind="condition-stub" data-edge-id="edge:S5O1G2I2" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"><tspan x="16.40" dy="0">readiness reported;</tspan><tspan x="16.40" dy="0.68">await next C06</tspan><tspan x="16.40" dy="0.68">invocation</tspan></text>
+</svg>

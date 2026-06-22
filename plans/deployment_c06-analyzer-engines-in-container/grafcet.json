@@ -1,0 +1,70 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Image build: extract cleaned engine tarballs to /opt/bodesign-engines",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "Condition": ["docker build (Dockerfile / Dockerfile.ee)"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Set BODESIGN_KICAD/SPICE/EMC_SKILL env -> bundled scripts dirs",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "Condition": ["engine scripts present in image"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "C06 tool invoked; resolve_skill(name, env) runs",
+    "LinkInputType": "convergence_or",
+    "LinkOutputType": "divergence_or",
+    "LinkInputNumber": [1, 5],
+    "LinkOutputNumber": [3, 4],
+    "Condition": ["simulate / analyze_emc / analyze_thermal called"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Run analyzer engine -> emit real verdict (pass/warn/fail)",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [5],
+    "Condition": ["engine resolvable AND binary present"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Honest skip: skipped-no-simulator (binary genuinely absent)",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [5],
+    "Condition": ["engine resolvable AND binary missing"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Self-check reports per-engine readiness; idle, ready for next call",
+    "LinkInputType": "convergence_or",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [3, 4],
+    "LinkOutputNumber": [2],
+    "Condition": ["readiness reported; await next C06 invocation"],
+    "SubGrafcet": []
+  }
+]
