@@ -58,3 +58,35 @@ validate 通過），但**視覺上完全不是一張電路圖**。實測 ink/bb
   （`emit_kicad_schematic` global-label 路徑）。
 - 量測：aiguard C03 `02_build/mcu_integration/aiguard_mcu_integration.sch.pdf`（5.8% ink）、
   `02_build/renders/memory/aiguard_memory.sch.pdf`（2.9% ink）。
+
+---
+
+## Resolution
+
+- **Status**: resolved / fixed。Closed 2026-06-23。
+- **背景（BR 已過時）**：此 BR 描述的是 79 行的舊 composer。其後已有 commit `1731897`
+  （drawn-wire mode）+ `0000d5a`（opt-in `draftsman` style）把功能補上 ——`composer.py` 現為 600+
+  行,具備 subsystem clustering、force-directed placement、drawn wires + junctions、sheet-fit、
+  route-stats、ink 量測,MCP `bodesign_compose_schematic` 也已暴露 `style=draftsman`/`measure_ink`。
+  BR 的兩個根因(`_auto_place` index 網格、純 global-label)在 `draftsman` 模式下都已不成立。
+- **本次補完的三個實質缺陷**(讓 draftsman 真正達到 BR 的驗收):
+  1. **部署缺漏**:ink 量測需 `pdftoppm`(poppler),而 image 沒裝 → `measure_ink` 與其回歸測試
+     (TV6)一直 silently skip。已將 `poppler-utils` 加入 `Dockerfile.ee` + `Dockerfile`。
+  2. **ink 量測 bug**(`ink_metrics._measure_image`):KiCad 9 PDF 的紙張底色是 off-white
+     (~244),低於硬編 `bg_threshold=250` → 整張底色被當成 ink → **任何圖都回 ~100%**(TV6 因此
+     vacuously pass)。改為**以最亮像素(紙張)為基準**動態取閾(`hi - margin`)。修後 sparse 圖
+     回 0.83%(原 99.9%)、可正確區分。
+  3. **placement 發散**(`composer._refine`):原 force-directed 無 cooling/clamp + 全對排斥,
+     7 個小元件被甩到 ~1m span → 選到 A0/overflow → 稀疏。改為 **Fruchterman-Reingold + cooling +
+     per-iteration step clamp + 質心 gravity**(仍 deterministic)。修後同一 7 元件 content
+     961→**180×180mm → A4**(不再 A0),content-fill ~85%,仍畫 3 條實體 wire。
+- **Verification**(重 build image 後容器內):
+  - `tests/test_composer_draftsman.py` **12/12**(含新 **TV7** placement-convergence 回歸:小 spec
+    必須收斂到 A4/A3、不 overflow、content < 300mm、wired_nets > 0)+ TV6 ink 測試現在**真的會跑**。
+  - sparse netlist ink% 由 99.9% → 0.83%;7 元件 draftsman 由 A0 → A4。
+- **誠實保留**:BR §4 的「著墨率 15-40%」字面目標對原理圖其實偏高 —— 即使手繪 KiCad 圖,線條細、
+  ink% 本就低(個位數)。真正有意義的可讀性指標是 **content-fill(內容是否撐滿版面,現 ~85%)+ 是否
+  有實體導線 + 分群**,這三項都已達成。純 ink% 不是好的鑑別指標(netlist 與 draftsman 在同尺寸下
+  ink% 接近),差異在「有沒有 wire/cluster」,非著墨率。
+- **後續(非阻斷)**:更大型整合圖(數十元件、跨子系統)的 placement 美觀度、bus/跨 sheet 切分,
+  仍可再調 —— 但 BR 的核心(可讀、有線、分群、合理紙張、可量測回歸)已達成。

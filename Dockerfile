@@ -25,6 +25,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         software-properties-common gnupg ca-certificates curl \
         python3 python3-venv python3-pip \
+        poppler-utils \
         libreoffice-core libreoffice-writer libreoffice-calc \
  && add-apt-repository -y ppa:kicad/kicad-9.0-releases \
  && apt-get update \

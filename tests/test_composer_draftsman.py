@@ -250,5 +250,39 @@ class InkMetricsTests(unittest.TestCase):
         self.assertGreater(base_ink, 0.0)
 
 
+    # TV7: placement converges — a handful of small parts must NOT blow up the
+    # content to ~1m and pick A0/overflow. Guards the force-directed cooling +
+    # centroid-gravity fix (issue_20260618). Deterministic, no toolchain needed.
+    def test_tv7_placement_converges_to_sane_sheet(self):
+        spec = {
+            "components": [
+                {"ref": "U1", "symbol": "Device:R", "group": "mcu"},
+                {"ref": "C1", "symbol": "Device:C", "group": "mcu"},
+                {"ref": "C2", "symbol": "Device:C", "group": "mcu"},
+                {"ref": "R1", "symbol": "Device:R", "group": "io"},
+                {"ref": "R2", "symbol": "Device:R", "group": "io"},
+                {"ref": "D1", "symbol": "Device:LED", "group": "io"},
+                {"ref": "J1", "symbol": "Connector:Conn_01x04_Pin", "group": "io"},
+            ],
+            "nets": [
+                {"name": "SWDIO", "nodes": ["U1.1", "J1.1"]},
+                {"name": "LED_GPIO", "nodes": ["U1.3", "R1.1"]},
+                {"name": "LED_A", "nodes": ["R1.2", "D1.1"]},
+                {"name": "BTN", "nodes": ["U1.4", "R2.1"]},
+                {"name": "VCC", "nodes": ["U1.5", "C1.1", "C2.1"], "kind": "power"},
+                {"name": "GND", "nodes": ["U1.6", "C1.2", "C2.2", "D1.2"], "kind": "power"},
+            ],
+        }
+        r = compose_schematic(self.work, "tv7", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        self.assertIsNotNone(r.sheet_fit)
+        # 7 small parts must fit a small standard sheet, not balloon to A1/A0.
+        self.assertIn(r.sheet_fit.selected_paper, ("A4", "A3"))
+        self.assertFalse(r.sheet_fit.overflow)
+        self.assertLess(r.sheet_fit.content_w, 300.0)
+        self.assertLess(r.sheet_fit.content_h, 300.0)
+        # and it still draws real wires (not a label dump).
+        self.assertGreater(r.route_stats.wired_nets, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

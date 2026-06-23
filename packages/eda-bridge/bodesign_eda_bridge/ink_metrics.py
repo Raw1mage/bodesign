@@ -112,16 +112,22 @@ def measure_schematic_ink(schematic_path: str | Path, dpi: int = 150) -> dict:
     }
 
 
-def _measure_image(img, bg_threshold: int = 250) -> tuple[float, float]:
+def _measure_image(img, bg_margin: int = 12) -> tuple[float, float]:
     """Compute (ink_pct, content_fill_pct) from a greyscale PIL image.
 
-    A pixel is "ink" iff its luminance < bg_threshold (near-white = background).
+    The page "paper" is the BRIGHTEST luminance present, which is NOT pure white:
+    KiCad's PDF export renders an off-white sheet (~244), so a fixed near-255
+    threshold counts the whole background as ink and pins every page at ~100%.
+    Instead, derive the background from the brightest pixel and treat a pixel as
+    "ink" iff it is clearly darker than the paper (luminance < paper - bg_margin).
     content bbox = tight box around all ink pixels. Pure-python pixel scan.
     """
     w, h = img.size
     total = w * h
     if total == 0:
         return 0.0, 0.0
+    _lo, hi = img.getextrema()          # hi = brightest luminance = the paper background
+    bg_threshold = max(int(hi) - bg_margin, 1)
     pixels = img.load()
     ink = 0
     min_x, min_y, max_x, max_y = w, h, -1, -1

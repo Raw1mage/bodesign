@@ -18,6 +18,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         software-properties-common gnupg ca-certificates curl \
         python3 python3-venv python3-pip ngspice \
+        poppler-utils \
         default-jre-headless xvfb wget \
  && wget -q -O /opt/freerouting.jar https://github.com/freerouting/freerouting/releases/download/v1.9.0/freerouting-1.9.0.jar \
  && add-apt-repository -y ppa:kicad/kicad-9.0-releases \

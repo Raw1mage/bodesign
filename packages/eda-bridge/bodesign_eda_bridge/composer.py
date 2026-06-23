@@ -48,6 +48,7 @@ STANDARD_PAPERS: list[tuple[str, float, float]] = [
 PLACEMENT_ITERATIONS = 60
 SPRING_K = 0.05
 REPULSE_K = 2200.0
+GRAVITY_K = 0.25  # centroid pull per iteration (contains all-pairs repulsion spread)
 CLUSTER_GUTTER_MM = 30.0
 BBOX_MARGIN_MM = 2.54
 SHEET_MARGIN_MM = 12.7
@@ -250,50 +251,80 @@ def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str
     """
     if not members:
         return {}
-    # Deterministic initial grid: ref-sorted, square-ish.
+    # Deterministic initial grid: ref-sorted, square-ish. Spacing = the target
+    # separation `k` (largest member bbox + gutter) so the layout starts roughly
+    # to scale instead of at a fixed 1-inch pitch that the forces must undo.
     ordered = sorted(members)
+    dims = [max(bboxes[r]) for r in ordered if bboxes.get(r) is not None]
+    k = (max(dims) if dims else 2 * BBOX_MARGIN_MM) + CLUSTER_GUTTER_MM  # desired neighbour spacing
     cols = max(1, int(len(ordered) ** 0.5 + 0.9999))
-    step = 25.4  # 1 inch initial spacing
     pos: dict[str, list[float]] = {}
     for i, ref in enumerate(ordered):
-        pos[ref] = [float((i % cols) * step), float((i // cols) * step)]
+        pos[ref] = [float((i % cols) * k), float((i // cols) * k)]
 
     active = [r for r in ordered if bboxes.get(r) is not None]
     if len(active) < 2:
         return {r: (pos[r][0], pos[r][1]) for r in ordered}
 
+    # Fruchterman-Reingold with a cooling schedule + per-iteration step clamp. The
+    # previous loop had no cooling/clamp + a large absolute repulsion constant, so
+    # small parts flew apart to a ~1m span (→ oversized sheet, sparse fill). FR with
+    # k-scaled forces and a decaying max-step converges to ~k spacing. Deterministic
+    # (fixed init grid + fixed schedule; no RNG) so it stays regression-stable.
     member_set = set(active)
+    temp = k * 2.0               # initial max displacement per iteration
+    cool = (k * 2.0 - k * 0.05) / max(1, PLACEMENT_ITERATIONS)
+    k2 = k * k
     for _ in range(PLACEMENT_ITERATIONS):
         disp: dict[str, list[float]] = {r: [0.0, 0.0] for r in active}
-        # Repulsion between every active pair.
+        # Repulsion fr = k^2 / d between every active pair (along the unit vector).
         for i, a in enumerate(active):
             for b in active[i + 1 :]:
                 dx = pos[a][0] - pos[b][0]
                 dy = pos[a][1] - pos[b][1]
-                dist2 = dx * dx + dy * dy
-                if dist2 < 1e-6:
-                    # Deterministic tie-break: push along ref order, not random.
+                dist = (dx * dx + dy * dy) ** 0.5
+                if dist < 1e-6:
                     dx = (1.0 if a < b else -1.0)
                     dy = 0.0
-                    dist2 = 1.0
-                inv = REPULSE_K / dist2
-                disp[a][0] += dx * inv
-                disp[a][1] += dy * inv
-                disp[b][0] -= dx * inv
-                disp[b][1] -= dy * inv
-        # Spring attraction along shared-net edges (within this cluster).
+                    dist = 1.0
+                force = k2 / dist
+                ux, uy = dx / dist, dy / dist
+                disp[a][0] += ux * force
+                disp[a][1] += uy * force
+                disp[b][0] -= ux * force
+                disp[b][1] -= uy * force
+        # Attraction fa = d^2 / k along shared-net edges (within this cluster).
         for a in active:
             for b in sorted(adjacency.get(a, ())):
                 if b in member_set and a < b:
                     dx = pos[b][0] - pos[a][0]
                     dy = pos[b][1] - pos[a][1]
-                    disp[a][0] += dx * SPRING_K
-                    disp[a][1] += dy * SPRING_K
-                    disp[b][0] -= dx * SPRING_K
-                    disp[b][1] -= dy * SPRING_K
+                    dist = (dx * dx + dy * dy) ** 0.5
+                    if dist < 1e-6:
+                        continue
+                    force = (dist * dist) / k
+                    ux, uy = dx / dist, dy / dist
+                    disp[a][0] += ux * force
+                    disp[a][1] += uy * force
+                    disp[b][0] -= ux * force
+                    disp[b][1] -= uy * force
+        # Gravity toward the cluster centroid. Without it, all-pairs repulsion has
+        # nothing to contain it and sparsely-connected nodes escape to the periphery
+        # (a ~1m span for a handful of small parts). Pulling each node toward the
+        # barycenter bounds the layout so the sheet-fit picks a sane paper.
+        cx = sum(pos[r][0] for r in active) / len(active)
+        cy = sum(pos[r][1] for r in active) / len(active)
         for r in active:
-            pos[r][0] += disp[r][0]
-            pos[r][1] += disp[r][1]
+            disp[r][0] += (cx - pos[r][0]) * GRAVITY_K
+            disp[r][1] += (cy - pos[r][1]) * GRAVITY_K
+        # Clamp each displacement to the current temperature, then cool.
+        for r in active:
+            dlen = (disp[r][0] ** 2 + disp[r][1] ** 2) ** 0.5
+            if dlen > 1e-9:
+                scale = min(dlen, temp) / dlen
+                pos[r][0] += disp[r][0] * scale
+                pos[r][1] += disp[r][1] * scale
+        temp = max(temp - cool, k * 0.05)
 
     return {r: (pos[r][0], pos[r][1]) for r in ordered}
 
