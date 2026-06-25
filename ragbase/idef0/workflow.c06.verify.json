@@ -1,0 +1,70 @@
+{
+  "diagram_title": "C06 Verify — evidence → honest pass/warn/fail verdicts",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "C06 Verify — Evidence → Honest Pass Warn Fail Verdicts",
+      "description": "C06 owns the **verification record**: it takes what C03/C04 *produced* and decides what they *prove*. A tool run yields a **verdict**, not a certification — C06 converts evidence into pass/warn/fail *only where a tool actually ran*; everything else stays `not-run` with a reason. It is the stage most tempted to over-claim, so it has the strictest honesty contract.\n\n**Does NOT** produce the artifacts it grades (DRC/SI/length-match/netlist come from C04/C03), certify compliance (FCC/CE/CISPR/IEC 62368-1/RoHS/ESD are external-lab gates), sign off EVT/DVT, or invent a measurement. Flow: gather evidence + confirm what ran → **reference cross-check against the control group** (`cross_verify.py`: record `matched`/`missing[]`/`orphans[]` both directions — 'show, don't assert') → fab-release gate → sim companions (SPICE/EMC/thermal — only what is installed) → lifecycle audit → assemble deliverables.\n\n**Required deliverables:** `Verification_Summary.json` (schema `...v1`, the invariant `status:not-run ⇔ has_verdict:false`, external gates in `certification_targets[]` never in `checks[]`), `Test_Plan.md`, `Bring_Up_Checklist.md`, `cross_verify.json`, `EVT_Bringup_Findings.md` (when a board was brought up). A record where SPICE/EMC/thermal are honestly `not-run` and only the cross-check is `pass` is a **legitimate done-state**. A failing verdict with a design owner is routed back via a reconciliation record (`must_act` stage fixes the design, never relaxes the threshold). Self-verify: `bodesign_c06_readiness`.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Validation Evidence Package",
+      "type": "output"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "bodesign orchestrator (the AI running the lifecycle)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "External certification lab (owns the compliance verdict)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Routed PCB + Fab Outputs",
+      "type": "input"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Firmware Spec Package",
+      "type": "input"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "No Silent Fallback (honesty-model.md / AGENTS.md §2)",
+      "type": "control"
+    },
+    {
+      "id": "AR7",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "Datasheet-Grounded Electrical Claims (C03 EE GUIDE / AGENTS.md §2.4)",
+      "type": "control"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "Deterministic Validation + User Approval Before Fab (C07 MFG GUIDE / AGENTS.md §2.3)",
+      "type": "control"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "diagram_title": "C00 PRD — author the product requirements contract",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "C00 PRD — Author The Product Requirements Contract",
+      "description": "C00 fixes **what we're building, why, for whom, to which targets** — honestly. It is the head of the lifecycle; inputs are external (product brief, optional reference design, optional prior PRD). Built as an **answer-state model** (`answer_state.json`, 12 sections s01–s12 + RF appendix rf01–rf03, every field initialised `missing`), then rendered to source-of-truth markdown.\n\n**Owns:** product vision/strategy, system architecture (block diagram), requirements split by discipline (ID/ME, EE, SW), and the **targets** downstream must honour (cost, quantity EVT/DVT/MP, certification, schedule), roles, assumptions, PM cadence. **Does NOT own** schematic/BOM/pin (C03), enclosure CAD (C02), CMF/UX detail (C01), FW code (C05), any test verdict/compliance (C06/C07).\n\nField states each need a reason: `missing`/`drafted`/`answered`/`external-needed`/`blocked`/`accepted-risk`. **Required deliverables:** `answer_state.json`, `Project_Requirements.md`, `RF_Requirements.md` (iff RF), `C00_Handoff_Report.md`. **Gate (PRD freeze):** every gating section answered or explicitly accepted-risk/external-needed with owner; downstream handoff gates ready; `human_approved: true` set by the named approver (never by the AI). Targets are not results; certification is external-lab. Self-verify: `bodesign_c00_readiness` + boundary check (no C03/C05 detail leaked) + evidence check (every value sourced).",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "PRD Requirements Package",
+      "type": "output"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "bodesign orchestrator (the AI running the lifecycle)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Design Intent Spec",
+      "type": "input"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "No Silent Fallback (honesty-model.md / AGENTS.md §2)",
+      "type": "control"
+    }
+  ]
+}

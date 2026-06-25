@@ -1,0 +1,56 @@
+{
+  "diagram_title": "C04 Layout — verified netlist → DRC-clean, gated, fab-ready board",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "C04 Layout — Verified Netlist → DRC Clean, Gated, Fab Ready Board",
+      "description": "C04 owns the **physical board**: placement, routing, layer stackup, controlled-impedance constraints, the routed `.kicad_pcb`, and the **gated fab + assembly output package**. Takes C03's verified netlist + mechanical/interface constraints; produces a board that is either a **draft** or has passed the C04 gate. **Honour the feasibility tier:** Tier 1–2 is the autonomous lane (route + gate); **Tier 3** is not routable on KiCad+MCP → emit the SI constraint export and hand routing to pro-EDA (the handoff IS the deliverable).\n\nSOP: assemble `Layout_Constraints.json` → define stackup + compute impedance widths (`impedance_solve`) → build the board via MCP (`route_net2pcb`/`autoroute`, one-shot `c04_emit_layout_package`) → finishing chain (`widen_bus_tracks` → `pour_planes` → `length_match_bus` → `si_check`, each DRC-guarded) → cross-check vs C03 + run the fab-release gate.\n\n**The central lesson — the floating-PSRAM false-pass:** a BGA footprint's pad names didn't match the symbol, 24 pads were silently unnetted, yet the gate said COMPLETE. The fix was NOT to relax anything — it made the gate parse DRC honestly + added an unmapped-pad gate. **Never relax a threshold to make a board pass.** The C04 gate (`layout_drc_gate` + `c04_readiness`) HARD-FAILS on: missing board, DRC copper>0 OR unconnected>0, unmapped pads>0, missing fab outputs, SI worst=fail. WARNS on silk overlaps + length-match-over-budget. 'COMPLETE with warns' is a truthful done-state; a clean pass by widening a threshold is not.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Routed PCB + Fab Outputs",
+      "type": "output"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "bodesign orchestrator (the AI running the lifecycle)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Enclosure CAD Package",
+      "type": "input"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Mechanical Constraint Export",
+      "type": "input"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Schematic + Netlist + BOM",
+      "type": "input"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "Design Review Gate (G2) (cross-stage-reconciliation.md / design-review G2)",
+      "type": "control"
+    }
+  ]
+}

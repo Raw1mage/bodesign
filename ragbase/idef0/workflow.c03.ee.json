@@ -1,0 +1,77 @@
+{
+  "diagram_title": "C03 EE — design definition → schematic → BOM → netlist → bridges",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "C03 EE — Design Definition → Schematic → BOM → Netlist → Bridges",
+      "description": "C03 turns product intent (C00) + interface constraints (C01) into the **electrical truth**: design definition, captured KiCad schematic, complete machine BOM, netlist (pin→net), GPIO/interface pinmap, power-frontend, and the `Mechanical_Constraint_Export.json` bridge to C02/C04. This stage **has an execution engine** — the KiCad analysis engine — so you do not eyeball a schematic and assert it correct: run `analyze_schematic.py`, read the structured JSON, and carry every finding with its `confidence` + `evidence_source`.\n\nFlow: define → capture (generate via MCP `compose_schematic`, or author in KiCad) → sync datasheets → run analyzer → verify analyzer output against raw schematic + datasheets (pin-to-net is the highest-value check) → cross-check against a reference control group → export tables → produce the mechanical bridge. Watch gate findings: **DS-001** (datasheet coverage), **SS-001** (MPN <50%, pre-fab blocker), **PP-001** (IC power pin reaches rail only through a cap), **RS-002** (rail depends on an open jumper).\n\n**Required deliverables:** design definition + architecture, power tree, schematic, complete BOM, netlist, GPIO pinmap, `Netlist_Status.md` (iff full netlist not recoverable), `Mechanical_Constraint_Export.json` (`approval=false`), one consolidated `C03_*.docx`. **Re-run the feasibility triage on the firm component set.** Gate: analyzer clean of `high` findings (or each justified); every IC pin-to-net verified vs datasheet. There is no `c03_readiness` tool — the analyzer's gate is the self-check. Missing connectivity is a documented limit (`Netlist_Status.md`), never an invented net.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Mechanical Constraint Export",
+      "type": "output"
+    },
+    {
+      "id": "AR2",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Pin Map Bridge",
+      "type": "output"
+    },
+    {
+      "id": "AR3",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Schematic + Netlist + BOM",
+      "type": "output"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "bodesign orchestrator (the AI running the lifecycle)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "EE owner (signs off the electrical design)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "PRD Requirements Package",
+      "type": "input"
+    },
+    {
+      "id": "AR7",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "No Silent Fallback (honesty-model.md / AGENTS.md §2)",
+      "type": "control"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "Datasheet-Grounded Electrical Claims (C03 EE GUIDE / AGENTS.md §2.4)",
+      "type": "control"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "Design Review Gate (G2) (cross-stage-reconciliation.md / design-review G2)",
+      "type": "control"
+    }
+  ]
+}

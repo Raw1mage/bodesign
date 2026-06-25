@@ -1,0 +1,42 @@
+{
+  "diagram_title": "C05 FW — firmware spec (not code)",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "C05 FW — Firmware Spec (not Code)",
+      "description": "C05 turns intended behaviour into a **firmware specification package** the FW team builds against: functions, modules, a top-level state model, a task list, and a `Pin_Map_Bridge.json` carrying C03's pin truth into firmware-consumable signal definitions. **The central boundary — read twice:** bodesign owns the SPEC; the FW team owns the CODE. You never write drivers/ISRs/init/HAL/RTOS-choice/source, and never claim a behaviour is implemented or working. Everything is `draft`/spec-level until the FW team implements and C06 verifies.\n\nConsumes C00 PRD §s07 (software requirements), C01 UI/UX status model (the *Minimum States To Resolve* rows whose `C05 Firmware Dependency` column was written for you), and the C03 GPIO pinmap (the pin truth). Flow: functional spec → module architecture (candidate stubs, open decisions left to FW) → state machine → task breakdown → pin-map bridge → testable-behaviours list for C06.\n\n**Required deliverables (all 6):** `Functional_Spec.md`, `Module_Architecture.md`, `State_Machine.md`, `Task_Breakdown.md`, `Pin_Map_Bridge.json` (**derived from C03's pinmap — zero invented pins**, every signal `responsibility: 'TBD by FW team'`), `Firmware_Build_Notes.md`. Gate: every function traces to PRD §7; every state to PRD §7 + C01; every pin to a C03 row; FW-team decisions honestly marked open. Behaviours are testable, never tested. Self-verify: `bodesign_c05_readiness`.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Firmware Spec Package",
+      "type": "output"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "Firmware team (owns the code)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "PRD Requirements Package",
+      "type": "input"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Pin Map Bridge",
+      "type": "input"
+    }
+  ]
+}

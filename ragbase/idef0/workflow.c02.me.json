@@ -1,0 +1,49 @@
+{
+  "diagram_title": "C02 ME — mechanical/enclosure constraints + draft model",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "C02 ME — Mechanical Enclosure Constraints + Draft Model",
+      "description": "C02 turns upstream form-factor + electrical/interface facts into a **mechanical constraint package** + a **draft enclosure model** an ME/vendor can refine. Consumes C00 form-factor, C01 `Interface_Constraints.json`, and C03 `Mechanical_Constraint_Export.json` (the explicit-only EE facts: component heights, connector openings, heat sources, antenna keepouts, battery envelope).\n\n**Owns:** `Mechanical_Constraints.json` (enclosure contract + `constraint_status`/`approval_status` ledgers), `Mechanical_Assumptions.md`, `Enclosure.scad` (parametric source, all variables derived from constraints), a draft STEP (**only if build123d present** — else `not-run` with reason, never hand-written), and handoff notes (Assembly/Print/STEP/SketchUp/Vendor). **The honest boundary:** constraints + prototype model, NOT a manufacturable enclosure — no production tooling, DFM/tolerance/strength/waterproofing sign-off, or final vendor STEP. `me_approved` is **always false**; the board outline is **provisional** (authoritative outline owned by C04). \n\n**Environment honesty:** verify `which openscad` / `python3 -c 'import build123d'` before claiming any STL/STEP export. Missing inputs (board outline, heights, mounting) become `engineering_pending` with an owner — never invented. C02 is a lever owner for the **area** and **thermal** cross-stage budgets. Self-verify: `bodesign_c02_readiness`.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "label": "Enclosure CAD Package",
+      "type": "output"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "label": "ME / fab vendor (owns manufacturable enclosure)",
+      "type": "mechanism"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Industrial Design Package",
+      "type": "input"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Mechanical Constraint Export",
+      "type": "input"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "No Fabrication of Deliverables (honesty-model.md / AGENTS.md §2)",
+      "type": "control"
+    }
+  ]
+}
