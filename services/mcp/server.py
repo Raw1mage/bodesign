@@ -1689,9 +1689,31 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
     async def handle_mcp(scope, receive, send):
         await session_manager.handle_request(scope, receive, send)
 
+    def _health_payload() -> dict:
+        return {"status": "ok", "service": SERVER_NAME, "version": SERVER_VERSION,
+                "tools": len(TOOLS), "served_groups": sorted(SERVED_GROUPS)}
+
     async def healthz(request: Request) -> Response:
-        return JSONResponse({"status": "ok", "service": SERVER_NAME, "tools": len(TOOLS),
-                             "served_groups": sorted(SERVED_GROUPS)})
+        # /healthz kept for back-compat; /health is the MCP-Integration-Standard
+        # canonical liveness/readiness endpoint (R8.3).
+        return JSONResponse(_health_payload())
+
+    async def health(request: Request) -> Response:
+        return JSONResponse(_health_payload())
+
+    async def skills_index(request: Request) -> Response:
+        # R8.2 / R9.2 — list the companion skill bundles this service ships so a
+        # non-opencode host can discover + download them via /skills/<name>.
+        skills_dir = (_assets_dir() / "skills")
+        items: list[dict] = []
+        if skills_dir.is_dir():
+            for f in sorted(skills_dir.glob("*.tar.gz")):
+                items.append({"name": f.name,
+                              "skill": f.name[:-len(".tar.gz")],
+                              "bytes": f.stat().st_size,
+                              "url": f"/skills/{f.name}"})
+        return JSONResponse({"service": SERVER_NAME, "count": len(items), "skills": items,
+                             "manifest": "/skills/MANIFEST.md"})
 
     async def invoke(request: Request) -> Response:
         # Internal worker entrypoint: the core forwards a tool call here. Runs the
@@ -1815,7 +1837,9 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         Route("/tools", tools_index),
         Route("/tools/{name}", tool_detail),
         Route("/idef0.svg", idef0_svg),
+        Route("/skills", skills_index),
         Route("/skills/{name}", skill_download),
+        Route("/health", health),
         Route("/healthz", healthz),
         Route("/invoke", invoke, methods=["POST"]),
         Route("/files", upload_file, methods=["POST"]),
@@ -1835,12 +1859,33 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
     binds = []
     if uds:
         binds.append(uvicorn.Server(uvicorn.Config(app, uds=uds)).serve())
+        binds.append(_ensure_socket_perms(uds))
     if port is not None:
         binds.append(uvicorn.Server(uvicorn.Config(app, host=host, port=port)).serve())
     if not binds:
         raise ValueError("run_http needs at least one of --uds / --port")
     async with session_manager.run():
         await asyncio.gather(*binds)
+
+
+async def _ensure_socket_perms(uds: str) -> None:
+    """Enforce the MCP-Integration-Standard socket-permission rule (R7.3) so any
+    local user (and the rootful-docker gateway) can connect: parent dir 0755,
+    socket file 0666. uvicorn creates the socket on bind with a restrictive mode;
+    we relax it once it appears. Idempotent, best-effort, never fatal."""
+    sock = Path(uds)
+    for _ in range(50):  # ~5s: poll until uvicorn has bound the socket
+        if sock.exists():
+            try:
+                os.chmod(sock.parent, 0o755)
+            except OSError:
+                pass
+            try:
+                os.chmod(sock, 0o666)
+            except OSError:
+                pass
+            return
+        await asyncio.sleep(0.1)
 
 
 def main(argv: list[str] | None = None) -> None:
