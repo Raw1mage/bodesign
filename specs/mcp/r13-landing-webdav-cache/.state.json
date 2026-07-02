@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "verified",
+  "state": "living",
   "profile": [],
   "history": [
     {
@@ -42,6 +42,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "groups 1-8 complete: 727 host tests green (4 env artifacts), image tests green, dual-transport smoke {ok,0.2.0,tools:43}, TOOL_LANDED intercept verified, gate.py XDG self-sufficiency verified, rclone E2E green, docs+architecture synced"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-02T14:11:22.014162Z",
+      "by": "pkcs12",
+      "mode": "graduate",
+      "reason": "user-directed graduation: package moved plans/mcp_r13-landing-webdav-cache -> specs/mcp/r13-landing-webdav-cache"
     }
   ]
 }
