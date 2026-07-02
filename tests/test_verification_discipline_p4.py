@@ -166,8 +166,17 @@ class ApiCompatibilityTests(unittest.TestCase):
                          [s.stage_id for s in static.stages])
 
 
-class McpToolTests(unittest.TestCase):
-    """4.3: bodesign_reference_board_workflow uses the derived path."""
+class LandingVerbTests(unittest.TestCase):
+    """4.3 (post-R13): reference_board_workflow is a LANDED verb — it runs through
+    gate.py handlers on the host; the MCP name returns TOOL_LANDED."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        gate_path = Path(__file__).resolve().parents[1] / "skills" / "bodesign" / "scripts" / "gate.py"
+        spec = importlib.util.spec_from_file_location("bodesign_landing_gate_for_p4", gate_path)
+        cls.gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.gate)
 
     def setUp(self):
         import importlib
@@ -178,22 +187,29 @@ class McpToolTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.work, ignore_errors=True)
 
-    def _rt(self, name, args):
-        result = self.server.run_tool(name, args)
-        self.assertTrue(result.get("ok"), result)
-        return result["result"]
+    def _rt(self, verb, args):
+        result = self.gate._jsonable(self.gate.HANDLERS[verb](args))
+        self.assertIsNotNone(result)
+        return result
 
-    def test_tool_reports_spine_not_initialized(self):
-        plan = self._rt("bodesign_reference_board_workflow",
+    def test_verb_reports_spine_not_initialized(self):
+        plan = self._rt("reference_board_workflow",
                         {"project_id": "p1", "board_design_id": "bd1", "folder": str(self.work)})
         self.assertEqual(plan["status"], "spine-not-initialized")
 
-    def test_tool_derives_from_spine(self):
-        self._rt("bodesign_dispatch_work_packet",
+    def test_verb_derives_from_spine(self):
+        self._rt("dispatch_work_packet",
                  {"folder": str(self.work), "target_layer": "C04", "objective": "route"})
-        plan = self._rt("bodesign_reference_board_workflow",
+        plan = self._rt("reference_board_workflow",
                         {"project_id": "p1", "board_design_id": "bd1", "folder": str(self.work)})
         self.assertEqual(plan["status"], "in-progress")
+
+    def test_mcp_name_returns_tool_landed(self):
+        r = self.server.run_tool("bodesign_reference_board_workflow",
+                                 {"project_id": "p1", "board_design_id": "bd1", "folder": str(self.work)})
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["error"], "TOOL_LANDED")
+        self.assertIn("gate.py reference_board_workflow", r["landing_command"])
 
 
 if __name__ == "__main__":

@@ -187,8 +187,17 @@ class EvidenceIngestTests(unittest.TestCase):
         self.assertEqual(len(list_evidence_returns(self.work)), 1)
 
 
-class McpToolLayerTests(unittest.TestCase):
-    """3.4: MCP tool wiring for envelope wrap + evidence return/ingest."""
+class LandingVerbLayerTests(unittest.TestCase):
+    """3.4 (post-R13): envelope wrap + evidence return/ingest are LANDED verbs —
+    they run through gate.py handlers on the host; the MCP names return TOOL_LANDED."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        gate_path = Path(__file__).resolve().parents[1] / "skills" / "bodesign" / "scripts" / "gate.py"
+        spec = importlib.util.spec_from_file_location("bodesign_landing_gate_for_p3", gate_path)
+        cls.gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.gate)
 
     def setUp(self):
         import importlib
@@ -199,41 +208,47 @@ class McpToolLayerTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.work, ignore_errors=True)
 
-    def _rt(self, name, args):
-        result = self.server.run_tool(name, args)
-        self.assertTrue(result.get("ok"), result)
-        return result["result"]
+    def _rt(self, verb, args):
+        result = self.gate._jsonable(self.gate.HANDLERS[verb](args))
+        self.assertIsNotNone(result)
+        return result
 
-    def test_end_to_end_through_mcp(self):
-        p = self._rt("bodesign_dispatch_work_packet",
+    def test_end_to_end_through_landing(self):
+        p = self._rt("dispatch_work_packet",
                      {"folder": str(self.work), "target_layer": "C04", "objective": "route"})
-        env = self._rt("bodesign_wrap_validation_evidence",
+        env = self._rt("wrap_validation_evidence",
                        {"tool": "drc_gate",
                         "raw_result": {"copper": 1, "unconnected": 0, "silk": 0, "clean": False},
                         "requirement_refs": ["board_length"]})
-        ev = self._rt("bodesign_return_evidence",
+        ev = self._rt("return_evidence",
                       {"folder": str(self.work), "packet_id": p["packet_id"], "envelope": env,
                        "requirement_verdicts": [{"requirement_key": "board_length", "verdict": "fail"}]})
-        result = self._rt("bodesign_ingest_evidence",
+        result = self._rt("ingest_evidence",
                           {"folder": str(self.work), "evidence_id": ev["evidence_id"]})
         self.assertEqual(result["requirement_status_updates"], {"board_length": "fail"})
-        listing = self._rt("bodesign_list_evidence_returns", {"folder": str(self.work)})
+        listing = self._rt("list_evidence_returns", {"folder": str(self.work)})
         self.assertEqual(len(listing["evidence_returns"]), 1)
 
-    def test_blocker_simple_fix_candidates_through_mcp(self):
-        p = self._rt("bodesign_dispatch_work_packet",
+    def test_blocker_simple_fix_candidates_through_landing(self):
+        p = self._rt("dispatch_work_packet",
                      {"folder": str(self.work), "target_layer": "C04", "objective": "route"})
-        b = self._rt("bodesign_return_blocker",
+        b = self._rt("return_blocker",
                      {"folder": str(self.work), "packet_id": p["packet_id"], "severity": "blocked",
                       "summary": "s", "question_for_user": "q",
                       "simple_fix_candidates": [{"hypothesis": "h", "check_method": "m", "ruled_out": False}]})
         self.assertEqual(len(b["simple_fix_candidates"]), 1)
 
-    def test_tool_error_surfaces_as_data(self):
-        bad = self.server.run_tool("bodesign_wrap_validation_evidence",
-                                   {"tool": "magic", "raw_result": {"x": 1}})
-        self.assertFalse(bad["ok"])
-        self.assertIn("ENV_TOOL_UNKNOWN", bad["error"])
+    def test_verb_error_stays_typed(self):
+        with self.assertRaises(Exception) as ctx:
+            self.gate.HANDLERS["wrap_validation_evidence"]({"tool": "magic", "raw_result": {"x": 1}})
+        self.assertIn("ENV_TOOL_UNKNOWN", str(ctx.exception))
+
+    def test_mcp_name_returns_tool_landed(self):
+        r = self.server.run_tool("bodesign_wrap_validation_evidence",
+                                 {"tool": "drc_gate", "raw_result": {"clean": True}})
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["error"], "TOOL_LANDED")
+        self.assertIn("gate.py wrap_validation_evidence", r["landing_command"])
 
 
 if __name__ == "__main__":

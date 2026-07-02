@@ -202,8 +202,53 @@ the local analyzers (`analyze_schematic.py` / `analyze_pcb.py`) and the gates ov
 the stage guides require. The MCP refuses send-to-fab output without deterministic validation + an
 explicit approval — mirror that here.
 
+## Landing / compute routing contract (MCP server ≥ 0.2.0)
+
+The tool surface is split into two planes. Route by plane, not by habit:
+
+- **Landing plane — run locally via `gate.py`, zero token round-trip.** The **52 deterministic,
+  repo-local verbs** (C00 + C01 full families, C02 analysis-only, C03 emitters, C04–C06
+  scaffold/readiness, the 14 orchestration-spine verbs, read/gate verbs — `ingest_project` /
+  `package_readiness` / `datasheet_lookup` / `spec_check` / `rca_spec_audit` — and pure functions —
+  `plan_design_intent` / `evidence_manifest` / `pin_allocation` / `reference_crosscheck` /
+  `impedance_solve`) are **no longer MCP tools**. Run them agent-local against the client project
+  folder:
+
+  ```bash
+  python3 <skill>/scripts/gate.py --list                 # authoritative verb list + summaries
+  python3 <skill>/scripts/gate.py <verb> --repo <abs> [--json '{…}' | --arg k=v]
+  ```
+
+  Output is one JSON envelope on stdout (`{ok, verb, result}`; errors carry a typed code —
+  `VERB_UNKNOWN` / `VERB_NOT_LANDING` / `LANDING_PYTHON_TOO_OLD` / `LANDING_PACKAGES_NOT_FOUND` —
+  and exit≠0). When the skill is projected outside the bodesign checkout (XDG install), set
+  `BODESIGN_SRC=<bodesign repo>` explicitly. Heavy names are hard-guarded: a blacklisted verb
+  returns `VERB_NOT_LANDING` naming the container tool to use instead.
+
+- **Compute plane — container MCP tools (43 total; `/tools` is authoritative).** Heavy toolchain
+  work stays server-side: the C04 layout/routing family, `emit_symbol` / `compose_schematic` /
+  `emit_layout` / `emit_fab`, `simulate` / `analyze_emc` / `analyze_thermal` /
+  `spice_model_card`, the render family, C02 exports (STL/STEP/SKP) / render / `voice_to_design` /
+  `project_svg`, DXF↔DWG, `export_bom` / `export_netlist`, `emit_doc` / `render_companion`,
+  `c00_emit_prd_docx` (docxmcp assemble path), `c01_generate_concept_image`, the `vault_*` family,
+  `stage_dir`, `mcp_call`, and the three cache-lifecycle tools.
+
+- **`TOOL_LANDED` interception**: calling a landed name as an MCP tool returns a typed error
+  `TOOL_LANDED` carrying the equivalent `landing_command`. Follow the command; do not retry the
+  tool.
+
+**Cache 三層心智模型** — where files live and how they move:
+
+| Tier | What it is | How you touch it |
+|---|---|---|
+| **truth store** | client-owned project tree (durable inputs + deliverables) | landing verbs read/write it directly on the host; the container ingests it read-only |
+| **working cache** | per-deliverable WebDAV workspace (`deliverable-cache` kind) on the server | `bodesign_cache_provision` → mount `/dav/{token}` (rclone/davfs2, per-owner Basic credential) or let heavy tools emit into it → `bodesign_cache_export` back to a host target → `bodesign_cache_close` (dirty-gate: un-exported changes 409 unless forced) |
+| **vault** | cross-project component knowledge (server SQLite) | `vault_*` tools only |
+
 **Stage → MCP tool family** (use when the MCP is present; otherwise fall back to the manual/KiCad
-path each guide documents):
+path each guide documents). **Routing note (≥ 0.2.0):** most lightweight entries below are now
+*landing verbs* — same name, run via `gate.py`, and the MCP answers `TOOL_LANDED` if called as a
+tool. This table remains a *family* router; `--list` / `/tools` decide which plane a name lives on:
 
 | Stage | MCP generation tools (prefix `bodesign_`) |
 |---|---|

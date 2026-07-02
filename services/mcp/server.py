@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import sys
 import uuid
@@ -26,34 +27,42 @@ from pathlib import Path
 from typing import Any, Callable
 
 SERVER_NAME = "bodesign"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 INSTRUCTIONS = (
-    "bodesign is an AI PCB design copilot exposed as MCP tools. It ingests a client project "
-    "folder, plans requirements, sources reference evidence, generates KiCad symbols/schematics, "
-    "lays out + exports fab files, and tracks readiness — validating against KiCad and a known-good "
-    "reference (control group). The tool set spans the full C00-C07 lifecycle and evolves; GET "
-    "/tools and /tools/{name} for the authoritative, current schemas.\n\n"
+    "bodesign is an AI PCB design copilot. Since v0.2.0 its surface has THREE classes (R13.5):\n\n"
+    "1) COMPUTE TOOLS (this MCP server, prefix bodesign_): the heavy toolchain a host cannot run — "
+    "KiCad schematic/layout/fab (emit_symbol, compose_schematic, emit_layout, route_net2pcb, "
+    "via_in_pad, pour_planes, widen_bus_tracks, length_match_bus, layout_drc_gate, autoroute, "
+    "emit_fab, export_bom, export_netlist), verification (simulate, si_check, analyze_emc, "
+    "analyze_thermal, analyzer_selfcheck), CAD/render (c02_export_stl/skp/step, c02_render_enclosure, "
+    "c02_project_svg, c02_voice_to_design, render_board_model, render_gerber_preview, "
+    "render_companion, emit_doc, dxf_to_dwg/dwg_to_dxf), the server-side component vault (vault_*), "
+    "spice_model_card, c01_generate_concept_image, MCP delegation (mcp_call), the token file API "
+    "(stage_dir), and the deliverable-cache lifecycle (cache_provision/export/close). "
+    "GET /tools and /tools/{name} for the authoritative, current schemas.\n\n"
+    "2) LANDING VERBS (NOT MCP tools — run them on the HOST): the ~52 deterministic project-folder "
+    "verbs — C00 PRD family, C01 ID family, C02 analysis, C03 emitters, C04/C05/C06 "
+    "scaffold+readiness, the whole orchestration spine, ingest_project/package_readiness/datasheet "
+    "gates, and pure functions (impedance_solve, pin_allocation, reference_crosscheck, "
+    "plan_design_intent, evidence_manifest) — run directly on the caller's machine via the bodesign "
+    "skill's gate.py, writing straight into the project repo with zero token round-trip:\n"
+    "  python3 <bodesign-skill>/scripts/gate.py <verb> --repo /abs/project [--json '{...}' | --arg k=v]\n"
+    "  python3 <bodesign-skill>/scripts/gate.py --list   # enumerate every landing verb\n"
+    "Calling a landed name as an MCP tool returns a typed TOOL_LANDED error carrying the equivalent "
+    "gate.py command — it is not an unknown tool.\n\n"
+    "3) CACHE LIFECYCLE (batch file exchange for heavy flows): bodesign_cache_provision "
+    "(idempotent per owner+subject; returns cache token + /dav/{token}/ mount URL + a WebDAV Basic "
+    "credential) -> mount with rclone/davfs2 or PUT over WebDAV -> run compute tools against the "
+    "cache tree -> bodesign_cache_export (land the whole tree to a host dir) -> bodesign_cache_close "
+    "(dirty-gated: typed WORKSPACE_CLOSE_DIRTY unless exported or force=true). For small one-shot "
+    "trees the token file model still works: POST /files (tarball) or bodesign_stage_dir -> pass "
+    "`token` to any tool (path args resolve inside its doc_dir) -> GET /files/{token}/blob/{rel}.\n\n"
     "PAIRS WITH the companion `bodesign` skill (the C00-C07 workflow brain + the kicad/kidoc "
-    "analysis+doc engines): the skill drives these tools to generate, and the verification tools "
-    "(bodesign_simulate / analyze_emc / analyze_thermal) call the skill's engines back via "
+    "analysis+doc engines + gate.py): the skill drives these tools to generate, and the verification "
+    "tools (bodesign_simulate / analyze_emc / analyze_thermal) call the skill's engines back via "
     "BODESIGN_KICAD_SKILL / BODESIGN_SPICE_SKILL / BODESIGN_EMC_SKILL. The container image "
     "self-bundles these analyzer engines (under /opt/bodesign-engines) and sets those env vars, so "
-    "C06 simulate/EMC/thermal run out of the box; the ~/.claude/skills/... default only applies to a "
-    "non-containerized host install.\n\n"
-    "FILE MODEL (docxmcp-style): upload a whole project tree as a tarball to POST /files "
-    "(Content-Type application/x-tar or gzip) or call bodesign_stage_dir with an inline "
-    "{relpath:{content,encoding}} map -> {token, doc_dir, files}. Pass `token` to any tool: its path "
-    "args resolve inside the token's doc_dir and the result lists produced files as {rel, url}; fetch "
-    "via GET /files/{token}/blob/{rel}.\n\n"
-    "HOST PATHS vs FILE MODEL: tools also accept a plain host path, but ONLY if that path is inside "
-    "the container's mount namespace (bodesign runs in Docker and mounts only .run / sessions / "
-    "vault). Any path outside those mounts — an unmounted Google-Drive/FUSE mount, or a typo — is "
-    "INVISIBLE to the container. The readiness family fails loud on this: it returns "
-    "`root_visible: false` + a `warnings` entry instead of a misleading `readiness_pct: 0`. For any "
-    "tree that is not under a container mount, use the file model (tar -> token -> doc_dir) and pass "
-    "the token. For readiness scoring you only need the text/json deliverables — exclude heavy "
-    "binaries (`.glb`, `*_viewer.html`, PNG/JPG, generated KiCad output) to keep the upload small "
-    "(a 46 MB tree times out; the text/json subset is tens of KB).\n\n"
+    "C06 simulate/EMC/thermal run out of the box.\n\n"
     "No send-to-fab output without deterministic validation + explicit approval."
 )
 
@@ -69,24 +78,6 @@ def _jsonable(value: Any) -> Any:
 # ── Tool registry ──────────────────────────────────────────────────────
 # Each handler takes a dict of arguments and returns a JSON-serializable result.
 # Imports are lazy so a missing optional package fails only that tool.
-
-def _h_ingest(a: dict) -> Any:
-    from bodesign_reverse_core import ingest_project_folder
-    idx = ingest_project_folder(a["folder"])
-    d = idx.to_dict()
-    d["files"] = d.get("files", [])[:200]  # keep payload bounded
-    return d
-
-
-def _h_plan(a: dict) -> Any:
-    from bodesign_workflow_core import plan_design_intent
-    return plan_design_intent(a.get("spec", ""), a.get("answers")).to_dict()
-
-
-def _h_evidence(a: dict) -> Any:
-    from bodesign_workflow_core import build_design_evidence_manifest, extract_part_candidates
-    parts = a.get("parts") or extract_part_candidates(a.get("spec", ""))
-    return build_design_evidence_manifest(parts, a.get("corpus_dir"))
 
 
 def _h_emit_symbol(a: dict) -> Any:
@@ -119,12 +110,6 @@ def _h_compose(a: dict) -> Any:
     return out
 
 
-def _h_pin_alloc(a: dict) -> Any:
-    from bodesign_eda_bridge import build_pin_allocation, render_pin_allocation_csv
-    alloc = build_pin_allocation(a["nets"], tuple(a.get("mcu_refs", [])))
-    return {"refs": alloc.refs, "net_count": alloc.net_count, "csv": render_pin_allocation_csv(alloc)}
-
-
 def _h_layout(a: dict) -> Any:
     from bodesign_eda_bridge import emit_layout
     r = emit_layout(a["out_dir"], a["project_name"], a["components"],
@@ -151,36 +136,6 @@ def _h_companion(a: dict) -> Any:
 def _h_doc(a: dict) -> Any:
     from bodesign_reverse_core import emit_document
     return asdict(emit_document(a["md_path"], a["out_dir"], tuple(a.get("formats", ["docx", "pdf"]))))
-
-
-def _h_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_package_readiness
-    return assess_package_readiness(a["folder"], a.get("milestone", "POC")).to_dict()
-
-
-def _h_c01_emit(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c01_rockbox_package
-    return emit_c01_rockbox_package(a["out_dir"], a.get("c00"), a.get("answers")).to_dict()
-
-
-def _h_c00_scaffold_prd(a: dict) -> Any:
-    from bodesign_workflow_core import scaffold_c00_prd_package
-    return scaffold_c00_prd_package(a["out_dir"], a.get("project_name"), bool(a.get("include_rf", False))).to_dict()
-
-
-def _h_c00_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_c00_prd_readiness
-    return assess_c00_prd_readiness(a["folder"]).to_dict()
-
-
-def _h_c00_emit_prd(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c00_prd_markdown
-    return emit_c00_prd_markdown(a["folder"]).to_dict()
-
-
-def _h_c00_update_answers(a: dict) -> Any:
-    from bodesign_workflow_core import c00_update_answers
-    return c00_update_answers(a["folder"], a["answers"], regenerate=a.get("regenerate", True)).to_dict()
 
 
 def _h_c00_emit_prd_docx(a: dict) -> Any:
@@ -236,72 +191,9 @@ def _h_c00_emit_prd_docx(a: dict) -> Any:
     return result
 
 
-def _h_c01_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_c01_package_readiness
-    return assess_c01_package_readiness(a["folder"]).to_dict()
-
-
-def _h_c01_next_question(a: dict) -> Any:
-    from bodesign_workflow_core import c01_next_question
-    return c01_next_question(a["folder"]).to_dict()
-
-
-def _h_c01_update_answers(a: dict) -> Any:
-    from bodesign_workflow_core import c01_update_answers
-    return c01_update_answers(a["folder"], a["answers"], a.get("c00")).to_dict()
-
-
 def _h_c01_generate_concept_image(a: dict) -> Any:
     from bodesign_workflow_core import generate_c01_concept_image
     return generate_c01_concept_image(a["out_dir"], a["prompt"], a.get("model")).to_dict()
-
-
-def _h_c01_emit_concept_prompts(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c01_concept_prompts
-    return emit_c01_concept_prompts(a["out_dir"], a.get("c00"), a.get("answers")).to_dict()
-
-
-def _h_c01_add_reference_image(a: dict) -> Any:
-    from bodesign_workflow_core import c01_add_reference_image
-    return c01_add_reference_image(a["folder"], a["source_image"], a["cue_type"], a["observed_cue"],
-                                   a.get("target_artifact", "Ai file"), a.get("notes", "")).to_dict()
-
-
-def _h_c01_confirm_reference_cue(a: dict) -> Any:
-    from bodesign_workflow_core import c01_confirm_reference_cue
-    return c01_confirm_reference_cue(a["folder"], a["cue_id"], a["confirmation"], a.get("note", "")).to_dict()
-
-
-def _h_c01_emit_id_visual_package(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c01_id_visual_package
-    return emit_c01_id_visual_package(a["folder"], a.get("answer_state"),
-                                      figma_available=bool(a.get("figma_available", False)),
-                                      ai_export_path=a.get("ai_export_path")).to_dict()
-
-
-def _h_c01_emit_cmf_package(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c01_cmf_package
-    return emit_c01_cmf_package(a["folder"], a.get("answer_state")).to_dict()
-
-
-def _h_c01_emit_uiux_package(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c01_uiux_package
-    return emit_c01_uiux_package(a["folder"], a.get("answer_state")).to_dict()
-
-
-def _h_c02_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_c02_constraint_readiness
-    return assess_c02_constraint_readiness(a.get("constraints"), a.get("folder")).to_dict()
-
-
-def _h_c02_emit(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c02_enclosure_package
-    return emit_c02_enclosure_package(a["out_dir"], a.get("constraints"), a.get("project_summary"), a.get("prototype_intent"), a.get("printer_profile")).to_dict()
-
-
-def _h_c02_generate_openscad(a: dict) -> Any:
-    from bodesign_workflow_core import generate_c02_openscad
-    return generate_c02_openscad(a["out_dir"], a.get("constraints"), a.get("wall_thickness_mm"), a.get("clearance_mm"), a.get("lid_clearance_mm")).to_dict()
 
 
 def _h_c02_export_stl(a: dict) -> Any:
@@ -335,11 +227,6 @@ def _h_c02_render_enclosure(a: dict) -> Any:
                                   color=a.get("color")).to_dict()
 
 
-def _h_c02_plan_intent(a: dict) -> Any:
-    from bodesign_workflow_core import plan_c02_intent
-    return plan_c02_intent(a["spec_text"], a.get("answers"))
-
-
 def _h_c02_voice_to_design(a: dict) -> Any:
     from bodesign_workflow_core import voice_to_design
     result = voice_to_design(a["out_dir"], a["spec_text"], a.get("answers"), bool(a.get("approve", False)))
@@ -367,59 +254,6 @@ def _h_c02_voice_to_design(a: dict) -> Any:
 def _h_c02_project_svg(a: dict) -> Any:
     from bodesign_workflow_core import export_c02_projection_svg
     return export_c02_projection_svg(a["out_dir"], a.get("openscad_bin"), bool(a.get("cut", False))).to_dict()
-
-
-def _h_c03_export_mech_constraints(a: dict) -> Any:
-    from bodesign_workflow_core import export_c03_mechanical_constraints
-    return export_c03_mechanical_constraints(a["out_dir"], a.get("circuit")).to_dict()
-
-
-def _h_c03_emit_partition_diagram(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c03_partition_diagram
-    emit_pptx = bool(a.get("emit_pptx", False))
-    mcp_call = None
-    if emit_pptx:
-        from mcp_delegate import call_external_mcp_tool
-        mcp_call = call_external_mcp_tool
-    return emit_c03_partition_diagram(a["folder"], a["model"], emit_pptx=emit_pptx,
-                                      mcp_call=mcp_call).to_dict()
-
-
-def _h_c03_emit_host_block_diagram(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c03_host_block_diagram
-    emit_pptx = bool(a.get("emit_pptx", False))
-    mcp_call = None
-    if emit_pptx:
-        from mcp_delegate import call_external_mcp_tool
-        mcp_call = call_external_mcp_tool
-    return emit_c03_host_block_diagram(a["folder"], a["model"], emit_pptx=emit_pptx,
-                                       mcp_call=mcp_call).to_dict()
-
-
-# ── RCA spec gate over the `datasheets` skill's per-project extraction cache ──
-# Anti-hallucination guard: an electrical-spec claim must be grounded in a real cached
-# datasheet extraction (<project>/datasheets/extracted/), not stated from memory.
-# Capturing a NEW datasheet is the `datasheets` skill's job; bodesign only reads/gates.
-def _h_datasheet_lookup(a: dict) -> Any:
-    from bodesign_component_kb import lookup
-    entry = lookup(a["mpn"], root=a.get("vault_root"))
-    if entry is None:
-        return {"status": "absent", "mpn": a["mpn"],
-                "advice": "No cached datasheet extraction. Acquire the PDF into "
-                          "<project>/datasheets/ and run the `datasheets` skill before stating "
-                          "any spec for this part. Do not assert specs from memory."}
-    return {"status": "present", **entry}
-
-
-def _h_spec_check(a: dict) -> Any:
-    from bodesign_component_kb import spec_check
-    return spec_check(a["mpn"], a["field"], claimed_value=a.get("claimed_value"),
-                      root=a.get("vault_root"))
-
-
-def _h_rca_spec_audit(a: dict) -> Any:
-    from bodesign_component_kb import audit_claims
-    return audit_claims(a["claims"], root=a.get("vault_root"))
 
 
 # ── Server-side Component Vault (R9) ───────────────────────────────────
@@ -482,137 +316,6 @@ def _h_analyzer_selfcheck(a: dict) -> Any:
         "summary": {e["engine"]: e["can_run"] for e in engines},
         "all_runnable": all(e["can_run"] for e in engines),
     }
-
-
-# ── Orchestration spine (C00 dispatch / blocker backflow) ──────────────
-def _h_agent_registry(a: dict) -> Any:
-    from bodesign_workflow_core import load_agent_registry
-    return load_agent_registry().to_dict()
-
-
-def _h_dispatch_work_packet(a: dict) -> Any:
-    from bodesign_workflow_core import dispatch_work_packet
-    return dispatch_work_packet(
-        a["folder"], a["target_layer"], a["objective"],
-        sections=a.get("sections"), fields=a.get("fields"), generated_docs=a.get("generated_docs"),
-        inputs=a.get("inputs"), expected_outputs=a.get("expected_outputs"),
-    ).to_dict()
-
-
-def _h_list_work_packets(a: dict) -> Any:
-    from bodesign_workflow_core import list_work_packets
-    return {"work_packets": [w.to_dict() for w in list_work_packets(a["folder"])]}
-
-
-def _h_return_blocker(a: dict) -> Any:
-    from bodesign_workflow_core import return_blocker
-    return return_blocker(
-        a["folder"], a["packet_id"],
-        severity=a["severity"], summary=a["summary"], question_for_user=a["question_for_user"],
-        affected_c00_fields=a.get("affected_c00_fields"), affected_downstream_layers=a.get("affected_downstream_layers"),
-        options=a.get("options"), recommended_owner=a.get("recommended_owner", "user"),
-        proposed_state=a.get("proposed_state", "blocked"), evidence=a.get("evidence"),
-        simple_fix_candidates=a.get("simple_fix_candidates"),
-    ).to_dict()
-
-
-def _h_wrap_validation_evidence(a: dict) -> Any:
-    from bodesign_workflow_core import wrap_validation_evidence
-    return wrap_validation_evidence(
-        a["tool"], a["raw_result"],
-        inputs=a.get("inputs"), requirement_refs=a.get("requirement_refs"),
-    ).to_dict()
-
-
-def _h_return_evidence(a: dict) -> Any:
-    from bodesign_workflow_core import return_evidence
-    return return_evidence(
-        a["folder"], a["packet_id"],
-        envelope=a["envelope"], requirement_verdicts=a.get("requirement_verdicts"),
-    ).to_dict()
-
-
-def _h_list_evidence_returns(a: dict) -> Any:
-    from bodesign_workflow_core import list_evidence_returns
-    return {"evidence_returns": [e.to_dict() for e in list_evidence_returns(a["folder"], unresolved_only=a.get("unresolved_only", False))]}
-
-
-def _h_ingest_evidence(a: dict) -> Any:
-    from bodesign_workflow_core import ingest_evidence
-    return ingest_evidence(a["folder"], a["evidence_id"])
-
-
-def _h_reference_board_workflow(a: dict) -> Any:
-    from bodesign_workflow_core import derive_workflow_plan
-    return derive_workflow_plan(
-        a["project_id"], a["board_design_id"], a["folder"],
-        artifact_count=a.get("artifact_count", 0), component_count=a.get("component_count", 0),
-        net_count=a.get("net_count", 0), knowledge_queue_count=a.get("knowledge_queue_count", 0),
-    ).to_dict()
-
-
-def _h_list_blockers(a: dict) -> Any:
-    from bodesign_workflow_core import list_blockers
-    return {"blockers": [b.to_dict() for b in list_blockers(a["folder"], unresolved_only=a.get("unresolved_only", False))]}
-
-
-def _h_ingest_blocker(a: dict) -> Any:
-    from bodesign_workflow_core import ingest_blocker
-    return ingest_blocker(
-        a["folder"], a["blocker_id"],
-        resolved_state=a["resolved_state"], decision=a["decision"], decided_by=a.get("decided_by", "user"),
-    ).to_dict()
-
-
-def _h_enter_c01_mode(a: dict) -> Any:
-    from bodesign_workflow_core import enter_c01_mode
-    return enter_c01_mode(a["folder"], c00=a.get("c00"), answers=a.get("answers"), objective=a.get("objective")).to_dict()
-
-
-def _h_c00_orchestration_status(a: dict) -> Any:
-    from bodesign_workflow_core import c00_orchestration_status
-    return c00_orchestration_status(a["folder"]).to_dict()
-
-
-def _h_c00_orchestration_tick(a: dict) -> Any:
-    from bodesign_workflow_core import c00_orchestration_tick
-    return c00_orchestration_tick(a["folder"], auto_dispatch=a.get("auto_dispatch", True)).to_dict()
-
-
-def _h_c04_emit_layout_package(a: dict) -> Any:
-    from bodesign_workflow_core import emit_c04_layout_package
-    return emit_c04_layout_package(a["out_dir"], a.get("c01"), a.get("c03")).to_dict()
-
-
-def _h_c04_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_c04_layout_readiness
-    return assess_c04_layout_readiness(a["folder"]).to_dict()
-
-
-def _h_c05_scaffold_fw_spec(a: dict) -> Any:
-    from bodesign_workflow_core import scaffold_c05_fw_spec
-    return scaffold_c05_fw_spec(a["out_dir"], a.get("software"), a.get("pin_map")).to_dict()
-
-
-def _h_c05_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_c05_fw_readiness
-    return assess_c05_fw_readiness(a["folder"]).to_dict()
-
-
-def _h_c06_assemble_test_plan(a: dict) -> Any:
-    from bodesign_workflow_core import assemble_c06_test_plan
-    return assemble_c06_test_plan(a["out_dir"], a.get("verdicts"), a.get("certification_targets")).to_dict()
-
-
-def _h_c06_readiness(a: dict) -> Any:
-    from bodesign_workflow_core import assess_c06_readiness
-    return assess_c06_readiness(a["folder"]).to_dict()
-
-
-def _h_crosscheck(a: dict) -> Any:
-    from bodesign_workflow_core import crosscheck_nets
-    return crosscheck_nets(set(a["generated_nets"]), set(a["reference_nets"]),
-                           a.get("label", "interface"), a.get("provenance")).to_dict()
 
 
 def _h_simulate(a: dict) -> Any:
@@ -694,11 +397,6 @@ def _h_mcp_call(a: dict) -> Any:
     return call_external_mcp_tool(a["server"], a["tool"], a.get("arguments"))
 
 
-def _h_impedance_solve(a: dict) -> Any:
-    from bodesign_eda_bridge import solve_impedance
-    return solve_impedance(a["stackup"], a["targets"])
-
-
 def _h_route_net2pcb(a: dict) -> Any:
     from bodesign_eda_bridge import net2pcb_board
     return net2pcb_board(a["netlist_path"], a["out_path"], layers=a.get("layers", 2),
@@ -771,11 +469,182 @@ def _h_dwg_to_dxf(a: dict) -> Any:
     return dwg_to_dxf(a["in_path"], a["out_dir"])
 
 
+# ── Deliverable-cache lifecycle core (plan mcp_r13, tasks 5.3/5.5) ───────
+# Shared by the HTTP lifecycle routes (build_cache_dav_routes) and the MCP
+# tools below. Typed errors per plans/mcp_r13-landing-webdav-cache/errors.md.
+
+_cache_log = logging.getLogger("bodesign.cache")
+_tools_log = logging.getLogger("bodesign.tools")
+
+
+def _cache_soft_cap_limits() -> tuple[int, int]:
+    """(count_cap, bytes_cap) — WARN-FIRST per-owner usage ceilings; never block."""
+    try:
+        count_cap = int(os.environ.get("BODESIGN_CACHE_SOFT_CAP_COUNT", "8"))
+    except ValueError:
+        count_cap = 8
+    try:
+        bytes_cap = int(os.environ.get("BODESIGN_CACHE_SOFT_CAP_BYTES", str(2 * 1024 ** 3)))
+    except ValueError:
+        bytes_cap = 2 * 1024 ** 3
+    return count_cap, bytes_cap
+
+
+def _cache_list_by_owner(store, owner_identity: str) -> list[dict]:
+    """All live deliverable-cache records owned by ``owner_identity``."""
+    from token_store import KIND_DELIVERABLE_CACHE, _META_SUFFIX, StoreOpError
+    out = []
+    for meta_path in store.root.glob(f"tok_*{_META_SUFFIX}"):
+        try:
+            meta = store._parse_meta(meta_path)
+        except StoreOpError:
+            continue  # corrupt sidecar is the reaper's problem, not the lister's
+        if meta.kind != KIND_DELIVERABLE_CACHE or meta.owner_identity != owner_identity:
+            continue
+        d = store.root / meta.token
+        if not d.is_dir():
+            continue
+        size = sum(p.stat().st_size for p in d.rglob("*") if p.is_file())
+        out.append({"token": meta.token, "subject_id": meta.subject_id,
+                    "created_at": meta.created_at, "last_used_at": meta.last_used_at,
+                    "last_export_at": meta.last_export_at, "bytes": size})
+    return sorted(out, key=lambda r: r["token"])
+
+
+def _cache_soft_cap_status(store, owner_identity: str) -> dict:
+    """Per-owner soft-cap signal (docxmcp owner_soft_cap_status pattern):
+    WARN-FIRST, NON-BLOCKING (天條). Returns an observable dict; callers log a
+    WARNING when over but never refuse the operation."""
+    count_cap, bytes_cap = _cache_soft_cap_limits()
+    items = _cache_list_by_owner(store, owner_identity)
+    count = len(items)
+    total = sum(i["bytes"] for i in items)
+    over_count = count > count_cap
+    over_bytes = total > bytes_cap
+    return {"count": count, "count_cap": count_cap, "bytes": total, "bytes_cap": bytes_cap,
+            "over_count": over_count, "over_bytes": over_bytes,
+            "over": over_count or over_bytes}
+
+
+def _cache_export_tree(store, token: str, target: Path) -> dict:
+    """Copy the cache tree to a host-visible ``target`` dir + mark_exported.
+
+    The target's PARENT must already exist — ancestors are never auto-created
+    and no alternative target is guessed (typed EXPORT_TARGET_UNREACHABLE).
+    The leaf target dir itself is created if absent (docxmcp semantics)."""
+    import shutil
+    from token_store import StoreOpError
+    if not target.is_absolute():
+        raise StoreOpError("EXPORT_TARGET_UNREACHABLE",
+                           f"export target must be an absolute path: {target}")
+    if not target.parent.is_dir():
+        raise StoreOpError("EXPORT_TARGET_UNREACHABLE",
+                           f"export target parent does not exist: {target.parent} "
+                           "(ancestors are never auto-created)")
+    root = store.resolve(token)
+    try:
+        target.mkdir(exist_ok=True)
+    except OSError as exc:
+        raise StoreOpError("EXPORT_TARGET_UNREACHABLE",
+                           f"export target not writable: {target}: {exc}") from exc
+    count = 0
+    try:
+        for p in sorted(root.rglob("*")):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(root)
+            dest = target / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dest)
+            count += 1
+    except OSError as exc:
+        raise StoreOpError("EXPORT_TARGET_UNREACHABLE",
+                           f"export write failed under {target}: {exc}") from exc
+    store.mark_exported(token)
+    _cache_log.info("cache_export_ok token=%s target=%s files=%d", token, target, count)
+    return {"target": str(target), "count": count}
+
+
+def _cache_close(store, token: str, *, force: bool = False) -> dict:
+    """Close a deliverable cache behind the dirty-gate (DD-5).
+
+    Dirty (files newer than last export) and not force → typed
+    WORKSPACE_CLOSE_DIRTY carrying the unexported list. Clean (or force) →
+    remove the token dir + sidecar, freeing the (owner, subject) namespace."""
+    import shutil
+    from token_store import StoreOpError
+    dirty = store.cache_dirty_files(token)
+    if dirty and not force:
+        exc = StoreOpError(
+            "WORKSPACE_CLOSE_DIRTY",
+            "cache has files modified since last export: " + ", ".join(dirty)
+            + " — export first, or close with force=true to discard")
+        exc.unexported = dirty
+        raise exc
+    meta = store.cache_meta(token)
+    shutil.rmtree(store.root / token, ignore_errors=True)
+    store._meta_path(token).unlink(missing_ok=True)
+    _cache_log.info("cache_close_ok token=%s owner=%s subject=%s forced=%s",
+                    token, meta.owner_identity, meta.subject_id, force)
+    return {"closed": True, "forced": force, "token": token, "subject_id": meta.subject_id}
+
+
+# ── Deliverable-cache lifecycle handlers (plan mcp_r13, task 5.5) ────────
+# Agents drive the cache over these tools; humans mount over WebDAV. The
+# cache token arg is named `cache_token` (NOT `token`) on purpose: `token`
+# is the generic file-model arg that run_tool pops + rewrites paths with.
+
+def _h_cache_provision(a: dict) -> Any:
+    import importlib
+    from token_store import StoreOpError, default_store
+    ap = importlib.import_module("_auth_provider")
+    owner = a["owner_identity"]
+    subject = a["subject_id"]
+    store = default_store()
+    try:
+        meta = store.provision_cache(owner, subject)
+    except StoreOpError as exc:
+        return {"error": exc.code, "message": str(exc)}
+    password = ap.default_provider().credentials.issue(owner)
+    return {"token": meta.token, "subject_id": meta.subject_id, "owner": meta.owner_identity,
+            "mount_url": f"{_base()}/dav/{meta.token}/",
+            "webdav_username": owner, "webdav_password": password,
+            "soft_cap": _cache_soft_cap_status(store, owner)}
+
+
+def _h_cache_export(a: dict) -> Any:
+    from token_store import StoreOpError, default_store
+    store = default_store()
+    meta = store.cache_meta(a["cache_token"])  # TokenNotFoundError → typed error via run_tool
+    if meta.owner_identity != a["owner_identity"]:
+        return {"error": "CACHE_FORBIDDEN",
+                "message": "cache belongs to another owner; cross-owner access is never granted"}
+    try:
+        result = _cache_export_tree(store, a["cache_token"], Path(a["target"]))
+    except StoreOpError as exc:
+        return {"error": exc.code, "message": str(exc)}
+    return {"exported": True, **result}
+
+
+def _h_cache_close(a: dict) -> Any:
+    from token_store import StoreOpError, default_store
+    store = default_store()
+    meta = store.cache_meta(a["cache_token"])
+    if meta.owner_identity != a["owner_identity"]:
+        return {"error": "CACHE_FORBIDDEN",
+                "message": "cache belongs to another owner; cross-owner access is never granted"}
+    try:
+        return _cache_close(store, a["cache_token"], force=bool(a.get("force", False)))
+    except StoreOpError as exc:
+        out = {"error": exc.code, "message": str(exc)}
+        unexported = getattr(exc, "unexported", None)
+        if unexported is not None:
+            out["unexported"] = unexported
+        return out
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
-    {"name": "bodesign_impedance_solve", "handler": _h_impedance_solve,
-     "description": "Pure-python C04 impedance estimate: solve microstrip class widths and delay constants from explicit stackup and target impedances. Differential targets require gap_mm or width_mm; outputs are guidance only and require fab field-solver confirmation.",
-     "schema": {"type": "object", "properties": {"stackup": {"type": "object"}, "targets": {}}, "required": ["stackup", "targets"]}},
     {"name": "bodesign_route_net2pcb", "handler": _h_route_net2pcb,
      "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part).",
      "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}, "connectors": {"type": "object", "description": "{refdes: {net_name: [pad ids]}} explicit connector pin expansion; omit to use the built-in USB-C table for USB-C footprints"}}, "required": ["netlist_path", "out_path"]}},
@@ -816,15 +685,6 @@ TOOLS: list[dict] = [
     {"name": "bodesign_stage_dir", "handler": _h_stage_dir,
      "description": "Stage an inline file tree {relpath:{content,encoding}} into a token namespace; returns {token, doc_dir, files}. Pass the token to other tools to operate inside that tree (docxmcp-style).",
      "schema": {"type": "object", "properties": {"files": {"type": "object"}}, "required": ["files"]}},
-    {"name": "bodesign_ingest_project", "handler": _h_ingest,
-     "description": "Ingest a KiCad/EDA project folder read-only; classify files, detect C0* sections, flag non-readable files needing a companion.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_plan_design_intent", "handler": _h_plan,
-     "description": "Plan a DesignIntent from a natural-language spec (+ optional answers): requirements, clarifying questions, subsystems.",
-     "schema": {"type": "object", "properties": {"spec": _STR, "answers": {"type": "object"}}, "required": ["spec"]}},
-    {"name": "bodesign_evidence_manifest", "handler": _h_evidence,
-     "description": "Build a design-evidence sourcing manifest for the spec's parts (local-corpus-first; distributor pointers otherwise).",
-     "schema": {"type": "object", "properties": {"spec": _STR, "parts": {"type": "array", "items": _STR}, "corpus_dir": _STR}}},
     {"name": "bodesign_emit_symbol", "handler": _h_emit_symbol,
      "description": "Generate a KiCad .kicad_sym symbol from a pin list [{number,name,type}].",
      "schema": {"type": "object", "properties": {"symbol_name": _STR, "pins": {"type": "array"}, "output_path": _STR,
@@ -834,9 +694,6 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "spec": {"type": "object"},
                 "symbol_dirs": {}, "validate": {"type": "boolean"}, "style": {"type": "string", "enum": ["netlist", "draftsman"]},
                 "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"}}, "required": ["out_dir", "project_name", "spec"]}},
-    {"name": "bodesign_pin_allocation", "handler": _h_pin_alloc,
-     "description": "Build a pin/GPIO allocation table (C03->FW interface) from a net list; returns CSV.",
-     "schema": {"type": "object", "properties": {"nets": {"type": "array"}, "mcu_refs": {"type": "array", "items": _STR}}, "required": ["nets"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
      "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "components": {"type": "array"},
@@ -868,70 +725,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_emit_doc", "handler": _h_doc,
      "description": "Render a markdown deliverable to shareable docx + pdf.",
      "schema": {"type": "object", "properties": {"md_path": _STR, "out_dir": _STR, "formats": {"type": "array", "items": _STR}}, "required": ["md_path", "out_dir"]}},
-    {"name": "bodesign_package_readiness", "handler": _h_readiness,
-     "description": "Assess a product folder against the POC deliverable checklist; per-deliverable status + next step (the compass).",
-     "schema": {"type": "object", "properties": {"folder": _STR, "milestone": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c00_scaffold_prd", "handler": _h_c00_scaffold_prd,
-     "description": "Scaffold a blank C00 PRD source package from the committed template: Project_Requirements.md, answer_state.json, and optional RF_Requirements.md. Initializes every required field as missing and does not compute readiness or emit final PRD prose.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "include_rf": {"type": "boolean"}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c00_readiness", "handler": _h_c00_readiness,
-     "description": "Assess C00 PRD answer_state.json against the committed rubric. Computes field/section/gate readiness and next question; does not emit PRD prose or mark human approval.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c00_emit_prd", "handler": _h_c00_emit_prd,
-     "description": "Render Markdown-first C00 PRD outputs from answer_state.json: generated Project/RF requirements and C00_Handoff_Report. Preserves missing/drafted/external-needed/blocked/accepted-risk markers and never marks human approval.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c00_update_answers", "handler": _h_c00_update_answers,
-     "description": "Record user/consultant answers into the C00 PRD answer-state, recompute readiness, and regenerate the PRD Markdown. `answers` maps a field key (or qualified `section_id.field`) to a value, or to {value, state} where state ∈ missing/drafted/answered/external-needed/blocked/accepted-risk. Unknown keys → not_found; an unqualified key in multiple sections → ambiguous (not guessed). Never marks human approval. This is how C00 field answers get recorded (the consultant's intake), without hand-editing answer_state.json.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "regenerate": {"type": "boolean"}},
-                "required": ["folder", "answers"]}},
     {"name": "bodesign_c00_emit_prd_docx", "handler": _h_c00_emit_prd_docx,
-     "description": "Render the C00 PRD as a docxmcp-assemblable package matching the stored Rockbox Word architecture (cover + revision history + 12 sections with per-section table layouts; conditional RF document) — body.md + outline.md + manifest.json + template/template.dotx (from the committed c00_prd.dotx/c00_rf.dotx) built from answer_state. DEFAULT is client-side orchestration (the MVP): bodesign returns the package(s) + an assemble_hint, and the CALLING CLIENT drives docxmcp document.assemble itself (so bodesign does not depend on docxmcp runtime/accounts/permissions). Set assemble=true to opt into the internal MCP bridge, which assembles via a configured docxmcp server (BODESIGN_MCP_SERVERS / BODESIGN_MCP_DOCXMCP_URL); when unconfigured it degrades honestly to worker_unavailable and never fabricates a .docx. Honest: missing/drafted/external-needed/blocked/accepted-risk field states stay visible; never marks human approval.",
+     "description": "BORDERLINE keep (R13/DD-3): the render-only path of this verb is ALSO landed (gate.py c00_emit_prd_docx); this container tool remains chiefly for assemble=true, which needs the docxmcp MCP bridge. Renders the C00 PRD as a docxmcp-assemblable package matching the stored Rockbox Word architecture (cover + revision history + 12 sections with per-section table layouts; conditional RF document) — body.md + outline.md + manifest.json + template/template.dotx built from answer_state. DEFAULT is client-side orchestration: bodesign returns the package(s) + an assemble_hint and the CALLING CLIENT drives docxmcp document.assemble itself. Set assemble=true to opt into the internal MCP bridge (BODESIGN_MCP_SERVERS / BODESIGN_MCP_DOCXMCP_URL); when unconfigured it degrades honestly to worker_unavailable and never fabricates a .docx. Honest: missing/drafted/external-needed/blocked/accepted-risk field states stay visible; never marks human approval.",
      "schema": {"type": "object", "properties": {"folder": _STR, "assemble": {"type": "boolean"}}, "required": ["folder"]}},
-    {"name": "bodesign_c01_emit_package", "handler": _h_c01_emit,
-     "description": "Emit a Rockbox-like C01 ID package: Ai file/Design_Direction.md, CMF/CMF_Direction.md, Display UIUX/UIUX_Requirements.md, Interface_Constraints.json, and ID handoff, with draft/decision markers.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c01_readiness", "handler": _h_c01_readiness,
-     "description": "Check whether the Rockbox-like C01 package has non-empty scripts for Ai file, CMF, Display UI/UX, constraints JSON, and ID handoff.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c01_next_question", "handler": _h_c01_next_question,
-     "description": "Return the next C01 industrial-design preference question from C01-ID/answer_state.json. If no state exists, returns the first bootstrap question without writing files.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c01_update_answers", "handler": _h_c01_update_answers,
-     "description": "Update C01-ID/answer_state.json with user/design preferences, then regenerate the Rockbox-like C01 package and return the next question. Does not mark ID approval or create final .ai/Figma/CAD artifacts.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "answers": {"type": "object"}, "c00": {}}, "required": ["folder", "answers"]}},
-    {"name": "bodesign_c01_emit_id_visual_package", "handler": _h_c01_emit_id_visual_package,
-     "description": "Emit the C01 ID-native Ai file bucket (C01-ID/Ai file/): a layered, designer-editable <product>_ID_skeleton.svg (outline/panel/cmf-fill/components/annotations layers, each exposed component an independently-selectable component-<type>-<n> group) + figma_import_spec.json + README.md. Inputs: Interface_Constraints.json (primary) + answer_state (form_archetype/primary_face/exposed_components/cmf_direction). Fails fast (status=missing, C01V-E001) when a required field is absent — never fabricates geometry. Unknown component types render as generic placeholders and are reported (not silently dropped). Carries a visible 'draft / not final industrial design' marking. Never fabricates a .ai (ai_emitted=false unless a real Illustrator export path is configured); without Figma it still emits figma_import_spec.json. Not an ID approval.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "answer_state": {"type": "object"}, "figma_available": {"type": "boolean"}, "ai_export_path": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c01_emit_cmf_package", "handler": _h_c01_emit_cmf_package,
-     "description": "Emit the C01 ID-native CMF draft bucket (C01-ID/CMF/): cmf_tokens.json (material_family/finish/colour routes/RF-transparent zones/gasket-sealing notes/sample-vendor gates, approval_state permanently not-approved) + <product>_CMF_Direction markdown (rendered to PDF via the approved emit_document pipeline when LibreOffice is available; otherwise the markdown source is emitted and the PDF is marked pending, C01D-E001 — never hand-stitched) + README.md. Fails fast (status=missing, C01C-E001) when cmf_direction is absent — no default material. Carries a visible 'not CMF approval' marking.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "answer_state": {"type": "object"}}, "required": ["folder"]}},
-    {"name": "bodesign_c01_emit_uiux_package", "handler": _h_c01_emit_uiux_package,
-     "description": "Emit the C01 ID-native Display UI/UX draft bucket (C01-ID/Display UI_UX/ — underscore, coexists with the core companion Display UIUX/): uiux_wireframes.svg (state wireframes) + <product>_UIUX_Flow markdown (rendered to PDF via emit_document when available; else markdown source + PDF pending, C01D-E001) + README.md. Covers OLED screens/states, LED state vocabulary, insert/remove feedback, privacy/local-only, and charging/connectivity/error states. No-display products map explicitly to LED/status/button interaction (not silently omitted). Fails fast (status=missing, C01U-E001) when neither display_uiux nor any status component is described. Carries a visible 'not UI sign-off' marking.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "answer_state": {"type": "object"}}, "required": ["folder"]}},
-    {"name": "bodesign_c01_emit_concept_prompts", "handler": _h_c01_emit_concept_prompts,
-     "description": "Persist reference-only C01 concept/moodboard/UI prompt artifacts (Concept_Image_Prompts.md, Moodboard_Prompts.md, UI_Concept_Prompts.md) derived from accumulated C00/C01 intent. Generalized design language; not final art and not a copy of any product/brand.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "c00": {}, "answers": {"type": "object"}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c01_add_reference_image", "handler": _h_c01_add_reference_image,
-     "description": "Record a reference-image cue (form/cmf/ui/component/mood) into C01-ID/reference_cues.json: source image path, observed cue (generalized — what to borrow/avoid), target artifact, notes. The cue stays `reference-derived` until the user confirms it; never auto-promoted to an approved preference, never a copy of the source.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "source_image": _STR, "cue_type": _STR,
-                "observed_cue": _STR, "target_artifact": _STR, "notes": _STR},
-                "required": ["folder", "source_image", "cue_type", "observed_cue"]}},
-    {"name": "bodesign_c01_confirm_reference_cue", "handler": _h_c01_confirm_reference_cue,
-     "description": "Explicitly confirm or reject a C01 reference cue by cue_id. Only the user may move a cue out of `reference-derived`; confirmed cues remain generalized design intent (copyright-safe).",
-     "schema": {"type": "object", "properties": {"folder": _STR, "cue_id": _STR, "confirmation": _STR, "note": _STR},
-                "required": ["folder", "cue_id", "confirmation"]}},
     {"name": "bodesign_c01_generate_concept_image", "handler": _h_c01_generate_concept_image,
      "description": "Optional C01 add-on: generate a reference-only concept image via Google AI Studio from a C01 concept prompt. Credential source is server-side only: BODESIGN_GOOGLE_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY env first, then active API account from opencode accounts.json (default family gemini-cli). Does not affect C01 readiness.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "prompt": _STR, "model": _STR}, "required": ["out_dir", "prompt"]}},
-    {"name": "bodesign_c02_readiness", "handler": _h_c02_readiness,
-     "description": "Assess C02 mechanical/enclosure constraint readiness before CAD generation. Reports missing board outline, heights, holes, connector openings, heat, RF, battery, and environment targets without guessing dimensions.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "constraints": {"type": "object"}}}},
-    {"name": "bodesign_c02_emit_enclosure_package", "handler": _h_c02_emit,
-     "description": "Emit a C02-ME mechanical enclosure support package without generating CAD/STL/SKP/STEP or ME approval. Missing geometry is preserved as engineering_pending with owner/reason.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "constraints": {"type": "object"}, "project_summary": {}, "prototype_intent": _STR, "printer_profile": {}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c02_generate_openscad", "handler": _h_c02_generate_openscad,
-     "description": "Generate C02-ME/Enclosure.scad prototype source from explicit board outline, component height constraints, wall thickness, clearance, and lid clearance. Missing dimensions return source_blocked; does not export STL/SKP/STEP or imply ME approval.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "constraints": {"type": "object"}, "wall_thickness_mm": {"type": "number"}, "clearance_mm": {"type": "number"}, "lid_clearance_mm": {"type": "number"}}, "required": ["out_dir"]}},
     {"name": "bodesign_c02_export_stl", "handler": _h_c02_export_stl,
      "description": "Export C02-ME/Enclosure.stl from Enclosure.scad using local OpenSCAD CLI when available; returns export_unavailable instead of creating fake STL when missing.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "openscad_bin": _STR}, "required": ["out_dir"]}},
@@ -954,9 +753,6 @@ TOOLS: list[dict] = [
                 "views": {"type": "array", "items": _STR}, "width": {"type": "integer"}, "height": {"type": "integer"},
                 "color": _STR},
                 "required": ["stl_path", "out_dir"]}},
-    {"name": "bodesign_c02_plan_intent", "handler": _h_c02_plan_intent,
-     "description": "Extract C02 enclosure constraints from a spoken natural-language product description (voice-to-design front end). Deterministic keyword + regex extraction binds the 8 C02 mechanical fields (board outline W×H, component heights, mounting holes, connector openings, heat sources, antenna keepouts, battery, environment); each field is answered/stated/missing. Never guesses dimensions — missing board/heights or wall/clearance surface as a next_question. Returns {status (needs-clarification|ready-for-approval), draft+field_status, gen_params, readiness_pct, can_generate_cad_source, next_question, missing}. Pure analysis: generates no CAD.",
-     "schema": {"type": "object", "properties": {"spec_text": _STR, "answers": {"type": "object"}}, "required": ["spec_text"]}},
     {"name": "bodesign_c02_voice_to_design", "handler": _h_c02_voice_to_design,
      "description": "Orchestrate the full voice-to-design loop: spoken intent → clarify → approval gate → enclosure source → STL → top/iso render. Calls plan_c02_intent; if constraints are incomplete returns the clarifying plan (no CAD); if ready and approve!=true returns the constraint set for confirmation (no CAD). Only with approve=true AND complete constraints+wall/clearance does it run generate_openscad → export_stl → render_enclosure, returning {status:approved, pipeline, images}. Honours the C02 approval gate and the no-guess-dimensions rule; degrades honestly when OpenSCAD CLI or GL is absent.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "spec_text": _STR, "answers": {"type": "object"},
@@ -967,26 +763,6 @@ TOOLS: list[dict] = [
      "description": "Project the generated 3D enclosure (Enclosure.stl from c02_export_stl) to a clean 2D vector SVG via OpenSCAD projection() — the 2D drawing is DERIVED from the 3D model (same source, no drift), so it is exact geometric paths, not a messy raster trace. Writes a wrapper .scad doing projection(cut=<cut>) import(Enclosure.stl) then runs openscad -o Enclosure.svg on the me worker. cut=false gives the outline silhouette (design view); cut=true a planar z=0 cross-section. Fails fast (no fake SVG) when the STL or OpenSCAD CLI is absent. Returns {status (source_missing|export_unavailable|export_failed|svg_exported), svg_path, wrapper_path, vector_ready}.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "openscad_bin": _STR, "cut": {"type": "boolean"}},
                 "required": ["out_dir"]}},
-    {"name": "bodesign_c03_export_mechanical_constraints", "handler": _h_c03_export_mech_constraints,
-     "description": "Export C03 circuit/spec data that affects C02/C04 mechanical work: component heights, external connectors/openings, heat sources, antenna/RF keepouts, battery envelope, and ESD/EMC notes. Does not infer board outline or placement coordinates.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "circuit": {"type": "object"}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c03_emit_partition_diagram", "handler": _h_c03_emit_partition_diagram,
-     "description": "Project a board-level partition MODEL (boards + board-to-board pin classes) into a layered, editable breakout concept SVG under C03-EE/partition/. `model` = {boards:[{name, role, tier?, modules:[{name, type, note?}]}], interconnect:[{class, dir, signals?, from_board?, to_board?}]}. Five named layers (boards/modules/interconnect/legend/annotations); each board a <g id='board-<name>'>, each module <g id='module-<board>-<n>'>, each interconnect <g id='net-<class>'>. Fails fast (status=missing + missing_fields) when a board.role / interconnect.class / interconnect.dir is absent — never fabricates a partition or substitutes a default. Unknown module types render as named placeholders and are reported in placeholders[] (never silently dropped). Always stamps the honest-boundary footer (design partition, not fab pinout / no RefDes.Pin→net / no DRC-SI claim); not parameterisable. Deterministic: same MODEL → byte-stable SVG. PNG raster is cairosvg-gated (png_rendered=false and PNG NOT listed in files when absent — no phantom). emit_pptx=true attempts an editable PPTX via the docxmcp bridge; unreachable → pptx_status=unavailable (never fabricates a .pptx). Design partition only — not a fab pinout, not a DRC/SI claim.",
-      "schema": {"type": "object", "properties": {"folder": _STR, "model": {"type": "object"}, "emit_pptx": {"type": "boolean"}},
-                 "required": ["folder", "model"]}},
-    {"name": "bodesign_c03_emit_host_block_diagram", "handler": _h_c03_emit_host_block_diagram,
-     "description": "Project a host/MCU-centric MODEL (a center SoC/MCU + peripherals radiating to the four sides) into a layered, editable functional block diagram SVG under C03-EE/block/. `model` = {center_part:{name, mpn?, type?}, peripherals:[{name, side(top|bottom|left|right), mpn?, bus?, type?}], reference_baseline?:{name, diffs?:[str], sourcing_gates?:[str]}, title?}. Five named layers (center/peripherals/buses/legend/annotations); center a <g id='center-<name>'> (solid blue), each peripheral <g id='peripheral-<name>'>, each bus <g id='bus-<name>'>. Fails fast (status=missing + missing_fields) when center_part.name / a peripheral.name / a peripheral.side is absent, or side is not in {top,bottom,left,right} (reported as peripherals[i].side(invalid:<v>)) — never fabricates or substitutes a default. Unknown peripheral types render as named dashed placeholders and are reported in placeholders[] (never silently dropped). Optional reference_baseline renders a 'derived from <name>' diff + sourcing-gates annotation block (omitted entirely when absent — no fabricated baseline) and is echoed in result.reference_baseline. Always stamps the honest-boundary footer (functional block diagram, not a netlist / no RefDes.Pin→net / no DRC-SI claim); not parameterisable. Deterministic: same MODEL → byte-stable SVG (no RNG; peripheral order = declaration order within each side). PNG raster is cairosvg-gated (png_rendered=false and PNG NOT listed in files when absent — no phantom). emit_pptx=true attempts an editable PPTX via the docxmcp bridge; unreachable → pptx_status=unavailable (never fabricates a .pptx). Functional block diagram only — not a netlist, not a fab pinout, not a DRC/SI claim.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "model": {"type": "object"}, "emit_pptx": {"type": "boolean"}},
-                "required": ["folder", "model"]}},
-    {"name": "bodesign_datasheet_lookup", "handler": _h_datasheet_lookup,
-     "description": "Look up a part's cached datasheet extraction (by MPN) in the project's `datasheets` skill cache (<project>/datasheets/extracted/). RCA anti-hallucination guard: call this BEFORE stating an electrical spec for a part. Returns the structured extraction, or status 'absent' (acquire the PDF + run the datasheets skill first — do NOT state the value from memory). bodesign only reads/gates; capturing datasheets is the `datasheets` skill's job. Pass vault_root = <project>/datasheets (in the C00–C07 tree: <track>/c03-ee/01_refs/datasheets).",
-     "schema": {"type": "object", "properties": {"mpn": _STR, "vault_root": _STR}, "required": ["mpn"]}},
-    {"name": "bodesign_spec_check", "handler": _h_spec_check,
-     "description": "Check whether a spec field of a part is grounded in the project datasheet cache (verified=value present + extraction cites a real source | unverified=no source | no-field | absent), optionally comparing a claimed_value. field accepts a friendly alias (vcc_min_v, vout_v, dropout_mv, iout_max_ma, …) or a raw dotted schema path. The RCA discipline gate: if 'absent'/'unverified', acquire+extract the datasheet before relying on the value. Pass vault_root = <project>/datasheets.",
-     "schema": {"type": "object", "properties": {"mpn": _STR, "field": _STR, "claimed_value": {}, "vault_root": _STR}, "required": ["mpn", "field"]}},
-    {"name": "bodesign_rca_spec_audit", "handler": _h_rca_spec_audit,
-     "description": "Gate a whole RCA before publishing: pass the list of spec values the analysis asserts (claims=[{mpn, field, asserted_value}]) and get back which are datasheet-grounded and which are BLOCKING — absent (no cached extraction), unverified (extraction has no source), or contradicting the cached datasheet. Returns publishable=false if any blocker. Run before stating spec-dependent conclusions so RCA rides on real datasheets, not guesses. Pass vault_root = <project>/datasheets.",
-     "schema": {"type": "object", "properties": {"claims": {"type": "array", "items": {"type": "object"}}, "vault_root": _STR}, "required": ["claims"]}},
     {"name": "bodesign_vault_ingest", "handler": _h_vault_ingest,
      "description": "Write into the server-side Component Vault (SQLite+FTS5, persistent across projects): upsert component identity, ingest a document (sha256 dedup + blob store), index chunks, and write evidence-backed spec values in one audited call. Every write needs `actor`; specs without evidence are stored unverified (never verified). Returns a write summary + the explicit knowledge-gap list per touched MPN. Contract identical to POST /vault/ingest.",
      "schema": {"type": "object", "properties": {"actor": _STR, "component": {"type": "object"}, "mpns": {"type": "array", "items": _STR}, "document": {"type": "object"}, "document_id": {"type": "integer"}, "chunks": {"type": "array", "items": {"type": "object"}}, "specs": {"type": "array", "items": {"type": "object"}}, "vault_dir": _STR}, "required": ["actor"]}},
@@ -1005,93 +781,62 @@ TOOLS: list[dict] = [
     {"name": "bodesign_analyzer_selfcheck", "handler": _h_analyzer_selfcheck,
      "description": "Deployment self-check for the C06 analyzer engines (kicad/spice/emc): per engine reports engine_resolvable (the analyzer SCRIPTS are bundled + resolvable via BODESIGN_*_SKILL) and binary_present (kicad-cli / ngspice on PATH), plus can_run, resolved_path, image_role (monolith/ee/core), and all_runnable. Answers 'can simulate/analyze_emc/analyze_thermal actually run in this process?' without a docker exec probe. Distinguishes a missing engine script (would cause skipped-no-skills) from a missing binary (skipped-no-simulator). EE-group: runs on the monolith locally, or forwards to the bodesign-ee worker; the lean core reports image_role=core (engines absent by design — it forwards EE).",
      "schema": {"type": "object", "properties": {}}},
-    {"name": "bodesign_c04_emit_layout_package", "handler": _h_c04_emit_layout_package,
-     "description": "Assemble the C04 layout constraint package (Layout_Constraints.json + Placement_Constraints.md) from C01 interface constraints + C03 mechanical constraints. Constraint-first for the layout engineer; board outline, mounting holes, placement coordinates, and stackup stay open and are never fabricated. Auto-loads C01/C03 exports from the folder if not passed.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "c01": {"type": "object"}, "c03": {"type": "object"}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c04_readiness", "handler": _h_c04_readiness,
-     "description": "Report C04 layout-constraint readiness: which upstream constraint groups are present and what remains layout-owned (board outline, mounting, placement, stackup). Never claims board/Gerber/layout approval.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c05_scaffold_fw_spec", "handler": _h_c05_scaffold_fw_spec,
-     "description": "Scaffold the C05 firmware software-development spec sub-package (Functional_Spec / Module_Architecture / State_Machine / Task_Breakdown + Pin_Map_Bridge.json) from PRD §7 software intent and the C03 pin map. bodesign owns the SPEC; the FW team owns the firmware code. No firmware code is generated; absent inputs stay pending, never fabricated.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "software": {"type": "object"}, "pin_map": {}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c05_readiness", "handler": _h_c05_readiness,
-     "description": "Report C05 FW SW-spec readiness: which spec sections exist, whether PRD §7 functions and the C03 pin map are bridged, and what is pending. Never claims firmware code or completion.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c06_assemble_test_plan", "handler": _h_c06_assemble_test_plan,
-     "description": "Assemble the C06 verification package (Verification_Summary.json + Test_Plan.md + Bring_Up_Checklist.md) from the verify-tool verdicts {simulate, emc, thermal, crosscheck}. Checks with no verdict are recorded `not-run`; no pass is fabricated. EVT/DVT and certification stay external-lab gates and are never marked certified.",
-     "schema": {"type": "object", "properties": {"out_dir": _STR, "verdicts": {"type": "object"}, "certification_targets": {"type": "array"}}, "required": ["out_dir"]}},
-    {"name": "bodesign_c06_readiness", "handler": _h_c06_readiness,
-     "description": "Report C06 verification readiness: per-check status, how many verify tools have produced verdicts, which are not-run, and whether any failed. Never claims certified/EVT-DVT-passed.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_reference_crosscheck", "handler": _h_crosscheck,
-     "description": "Cross-check a generated net set vs a reference product's nets (control group): matched/missing/extra + coverage.",
-     "schema": {"type": "object", "properties": {"generated_nets": {"type": "array", "items": _STR},
-                "reference_nets": {"type": "array", "items": _STR}, "label": _STR, "provenance": {"type": "object"}},
-                "required": ["generated_nets", "reference_nets"]}},
 
-    # ── Orchestration spine ──────────────────────────────────────────
-    {"name": "bodesign_agent_registry", "handler": _h_agent_registry,
-     "description": "Return the C00–C06 agent registry (derived from the document architecture): each layer's role, target_role, owning team, skills, human approval gate, and allowed/forbidden actions. C00 is the requirement-contract owner; C01–C06 are downstream workers.",
-     "schema": {"type": "object", "properties": {}}},
-    {"name": "bodesign_dispatch_work_packet", "handler": _h_dispatch_work_packet,
-     "description": "C00 dispatches a scoped work packet (bodesign.c00.work_packet.v1) to a downstream layer (C01–C06). The packet inherits the target layer's authority from the registry; it cannot target C00 itself. Persists under <folder>/_orchestration/work_packets/.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "target_layer": _STR, "objective": _STR,
-                "sections": {"type": "array", "items": _STR}, "fields": {"type": "array", "items": _STR},
-                "generated_docs": {"type": "array", "items": _STR}, "inputs": {"type": "object"},
-                "expected_outputs": {"type": "array", "items": _STR}},
-                "required": ["folder", "target_layer", "objective"]}},
-    {"name": "bodesign_list_work_packets", "handler": _h_list_work_packets,
-     "description": "List all C00 work packets dispatched in a project folder, with their target layer and status (ready/partial/blocked).",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_return_blocker", "handler": _h_return_blocker,
-     "description": "A downstream layer returns a blocker (bodesign.c00.blocker_return.v1) against its work packet to C00. The source layer is taken from the packet; this marks the packet blocked. severity ∈ {decision, external-needed, blocked, accepted-risk-request}.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "packet_id": _STR, "severity": _STR,
-                "summary": _STR, "question_for_user": _STR, "affected_c00_fields": {"type": "array", "items": _STR},
-                "affected_downstream_layers": {"type": "array", "items": _STR}, "options": {"type": "array"},
-                "recommended_owner": _STR, "proposed_state": _STR, "evidence": {"type": "object"},
-                "simple_fix_candidates": {"type": "array", "items": {"type": "object"}}},
-                "required": ["folder", "packet_id", "severity", "summary", "question_for_user"]}},
-    {"name": "bodesign_list_blockers", "handler": _h_list_blockers,
-     "description": "List blockers returned to C00 in a project folder; set unresolved_only=true for the open ones C00 still owes the user a decision on.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "unresolved_only": {"type": "boolean"}}, "required": ["folder"]}},
-    {"name": "bodesign_ingest_blocker", "handler": _h_ingest_blocker,
-     "description": "C00 records the human/owner resolution of a blocker and closes it. Does NOT silently mutate the PRD — it records the decision and the C00 field-state to apply via the C00 update/emit step. Requires a non-empty decision (no auto-resolution).",
-     "schema": {"type": "object", "properties": {"folder": _STR, "blocker_id": _STR, "resolved_state": _STR,
-                "decision": _STR, "decided_by": _STR}, "required": ["folder", "blocker_id", "resolved_state", "decision"]}},
-    {"name": "bodesign_reference_board_workflow", "handler": _h_reference_board_workflow,
-     "description": "Reference-board workflow plan with stage status/blockers DERIVED from the orchestration spine (_orchestration/ work packets + blockers + evidence returns) plus the design-review gate — the single source of truth (A1/DD-8). A missing spine reports SPINE_NOT_INITIALIZED blockers explicitly; it never falls back to parameter-snapshot status.",
-     "schema": {"type": "object", "properties": {"project_id": _STR, "board_design_id": _STR, "folder": _STR,
-                "artifact_count": {"type": "integer"}, "component_count": {"type": "integer"},
-                "net_count": {"type": "integer"}, "knowledge_queue_count": {"type": "integer"}},
-                "required": ["project_id", "board_design_id", "folder"]}},
-    {"name": "bodesign_wrap_validation_evidence", "handler": _h_wrap_validation_evidence,
-     "description": "Wrap a native validation tool result (drc_gate / si_check / crosscheck) into the unified ValidationEvidence envelope (bodesign.validation_evidence.v1): {tool, inputs, findings[], severity, anchors[], requirement_refs[], raw_result}. Native fields are preserved untouched under raw_result, never reinterpreted. Unknown tools / empty results fail fast (ENV_TOOL_UNKNOWN / ENV_RAW_RESULT_MISSING).",
-     "schema": {"type": "object", "properties": {"tool": _STR, "raw_result": {"type": "object"},
-                "inputs": {"type": "object"}, "requirement_refs": {"type": "array", "items": _STR}},
-                "required": ["tool", "raw_result"]}},
-    {"name": "bodesign_return_evidence", "handler": _h_return_evidence,
-     "description": "A downstream layer returns measured validation evidence (bodesign.c00.evidence_return.v1) against its work packet to C00. envelope must be a ValidationEvidence dict; requirement_verdicts rows are {requirement_key, verdict: pass|fail, measured_value?, anchors?}. Persists under <folder>/_orchestration/evidence_returns/ with count-based IDs (<LAYER>-EV-0001); malformed payloads fail fast and persist nothing.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "packet_id": _STR, "envelope": {"type": "object"},
-                "requirement_verdicts": {"type": "array", "items": {"type": "object"}}},
-                "required": ["folder", "packet_id", "envelope"]}},
-    {"name": "bodesign_list_evidence_returns", "handler": _h_list_evidence_returns,
-     "description": "List validation evidence returns in a project folder's orchestration spine; set unresolved_only=true for ones C00 has not ingested yet.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "unresolved_only": {"type": "boolean"}}, "required": ["folder"]}},
-    {"name": "bodesign_ingest_evidence", "handler": _h_ingest_evidence,
-     "description": "C00 consumes an evidence return: records per-requirement verification-status updates (pass/fail from oracle execution) and lists failed requirements for follow-up dispatch. Never auto-executes fixes — opening a new work packet remains C00's explicit dispatch step.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "evidence_id": _STR}, "required": ["folder", "evidence_id"]}},
-    {"name": "bodesign_enter_c01_mode", "handler": _h_enter_c01_mode,
-     "description": "C00 → C01 mode contract (C01-I3): dispatch a C01 work packet scoped to the PRD sections that hand off to C01, emit the Rockbox-like C01 package, and return the next C01 preference question. C01 may ask preference questions directly; product-level decisions return to C00 as blockers. C01 does not mutate the PRD or claim ID approval.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "c00": {}, "answers": {"type": "object"}, "objective": _STR},
-                "required": ["folder"]}},
-    {"name": "bodesign_c00_orchestration_status", "handler": _h_c00_orchestration_status,
-     "description": "Read-only orchestration board: per-layer (C01–C06) gate status (ready/partial/blocked), whether it has been dispatched + packet status, open blockers, plus the C00 PRD overall status and next question. Mutates nothing.",
-     "schema": {"type": "object", "properties": {"folder": _STR}, "required": ["folder"]}},
-    {"name": "bodesign_c00_orchestration_tick", "handler": _h_c00_orchestration_tick,
-     "description": "Advance the C00-driven loop one step: returns the single highest-value next action (scaffold_c00 / resolve_blocker / ask_c00 / dispatch / waiting / done) over the spine. May auto-dispatch a ready, undispatched layer (set auto_dispatch=false for a recommendation-only dry run). Never auto-answers a PRD field, resolves a blocker, or marks approval — those return to the user.",
-     "schema": {"type": "object", "properties": {"folder": _STR, "auto_dispatch": {"type": "boolean"}}, "required": ["folder"]}},
+    # ── Deliverable-cache lifecycle (plan mcp_r13-landing-webdav-cache, DD-5/DD-6) ──
+    {"name": "bodesign_cache_provision", "handler": _h_cache_provision,
+     "description": "Provision (find-or-mint, idempotent per owner+subject) a per-deliverable WebDAV working cache. Returns the cache token, the /dav/{token}/ mount URL, and the owner's WebDAV Basic credential — the password is returned plaintext ONCE and rotated on every provision (stored salted-hashed). soft_cap is a WARN-FIRST per-owner usage signal; it never blocks. Mount with rclone/davfs2 (class-2 DAV), let heavy tools read/write the same namespace, then bodesign_cache_export + bodesign_cache_close.",
+     "schema": {"type": "object", "properties": {"owner_identity": _STR, "subject_id": _STR},
+                "required": ["owner_identity", "subject_id"]}},
+    {"name": "bodesign_cache_export", "handler": _h_cache_export,
+     "description": "Export (land) a deliverable cache's whole tree to an absolute host-visible target directory and stamp last_export_at (the close dirty-gate reference). The target's PARENT must already exist — ancestors are never auto-created and no alternative target is guessed (typed EXPORT_TARGET_UNREACHABLE otherwise). Cross-owner access returns typed CACHE_FORBIDDEN. `cache_token` is the cache token from bodesign_cache_provision (do NOT pass it as the generic file-model `token` arg).",
+     "schema": {"type": "object", "properties": {"cache_token": _STR, "owner_identity": _STR, "target": _STR},
+                "required": ["cache_token", "owner_identity", "target"]}},
+    {"name": "bodesign_cache_close", "handler": _h_cache_close,
+     "description": "Close a deliverable cache and free its namespace. Dirty-gated: files modified since the last export return typed WORKSPACE_CLOSE_DIRTY plus the unexported list unless force=true (which discards them). Cross-owner access returns typed CACHE_FORBIDDEN.",
+     "schema": {"type": "object", "properties": {"cache_token": _STR, "owner_identity": _STR, "force": {"type": "boolean"}},
+                "required": ["cache_token", "owner_identity"]}},
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
+
+# ── Landed tools (plan mcp_r13, task 6.1 / R3) ─────────────────────────
+# Bucket-2 verbs moved to the landing plane (skills/bodesign/scripts/gate.py):
+# they run on the HOST, writing directly into the caller's repo. A call to a
+# removed bodesign_<verb> tool returns a typed TOOL_LANDED error carrying the
+# equivalent gate.py command — never an anonymous unknown-tool error. This set
+# mirrors gate.py's VERBS registry 1:1 (drift-guarded by tests). Borderline
+# (DD-3): c00_emit_prd_docx is in BOTH — gate.py lands the render-only path,
+# while the container KEEPS the registered tool for the assemble path (docxmcp
+# bridge); a registered name always dispatches normally (registry wins).
+LANDED_VERBS = frozenset({
+    # C00 PRD family
+    "c00_scaffold_prd", "c00_readiness", "c00_emit_prd", "c00_update_answers", "c00_emit_prd_docx",
+    # C01 family
+    "c01_emit_package", "c01_readiness", "c01_next_question", "c01_update_answers",
+    "c01_emit_concept_prompts", "c01_add_reference_image", "c01_confirm_reference_cue",
+    "c01_emit_id_visual_package", "c01_emit_cmf_package", "c01_emit_uiux_package",
+    # C02 analysis-only
+    "c02_readiness", "c02_emit_enclosure_package", "c02_generate_openscad", "c02_plan_intent",
+    # C03 emitters
+    "c03_export_mechanical_constraints", "c03_emit_partition_diagram", "c03_emit_host_block_diagram",
+    # C04/C05/C06 scaffold + readiness
+    "c04_emit_layout_package", "c04_readiness", "c05_scaffold_fw_spec", "c05_readiness",
+    "c06_assemble_test_plan", "c06_readiness",
+    # Orchestration spine
+    "agent_registry", "dispatch_work_packet", "list_work_packets", "return_blocker",
+    "list_blockers", "ingest_blocker", "wrap_validation_evidence", "return_evidence",
+    "list_evidence_returns", "ingest_evidence", "enter_c01_mode", "c00_orchestration_status",
+    "c00_orchestration_tick", "reference_board_workflow",
+    # Read / gate
+    "ingest_project", "package_readiness", "datasheet_lookup", "spec_check", "rca_spec_audit",
+    # Pure functions
+    "plan_design_intent", "evidence_manifest", "pin_allocation", "reference_crosscheck",
+    "impedance_solve",
+})
+
+
+def _landing_command(verb: str) -> str:
+    return (f"python3 skills/bodesign/scripts/gate.py {verb} --repo <abs-project-dir> "
+            "[--json '{...}' | --arg k=v]  (gate.py --list enumerates all landing verbs)")
 
 # ── Toolchain worker grouping/routing (Batch E) ────────────────────────
 # Tools are grouped by C0x responsibility / toolchain so heavy deps can live in
@@ -1100,7 +845,6 @@ TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 # change). A worker runs e.g. `--tools me`; the core runs `--tools core` and
 # forwards a non-local tool to its worker URL, or reports it unavailable.
 _ME_GROUP_TOOLS = {
-    "bodesign_c02_generate_openscad",
     "bodesign_c02_export_stl",
     "bodesign_c02_export_skp",
     "bodesign_c02_export_step",
@@ -1274,6 +1018,19 @@ def _produced(doc_dir: Path, before: dict) -> list[str]:
 
 
 def run_tool(name: str, arguments: dict) -> dict:
+    # Landed tool (v0.2.0 R13 split): typed TOOL_LANDED + the equivalent gate.py
+    # command line — never a silent 404 / anonymous unknown-tool error (R3).
+    # A name still in the registry always dispatches normally (the DD-3
+    # borderline case: bodesign_c00_emit_prd_docx stays for the assemble path).
+    if (name not in TOOLS_BY_NAME and name.startswith("bodesign_")
+            and name[len("bodesign_"):] in LANDED_VERBS):
+        verb = name[len("bodesign_"):]
+        _tools_log.info("tool_landed_hit tool=%s", name)
+        return {"ok": False, "error": "TOOL_LANDED",
+                "message": f"'{name}' moved to the landing plane in v0.2.0: it is a deterministic "
+                           "project-folder verb that runs on the HOST via the bodesign skill's "
+                           "gate.py (zero token round-trip), not an MCP tool",
+                "landing_command": _landing_command(verb)}
     # Worker routing: forward a non-local tool to its worker, or report it
     # unavailable when no worker is configured (the build123d gate, generalized).
     decision, target = _route_tool(name)
@@ -1330,26 +1087,26 @@ ORCHESTRATED_SKILLS = [
 
 # (en_head, en_body, zh_head, zh_body)
 WORKFLOW_STEPS = [
-    ("1. Ingest", "Upload your project tree (tarball→token) or point at a folder; <code>bodesign_ingest_project</code> classifies files + flags non-readable ones.",
-     "1. 匯入", "上傳專案樹（tarball→token）或指定資料夾；<code>bodesign_ingest_project</code> 分類檔案並標記不可讀者。"),
-    ("2. Plan", "<code>bodesign_plan_design_intent</code> turns a natural-language spec into requirements, clarifying questions, and subsystems.",
-     "2. 規劃", "<code>bodesign_plan_design_intent</code> 把自然語言規格轉成需求、釐清問題與子系統。"),
-    ("3. Source evidence", "<code>bodesign_evidence_manifest</code> grounds each part in a reference (local corpus first), so design = faithful reuse of known-good boards.",
-     "3. 蒐集證據", "<code>bodesign_evidence_manifest</code> 將每個零件對應到參考設計（本地語料優先），使設計＝忠實重用良品。"),
+    ("1. Ingest", "Run <code>gate.py ingest_project</code> on the host (landing verb) — it classifies files + flags non-readable ones right in your project folder.",
+     "1. 匯入", "在主機執行 <code>gate.py ingest_project</code>（landing verb）— 直接在專案資料夾分類檔案並標記不可讀者。"),
+    ("2. Plan", "<code>gate.py plan_design_intent</code> (landing verb) turns a natural-language spec into requirements, clarifying questions, and subsystems.",
+     "2. 規劃", "<code>gate.py plan_design_intent</code>（landing verb）把自然語言規格轉成需求、釐清問題與子系統。"),
+    ("3. Source evidence", "<code>gate.py evidence_manifest</code> (landing verb) grounds each part in a reference (local corpus first), so design = faithful reuse of known-good boards.",
+     "3. 蒐集證據", "<code>gate.py evidence_manifest</code>（landing verb）將每個零件對應到參考設計（本地語料優先），使設計＝忠實重用良品。"),
     ("4. Symbols", "<code>bodesign_emit_symbol</code> turns a datasheet pinout into a KiCad symbol (harvest via the datasheets skill).",
      "4. 符號", "<code>bodesign_emit_symbol</code> 把 datasheet 腳位轉成 KiCad 符號（透過 datasheets skill 採集）。"),
     ("5. Compose + ERC", "<code>bodesign_compose_schematic</code> auto-places components + nets → a kicad-cli-validated schematic (0 ERC).",
      "5. 組成＋ERC", "<code>bodesign_compose_schematic</code> 自動佈點＋接線 → 經 kicad-cli 驗證的原理圖（0 ERC）。"),
-    ("6. BOM + pins", "<code>bodesign_export_bom</code> (grouped, MPN) + <code>bodesign_pin_allocation</code> (the C03↔firmware interface).",
-     "6. BOM＋腳位", "<code>bodesign_export_bom</code>（分組、MPN）＋ <code>bodesign_pin_allocation</code>（C03↔韌體介面）。"),
+    ("6. BOM + pins", "<code>bodesign_export_bom</code> (grouped, MPN) + <code>gate.py pin_allocation</code> (landing verb; the C03↔firmware interface).",
+     "6. BOM＋腳位", "<code>bodesign_export_bom</code>（分組、MPN）＋ <code>gate.py pin_allocation</code>（landing verb；C03↔韌體介面）。"),
     ("7. Layout", "<code>bodesign_emit_layout</code> places footprints via pcbnew + DRC + an SVG companion (a starting board to route).",
      "7. 佈局", "<code>bodesign_emit_layout</code> 以 pcbnew 擺放 footprint＋DRC＋SVG 伴隨檔（待繞線的起手板）。"),
     ("8. Fab", "<code>bodesign_emit_fab</code> exports gerbers/drill/pos/STEP/PDF for the factory.",
      "8. 製造", "<code>bodesign_emit_fab</code> 匯出 gerber／鑽孔／pos／STEP／PDF 給工廠。"),
     ("9. Verify", "Four layers: ERC/DRC · <code>reference_crosscheck</code> vs a control group · <code>simulate</code> (SPICE) · <code>analyze_emc</code>/<code>analyze_thermal</code>.",
      "9. 驗證", "四層：ERC/DRC・對照組 <code>reference_crosscheck</code>・SPICE <code>simulate</code>・<code>analyze_emc</code>／<code>analyze_thermal</code>。"),
-    ("10. Track", "<code>bodesign_package_readiness</code> recomputes the compass + next step until the package is factory-submittable.",
-     "10. 追蹤", "<code>bodesign_package_readiness</code> 重算羅盤與下一步，直到文件包可送廠。"),
+    ("10. Track", "<code>gate.py package_readiness</code> (landing verb) recomputes the compass + next step until the package is factory-submittable.",
+     "10. 追蹤", "<code>gate.py package_readiness</code>（landing verb）重算羅盤與下一步，直到文件包可送廠。"),
 ]
 
 # UI string table (en / zh-Hant). i18n: lang from ?lang= or Accept-Language.
@@ -1672,6 +1429,435 @@ def _sessions_root() -> Path:
     root = Path(os.environ.get("BODESIGN_SESSIONS_ROOT", str(Path(__file__).resolve().parents[2] / ".run" / "sessions")))
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def build_cache_dav_routes() -> list:
+    """Deliverable-cache lifecycle + WebDAV class-2 routes as a module-level
+    factory (plan mcp_r13, tasks 5.3/5.4 — ported from docxmcp
+    build_cache_dav_routes) so a Starlette TestClient can build an app from
+    just these routes. Every handler is AuthProvider-gated + owner-checked;
+    failures are typed 401/403/404 per errors.md — never a fallback identity
+    or first-available cache (DD-6 / 天條).
+    """
+    import importlib
+    import shutil
+    from urllib.parse import unquote, urlsplit
+
+    from starlette.requests import Request
+    from starlette.responses import FileResponse, JSONResponse, Response
+    from starlette.routing import Route
+
+    from token_store import StoreOpError, TokenNotFoundError, default_store
+    _dav = importlib.import_module("_webdav")
+    ap = importlib.import_module("_auth_provider")
+
+    _dav_locks = _dav.LockTable()
+
+    def _put_max_bytes() -> int:
+        try:
+            return int(os.environ.get("BODESIGN_DAV_MAX_PUT_BYTES", str(64 * 1024 * 1024)))
+        except ValueError:
+            return 64 * 1024 * 1024
+
+    # ── shared auth + ownership helpers ──
+
+    class _CacheForbidden(Exception):
+        def __init__(self, token: str, who: str):
+            super().__init__(token, who)
+            self.token, self.who = token, who
+
+        def response(self) -> Response:
+            return JSONResponse(
+                {"error": "CACHE_FORBIDDEN",
+                 "message": "cache belongs to another owner; cross-owner access is never granted"},
+                status_code=403)
+
+    def _auth_identity(request: Request):
+        return ap.default_provider().resolve_identity(
+            auth_header=request.headers.get("authorization"),
+            cookies=dict(request.cookies),
+        )
+
+    def _auth_error_response(exc) -> Response:
+        _cache_log.warning("cache_auth_reject code=%s", exc.code)
+        return JSONResponse(
+            {"error": exc.code, "message": exc.message},
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="bodesign-webdav"'},
+        )
+
+    def _require_owned_cache(store, identity, token):
+        """cache_meta (→ 404) then owns() (→ 403). Identity + ownership resolve
+        BEFORE any filesystem work on the token."""
+        meta = store.cache_meta(token)  # TokenNotFoundError → 404
+        if not ap.default_provider().owns(identity, meta.owner_identity):
+            raise _CacheForbidden(token, identity.owner_identity)
+        return meta
+
+    def _mount_url(request: Request, token: str) -> str:
+        return f"{str(request.base_url).rstrip('/')}{_base()}/dav/{token}/"
+
+    # ── cache lifecycle handlers (task 5.3) ──
+
+    async def cache_provision(request: Request) -> Response:
+        try:
+            identity = _auth_identity(request)
+        except ap.AuthError as exc:
+            return _auth_error_response(exc)
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            payload = {}
+        subject_id = (payload or {}).get("subject_id") or ""
+        if not subject_id:
+            return JSONResponse(
+                {"error": "MISSING_SUBJECT_ID", "message": "subject_id is required"},
+                status_code=400)
+        store = default_store()
+        try:
+            meta = await asyncio.to_thread(
+                store.provision_cache, identity.owner_identity, subject_id)
+        except StoreOpError as exc:
+            return JSONResponse({"error": exc.code, "message": str(exc)}, status_code=400)
+        password = await asyncio.to_thread(
+            ap.default_provider().credentials.issue, identity.owner_identity)
+        # Per-owner soft cap: WARN-FIRST, NON-BLOCKING (天條). Provision already
+        # succeeded; over-cap still returns 201 with an observable signal.
+        soft_cap = await asyncio.to_thread(
+            _cache_soft_cap_status, store, identity.owner_identity)
+        if soft_cap.get("over"):
+            _cache_log.warning(
+                "cache_soft_cap_exceeded owner=%s count=%d/%d bytes=%d/%d",
+                identity.owner_identity, soft_cap["count"], soft_cap["count_cap"],
+                soft_cap["bytes"], soft_cap["bytes_cap"])
+        _cache_log.info("cache_provision_ok token=%s owner=%s subject=%s",
+                        meta.token, identity.owner_identity, subject_id)
+        return JSONResponse(
+            {"token": meta.token, "subject_id": meta.subject_id,
+             "owner": meta.owner_identity,
+             "mount_url": _mount_url(request, meta.token),
+             "mount_path": f"{_base()}/dav/{meta.token}",
+             "webdav_username": identity.owner_identity,
+             "webdav_password": password,
+             "soft_cap": soft_cap},
+            status_code=201)
+
+    async def cache_list_mine(request: Request) -> Response:
+        try:
+            identity = _auth_identity(request)
+        except ap.AuthError as exc:
+            return _auth_error_response(exc)
+        store = default_store()
+        items = await asyncio.to_thread(_cache_list_by_owner, store, identity.owner_identity)
+        return JSONResponse({"ok": True, "owner": identity.owner_identity,
+                             "caches": items, "count": len(items)})
+
+    async def cache_export(request: Request) -> Response:
+        try:
+            identity = _auth_identity(request)
+        except ap.AuthError as exc:
+            return _auth_error_response(exc)
+        token = request.path_params["token"]
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            payload = {}
+        target = (payload or {}).get("target") or ""
+        if not target:
+            return JSONResponse(
+                {"error": "MISSING_TARGET", "message": "target host path is required"},
+                status_code=400)
+        store = default_store()
+        try:
+            await asyncio.to_thread(_require_owned_cache, store, identity, token)
+        except TokenNotFoundError:
+            return JSONResponse({"error": "CACHE_NOT_FOUND"}, status_code=404)
+        except _CacheForbidden as exc:
+            return exc.response()
+        try:
+            result = await asyncio.to_thread(_cache_export_tree, store, token, Path(target))
+        except StoreOpError as exc:
+            status = 502 if exc.code == "EXPORT_TARGET_UNREACHABLE" else 400
+            _cache_log.warning("cache_export_reject token=%s code=%s", token, exc.code)
+            return JSONResponse({"error": exc.code, "message": str(exc)}, status_code=status)
+        return JSONResponse({"ok": True, **result})
+
+    async def cache_close(request: Request) -> Response:
+        try:
+            identity = _auth_identity(request)
+        except ap.AuthError as exc:
+            return _auth_error_response(exc)
+        token = request.path_params["token"]
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            payload = {}
+        force = bool((payload or {}).get("force", False))
+        store = default_store()
+        try:
+            await asyncio.to_thread(_require_owned_cache, store, identity, token)
+        except TokenNotFoundError:
+            return JSONResponse({"error": "CACHE_NOT_FOUND"}, status_code=404)
+        except _CacheForbidden as exc:
+            return exc.response()
+        try:
+            result = await asyncio.to_thread(_cache_close, store, token, force=force)
+        except StoreOpError as exc:
+            status = 409 if exc.code == "WORKSPACE_CLOSE_DIRTY" else 400
+            _cache_log.warning("cache_close_reject token=%s code=%s", token, exc.code)
+            body = {"error": exc.code, "message": str(exc)}
+            if getattr(exc, "unexported", None) is not None:
+                body["unexported"] = exc.unexported
+            return JSONResponse(body, status_code=status)
+        return JSONResponse({"ok": True, **result})
+
+    # ── WebDAV class-2 adapter (task 5.4) ──
+
+    def _dav_prefix(token: str) -> str:
+        return f"{_base()}/dav/{token}"
+
+    def _dav_dest_parse(destination: str) -> tuple[str | None, str | None]:
+        """Destination header → (dest_token, rel). (None, None) = unparseable."""
+        if not destination:
+            return None, None
+        path = urlsplit(destination).path or destination
+        path = unquote(path)
+        marker = "/dav/"
+        idx = path.find(marker)
+        if idx < 0:
+            return None, None
+        rest = path[idx + len(marker):]
+        tok, _, rel = rest.partition("/")
+        rel = rel.strip("/")
+        return (tok or None), (rel or None)
+
+    def _dest_rel_or_response(request: Request, token: str) -> tuple[str | None, Response | None]:
+        """Same-token rel from the Destination header, or the typed error
+        response: cross-token → 403 CACHE_FORBIDDEN, unparseable → 400."""
+        dest_token, dst_rel = _dav_dest_parse(request.headers.get("destination", ""))
+        if dest_token is None:
+            return None, Response(status_code=400)
+        if dest_token != token:
+            _cache_log.warning("dav_dest_cross_token token=%s dest_token=%s", token, dest_token)
+            return None, JSONResponse(
+                {"error": "CACHE_FORBIDDEN",
+                 "message": "MOVE/COPY Destination must stay inside the same cache token"},
+                status_code=403)
+        if dst_rel is None:
+            return None, Response(status_code=400)
+        return dst_rel, None
+
+    async def _dav_resolve_owned(request: Request, token: str):
+        identity = _auth_identity(request)  # AuthError → 401
+        store = default_store()
+        meta = await asyncio.to_thread(_require_owned_cache, store, identity, token)
+        return identity, meta, store
+
+    def _dav_auth_fail(exc) -> Response:
+        if isinstance(exc, ap.AuthError):
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="bodesign-webdav"',
+                         "DAV": _dav.DAV_COMPLIANCE})
+        if isinstance(exc, _CacheForbidden):
+            return exc.response()
+        return Response(status_code=404)  # TokenNotFoundError
+
+    def _store_op_status(exc: StoreOpError) -> int:
+        code = exc.code
+        if "DEST_EXISTS" in code:
+            return 412
+        if "SRC_MISSING" in code:
+            return 404
+        if code == "MKCOL_NOT_DIR":
+            return 405
+        return 400
+
+    async def dav_dispatch(request: Request) -> Response:
+        method = request.method.upper()
+        token = request.path_params["token"]
+        rel = (request.path_params.get("rel") or "").strip("/")
+
+        if method == "OPTIONS":
+            # identity-free capability probe (davfs2/rclone probe pre-auth)
+            return Response(status_code=200, headers=_dav.options_headers())
+
+        try:
+            identity, meta, store = await _dav_resolve_owned(request, token)
+        except (ap.AuthError, _CacheForbidden, TokenNotFoundError) as exc:
+            _cache_log.warning("dav_auth_reject method=%s token=%s", method, token)
+            return _dav_auth_fail(exc)
+        doc_dir = store.root / token
+
+        if method == "PROPFIND":
+            depth = _dav.normalise_depth(request.headers.get("depth"))
+            try:
+                resources = await asyncio.to_thread(
+                    _dav.build_propfind, _dav_prefix(token), doc_dir, rel, depth)
+            except _dav.PropfindNotFound:
+                _cache_log.info("dav_propfind_404 token=%s rel=%s", token, rel)
+                return Response(status_code=404)
+            xml = _dav.multistatus_xml(resources)
+            _cache_log.info("dav_propfind_ok token=%s rel=%s depth=%s n=%d",
+                            token, rel, depth, len(resources))
+            return Response(xml, status_code=207,
+                            media_type="application/xml; charset=utf-8",
+                            headers={"DAV": _dav.DAV_COMPLIANCE})
+
+        if method in ("GET", "HEAD"):
+            if not rel:
+                return Response(status_code=403)
+            try:
+                target = store.safe_join(doc_dir, rel)
+            except (ValueError, OSError):
+                _cache_log.warning("dav_traversal_reject method=%s token=%s rel=%s", method, token, rel)
+                return JSONResponse({"error": "DAV_TRAVERSAL_REJECTED"}, status_code=403)
+            if not target.is_file():
+                return Response(status_code=404)
+            _cache_log.info("dav_%s_ok token=%s rel=%s", method.lower(), token, rel)
+            if method == "HEAD":
+                return Response(status_code=200, headers={
+                    "Content-Length": str(target.stat().st_size),
+                    "Content-Type": "application/octet-stream"})
+            return FileResponse(path=str(target), filename=target.name,
+                                media_type="application/octet-stream")
+
+        if method == "PUT":
+            if not rel:
+                return Response(status_code=403)
+            blocking = _dav_locks.check(token, rel, identity.owner_identity)
+            if blocking is not None:
+                _cache_log.warning("dav_put_locked token=%s rel=%s", token, rel)
+                return JSONResponse({"error": "DAV_LOCKED"}, status_code=423)
+            max_bytes = _put_max_bytes()
+            body = b""
+            async for chunk in request.stream():
+                if chunk:
+                    body += chunk
+                    if len(body) > max_bytes:
+                        _cache_log.warning("dav_put_too_large token=%s rel=%s", token, rel)
+                        return JSONResponse({"error": "PAYLOAD_TOO_LARGE"}, status_code=413)
+            try:
+                target = store.safe_join(doc_dir, rel)
+            except (ValueError, OSError):
+                _cache_log.warning("dav_traversal_reject method=PUT token=%s rel=%s", token, rel)
+                return JSONResponse({"error": "DAV_TRAVERSAL_REJECTED"}, status_code=403)
+            def _write() -> None:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(body)
+            await asyncio.to_thread(_write)
+            await asyncio.to_thread(store.touch_cache, token)
+            _cache_log.info("dav_put_ok token=%s rel=%s bytes=%d", token, rel, len(body))
+            return Response(status_code=201)
+
+        if method == "DELETE":
+            if not rel:
+                return Response(status_code=403)
+            blocking = _dav_locks.check(token, rel, identity.owner_identity)
+            if blocking is not None:
+                return JSONResponse({"error": "DAV_LOCKED"}, status_code=423)
+            try:
+                target = store.safe_join(doc_dir, rel)
+            except (ValueError, OSError):
+                return JSONResponse({"error": "DAV_TRAVERSAL_REJECTED"}, status_code=403)
+            if not target.exists():
+                return Response(status_code=404)
+            def _delete() -> None:
+                if target.is_dir():
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink(missing_ok=True)
+            await asyncio.to_thread(_delete)
+            _cache_log.info("dav_delete_ok token=%s rel=%s", token, rel)
+            return Response(status_code=204)
+
+        if method == "MKCOL":
+            if not rel:
+                return Response(status_code=405)
+            try:
+                await asyncio.to_thread(store.mkdir, token, rel)
+            except ValueError:
+                return JSONResponse({"error": "DAV_TRAVERSAL_REJECTED"}, status_code=403)
+            except StoreOpError as exc:
+                return Response(status_code=_store_op_status(exc))
+            _cache_log.info("dav_mkcol_ok token=%s rel=%s", token, rel)
+            return Response(status_code=201)
+
+        if method == "MOVE":
+            if not rel:
+                return Response(status_code=403)
+            dst_rel, err = _dest_rel_or_response(request, token)
+            if err is not None:
+                return err
+            # source AND destination locks both matter for a rename
+            for guarded in (rel, dst_rel):
+                if _dav_locks.check(token, guarded, identity.owner_identity) is not None:
+                    _cache_log.warning("dav_move_locked token=%s rel=%s", token, guarded)
+                    return JSONResponse({"error": "DAV_LOCKED"}, status_code=423)
+            overwrite = request.headers.get("overwrite", "T").upper() != "F"
+            try:
+                _, created = await asyncio.to_thread(
+                    store.move, token, rel, dst_rel, overwrite=overwrite)
+            except ValueError:
+                return JSONResponse({"error": "DAV_TRAVERSAL_REJECTED"}, status_code=403)
+            except StoreOpError as exc:
+                return Response(status_code=_store_op_status(exc))
+            _cache_log.info("dav_move_ok token=%s src=%s dst=%s created=%s",
+                            token, rel, dst_rel, created)
+            # RFC 4918: 201 when the destination is new, 204 on overwrite.
+            return Response(status_code=201 if created else 204)
+
+        if method == "COPY":
+            if not rel:
+                return Response(status_code=403)
+            dst_rel, err = _dest_rel_or_response(request, token)
+            if err is not None:
+                return err
+            # COPY only reads the source; the lock that matters is on the
+            # DESTINATION (we are about to write it), mirroring PUT.
+            if _dav_locks.check(token, dst_rel, identity.owner_identity) is not None:
+                _cache_log.warning("dav_copy_locked token=%s dst=%s", token, dst_rel)
+                return JSONResponse({"error": "DAV_LOCKED"}, status_code=423)
+            overwrite = request.headers.get("overwrite", "T").upper() != "F"
+            try:
+                _, created = await asyncio.to_thread(
+                    store.copy, token, rel, dst_rel, overwrite=overwrite)
+            except ValueError:
+                return JSONResponse({"error": "DAV_TRAVERSAL_REJECTED"}, status_code=403)
+            except StoreOpError as exc:
+                return Response(status_code=_store_op_status(exc))
+            _cache_log.info("dav_copy_ok token=%s src=%s dst=%s created=%s",
+                            token, rel, dst_rel, created)
+            return Response(status_code=201 if created else 204)
+
+        if method == "LOCK":
+            ttl = _dav.parse_timeout_header(request.headers.get("timeout"))
+            lock = _dav_locks.acquire(token, rel, identity.owner_identity, ttl=ttl)
+            if lock is None:
+                _cache_log.warning("dav_lock_conflict token=%s rel=%s", token, rel)
+                return JSONResponse({"error": "DAV_LOCKED"}, status_code=423)
+            _cache_log.info("dav_lock_ok token=%s rel=%s", token, rel)
+            return Response(
+                _dav_locks.lockdiscovery_xml(lock), status_code=200,
+                media_type="application/xml; charset=utf-8",
+                headers={"Lock-Token": f"<{lock.token}>"})
+
+        if method == "UNLOCK":
+            locktoken = request.headers.get("lock-token", "").strip().lstrip("<").rstrip(">")
+            removed = _dav_locks.release(token, rel, locktoken)
+            _cache_log.info("dav_unlock token=%s rel=%s removed=%s", token, rel, removed)
+            return Response(status_code=204 if removed else 409)
+
+        return Response(status_code=405, headers={"Allow": ", ".join(_dav.ALLOWED_METHODS)})
+
+    return [
+        Route("/caches", endpoint=cache_provision, methods=["POST"]),
+        Route("/caches", endpoint=cache_list_mine, methods=["GET"]),
+        Route("/caches/{token}/export", endpoint=cache_export, methods=["POST"]),
+        Route("/caches/{token}/close", endpoint=cache_close, methods=["POST"]),
+        Route("/dav/{token}", endpoint=dav_dispatch, methods=list(_dav.ALLOWED_METHODS)),
+        Route("/dav/{token}/{rel:path}", endpoint=dav_dispatch, methods=list(_dav.ALLOWED_METHODS)),
+    ]
 
 
 async def run_http(host: str, port: int, uds: str | None = None) -> None:

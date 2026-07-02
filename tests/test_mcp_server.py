@@ -1,4 +1,5 @@
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -9,6 +10,23 @@ from unittest.mock import patch
 
 
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
+
+# Landing plane (plan mcp_r13, task 6.1): the Bucket-2 verbs are no longer MCP
+# tools — their functional coverage now runs through gate.py's in-process
+# handlers, mirroring how agents invoke them on the host.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_GATE_SPEC = importlib.util.spec_from_file_location(
+    "bodesign_landing_gate_for_mcp_tests", REPO_ROOT / "skills" / "bodesign" / "scripts" / "gate.py")
+GATE = importlib.util.module_from_spec(_GATE_SPEC)
+_GATE_SPEC.loader.exec_module(GATE)
+
+
+def run_landing(verb: str, args: dict) -> dict:
+    """Run a landed verb through gate.py's handler, with run_tool-shaped output."""
+    try:
+        return {"ok": True, "result": GATE._jsonable(GATE.HANDLERS[verb](args))}
+    except Exception as error:
+        return {"ok": False, "error": f"{type(error).__name__}: {error}"}
 
 
 class McpServerTests(unittest.TestCase):
@@ -26,7 +44,7 @@ class McpServerTests(unittest.TestCase):
             self.assertTrue(t["description"])
 
     def test_run_tool_plan_design_intent(self):
-        r = self.server.run_tool("bodesign_plan_design_intent",
+        r = run_landing("plan_design_intent",
                                  {"spec": "STM32N6 NPU + WiFi + camera + USB-C charging + 18650 battery"})
         self.assertTrue(r["ok"])
         self.assertEqual("needs-clarification", r["result"]["status"])
@@ -36,7 +54,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-", dir=PRIVATE_BASE))
         try:
-            r = self.server.run_tool("bodesign_c01_emit_package", {
+            r = run_landing("c01_emit_package", {
                 "out_dir": str(work),
                 "c00": "Battery camera product with microphone, BLE, USB-C, and LED status.",
                 "answers": {"product_name": "MCP C01 POC", "form_archetype": "desktop sensor"},
@@ -45,7 +63,7 @@ class McpServerTests(unittest.TestCase):
             self.assertTrue(r["result"]["readiness"]["usable"])
             self.assertTrue((work / "C01-ID" / "CMF" / "CMF_Direction.md").exists())
 
-            readiness = self.server.run_tool("bodesign_c01_readiness", {"folder": str(work)})
+            readiness = run_landing("c01_readiness", {"folder": str(work)})
             self.assertTrue(readiness["ok"])
             self.assertEqual(100, readiness["result"]["readiness_pct"])
         finally:
@@ -55,12 +73,12 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-interact-", dir=PRIVATE_BASE))
         try:
-            question = self.server.run_tool("bodesign_c01_next_question", {"folder": str(work)})
+            question = run_landing("c01_next_question", {"folder": str(work)})
             self.assertTrue(question["ok"])
             self.assertEqual("form_archetype", question["result"]["target_field"])
             self.assertFalse(question["result"]["answer_state_exists"])
 
-            update = self.server.run_tool("bodesign_c01_update_answers", {
+            update = run_landing("c01_update_answers", {
                 "folder": str(work),
                 "c00": "Desk edge AI device with camera, mic, USB-C, and LED.",
                 "answers": {
@@ -76,7 +94,7 @@ class McpServerTests(unittest.TestCase):
             self.assertTrue((work / "C01-ID" / "answer_state.json").exists())
             self.assertTrue((work / "C01-ID" / "Handoff_to_ID_Designer.md").exists())
 
-            readiness = self.server.run_tool("bodesign_c01_readiness", {"folder": str(work)})
+            readiness = run_landing("c01_readiness", {"folder": str(work)})
             self.assertTrue(readiness["ok"])
             self.assertFalse(readiness["result"]["usable"])
             self.assertEqual("C01-ID/answer_state.json", readiness["result"]["answer_state_path"])
@@ -89,7 +107,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-", dir=PRIVATE_BASE))
         try:
-            result = self.server.run_tool("bodesign_c00_scaffold_prd", {
+            result = run_landing("c00_scaffold_prd", {
                 "out_dir": str(work),
                 "project_name": "MCP C00 POC",
                 "include_rf": True,
@@ -113,10 +131,10 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-ready-", dir=PRIVATE_BASE))
         try:
-            scaffold = self.server.run_tool("bodesign_c00_scaffold_prd", {"out_dir": str(work)})
+            scaffold = run_landing("c00_scaffold_prd", {"out_dir": str(work)})
             self.assertTrue(scaffold["ok"])
 
-            readiness = self.server.run_tool("bodesign_c00_readiness", {"folder": str(work)})
+            readiness = run_landing("c00_readiness", {"folder": str(work)})
 
             self.assertTrue(readiness["ok"])
             self.assertEqual("blocked", readiness["result"]["status"])
@@ -131,7 +149,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-missing-", dir=PRIVATE_BASE))
         try:
-            result = self.server.run_tool("bodesign_c00_readiness", {"folder": str(work)})
+            result = run_landing("c00_readiness", {"folder": str(work)})
 
             self.assertFalse(result["ok"])
             self.assertIn("answer_state.json", result["error"])
@@ -142,10 +160,10 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c00-emit-", dir=PRIVATE_BASE))
         try:
-            scaffold = self.server.run_tool("bodesign_c00_scaffold_prd", {"out_dir": str(work)})
+            scaffold = run_landing("c00_scaffold_prd", {"out_dir": str(work)})
             self.assertTrue(scaffold["ok"])
 
-            result = self.server.run_tool("bodesign_c00_emit_prd", {"folder": str(work)})
+            result = run_landing("c00_emit_prd", {"folder": str(work)})
 
             self.assertTrue(result["ok"])
             self.assertEqual("prd_markdown_emitted", result["result"]["status"])
@@ -176,7 +194,7 @@ class McpServerTests(unittest.TestCase):
             shutil.rmtree(work, ignore_errors=True)
 
     def test_run_tool_c02_readiness_blocks_missing_board_outline(self):
-        result = self.server.run_tool("bodesign_c02_readiness", {
+        result = run_landing("c02_readiness", {
             "constraints": {"component_heights": [{"ref": "J1", "height_mm": 8}]}
         })
 
@@ -185,7 +203,7 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("Board outline", result["result"]["next_step"])
 
     def test_run_tool_c02_readiness_accepts_minimum_source_constraints(self):
-        result = self.server.run_tool("bodesign_c02_readiness", {
+        result = run_landing("c02_readiness", {
             "constraints": {
                 "board_outline": {"width_mm": 80, "height_mm": 50},
                 "component_heights": [{"ref": "U1", "height_mm": 4}],
@@ -200,7 +218,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-", dir=PRIVATE_BASE))
         try:
-            result = self.server.run_tool("bodesign_c02_emit_enclosure_package", {
+            result = run_landing("c02_emit_enclosure_package", {
                 "out_dir": str(work),
                 "constraints": {"component_heights": [{"ref": "J1", "height_mm": 8}]},
                 "project_summary": "Desk AI sensor",
@@ -227,7 +245,7 @@ class McpServerTests(unittest.TestCase):
                 "board_outline": {"width_mm": 80, "height_mm": 50},
                 "component_heights": [{"ref": "J1", "height_mm": 8}],
             }
-            source = self.server.run_tool("bodesign_c02_generate_openscad", {
+            source = run_landing("c02_generate_openscad", {
                 "out_dir": str(work),
                 "constraints": constraints,
                 "wall_thickness_mm": 2.0,
@@ -253,7 +271,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-skp-", dir=PRIVATE_BASE))
         try:
-            source = self.server.run_tool("bodesign_c02_generate_openscad", {
+            source = run_landing("c02_generate_openscad", {
                 "out_dir": str(work),
                 "constraints": {
                     "board_outline": {"width_mm": 80, "height_mm": 50},
@@ -280,7 +298,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-step-", dir=PRIVATE_BASE))
         try:
-            source = self.server.run_tool("bodesign_c02_generate_openscad", {
+            source = run_landing("c02_generate_openscad", {
                 "out_dir": str(work),
                 "constraints": {
                     "board_outline": {"width_mm": 80, "height_mm": 50},
@@ -307,7 +325,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c03-", dir=PRIVATE_BASE))
         try:
-            result = self.server.run_tool("bodesign_c03_export_mechanical_constraints", {
+            result = run_landing("c03_export_mechanical_constraints", {
                 "out_dir": str(work),
                 "circuit": {
                     "components": [
@@ -333,7 +351,7 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("unknown tool", r["error"])
 
     def test_run_tool_agent_registry(self):
-        r = self.server.run_tool("bodesign_agent_registry", {})
+        r = run_landing("agent_registry", {})
         self.assertTrue(r["ok"])
         self.assertEqual([role["code"] for role in r["result"]["roles"]],
                          ["C00", "C01", "C02", "C03", "C04", "C05", "C06"])
@@ -342,7 +360,7 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-orch-", dir=PRIVATE_BASE))
         try:
-            d = self.server.run_tool("bodesign_dispatch_work_packet", {
+            d = run_landing("dispatch_work_packet", {
                 "folder": str(work), "target_layer": "C01",
                 "objective": "Produce first-pass ID direction from PRD visual fields.",
                 "sections": ["s05_id_me_requirements"]})
@@ -350,7 +368,7 @@ class McpServerTests(unittest.TestCase):
             packet_id = d["result"]["packet_id"]
             self.assertEqual(d["result"]["target_role"], "industrial_design")
 
-            b = self.server.run_tool("bodesign_return_blocker", {
+            b = run_landing("return_blocker", {
                 "folder": str(work), "packet_id": packet_id, "severity": "decision",
                 "summary": "Need primary face decision.",
                 "question_for_user": "Which face is primary?",
@@ -358,16 +376,16 @@ class McpServerTests(unittest.TestCase):
             self.assertTrue(b["ok"])
             blocker_id = b["result"]["blocker_id"]
 
-            open_blk = self.server.run_tool("bodesign_list_blockers", {"folder": str(work), "unresolved_only": True})
+            open_blk = run_landing("list_blockers", {"folder": str(work), "unresolved_only": True})
             self.assertEqual(len(open_blk["result"]["blockers"]), 1)
 
-            g = self.server.run_tool("bodesign_ingest_blocker", {
+            g = run_landing("ingest_blocker", {
                 "folder": str(work), "blocker_id": blocker_id, "resolved_state": "answered",
                 "decision": "Top face is primary."})
             self.assertTrue(g["ok"])
             self.assertTrue(g["result"]["resolved"])
 
-            closed = self.server.run_tool("bodesign_list_blockers", {"folder": str(work), "unresolved_only": True})
+            closed = run_landing("list_blockers", {"folder": str(work), "unresolved_only": True})
             self.assertEqual(closed["result"]["blockers"], [])
         finally:
             shutil.rmtree(work, ignore_errors=True)
@@ -376,8 +394,8 @@ class McpServerTests(unittest.TestCase):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-orch2-", dir=PRIVATE_BASE))
         try:
-            r = self.server.run_tool("bodesign_dispatch_work_packet",
-                                     {"folder": str(work), "target_layer": "C00", "objective": "x"})
+            r = run_landing("dispatch_work_packet",
+                            {"folder": str(work), "target_layer": "C00", "objective": "x"})
             self.assertFalse(r["ok"])
         finally:
             shutil.rmtree(work, ignore_errors=True)
@@ -387,12 +405,12 @@ class McpServerTests(unittest.TestCase):
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-loop-", dir=PRIVATE_BASE))
         try:
             # Empty -> the loop tells you to scaffold C00 first.
-            tick = self.server.run_tool("bodesign_c00_orchestration_tick", {"folder": str(work)})
+            tick = run_landing("c00_orchestration_tick", {"folder": str(work)})
             self.assertTrue(tick["ok"])
             self.assertEqual(tick["result"]["kind"], "scaffold_c00")
             # Status board is read-only and well-formed.
-            self.server.run_tool("bodesign_c00_scaffold_prd", {"out_dir": str(work), "project_name": "X"})
-            board = self.server.run_tool("bodesign_c00_orchestration_status", {"folder": str(work)})
+            run_landing("c00_scaffold_prd", {"out_dir": str(work), "project_name": "X"})
+            board = run_landing("c00_orchestration_status", {"folder": str(work)})
             self.assertTrue(board["ok"])
             self.assertEqual([l["code"] for l in board["result"]["layers"]],
                              ["C01", "C02", "C03", "C04", "C05", "C06"])
@@ -401,9 +419,9 @@ class McpServerTests(unittest.TestCase):
 
     def test_tool_groups_assigned(self):
         groups = {t["name"]: t["group"] for t in self.server.TOOLS}
-        # C02 CAD generation/export tools belong to the mechanical worker group.
-        for t in ("bodesign_c02_export_step", "bodesign_c02_export_stl",
-                  "bodesign_c02_generate_openscad", "bodesign_c02_export_skp"):
+        # C02 CAD export tools belong to the mechanical worker group
+        # (c02_generate_openscad landed — pure text generation runs on the host).
+        for t in ("bodesign_c02_export_step", "bodesign_c02_export_stl", "bodesign_c02_export_skp"):
             self.assertEqual(groups[t], "me")
         # Electronics-engineering tools (KiCad/ngspice) belong to the ee worker group.
         for t in ("bodesign_compose_schematic", "bodesign_emit_layout", "bodesign_simulate",
@@ -413,26 +431,70 @@ class McpServerTests(unittest.TestCase):
         # emit_doc stays core: there is NO bodesign-docs worker — docx/pdf rendering is
         # delegated to docxmcp (which already ships LibreOffice). emit_doc gates gracefully.
         self.assertEqual(groups["bodesign_emit_doc"], "core")
-        # Pure-python / core tools stay core (incl. EE-adjacent pure python).
-        for t in ("bodesign_agent_registry", "bodesign_c02_readiness", "bodesign_c00_orchestration_tick",
-                  "bodesign_pin_allocation", "bodesign_reference_crosscheck", "bodesign_ingest_project",
-                  "bodesign_impedance_solve", "bodesign_render_gerber_preview"):
+        # Remaining core tools stay core.
+        for t in ("bodesign_stage_dir", "bodesign_mcp_call", "bodesign_spice_model_card",
+                  "bodesign_vault_query", "bodesign_render_gerber_preview"):
             self.assertEqual(groups[t], "core")
 
-    def test_run_tool_impedance_solve_is_core_and_structured(self):
-        result = self.server.run_tool("bodesign_impedance_solve", {
+    # DD-3 borderline: the render-only path landed in gate.py, but the container
+    # KEEPS this registered tool for the assemble path (docxmcp bridge).
+    BORDERLINE_KEPT = {"c00_emit_prd_docx"}
+
+    def test_landed_tools_removed_from_registry(self):
+        """6.1/AC-7: no landed verb is still registered as an MCP tool — except the
+        DD-3 borderline keeps, which stay registered for their container-only path."""
+        names = {t["name"] for t in self.server.TOOLS}
+        for verb in self.server.LANDED_VERBS:
+            if verb in self.BORDERLINE_KEPT:
+                self.assertIn(f"bodesign_{verb}", names,
+                              f"{verb}: borderline keep must stay registered (assemble path)")
+                continue
+            self.assertNotIn(f"bodesign_{verb}", names)
+
+    def test_landed_verbs_mirror_gate_registry(self):
+        """Drift guard: server.LANDED_VERBS is 1:1 with gate.py's VERBS table."""
+        self.assertEqual(set(self.server.LANDED_VERBS), set(GATE.VERBS))
+
+    def test_removed_tool_call_returns_typed_tool_landed(self):
+        """R3/AC-7: EVERY gate.py verb, called as its former MCP tool name, returns
+        the typed TOOL_LANDED envelope (data-schema.json ToolLandedError) with the
+        verb inside landing_command — never an anonymous unknown-tool error.
+        Borderline keeps (still registered) dispatch normally instead."""
+        for verb in sorted(GATE.VERBS):
+            if verb in self.BORDERLINE_KEPT:
+                self.assertIn(f"bodesign_{verb}", self.server.TOOLS_BY_NAME)
+                continue
+            r = self.server.run_tool(f"bodesign_{verb}", {"folder": "/x"})
+            self.assertFalse(r["ok"], f"{verb}: expected ok=false")
+            self.assertEqual(r["error"], "TOOL_LANDED", f"{verb}: wrong error code")
+            self.assertIn(f"gate.py {verb} --repo", r["landing_command"],
+                          f"{verb}: landing_command must carry the verb")
+
+    def test_converged_registry_tool_count(self):
+        """6.4/AC-7: GET /tools reflects the converged registry — pre-refactor 91
+        non-cache tools minus 51 fully-landed verbs (c00_emit_prd_docx stays as a
+        DD-3 borderline keep for the assemble path) plus the 3 cache tools = 43."""
+        self.assertEqual(len(self.server.TOOLS), 43)
+        names = {t["name"] for t in self.server.TOOLS}
+        # borderline / infrastructure keeps (design.md DD-3):
+        for kept in ("bodesign_c00_emit_prd_docx", "bodesign_c02_voice_to_design",
+                     "bodesign_spice_model_card", "bodesign_stage_dir", "bodesign_mcp_call",
+                     "bodesign_cache_provision", "bodesign_cache_export", "bodesign_cache_close"):
+            self.assertIn(kept, names)
+
+    def test_landed_impedance_solve_is_structured(self):
+        result = run_landing("impedance_solve", {
             "stackup": {"dielectric_height_mm": 0.18, "er": 4.2},
             "targets": {"se50": {"impedance_ohm": 50}},
         })
 
         self.assertTrue(result["ok"])
-        self.assertEqual(self.server.TOOLS_BY_NAME["bodesign_impedance_solve"]["group"], "core")
         self.assertIn("se50", result["result"]["classes"])
         self.assertIn("width_mm", result["result"]["classes"]["se50"])
         self.assertIn("actual_ohm", result["result"]["classes"]["se50"])
         self.assertIn("ps_per_mm", result["result"]["classes"]["se50"])
 
-        missing = self.server.run_tool("bodesign_impedance_solve", {"stackup": {"er": 4.2}, "targets": {"se50": 50}})
+        missing = run_landing("impedance_solve", {"stackup": {"er": 4.2}, "targets": {"se50": 50}})
         self.assertFalse(missing["ok"])
         self.assertIn("dielectric_height_mm", missing["error"])
 
@@ -513,7 +575,7 @@ class McpServerTests(unittest.TestCase):
         saved = self.server.SERVED_GROUPS
         try:
             self.server.SERVED_GROUPS = {"all"}
-            for name in ("bodesign_c02_export_step", "bodesign_agent_registry"):
+            for name in ("bodesign_c02_export_step", "bodesign_stage_dir"):
                 self.assertEqual(self.server._route_tool(name)[0], "local")
         finally:
             self.server.SERVED_GROUPS = saved
@@ -531,7 +593,7 @@ class McpServerTests(unittest.TestCase):
                 self.assertFalse(r["ok"])
                 self.assertTrue(r["worker_unavailable"])
                 # A core tool still runs locally.
-                self.assertEqual(self.server._route_tool("bodesign_agent_registry")[0], "local")
+                self.assertEqual(self.server._route_tool("bodesign_stage_dir")[0], "local")
         finally:
             self.server.SERVED_GROUPS = saved
 
@@ -587,13 +649,13 @@ class McpServerTests(unittest.TestCase):
             # A core tool on the worker, with no core worker url, is unavailable (core never forwards core tools here).
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("BODESIGN_CORE_WORKER_URL", None)
-                self.assertEqual(self.server._route_tool("bodesign_agent_registry")[0], "unavailable")
+                self.assertEqual(self.server._route_tool("bodesign_stage_dir")[0], "unavailable")
         finally:
             self.server.SERVED_GROUPS = saved
 
     def test_handler_error_is_captured(self):
-        # missing required "folder" -> KeyError captured as data, not raised
-        r = self.server.run_tool("bodesign_ingest_project", {})
+        # missing required "symbol_name" -> KeyError captured as data, not raised
+        r = self.server.run_tool("bodesign_emit_symbol", {})
         self.assertFalse(r["ok"])
         self.assertIn("error", r)
 
@@ -662,8 +724,8 @@ class McpServerTests(unittest.TestCase):
         pkgs = ["services/mcp", "packages/workflow-core", "packages/eda-bridge",
                 "packages/gerber-core", "packages/reverse-core", "packages/me-bridge",
                 "packages/shared"]
-        new_tools = {"bodesign_impedance_solve", "bodesign_widen_bus_tracks",
-                     "bodesign_length_match_bus", "bodesign_render_gerber_preview"}
+        expected_tools = {"bodesign_widen_bus_tracks", "bodesign_length_match_bus",
+                          "bodesign_render_gerber_preview"}
 
         async def roundtrip():
             env = dict(os.environ)
@@ -680,25 +742,21 @@ class McpServerTests(unittest.TestCase):
 
                     listed = await session.list_tools()
                     names = {t.name for t in listed.tools}
-                    self.assertTrue(new_tools <= names,
-                                    f"new C04 tools missing from list_tools: {new_tools - names}")
+                    self.assertTrue(expected_tools <= names,
+                                    f"C04 tools missing from list_tools: {expected_tools - names}")
+                    # landed verbs are NOT listed (v0.2.0 surface convergence)
+                    self.assertNotIn("bodesign_impedance_solve", names)
+                    self.assertNotIn("bodesign_c00_readiness", names)
 
+                    # a landed name called through the real protocol → typed TOOL_LANDED
                     res = await session.call_tool("bodesign_impedance_solve", {
-                        "stackup": {"dielectric_height_mm": 0.1, "er": 4.2,
-                                    "copper_thickness_mm": 0.035},
-                        "targets": [
-                            {"name": "se50", "impedance_ohm": 50, "kind": "single"},
-                            {"name": "usb_dp", "impedance_ohm": 90, "kind": "diff",
-                             "gap_mm": 0.15},
-                        ],
+                        "stackup": {"dielectric_height_mm": 0.1, "er": 4.2},
+                        "targets": [{"name": "se50", "impedance_ohm": 50, "kind": "single"}],
                     })
                     env_payload = json.loads(res.content[0].text)
-                    self.assertTrue(env_payload.get("ok"), env_payload)
-                    classes = env_payload["result"]["classes"]
-                    self.assertEqual("single-ended", classes["se50"]["kind"])
-                    self.assertEqual("differential", classes["usb_dp"]["kind"])
-                    self.assertIn("gap_mm", classes["usb_dp"])
-                    self.assertTrue(env_payload["result"].get("warnings"))
+                    self.assertFalse(env_payload.get("ok"), env_payload)
+                    self.assertEqual("TOOL_LANDED", env_payload["error"])
+                    self.assertIn("gate.py impedance_solve", env_payload["landing_command"])
 
                     res2 = await session.call_tool("bodesign_widen_bus_tracks", {
                         "in_path": "/nonexistent/none.kicad_pcb",

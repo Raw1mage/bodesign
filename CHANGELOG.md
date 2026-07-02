@@ -4,6 +4,46 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [0.2.0] — 2026-07-02
+
+### 破壞性變更 — R13 compute/landing split：52 個工具落地為 gate.py verbs
+- 依 fleet MCP integration standard 的 **R13 compute/landing split** 重構工具面：**52 個確定性、
+  只碰專案目錄的 verbs**（C00/C01 全家族、C02 analysis-only、C03 emitters、C04–C06
+  scaffold+readiness、orchestration spine 14 個、read/gate、純函數）**自 MCP tool registry 移除**，
+  改由 agent 在主機端以 `skills/bodesign/scripts/gate.py` 直跑（`--list` 為權威清單；
+  `<verb> --repo <abs> [--json {…}|--arg k=v]`；JSON envelope stdout；typed error + exit≠0；
+  `BODESIGN_SRC` 顯式指定源碼樹；heavy verbs 黑名單 hard-guard → `VERB_NOT_LANDING`）。
+- 呼叫已落地的 tool 名 → typed **`TOOL_LANDED`** 錯誤 + 等效 `landing_command`（絕不無聲消失）；
+  dispatch 層記 `tool_landed_hit`。收斂後容器 registry = **43 個 compute-plane 工具**
+  （heavy EDA 工具鏈 + vault 家族 + `stage_dir` + `mcp_call` + docxmcp-assemble 路徑
+  `c00_emit_prd_docx` + 3 個 cache 工具）。
+- INSTRUCTIONS 改為 R13.5 三類宣告（compute tools / landing verbs / cache lifecycle）；
+  `SERVER_VERSION`/`mcp.json` → 0.2.0。
+
+### 新增 — WebDAV working cache（消滅整包進出儀式）
+- `services/mcp/_webdav.py`（自 docxmcp 移植：multistatus / PROPFIND depth 0–1 / OPTIONS
+  `DAV: 1,2` / Timeout 解析 / LockTable）+ `services/mcp/_auth_provider.py`（per-owner Basic
+  credential：hash 存放 `.webdav-creds.json`、constant-time 比對、issue/rotate/revoke）。
+- Cache lifecycle routes：`POST /caches`（provision，per-subject idempotent，回 token + mount
+  URL + credential）/ `POST /caches/{token}/export`（host 目標；typed
+  `EXPORT_TARGET_UNREACHABLE`）/ `POST /caches/{token}/close`（dirty-gate 409
+  `WORKSPACE_CLOSE_DIRTY`，除非 clean/force）/ `GET /caches`；DAV method routes
+  `/dav/{token}[/{rel}]` 全 method 先 resolve identity→owns()、逐 method audit log、cross-token
+  Destination → 403。已以真 rclone webdav backend E2E 驗證。
+- MCP 工具 `bodesign_cache_provision` / `bodesign_cache_export` / `bodesign_cache_close`
+  （agent 走 tool、人走 mount）。
+
+### 變更 — token_store 分級
+- 每筆 entry 帶 `kind`（`ephemeral` | `deliverable-cache`）+ `owner_identity` / `subject_id` /
+  `last_export_at` sidecar 持久化；新增 `mkdir`/`move`/`copy` helpers（沿用 `_safe` traversal
+  防禦）；reaper class-aware：deliverable-cache 免 idle 回收、走長 safety-net TTL（warn-first），
+  ephemeral 行為不變。
+
+### 驗證
+- host venv 727 tests 綠（4 個既有環境假影）；部署映像 727 綠（6 個環境假影）；restart 後
+  UDS+TCP 雙 transport smoke（health / tools=43 / heavy tool token 路徑）；gate.py 於 repo 外
+  XDG 情境以 `BODESIGN_SRC` 自足執行。Plan：`plans/mcp_r13-landing-webdav-cache/`。
+
 ## [Unreleased]
 
 ### 新增 — 本地 DXF↔DWG 轉換工具（LibreDWG + ezdxf）

@@ -1,0 +1,57 @@
+[
+  {
+    "step": "S0",
+    "name": "idle",
+    "initial": true,
+    "action": "Await agent verb / provision / DAV request / export / close",
+    "transition": "agent verb request arrives -> S1"
+  },
+  {
+    "step": "S1",
+    "name": "route_verb",
+    "action": "Classify verb: landing vs compute vs cache-lifecycle (mcp.json instructions R13.5)",
+    "transition": "deterministic repo-local verb -> S2; heavy verb needing bulk exchange -> S3"
+  },
+  {
+    "step": "S2",
+    "name": "landing_exec",
+    "action": "gate.py assembles PYTHONPATH over packages/*, runs pure-python verb against --repo tree, writes directly into caller repo, emits JSON envelope or typed LANDING_* error",
+    "transition": "verb completed or typed error -> S0"
+  },
+  {
+    "step": "S3",
+    "name": "cache_provision",
+    "action": "Resolve identity (Basic credential), find-or-mint deliverable-cache token, return mount URL + credential",
+    "transition": "cache provisioned; inputs staged via DAV mount -> S4"
+  },
+  {
+    "step": "S4",
+    "name": "heavy_compute",
+    "action": "Container tool reads cache tree; pcbnew/ngspice/OpenSCAD/render pipeline runs; artifacts written into cache namespace",
+    "transition": "host-side inspects/edits over WebDAV -> S5; deliverable ready -> S6"
+  },
+  {
+    "step": "S5",
+    "name": "dav_serve",
+    "action": "Dispatch DAV method (PROPFIND/GET/PUT/MKCOL/MOVE/COPY/LOCK) with identity + traversal + lock guards + audit log",
+    "transition": "next heavy tool call in relay chain -> S4"
+  },
+  {
+    "step": "S6",
+    "name": "export_land",
+    "action": "Export cache tree to caller truth store, stamp last_export_at; typed EXPORT_TARGET_UNREACHABLE on bad target",
+    "transition": "export landed clean; close requested -> S7; further iterations -> S4"
+  },
+  {
+    "step": "S7",
+    "name": "close_reap",
+    "action": "Verify working tree clean since last export (or force), close cache, reaper frees namespace",
+    "transition": "cache closed -> S0"
+  },
+  {
+    "step": "SB",
+    "name": "blocked",
+    "action": "Typed error surfaced (AUTH_*, LANDING_PACKAGES_NOT_FOUND, WORKSPACE_CLOSE_DIRTY, EXPORT_TARGET_UNREACHABLE) — no silent fallback",
+    "transition": "caller resolves (credential / packages / export / force) -> resume prior step"
+  }
+]

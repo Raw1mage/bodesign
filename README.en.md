@@ -68,17 +68,38 @@ See [`mcp.json`](mcp.json) for the registration manifest. Open `/` (or `http://<
 for the live, self-documenting guide — install, the file model, the circuit-design workflow,
 and the full tool-call schemas at `/tools` and `/tools/{name}`.
 
-## File model (docxmcp-style)
+## File model (two planes, 0.2.0)
 
-bodesign ships **no working data**. Upload a project tree as a tarball → a **token**; pass the
-token to any tool (path args resolve inside the token's `doc_dir`); download produced files by token.
-Server-side session data is TTL-garbage-collected. Tools also accept plain host paths for local use.
+**Landing plane (agent-local, zero token round-trip)** — the 52 deterministic, repo-local verbs
+(C00–C06 scaffold/readiness/emitters, the orchestration spine, pure functions) are **no longer MCP
+tools**; the agent runs them directly on the host under its own identity:
+
+```bash
+python3 skills/bodesign/scripts/gate.py --list        # authoritative verb list
+python3 skills/bodesign/scripts/gate.py <verb> --repo <abs-project-path> [--json '{…}' | --arg k=v]
+```
+
+Calling a landed name as an MCP tool returns a typed `TOOL_LANDED` error carrying the equivalent
+gate.py command.
+
+**Compute plane (container token file model, docxmcp-style)** — heavy-toolchain work (pcbnew /
+kicad-cli / ngspice / rendering / 3D) stays in the container's 43 MCP tools. bodesign ships **no
+working data**: upload a project tree as a tarball → a **token**; pass the token to any tool (path
+args resolve inside the token's `doc_dir`); download produced files by token. Server-side session
+data is TTL-garbage-collected. Tools also accept plain host paths for local use.
 
 ```bash
 tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
      -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
 curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
 ```
+
+**Working cache (WebDAV — kills the pack/unpack ritual)** — deliverables that need many file
+round-trips use a server-side working cache instead: `bodesign_cache_provision` returns a token +
+mount URL + per-owner Basic credential → mount `/dav/{token}` with rclone/davfs2 (or let heavy
+tools emit straight into the cache namespace) → `bodesign_cache_export` back to a host target →
+`bodesign_cache_close` (a dirty-gate 409s on un-exported changes unless forced). Caches are
+owner-isolated and exempt from idle reaping (a long safety-net TTL backstops them).
 
 ## Skill pairing
 

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "state": "verified",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-02T11:36:24.848Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-02T11:46:13.225Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "full designed artifact set authored: proposal (user-confirmed scope), spec (4 requirements + AC-1..AC-10), design DD-1..DD-10 with Goals/Risks/Critical Files, idef0 A0+A1-A5 ICOM, grafcet S0-S7+SB, sequence (4 flows), data-schema (6 shapes)"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-02T11:48:04.412Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "planned artifact set complete: tasks.md (8 groups + two-layer verification recipe), handoff.md (Required Reads / Stop Gates In Force / Execution-Ready Checklist), test-vectors.json (TV-1..TV-12), errors.md (typed error catalogue), observability.md (Events + Metrics + CP-1..CP-5)"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-02T11:49:20.458Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "kickoff event recorded (docs/events/event_20260702_r13-landing-webdav-kickoff.md); beginning group 1-3 landing plane implementation"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-02T13:26:31.411Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "groups 1-8 complete: 727 host tests green (4 env artifacts), image tests green, dual-transport smoke {ok,0.2.0,tools:43}, TOOL_LANDED intercept verified, gate.py XDG self-sufficiency verified, rclone E2E green, docs+architecture synced"
+    }
+  ]
+}

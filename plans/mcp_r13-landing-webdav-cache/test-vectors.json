@@ -1,0 +1,86 @@
+[
+  {
+    "id": "TV-1",
+    "requirement": "Landing verbs run on host",
+    "trigger": "gate.py c00_scaffold_prd → c00_readiness → c00_update_answers → c00_emit_prd against a tmp repo (subprocess, host venv)",
+    "expected": "all four succeed; files created directly in tmp repo; each stdout is a single JSON envelope {ok:true, verb, result}; no token/tar anywhere",
+    "maps_to": "AC-1, AC-3"
+  },
+  {
+    "id": "TV-2",
+    "requirement": "Landing gate hard-guard",
+    "trigger": "gate.py emit_fab --repo /tmp/x",
+    "expected": "exit!=0; envelope {ok:false, error:{code:VERB_NOT_LANDING, hint contains 'bodesign_emit_fab'}}",
+    "maps_to": "AC-2"
+  },
+  {
+    "id": "TV-3",
+    "requirement": "Fail-fast missing packages",
+    "trigger": "BODESIGN_SRC=/tmp/empty gate.py c00_readiness --repo /tmp/x",
+    "expected": "exit!=0; {ok:false, error:{code:LANDING_PACKAGES_NOT_FOUND}}; no import attempted, no container fallback",
+    "maps_to": "AC-2"
+  },
+  {
+    "id": "TV-4",
+    "requirement": "Registry integrity",
+    "trigger": "gate.py --list, then import-resolve every (module, callable) row",
+    "expected": "~40 verbs listed with summaries; every row resolves; count matches removed-tools list from server.py",
+    "maps_to": "AC-1"
+  },
+  {
+    "id": "TV-5",
+    "requirement": "Orchestration spine on host",
+    "trigger": "gate.py dispatch_work_packet → return_blocker → ingest_blocker → c00_orchestration_status cycle on tmp repo",
+    "expected": "JSON files created under <repo>/_orchestration/; status reflects the cycle; byte-identical semantics to the removed container tools",
+    "maps_to": "AC-3"
+  },
+  {
+    "id": "TV-6",
+    "requirement": "WebDAV PoC roundtrip",
+    "trigger": "in-process TestClient: provision → OPTIONS → PUT ×2 → PROPFIND depth-1 → GET → MOVE → close(dirty) → export → close",
+    "expected": "OPTIONS returns DAV:1,2; PROPFIND lists tree; MOVE renames; dirty close → 409 WORKSPACE_CLOSE_DIRTY; after export close → 200",
+    "maps_to": "AC-4"
+  },
+  {
+    "id": "TV-7",
+    "requirement": "Multi-user isolation",
+    "trigger": "user B (valid creds) hits user A's token via DAV + lifecycle; unauthenticated request",
+    "expected": "typed 403 for cross-owner; typed 401 (WWW-Authenticate) for unauthenticated; no first-available fallback",
+    "maps_to": "AC-4"
+  },
+  {
+    "id": "TV-8",
+    "requirement": "rclone E2E",
+    "trigger": "real uvicorn server + real rclone webdav backend: copyto/lsf/cat/mkdir/moveto/deletefile + wrong password",
+    "expected": "all verbs succeed over a real socket; wrong password rejected",
+    "maps_to": "AC-5"
+  },
+  {
+    "id": "TV-9",
+    "requirement": "Reaper class-aware",
+    "trigger": "fast-forward last_used_at beyond ephemeral TTL for one deliverable-cache + one ephemeral token",
+    "expected": "ephemeral reaped; deliverable-cache retained; safety-net warn window logged before long-TTL reclaim",
+    "maps_to": "AC-6"
+  },
+  {
+    "id": "TV-10",
+    "requirement": "TOOL_LANDED surface",
+    "trigger": "call bodesign_c00_readiness on the 0.2.0 registry",
+    "expected": "{ok:false, error:TOOL_LANDED, landing_command:'python3 …/gate.py c00_readiness --repo <abs>'}",
+    "maps_to": "AC-7"
+  },
+  {
+    "id": "TV-11",
+    "requirement": "Two-layer verification",
+    "trigger": "host venv full suite; then deployment-image suite per the recorded recipe (tasks.md top)",
+    "expected": "both green; any first-run image failure triaged env-artifact vs regression before fixing",
+    "maps_to": "AC-8"
+  },
+  {
+    "id": "TV-12",
+    "requirement": "XDG self-containment",
+    "trigger": "run gate.py from the XDG-projected skill dir with explicit BODESIGN_SRC",
+    "expected": "verb executes identically; no reliance on being inside the repo tree",
+    "maps_to": "AC-9"
+  }
+]

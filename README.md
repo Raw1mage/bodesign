@@ -65,17 +65,35 @@ MCP **Streamable HTTP**，由同一個行程同時提供 UDS（本機）與 TCP�
 註冊資訊見 [`mcp.json`](mcp.json)。開啟 `/`（或 `http://<host>:8077/`）即是即時的自我說明指南——
 安裝、檔案模型、電路設計工作流，以及 `/tools`、`/tools/{name}` 的完整 tool-call schema。
 
-## 檔案模型（docxmcp 風格）
+## 檔案模型（兩平面，0.2.0）
 
-bodesign **不內含任何工作資料**。把專案樹以 tarball 上傳 → 取得 **token**；將 token 傳給任一工具
-（路徑參數會在 token 的 `doc_dir` 內解析）；以 token 下載產出檔。伺服端的工作資料會依 TTL 自動垃圾回收。
-工具也接受一般的主機路徑（本機使用）。
+**Landing plane（本地直跑，零 token 往返）** — 52 個確定性、只碰專案目錄的 verb
+（C00–C06 scaffold/readiness/emitters、orchestration spine、純函數）**不再是 MCP 工具**，
+改由 agent 在主機以自己的身分直接執行：
+
+```bash
+python3 skills/bodesign/scripts/gate.py --list        # 權威 verb 清單
+python3 skills/bodesign/scripts/gate.py <verb> --repo <abs專案路徑> [--json '{…}' | --arg k=v]
+```
+
+誤把已落地的名字當 MCP 工具呼叫，會收到 typed error `TOOL_LANDED`，內附等效的 gate.py 指令。
+
+**Compute plane（容器 token 檔案模型，docxmcp 風格）** — 重工具鏈（pcbnew/kicad-cli/ngspice/
+渲染/3D）留在容器內的 43 個 MCP 工具。bodesign **不內含任何工作資料**：把專案樹以 tarball
+上傳 → 取得 **token**；將 token 傳給任一工具（路徑參數在 token 的 `doc_dir` 內解析）；以 token
+下載產出檔。伺服端工作資料依 TTL 自動垃圾回收；工具也接受一般主機路徑（本機使用）。
 
 ```bash
 tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
      -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
 curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
 ```
+
+**Working cache（WebDAV，消滅整包進出儀式）** — 需要多檔往返的交付物改用伺服端工作快取：
+`bodesign_cache_provision` 取得 token + mount URL + 專屬 Basic 憑證 → 以 rclone/davfs2 掛載
+`/dav/{token}`（或讓重工具直接寫入快取命名空間）→ `bodesign_cache_export` 匯回主機目標 →
+`bodesign_cache_close`（有未匯出的變更時 dirty-gate 409，除非 force）。每個 cache 依擁有者隔離，
+免於 idle 回收（長 safety-net TTL 把關）。
 
 ## Skill 配對
 

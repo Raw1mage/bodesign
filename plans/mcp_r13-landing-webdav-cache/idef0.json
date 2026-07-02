@@ -1,0 +1,74 @@
+{
+  "diagram_title": "bodesign R13 compute/landing split + WebDAV working-cache",
+  "node_reference": "A0",
+  "function": "Serve the C00-C07 PCB lifecycle with deterministic repo-local verbs executed on the host (landing plane) and heavy EDA compute in the container (compute plane), exchanging bulk files through a per-deliverable WebDAV working cache",
+  "inputs": [
+    "Agent verb requests (landing or compute)",
+    "Caller project folder (authoritative truth store)",
+    "WebDAV method requests from mount clients (rclone/davfs2)",
+    "Staged input trees (token or cache namespace)"
+  ],
+  "controls": [
+    "mcp.json instructions (R13.5 verb-class declaration: compute / landing / cache-lifecycle)",
+    "R13.6 self-containment: gate.py runs from skill dir with --repo only, hard-guards its scope",
+    "No-silent-fallback 天條: missing repo/packages/credential = typed error, never container fallback",
+    "R2 token contract (TTL, size cap, traversal defence) for remote compute paths",
+    "AuthProvider identity resolution (Basic per-owner credential, typed 401/403)"
+  ],
+  "outputs": [
+    "Files written directly into caller repo (landing verbs)",
+    "Produced heavy artifacts (kicad_pcb, gerbers, STEP, renders, sim reports)",
+    "Mountable per-deliverable cache namespace + DAV responses",
+    "Artifacts exported (landed) into caller truth store",
+    "Typed errors (LANDING_*, VERB_*, AUTH_*, EXPORT_*, WORKSPACE_*)"
+  ],
+  "mechanisms": [
+    "skills/bodesign/scripts/gate.py + PYTHONPATH over bodesign packages/*",
+    "services/mcp/server.py MCP tool registry (heavy + vault + cache lifecycle)",
+    "services/mcp/_webdav.py protocol composer + _auth_provider.py credential store",
+    "token_store deliverable-cache class + mkdir/move/copy helpers",
+    "pcbnew / kicad-cli / ngspice / OpenSCAD / build123d / pyrender / LibreDWG / LibreOffice / pygerber / freerouting"
+  ],
+  "activities": [
+    {
+      "node_reference": "A1",
+      "function": "Route verb by locality (landing vs compute vs cache-lifecycle)",
+      "inputs": ["agent verb request", "caller repo path (--repo abs)"],
+      "controls": ["mcp.json instructions (R13.5)", "SKILL.md routing contract"],
+      "outputs": ["landing-plane invocation (gate.py)", "compute-plane tool call (bodesign_* MCP)", "typed VERB_UNKNOWN error"],
+      "mechanisms": ["gate.py verb registry", "MCP tool registry (server.py)"]
+    },
+    {
+      "node_reference": "A2",
+      "function": "Execute deterministic repo-local verb on host (landing plane)",
+      "inputs": ["verb + args", "caller project folder"],
+      "controls": ["R13.6 self-containment", "hard-guard scope (refuse heavy verbs)", "fail-fast typed errors"],
+      "outputs": ["files written directly into caller repo", "JSON result envelope on stdout", "typed LANDING_* error"],
+      "mechanisms": ["python3 gate.py", "PYTHONPATH auto-assembly over packages/*", "bodesign_workflow_core / reverse_core pure-python modules"]
+    },
+    {
+      "node_reference": "A3",
+      "function": "Execute heavy compute verb in container (compute plane)",
+      "inputs": ["tool call (token or cache-namespace path)", "staged input tree"],
+      "controls": ["R2 token contract", "DRC/ERC deterministic gates"],
+      "outputs": ["produced artifacts (kicad_pcb, gerbers, STEP, renders, sim reports)", "blob URLs or cache-visible files"],
+      "mechanisms": ["pcbnew/kicad-cli", "ngspice", "OpenSCAD/build123d", "pyrender/EGL", "LibreOffice/pygerber", "freerouting.jar"]
+    },
+    {
+      "node_reference": "A4",
+      "function": "Provision and serve WebDAV working cache",
+      "inputs": ["provision request (owner, deliverable subject)", "WebDAV method requests (PROPFIND/GET/PUT/MKCOL/MOVE/COPY/LOCK)"],
+      "controls": ["AuthProvider identity resolution (Basic, typed 401/403, no fallback)", "traversal + size + lock guards", "audit log per method"],
+      "outputs": ["mountable cache namespace (token dir)", "DAV multistatus/method responses", "typed AUTH/DAV error"],
+      "mechanisms": ["services/mcp/_webdav.py protocol composer", "services/mcp/_auth_provider.py credential store", "token_store deliverable-cache class"]
+    },
+    {
+      "node_reference": "A5",
+      "function": "Export cache to truth store and close",
+      "inputs": ["export request (cache token, host target)", "close request"],
+      "controls": ["dirty-since-last-export gate (close 409 unless clean or force)", "typed EXPORT_TARGET_UNREACHABLE"],
+      "outputs": ["artifacts landed in caller authoritative folder", "closed/reaped cache namespace"],
+      "mechanisms": ["cache lifecycle routes (POST /caches, /export, /close)", "token_store reaper (deliverable-cache exempt from idle reap)"]
+    }
+  ]
+}

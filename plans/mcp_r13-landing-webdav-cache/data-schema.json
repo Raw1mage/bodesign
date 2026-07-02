@@ -1,0 +1,81 @@
+{
+  "title": "R13 landing + WebDAV working-cache data shapes",
+  "definitions": {
+    "LandingEnvelope": {
+      "type": "object",
+      "description": "gate.py stdout contract (single JSON object; exit!=0 iff ok=false)",
+      "properties": {
+        "ok": { "type": "boolean" },
+        "verb": { "type": "string" },
+        "result": { "type": "object", "description": "verb-specific payload (same shape the removed MCP tool returned)" },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": { "enum": ["LANDING_PYTHON_TOO_OLD", "LANDING_PACKAGES_NOT_FOUND", "VERB_UNKNOWN", "VERB_NOT_LANDING", "VERB_ARGS_INVALID", "VERB_RUNTIME_ERROR"] },
+            "message": { "type": "string" },
+            "hint": { "type": "string", "description": "e.g. the container tool to call instead for VERB_NOT_LANDING" }
+          },
+          "required": ["code", "message"]
+        }
+      },
+      "required": ["ok", "verb"]
+    },
+    "VerbRegistryEntry": {
+      "type": "object",
+      "description": "One row of gate.py VERBS declarative table (DD-2)",
+      "properties": {
+        "verb": { "type": "string", "examples": ["c00_scaffold_prd", "c00_readiness", "dispatch_work_packet", "impedance_solve"] },
+        "module": { "type": "string", "examples": ["bodesign_workflow_core"] },
+        "callable": { "type": "string" },
+        "required_args": { "type": "array", "items": { "type": "string" } },
+        "summary": { "type": "string", "description": "one-liner shown by --list" }
+      },
+      "required": ["verb", "module", "callable"]
+    },
+    "CacheEntry": {
+      "type": "object",
+      "description": "token_store deliverable-cache record (DD-5/DD-7; sidecar JSON next to token dir)",
+      "properties": {
+        "token": { "type": "string" },
+        "kind": { "enum": ["ephemeral", "deliverable-cache"] },
+        "owner_identity": { "type": "string", "description": "from Basic credential" },
+        "subject_id": { "type": "string", "description": "deliverable topic; provision is idempotent per (owner, subject)" },
+        "created_at": { "type": "number" },
+        "last_used_at": { "type": "number" },
+        "last_export_at": { "type": ["number", "null"], "description": "null until first export; dirty = mtime newer than this" }
+      },
+      "required": ["token", "kind", "owner_identity", "subject_id"]
+    },
+    "ProvisionResponse": {
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "mount_url": { "type": "string", "description": "http(s)://.../dav/{token}/ — rclone/davfs2 target" },
+        "webdav_username": { "type": "string" },
+        "webdav_password": { "type": "string", "description": "plaintext returned ONCE at provision (rotate on re-provision); stored hashed" },
+        "soft_cap": { "type": "object", "description": "warn-first per-owner usage signal; never blocks (天條 11)" }
+      },
+      "required": ["token", "mount_url", "webdav_username", "webdav_password"]
+    },
+    "CredentialRecord": {
+      "type": "object",
+      "description": ".webdav-creds.json entry (dotfile sibling in bodesign-sessions volume; reaper ignores dotfiles)",
+      "properties": {
+        "owner_identity": { "type": "string" },
+        "password_hash": { "type": "string", "description": "salted hash; constant-time compare; plaintext never stored" },
+        "issued_at": { "type": "number" }
+      },
+      "required": ["owner_identity", "password_hash"]
+    },
+    "ToolLandedError": {
+      "type": "object",
+      "description": "R3 mitigation: calling a removed (landed) tool on the 0.2.0 surface",
+      "properties": {
+        "ok": { "const": false },
+        "error": { "const": "TOOL_LANDED" },
+        "landing_command": { "type": "string", "examples": ["python3 <skill>/scripts/gate.py c00_readiness --repo /abs/project"] }
+      },
+      "required": ["ok", "error", "landing_command"]
+    }
+  }
+}

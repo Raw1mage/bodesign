@@ -1,0 +1,47 @@
+[
+  {
+    "title": "Landing verb — C00 Q&A loop with zero token round-trip",
+    "participants": ["Agent", "gate.py", "packages/workflow-core", "CallerRepo"],
+    "messages": [
+      { "from": "Agent", "to": "gate.py", "text": "python3 gate.py c00_update_answers --repo /abs/project --json {answers}" },
+      { "from": "gate.py", "to": "gate.py", "text": "fail-fast: python>=3.10, BODESIGN_SRC/packages/* resolvable (else typed LANDING_* error)" },
+      { "from": "gate.py", "to": "packages/workflow-core", "text": "import verb callable per VERBS registry (unknown -> VERB_UNKNOWN; heavy -> VERB_NOT_LANDING)" },
+      { "from": "packages/workflow-core", "to": "CallerRepo", "text": "read answer_state.json, apply answers, regenerate md — direct file I/O under agent uid" },
+      { "from": "gate.py", "to": "Agent", "text": "JSON envelope on stdout {ok, result} — no tar, no token, no blob GET" }
+    ]
+  },
+  {
+    "title": "Heavy relay chain over a WebDAV working cache (C04 layout)",
+    "participants": ["Agent", "MCPServer", "AuthProvider", "TokenStore", "MountClient"],
+    "messages": [
+      { "from": "Agent", "to": "MCPServer", "text": "bodesign_cache_provision(subject='boardX-fab')" },
+      { "from": "MCPServer", "to": "AuthProvider", "text": "resolve_identity(Basic) -> owner (typed 401 on failure, no fallback)" },
+      { "from": "MCPServer", "to": "TokenStore", "text": "find-or-mint deliverable-cache token (kind=deliverable-cache, owner, subject)" },
+      { "from": "MCPServer", "to": "Agent", "text": "{token, mount_url, webdav_password}" },
+      { "from": "MountClient", "to": "MCPServer", "text": "rclone mount: PROPFIND/PUT inputs into /dav/{token}/" },
+      { "from": "Agent", "to": "MCPServer", "text": "bodesign_route_net2pcb / pour_planes / layout_drc_gate / emit_fab (paths inside cache namespace)" },
+      { "from": "MCPServer", "to": "TokenStore", "text": "heavy tools read+write the same cache tree (no per-step re-upload)" },
+      { "from": "MountClient", "to": "MCPServer", "text": "host inspects gerbers live over the mount" }
+    ]
+  },
+  {
+    "title": "Export to truth store, then close (dirty-gate)",
+    "participants": ["Agent", "MCPServer", "TokenStore", "CallerRepo"],
+    "messages": [
+      { "from": "Agent", "to": "MCPServer", "text": "bodesign_cache_export(token, target=/abs/project/fab_out)" },
+      { "from": "MCPServer", "to": "TokenStore", "text": "copy cache tree -> host target; stamp last_export_at (typed EXPORT_TARGET_UNREACHABLE on bad target)" },
+      { "from": "TokenStore", "to": "CallerRepo", "text": "artifacts land in authoritative folder" },
+      { "from": "Agent", "to": "MCPServer", "text": "bodesign_cache_close(token)" },
+      { "from": "MCPServer", "to": "TokenStore", "text": "is_cache_clean? dirty-since-last-export -> 409 WORKSPACE_CLOSE_DIRTY (unless force)" },
+      { "from": "MCPServer", "to": "Agent", "text": "closed; reaper frees namespace" }
+    ]
+  },
+  {
+    "title": "Removed tool called on 0.2.0 surface (R3 mitigation)",
+    "participants": ["LegacyClient", "MCPServer"],
+    "messages": [
+      { "from": "LegacyClient", "to": "MCPServer", "text": "bodesign_c00_readiness(folder=...) — tool removed in 0.2.0" },
+      { "from": "MCPServer", "to": "LegacyClient", "text": "typed TOOL_LANDED error + equivalent gate.py command line (not a silent 404)" }
+    ]
+  }
+]
