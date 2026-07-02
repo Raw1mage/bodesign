@@ -24,7 +24,7 @@ the user** — never a guessed connection (`../../../references/honesty-model.md
    deviation is a *decision with a reason*, not a default.
 4. **Discharge each pin's obligation** — add the support each class requires (below).
 5. **Complete each interface** — instantiate the standard support set per bus/peripheral.
-6. **Allocate pins against the mux table** — `bodesign_pin_allocation`; a function isn't available on
+6. **Allocate pins against the mux table** — the `pin_allocation` landing verb (via `gate.py`); a function isn't available on
    every pin. This closes the spec and produces the C05 GPIO map.
 7. **Build → verify** — `compose_schematic` places+nets; resolve its `unresolved_pins`; then the
    analyzer + datasheets confirm correctness. Generation ≠ correctness.

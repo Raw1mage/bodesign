@@ -46,8 +46,9 @@ missing.
 | 3 | Manufacturing BOM / CPL | `mfg_bom.csv` + CPL | stage root (only after C04 fab export) |
 | 4 | Cost / qty / cert targets + DFM checklist | within `Manufacturing_Transfer.md`, cited to C00 | stage root |
 
-**Self-verify:** confirm the C04 freeze via `fab_release_gate.py` (there is no `c07_readiness` tool)
-and `bodesign_package_readiness` for the roll-up; every fab item must list its owning gate + honest
+**Self-verify:** confirm the C04 freeze via `fab_release_gate.py` (there is no `c07_readiness` verb)
+and the `package_readiness` landing verb (`gate.py package_readiness --repo <abs-project>` — NOT an
+MCP tool) for the roll-up; every fab item must list its owning gate + honest
 status. PRD cost/qty/cert targets are **consumed from C00**, never restated as achieved. Model:
 `thesmart_products/rockbox/c07-mfg/`.
 

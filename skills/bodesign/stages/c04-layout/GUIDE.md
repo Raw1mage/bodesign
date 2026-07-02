@@ -58,8 +58,9 @@ the board is frozen, which is honest, not missing.
 | 6 | Per-layer copper PNGs + fab view | `copper_layers/`, `renders/` | `02_build/` |
 | 7 | Length-match + SI reports | `<board>.lengthmatch.json`, `<board>.si.json` | stage root (high-speed only) |
 
-**Self-verify:** run the gate — `bodesign_layout_drc_gate` (`board_path`) + `bodesign_c04_readiness`
-(`folder`) — and report the verdict (see "Gate / done-criteria" below). Mechanical constraints are
+**Self-verify:** run the gate — the MCP tool `bodesign_layout_drc_gate` (`board_path`) + the
+landing verb `c04_readiness` (`gate.py c04_readiness --repo <abs-project>` — NOT an MCP tool) —
+and report the verdict (see "Gate / done-criteria" below). Mechanical constraints are
 **consumed from C03** (`01_refs/`), not re-authored. Model: `thesmart_products/rockbox/c04-layout/`.
 
 ## Inputs (from upstream)
@@ -106,8 +107,8 @@ owner — do **not** silently fill it. Mark the file `"state": "drafted"` until 
 
 Pick a layer count from density + the controlled-impedance net set, and write `Stackup.md` +
 `Routing_Rules.md` (net classes: width / clearance / impedance / length-match). Compute trace
-widths from the stackup rather than guessing — call **`bodesign_impedance_solve`** (`stackup`,
-`targets`): it returns microstrip/stripline Z0 → width for each target net class. (No MCP? Use any
+widths from the stackup rather than guessing — run the **`impedance_solve`** landing verb via
+`gate.py` (`stackup`, `targets`): it returns microstrip/stripline Z0 → width for each target net class. (No MCP? Use any
 microstrip/stripline solver and record the inputs.)
 
 State honestly that final stackup + exact geometry must be **confirmed against the chosen fab's
@@ -119,9 +120,9 @@ until fab-confirmed. Real example: `openmv/N6_board/C04_Layout/Stackup.md` and `
 The bodesign MCP produces and gates the deliverable manifest — see `../../SKILL.md` § "Relationship
 to the bodesign MCP server". Two ways in:
 
-**One-shot:** `bodesign_c04_emit_layout_package` (`out_dir`, `c01`, `c03`) assembles the whole C04
-package (board + constraints + renders + assembly outputs) from the C01/C03 handoffs, then
-`bodesign_c04_readiness` (`folder`) reports the gate verdict.
+**One-shot:** the `c04_emit_layout_package` landing verb (`out_dir`, `c01`, `c03`; via `gate.py`)
+assembles the whole C04 package (board + constraints + renders + assembly outputs) from the C01/C03
+handoffs, then the `c04_readiness` landing verb (`folder`) reports the gate verdict.
 
 **Step-by-step** (when you need control over routing/finishing):
 1. **Place + route from the netlist** — `bodesign_route_net2pcb` (`netlist_path`, `out_path`,
@@ -215,8 +216,9 @@ source of truth.
 
 ## Gate / done-criteria — the C04 gate contract
 
-The gate is **`bodesign_layout_drc_gate`** (`board_path`) for the DRC verdict + **`bodesign_c04_readiness`**
-(`folder`) for package/SI completeness; cross-check the schematic-intent side with the local
+The gate is **`bodesign_layout_drc_gate`** (MCP tool; `board_path`) for the DRC verdict + the
+**`c04_readiness`** landing verb (`gate.py c04_readiness --repo <abs-project>`) for package/SI
+completeness; cross-check the schematic-intent side with the local
 `fab_release_gate.py` engine (step "Cross-check" above). It is **HARD FAIL** on any of:
 
 - routed `.kicad_pcb` missing;

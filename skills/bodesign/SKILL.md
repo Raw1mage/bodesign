@@ -102,17 +102,36 @@ downstream area/thermal/height overflow or a C06 verdict-fail routes *back* here
 you re-enter, **fix the design** (never relax the threshold — the C04 floating-PSRAM lesson), then
 `ingest_blocker` to resolve it, or escalate to the next lever's stage. You — the agent running
 bodesign — are the orchestrator that runs this scan each time you would advance or report done. The
-`bodesign_package_readiness` roll-up also surfaces these open blockers so the gate is machine-checked,
+`package_readiness` roll-up (landing verb, via `gate.py`) also surfaces these open blockers so the gate is machine-checked,
 not memory-dependent.
 
 **Self-verify before you report.** Run the stage's readiness check and state its result (which
-required items are present / partial / missing) in your completion report:
-- C00 / C01 / C02 / C05 / C06 → `bodesign_c00_readiness` … `bodesign_c06_readiness` (`folder`).
-- C04 → the gate: `bodesign_layout_drc_gate` (`board_path`) + `bodesign_c04_readiness` (`folder`).
+required items are present / partial / missing) in your completion report. **Readiness checks are
+landing verbs, NOT MCP tools** (§ "Landing / compute routing contract") — run them locally:
+
+```bash
+python3 <skill>/scripts/gate.py <verb> --repo <abs-project> [--arg folder=<stage-dir>]
+```
+
+- C00 / C01 / C02 / C05 / C06 → landing verbs `c00_readiness` … `c06_readiness` (`folder` defaults
+  to `--repo`; a relative `folder` resolves against it).
+- C04 → the gate: the MCP tool `bodesign_layout_drc_gate` (`board_path`) + the landing verb
+  `c04_readiness` (`folder`).
 - C03 → the schematic analyzer's gate (`analyze_schematic.py`: no open `high` findings) — there is no
-  `c03_readiness` tool.
-- C07 → the C04 fab-release gate (`fab_release_gate.py`) — there is no `c07_readiness` tool.
-- Any milestone → `bodesign_package_readiness` (`folder`) for the cross-stage roll-up.
+  `c03_readiness` verb.
+- C07 → the C04 fab-release gate (`fab_release_gate.py`) — there is no `c07_readiness` verb.
+- Any milestone → landing verb `package_readiness` (`folder`) for the cross-stage roll-up.
+
+> **Legacy-name correction table.** Older docs / model memory may still advertise these as
+> `bodesign_<verb>` MCP tools; they were landed in R13 and calling them as tools fails
+> (`TOOL_LANDED` / unknown-tool). Self-correct as follows — `bodesign_c00_readiness` → `gate.py
+> c00_readiness` · `bodesign_c01_readiness` → `gate.py c01_readiness` · `bodesign_c02_readiness` →
+> `gate.py c02_readiness` · `bodesign_c04_readiness` → `gate.py c04_readiness` ·
+> `bodesign_c05_readiness` → `gate.py c05_readiness` · `bodesign_c06_readiness` → `gate.py
+> c06_readiness` · `bodesign_package_readiness` → `gate.py package_readiness` · and likewise every
+> scaffold / emit / orchestration verb listed by `gate.py --list` (e.g. `bodesign_c00_scaffold_prd`,
+> `bodesign_c00_update_answers`, `bodesign_pin_allocation`, `bodesign_impedance_solve`,
+> `bodesign_c03_emit_host_block_diagram`).
 
 If the check says a required item is missing and you have not marked it honestly blocked, you are not
 done — go produce it. Only after it passes do you announce completion or cross the handoff.
@@ -151,9 +170,9 @@ diagram depicts. Each is a distinct deterministic emitter — do not hand-author
 
 | If the diagram depicts… | Emit via | Notes |
 |---|---|---|
-| **board-level partition / fan-out** (core↔carrier split, board-to-board pin classes, breakout) | `bodesign_c03_emit_partition_diagram` | MODEL = {boards, interconnect}; layered SVG (boards/modules/interconnect/legend/annotations); honest-boundary footer always on (design partition, **not** fab pinout). |
-| **host / MCU-centric functional block diagram** (center SoC/MCU + peripherals radiating to the four sides; buses on the connecting lines) | `bodesign_c03_emit_host_block_diagram` | MODEL = {center_part, peripherals[{name, side, bus?, type?}], reference_baseline?}; layered SVG (center/peripherals/buses/legend/annotations); unknown type → named placeholder (never dropped); optional `reference_baseline` renders a derived-from / diffs / sourcing-gates block (honesty model for derived products); honest-boundary footer always on (functional block diagram, **not** a netlist). |
-| **mechanical look & feel** (ID skeleton, CMF, exposed-component faces) | `bodesign_c01_emit_id_visual_package` | Layered, designer-editable ID skeleton SVG; not final industrial design. |
+| **board-level partition / fan-out** (core↔carrier split, board-to-board pin classes, breakout) | `c03_emit_partition_diagram` (landing verb, via `gate.py`) | MODEL = {boards, interconnect}; layered SVG (boards/modules/interconnect/legend/annotations); honest-boundary footer always on (design partition, **not** fab pinout). |
+| **host / MCU-centric functional block diagram** (center SoC/MCU + peripherals radiating to the four sides; buses on the connecting lines) | `c03_emit_host_block_diagram` (landing verb, via `gate.py`) | MODEL = {center_part, peripherals[{name, side, bus?, type?}], reference_baseline?}; layered SVG (center/peripherals/buses/legend/annotations); unknown type → named placeholder (never dropped); optional `reference_baseline` renders a derived-from / diffs / sourcing-gates block (honesty model for derived products); honest-boundary footer always on (functional block diagram, **not** a netlist). |
+| **mechanical look & feel** (ID skeleton, CMF, exposed-component faces) | `c01_emit_id_visual_package` (landing verb, via `gate.py`) | Layered, designer-editable ID skeleton SVG; not final industrial design. |
 | **physical placement** (real board outline, where parts land on copper) | `emit_layout` (C04 path) | Constraint-first; placement coordinates/stackup never fabricated. |
 | **software containers / processes** (C4, IDEF0, Grafcet) | `drawmiat` companion skill | C00/C01/C05 architecture diagrams. |
 
@@ -250,7 +269,7 @@ path each guide documents). **Routing note (≥ 0.2.0):** most lightweight entri
 *landing verbs* — same name, run via `gate.py`, and the MCP answers `TOOL_LANDED` if called as a
 tool. This table remains a *family* router; `--list` / `/tools` decide which plane a name lives on:
 
-| Stage | MCP generation tools (prefix `bodesign_`) |
+| Stage | Tool family (landing verbs run via `gate.py`; compute tools carry the `bodesign_` prefix) |
 |---|---|
 | C00 | `c00_scaffold_prd` · `c00_emit_prd` · `c00_readiness` · `plan_design_intent` · `evidence_manifest` |
 | C01 | `c01_emit_package` · `c01_emit_concept_prompts` · `c01_generate_concept_image` · `c01_readiness` |

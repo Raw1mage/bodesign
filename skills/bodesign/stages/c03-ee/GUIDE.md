@@ -45,8 +45,9 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 | 8 | Mechanical bridge | `Mechanical_Constraint_Export.json` | `approval=false` |
 
 **Self-verify:** run `analyze_schematic.py` and clear (or explicitly justify) every `high` finding —
-no open DS-001 / SS-001 / PP-001 / RS-002. There is **no `c03_readiness` tool**; the analyzer's gate
-is your self-check, plus `bodesign_package_readiness` for the roll-up. Model:
+no open DS-001 / SS-001 / PP-001 / RS-002. There is **no `c03_readiness` verb**; the analyzer's gate
+is your self-check, plus the `package_readiness` landing verb (`gate.py package_readiness --repo
+<abs-project>` — NOT an MCP tool) for the roll-up. Model:
 `thesmart_products/rockbox/c03-ee/` (note its merged `Architecture_and_BOM.md`).
 
 ## Inputs (from upstream)
@@ -81,10 +82,10 @@ EE architecture — NOT a C4-model container diagram.** C4 (Context/Container/Co
 *software*-architecture notation and is the wrong tool for describing a circuit; the same applies to
 C04. Power distribution may use IDEF0; signal/data flow a flow diagram — but the system/host
 architecture is a functional block diagram. **Do not hand-author this SVG** — for the host /
-MCU-centric form (center SoC + peripherals radiating to the four sides + buses) emit it with
-`bodesign_c03_emit_host_block_diagram` (MODEL = {center_part, peripherals[{name, side, bus?,
-type?}], reference_baseline?}); for a board-level core↔carrier split / fan-out use
-`bodesign_c03_emit_partition_diagram`. Both are deterministic, layered, honest-boundary-gated
+MCU-centric form (center SoC + peripherals radiating to the four sides + buses) emit it with the
+`c03_emit_host_block_diagram` landing verb (via `gate.py`; MODEL = {center_part, peripherals[{name,
+side, bus?, type?}], reference_baseline?}); for a board-level core↔carrier split / fan-out use the
+`c03_emit_partition_diagram` landing verb. Both are deterministic, layered, honest-boundary-gated
 emitters (see SKILL.md concept-diagram router). For a **derived product**, pass
 `reference_baseline` so the diagram honestly carries the derived-from / diffs / sourcing-gates
 provenance. Model these on the real examples — see
@@ -123,7 +124,7 @@ bodesign MCP server"):** generate rather than hand-draw.
   in `references/pinout-to-circuit-method.md` (classify each pin's obligation → ground in the
   reference design → complete each interface), so every net traces to a datasheet requirement rather
   than being invented to fill the spec.
-- `bodesign_pin_allocation` (`nets`, `mcu_refs`) to derive the GPIO/peripheral map for step 7/FW.
+- the `pin_allocation` landing verb (`nets`, `mcu_refs`; via `gate.py`) to derive the GPIO/peripheral map for step 7/FW.
 
 **Standard step — render readable, deliverable-grade schematics.** Produce directly-openable
 `.kicad_sch` sheets that KiCad's own engine renders to white-background PNGs, with chips as true

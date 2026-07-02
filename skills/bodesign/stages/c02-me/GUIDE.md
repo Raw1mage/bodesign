@@ -57,7 +57,8 @@ gap.)
 | 7 | Vendor handoff | `Vendor_Handoff.md` | |
 | 8 | SketchUp import guide | `SketchUp_Import_Guide.md` | |
 
-**Self-verify:** run `bodesign_c02_readiness` (`constraints`/`folder`) and pass the step-8 self-check;
+**Self-verify:** run the landing verb `c02_readiness` (`gate.py c02_readiness --repo <abs-project>
+[--arg constraints=…]` — NOT an MCP tool) and pass the step-8 self-check;
 the STEP/STL status in the package must match what actually ran. Model:
 `thesmart_products/rockbox/c02-me/`.
 

@@ -46,7 +46,8 @@ required file must be present and the statuses must agree across files.
 | 4 | Reference cross-check run | `analysis/<run>/cross_verify.json` (→ `02_build/`) |
 | 5 | EVT bring-up findings | `EVT_Bringup_Findings.md` (when a board was actually brought up) |
 
-**Self-verify:** run `bodesign_c06_readiness` (`folder`) and the cross-check; the summary's
+**Self-verify:** run the landing verb `c06_readiness` (`gate.py c06_readiness --repo <abs-project>`
+— NOT an MCP tool) and the cross-check; the summary's
 pass/warn/fail must match the test plan and checkbox states verbatim (no checklist that is 1/8 done
 sitting beside a "board was built" claim). Model: `thesmart_products/rockbox/c06-verify/`.
 

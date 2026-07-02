@@ -23,11 +23,11 @@ honest substitute for a designer's brief"* — enough to unblock C02–C05, not 
 finished design. This boundary is non-negotiable; see *Honesty notes* below.
 
 **Stage-ownership boundary — the *electrical* host architecture is C03's, not C01's.** C01 owns the
-*mechanical / user-facing* projection (ID skeleton, CMF, exposed-component faces via
-`bodesign_c01_emit_id_visual_package`). The **host / MCU-centric functional block diagram**
-(center SoC + peripherals + buses) and the **board-level partition / fan-out** diagram are
-**C03-EE deliverables** — emit them with `bodesign_c03_emit_host_block_diagram` and
-`bodesign_c03_emit_partition_diagram` respectively (see C03 GUIDE + SKILL.md concept-diagram
+*mechanical / user-facing* projection (ID skeleton, CMF, exposed-component faces via the
+`c01_emit_id_visual_package` landing verb, run via `gate.py`). The **host / MCU-centric functional
+block diagram** (center SoC + peripherals + buses) and the **board-level partition / fan-out**
+diagram are **C03-EE deliverables** — emit them with the `c03_emit_host_block_diagram` and
+`c03_emit_partition_diagram` landing verbs respectively (see C03 GUIDE + SKILL.md concept-diagram
 router). C01 only declares the *interface constraints* those diagrams later realise; it does not
 draw the electrical block architecture.
 
@@ -51,7 +51,8 @@ that is an honest status, not a missing deliverable.)
 | 4 | Interface constraints (machine bridge) | `Interface_Constraints.json` |
 | 5 | ID-designer handoff | `Handoff_to_ID_Designer.md` |
 
-**Self-verify:** run `bodesign_c01_readiness` (`folder`) and pass the step-7 self-check before
+**Self-verify:** run the landing verb `c01_readiness` (`gate.py c01_readiness --repo
+<abs-project>` — NOT an MCP tool) and pass the step-7 self-check before
 declaring the gate. Model: `thesmart_products/rockbox/c01-id/`.
 
 ## Inputs (from upstream C00)

@@ -42,7 +42,8 @@ that is honest, but every required file must still be present.
 | 5 | Pin-map bridge | `Pin_Map_Bridge.json` (**derived from C03's pin map — zero invented pins**) |
 | 6 | Build notes | `Firmware_Build_Notes.md` (→ stage root) |
 
-**Self-verify:** run `bodesign_c05_readiness` (`folder`); validate `Pin_Map_Bridge.json` parses; every
+**Self-verify:** run the landing verb `c05_readiness` (`gate.py c05_readiness --repo <abs-project>`
+— NOT an MCP tool); validate `Pin_Map_Bridge.json` parses; every
 signal must trace to a C03 pinmap row. Model: `thesmart_products/rockbox/c05-fw/`.
 
 ## Inputs (from upstream)

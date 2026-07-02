@@ -50,7 +50,9 @@ status with a reason + owner — silent absence is not allowed.
 | 3 | RF requirements | `C00-PRD/RF_Requirements.md` (`.generated.md`) | **only if the product has RF**; else mark N/A with reason |
 | 4 | Handoff report | `C00-PRD/C00_Handoff_Report.md` | downstream gates (C01/C02/C03/C05/C06) ready/blocked |
 
-**Self-verify:** run `bodesign_c00_readiness` (`folder`) and report which fields/sections are still
+**Self-verify:** run the landing verb `c00_readiness` (`python3 <skill>/scripts/gate.py
+c00_readiness --repo <abs-project>` — NOT an MCP tool; see SKILL.md § "Landing / compute routing
+contract") and report which fields/sections are still
 open. C00 is not done while any gating section is unanswered without an honest accepted-risk/external
 owner. Then run two honesty-review passes the readiness tool can't compute: a **boundary check** — no
 C03/C05-level detail (schematic, pin assignment, part numbers as *decisions*, firmware code) has leaked
