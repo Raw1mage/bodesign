@@ -1,0 +1,62 @@
+{
+  "schemas": [
+    {
+      "name": "main_components_structured.json",
+      "kind": "json",
+      "fields": [
+        { "name": "schema", "type": "string", "notes": "constant 'bodesign.c00.main_components_structured.v1'" },
+        { "name": "source_field", "type": "string", "notes": "always 's04_system_architecture.main_components'" },
+        { "name": "source_text", "type": "string", "notes": "verbatim PRD sentence the roles were extracted from (audit anchor)" },
+        { "name": "source_answer_state_sha256", "type": "string", "notes": "hash of answer_state.json at extraction time; drift detection" },
+        { "name": "roles", "type": "array<Role>", "notes": "one entry per circuit role" },
+        { "name": "approvals", "type": "array<Approval>", "notes": "user-owned out-of-envelope substitution approvals; empty by default" }
+      ]
+    },
+    {
+      "name": "Role",
+      "kind": "json",
+      "fields": [
+        { "name": "role", "type": "string", "notes": "stable id, e.g. 'current-regulator', 'usb-c-receptacle', 'tvs-diode'" },
+        { "name": "description", "type": "string", "notes": "human wording lifted from PRD" },
+        { "name": "qty_min", "type": "int", "notes": "minimum matched component count for 'present'" },
+        { "name": "patterns", "type": "array<string>", "notes": "case-insensitive regex matched against netlist value|footprint|libsymbol" },
+        { "name": "allowed_alternatives", "type": "array<{name, patterns}>", "notes": "PRD-sanctioned envelope; match here => substituted in_envelope" }
+      ]
+    },
+    {
+      "name": "Approval",
+      "kind": "json",
+      "fields": [
+        { "name": "role", "type": "string", "notes": "role id being substituted" },
+        { "name": "substitute", "type": "string", "notes": "what actually replaces it" },
+        { "name": "approved_by", "type": "string", "notes": "always 'user'; tool never writes this file autonomously" },
+        { "name": "quote", "type": "string", "notes": "user's approval wording, verbatim" },
+        { "name": "date", "type": "string", "notes": "ISO date" }
+      ]
+    },
+    {
+      "name": "CrosscheckReport",
+      "kind": "json",
+      "fields": [
+        { "name": "schema", "type": "string", "notes": "constant 'bodesign.crosscheck.prd_bom.v1'" },
+        { "name": "gate", "type": "string", "notes": "'PASS' | 'FAIL'" },
+        { "name": "verdicts", "type": "array<Verdict>", "notes": "one per manifest role" },
+        { "name": "blocking", "type": "array<string>", "notes": "role ids blocking C04 entry" },
+        { "name": "netlist_components", "type": "int", "notes": "parsed component count (sanity signal)" },
+        { "name": "manifest_stale", "type": "bool", "notes": "true when answer_state hash differs from manifest snapshot; warn-level" }
+      ]
+    },
+    {
+      "name": "Verdict",
+      "kind": "json",
+      "fields": [
+        { "name": "role", "type": "string", "notes": "role id" },
+        { "name": "status", "type": "string", "notes": "'present' | 'substituted' | 'missing'" },
+        { "name": "matched_refs", "type": "array<string>", "notes": "netlist refs that matched (audit trail for false positives)" },
+        { "name": "in_envelope", "type": "bool|null", "notes": "for substituted: matched an allowed_alternative" },
+        { "name": "approved", "type": "bool|null", "notes": "for out-of-envelope substituted: approvals[] entry exists" },
+        { "name": "blocking", "type": "bool", "notes": "missing OR (substituted AND NOT in_envelope AND NOT approved)" }
+      ]
+    }
+  ]
+}

@@ -26,12 +26,13 @@ C06_SUMMARY = C06_FOLDER / "Verification_Summary.json"
 C06_TEST_PLAN = C06_FOLDER / "Test_Plan.md"
 C06_BRINGUP = C06_FOLDER / "Bring_Up_Checklist.md"
 
-_CHECKS = ["simulate", "emc", "thermal", "crosscheck"]
+_CHECKS = ["simulate", "emc", "thermal", "crosscheck", "constraint_solve"]
 _CHECK_TITLES = {
     "simulate": "SPICE simulation (analog subcircuits)",
     "emc": "EMC / EMI pre-compliance",
     "thermal": "Thermal analysis",
     "crosscheck": "Reference cross-check (control group)",
+    "constraint_solve": "Declarative constraint solving (ato build, compile-time)",
 }
 
 
@@ -52,6 +53,13 @@ def _check_status(name: str, verdict: dict[str, Any] | None) -> str:
         return "fail"
     if isinstance(warned, int) and warned > 0:
         return "warn"
+    # Solver-based verdict (constraint_solve / ato_build).
+    if name == "constraint_solve":
+        solver = str(verdict.get("solver_verdict", "")).lower()
+        if verdict.get("ok") is True or solver in {"sat", "trivially_true"}:
+            return "pass"
+        if verdict.get("ok") is False or solver == "unsat":
+            return "fail"
     # Coverage-based verdict (crosscheck).
     if name == "crosscheck" and "coverage_pct" in verdict:
         if verdict.get("missing"):

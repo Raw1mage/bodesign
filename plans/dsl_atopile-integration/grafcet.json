@@ -1,0 +1,81 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Idle: awaiting ato_build request",
+    "LinkInputType": "convergence_or",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [5, 6],
+    "LinkOutputNumber": [1],
+    "Condition": ["ato_build MCP request received"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Validate request + locate .ato project; forward to ee worker",
+    "LinkOutputType": "divergence_or",
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2, 6],
+    "Condition": ["request well-formed AND .ato project exists AND ee worker reachable"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Run ato build: compile, unit/tolerance check, assert constraint solve",
+    "LinkOutputType": "divergence_or",
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3, 6],
+    "Condition": ["compile OK AND all constraints satisfiable"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Resolve parametric component picks (vault/registry, rated ⊆ spec)",
+    "LinkOutputType": "divergence_or",
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4, 6],
+    "Condition": ["all picks resolved with rated-subset proof"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Emit .kicad_pcb artifact + constraint-solving evidence report",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5],
+    "Condition": ["artifacts written to workspace"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Register artifact for C04 pipeline + record constraint_solve evidence in readiness",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [0],
+    "Condition": ["validation_evidence envelope recorded"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Fail fast: return structured deficiency list (malformed request / worker unavailable / compile error / unsat constraint / pick failure)",
+    "LinkInputType": "convergence_or",
+    "LinkOutputType": "track",
+    "LinkInputNumber": [1, 2, 3],
+    "LinkOutputNumber": [0],
+    "Condition": ["any failure condition raised"],
+    "SubGrafcet": []
+  }
+]

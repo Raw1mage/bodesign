@@ -43,6 +43,7 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 | 6 | GPIO/interface pinmap | `..._GPIO_pinout.xlsx` / `Pin_Allocation.csv` | drives C05 |
 | 7 | Netlist status | `Netlist_Status.md` | required **iff** a full netlist is not recoverable |
 | 8 | Mechanical bridge | `Mechanical_Constraint_Export.json` | `approval=false` |
+| 9 | PRD-BOM crosscheck report | `prd_bom_crosscheck.report.json` | `gate: PASS` required; report absent = gate **not run** (never presume PASS) — § 3b |
 
 **Self-verify:** run `analyze_schematic.py` and clear (or explicitly justify) every `high` finding —
 no open DS-001 / SS-001 / PP-001 / RS-002. There is **no `c03_readiness` verb**; the analyzer's gate
@@ -174,6 +175,36 @@ The engine exposes the `datasheets` and `emc` bridges via `../../engines/datashe
 property URLs, the `digikey` skill for individual parts, or **ask the user** — do not silently
 skip verification. Datasheets cache into `datasheets/` with a `manifest.json`; extractions land
 in `datasheets/extracted/<MPN>.json` and are reused across runs.
+
+### 3b. Vault-Absent Substitution Protocol (MANDATORY when a PRD-named part is unavailable)
+
+When the vault has no datasheet for a part the C00 PRD names (G4 cold start) and you must
+substitute, the substitution decision is **not yours to make freely**. The C00 manifest
+(`main_components_structured.json`, extracted from `s04_system_architecture.main_components`
+and human-audited) is the envelope SSOT:
+
+1. **Check the envelope first.** Compare your candidate against the role's
+   `allowed_alternatives` in the manifest. An in-envelope match (e.g. an NPN linear current
+   sink where the PRD says "NPN/resistor linear current sink or AL5809-ish CC regulator") may
+   be adopted directly — record it in the C04/C06 handoff as `substituted (in_envelope)`.
+2. **Out-of-envelope = BLOCKING, always.** If the candidate matches neither the role's primary
+   `patterns` nor any `allowed_alternatives`, STOP. List the options (restore the PRD-named
+   part via datasheet ingest, pick an in-envelope alternative, or ask the user to approve the
+   out-of-envelope substitute) and wait for the user's decision. Never pick the landing point
+   yourself. Case law: the E2E LED-driver board degraded "linear current sink" into a bare
+   ballast resistor — a resistor is **not** a current sink; the board shipped Gerbers that
+   could not meet the PRD's 60 mA ±10% target
+   (`issues/BR_20260703_prd_bom_crosscheck_gap_cc_regulator_missing.md`).
+3. **`approvals[]` is user-owned.** An out-of-envelope substitute becomes non-blocking only
+   through an `approvals[]` entry in the manifest (`role` / `substitute` / `approved_by:
+   "user"` / verbatim `quote` / `date`) — written only on the user's explicit instruction.
+   The agent never writes an approval on its own.
+4. **Gate before C04.** Run the MCP tool `bodesign_prd_bom_crosscheck` (`manifest_path` +
+   the exported netlist) before entering C04. Every role must come back `present` or a
+   non-blocking `substituted`; a `FAIL` gate (any `missing` role, or an unapproved
+   out-of-envelope substitution) refuses C04 entry until the design is fixed or the user
+   records an approval. A degraded schematic that passes ERC is still a non-conforming
+   deliverable — ERC checks self-consistency; this gate checks PRD fulfilment.
 
 ### 4. Run the schematic analyzer
 
@@ -360,6 +391,9 @@ C03 is genuinely complete when:
 - Every IC pin-to-net is verified against its datasheet (or the unverifiable ones are flagged
   with a plausibility assessment).
 - BOM, netlist, pinmap, and power-frontend are exported from the *verified* JSON.
+- `bodesign_prd_bom_crosscheck` has run against the exported netlist and reports `gate: PASS`
+  (every `main_components_structured.json` role `present` or non-blocking `substituted` — § 3b).
+  A missing report means the gate **has not run**: say so explicitly; never presume PASS.
 - `Mechanical_Constraint_Export.json` is produced with `approval=false`.
 - If a full netlist is not recoverable, `Netlist_Status.md` documents the source-data limit.
 
@@ -388,6 +422,8 @@ Anchored in `../../references/honesty-model.md`:
 ## Handoff to C04 (Layout) and C06 (Verify)
 
 To **C04 (`../c04-layout/GUIDE.md`)** export:
+- the **PRD-BOM crosscheck PASS** (`prd_bom_crosscheck.report.json`) — C04 entry is refused
+  while the gate reports `FAIL` or has not run (§ 3b),
 - the verified **netlist** (the connectivity C04 routes — full or the honest subset),
 - the **SI requirements as targets** (USB 90 Ω diff; MIPI CSI-2 100 Ω diff length-matched; XSPI
   50 Ω SE DQS-matched; SDMMC 50 Ω) — C04 makes copper meet these; you do not pre-route,

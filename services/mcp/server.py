@@ -110,6 +110,14 @@ def _h_compose(a: dict) -> Any:
     return out
 
 
+def _h_ato_build(a: dict) -> Any:
+    from bodesign_eda_bridge.ato_bridge import run_ato_build
+    r = run_ato_build(a["project_path"],
+                      component_source=a.get("component_source", "vault"),
+                      target=a.get("target"))
+    return _jsonable(asdict(r))
+
+
 def _h_layout(a: dict) -> Any:
     from bodesign_eda_bridge import emit_layout
     r = emit_layout(a["out_dir"], a["project_name"], a["components"],
@@ -385,6 +393,11 @@ def _h_export_bom(a: dict) -> Any:
 def _h_export_netlist(a: dict) -> Any:
     from bodesign_eda_bridge import export_netlist
     return asdict(export_netlist(a["schematic_path"], a["out_dir"], fmt=a.get("format", "kicadsexpr")))
+
+
+def _h_prd_bom_crosscheck(a: dict) -> Any:
+    from bodesign_workflow_core import prd_bom_crosscheck
+    return asdict(prd_bom_crosscheck(a["manifest_path"], a["netlist_path"], out_dir=a.get("out_dir")))
 
 
 def _h_stage_dir(a: dict) -> Any:
@@ -689,6 +702,9 @@ TOOLS: list[dict] = [
      "description": "Generate a KiCad .kicad_sym symbol from a pin list [{number,name,type}].",
      "schema": {"type": "object", "properties": {"symbol_name": _STR, "pins": {"type": "array"}, "output_path": _STR,
                 "footprint_filter": _STR, "datasheet": _STR}, "required": ["symbol_name", "pins", "output_path"]}},
+    {"name": "bodesign_ato_build", "handler": _h_ato_build,
+     "description": "C03 declarative verification front-end: compile an atopile .ato project (pinned toolchain, ee worker) — unit typing + tolerance intervals + assert constraint solving + parametric component picks checked at COMPILE TIME, before anything reaches KiCad. ok=true returns pcb_path (.kicad_pcb, feeds the C04 finishing chain directly — no netlist bridge) + constraint_solve evidence (5th trust layer). ok=false returns a structured deficiency list [{kind: compile_error|unsat_constraint|pick_failure|component_wrapper_missing|toolchain_missing, detail, source_anchor}] — fail-fast, no silent fallback, no constraint relaxation. component_source default 'vault' (Component Vault only; no cloud registry calls); 'registry'/'vault_then_registry' are explicit opt-ins. Raw build log lands at build_log_path in the workspace, not in this response.",
+     "schema": {"type": "object", "properties": {"project_path": _STR, "component_source": {"type": "string", "enum": ["vault", "registry", "vault_then_registry"]}, "target": _STR}, "required": ["project_path"]}},
     {"name": "bodesign_compose_schematic", "handler": _h_compose,
      "description": "Compose a schematic from a design spec (components + REF.PIN nets); place + emit + kicad-cli validate. style='netlist' (default, unchanged) uses a naive index grid + global labels (back-compat). style='draftsman' (opt-in) does subsystem-clustered deterministic force-directed placement + drawn wires + sheet-fit for engineer-readable schematics. connection_style overrides the style-derived default when given ('label' global labels; 'wire' orthogonal wires). Components may carry group (subsystem cluster) and x/y (caller-supplied placement). measure_ink=true (draftsman only) renders + measures ink%/content-fill% (toolchain-gated).",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "spec": {"type": "object"},
@@ -719,6 +735,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_export_netlist", "handler": _h_export_netlist,
      "description": "Export a netlist from a schematic via kicad-cli.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "format": _STR}, "required": ["schematic_path", "out_dir"]}},
+    {"name": "bodesign_prd_bom_crosscheck", "handler": _h_prd_bom_crosscheck,
+     "description": "C00\u2192C03 fulfilment gate (quality/prd-bom-crosscheck L1): deterministically crosscheck the human-audited main_components_structured.json role manifest against the C03 KiCad netlist (.net). Per-role verdicts present/substituted/missing with matched_refs audit trail; missing roles and out-of-envelope substitutions without a recorded user approval are BLOCKING (gate=FAIL \u2014 refuse C04 entry). Fail-fast on absent/invalid manifest or netlist (MANIFEST_MISSING/MANIFEST_INVALID/NETLIST_MISSING/NETLIST_PARSE_ERROR); never silently passes. Pure python, runs in core.",
+     "schema": {"type": "object", "properties": {"manifest_path": _STR, "netlist_path": _STR, "out_dir": _STR}, "required": ["manifest_path", "netlist_path"]}},
     {"name": "bodesign_render_companion", "handler": _h_companion,
      "description": "Render a readable companion (pdf/png) for a non-readable engineering file (.kicad_sch/.kicad_pcb/gerber).",
      "schema": {"type": "object", "properties": {"path": _STR, "out_dir": _STR}, "required": ["path", "out_dir"]}},
@@ -878,6 +897,8 @@ _EE_GROUP_TOOLS = {
     "bodesign_layout_drc_gate",
     "bodesign_si_check",
     "bodesign_autoroute",
+    # C03 declarative front-end (atopile toolchain lives in the ee image; DD-2)
+    "bodesign_ato_build",
 }
 
 
@@ -953,7 +974,7 @@ def _forward_to_worker(url: str, name: str, arguments: dict, group: str = "?") -
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
 # local same-host UDS mode).
-PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "in_path", "out_path", "output_path", "report_path", "corpus_dir", "schematic_path", "pcb_path", "gerber_dir", "drill_dir")
+PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "in_path", "out_path", "output_path", "report_path", "corpus_dir", "schematic_path", "pcb_path", "gerber_dir", "drill_dir", "project_path")
 
 # ── Schema steering for the container boundary (client-behavior fix) ──────────
 # Transfer is solved by /files; the residual problem is CLIENT BEHAVIOR — an agent

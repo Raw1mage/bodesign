@@ -1,0 +1,55 @@
+{
+  "schemas": [
+    {
+      "name": "ato_build_request",
+      "kind": "message",
+      "fields": [
+        { "name": "project_path", "type": "string", "notes": "工作區內 .ato 專案根目錄（含 ato.yaml）；PATH_ARG_KEYS 成員" },
+        { "name": "component_source", "type": "enum(vault|registry|vault_then_registry)", "notes": "預設 vault；vault_then_registry 僅使用者顯式啟用（DD-5）" },
+        { "name": "target", "type": "string?", "notes": "ato build target 名；預設 default" }
+      ]
+    },
+    {
+      "name": "ato_build_result",
+      "kind": "message",
+      "fields": [
+        { "name": "ok", "type": "boolean", "notes": "編譯+求解+選料全部通過" },
+        { "name": "pcb_path", "type": "string?", "notes": "ok=true 時的 .kicad_pcb 產物路徑（可直接餵 C04）" },
+        { "name": "evidence", "type": "constraint_solve_evidence?", "notes": "ok=true 必附" },
+        { "name": "deficiencies", "type": "deficiency[]", "notes": "ok=false 必附；空陣列與 ok=false 並存視為缺陷" },
+        { "name": "build_log_path", "type": "string?", "notes": "原始 log 落 workspace，不進回應主體（DD-6）" }
+      ]
+    },
+    {
+      "name": "deficiency",
+      "kind": "json",
+      "fields": [
+        { "name": "kind", "type": "enum(compile_error|unsat_constraint|pick_failure|component_wrapper_missing|toolchain_missing|worker_unavailable)", "notes": "失敗分類；驅動 LLM 迭代策略" },
+        { "name": "detail", "type": "string", "notes": "人類可讀說明（含參數區間/約束表達式）" },
+        { "name": "source_anchor", "type": "string?", "notes": ".ato 檔案:行號（compile/unsat 類必填）" }
+      ]
+    },
+    {
+      "name": "constraint_solve_evidence",
+      "kind": "json",
+      "fields": [
+        { "name": "envelope", "type": "validation_evidence.v1", "notes": "oracle=constraint_solve；須先進 ORACLE_TOOLS 白名單（DD-4）" },
+        { "name": "constraints_checked", "type": "int", "notes": "assert 約束總數" },
+        { "name": "solver_verdict", "type": "enum(sat|unsat|trivially_true)", "notes": "求解結果" },
+        { "name": "picks", "type": "pick_proof[]", "notes": "每零件 rated ⊆ spec 證明" },
+        { "name": "atopile_version", "type": "string", "notes": "pinned 版本，證據可重現性" }
+      ]
+    },
+    {
+      "name": "pick_proof",
+      "kind": "json",
+      "fields": [
+        { "name": "designator", "type": "string", "notes": "元件代號" },
+        { "name": "source", "type": "enum(vault|registry)", "notes": "實際來源；vault_then_registry 模式下逐件標示" },
+        { "name": "spec_interval", "type": "string", "notes": "需求參數區間（含單位）" },
+        { "name": "rated_interval", "type": "string", "notes": "選中零件 rated 區間；rated ⊆ spec 為通過條件" },
+        { "name": "mpn", "type": "string", "notes": "製造商料號" }
+      ]
+    }
+  ]
+}

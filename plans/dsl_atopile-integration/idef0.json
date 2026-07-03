@@ -1,0 +1,31 @@
+{
+  "diagram_title": "atopile declarative-DSL verification front-end for bodesign C03/C04",
+  "node_reference": "A0",
+  "activities": [
+    { "id": "A1", "title": "Author .ato circuit source (C03 front-end)" },
+    { "id": "A2", "title": "Compile & solve constraints (ato build, ee worker)" },
+    { "id": "A3", "title": "Resolve components against vault/registry" },
+    { "id": "A4", "title": "Hand off .kicad_pcb to C04 pipeline" },
+    { "id": "A5", "title": "Record fifth-layer trust evidence (constraint_solve)" }
+  ],
+  "arrows": [
+    { "id": "i1", "type": "input", "source": "EXTERNAL", "target": "A1:input", "label": "design spec (C00 PRD / user requirements)" },
+    { "id": "c1", "type": "control", "source": "EXTERNAL", "target": "A1:control", "label": "datasheet evidence contract (vault_spec_check)" },
+    { "id": "m1", "type": "mechanism", "source": "EXTERNAL", "target": "A1:mechanism", "label": "LLM authoring + Component Vault lookup" },
+    { "id": "f1", "type": "output", "source": "A1:output", "target": "A2:input", "label": ".ato source + ato.yaml manifest" },
+    { "id": "c2", "type": "control", "source": "EXTERNAL", "target": "A2:control", "label": "unit types / tolerance intervals / assert solver; pinned atopile 0.12.x" },
+    { "id": "m2", "type": "mechanism", "source": "EXTERNAL", "target": "A2:mechanism", "label": "atopile compiler in ee worker (_EE_GROUP_TOOLS forwarding)" },
+    { "id": "f2", "type": "output", "source": "A2:output", "target": "A3:input", "label": "parametric component requirements" },
+    { "id": "c3", "type": "control", "source": "EXTERNAL", "target": "A3:control", "label": "no-silent-fallback: fail fast on unsolvable picks; offline/self-hosted registry policy" },
+    { "id": "m3", "type": "mechanism", "source": "EXTERNAL", "target": "A3:mechanism", "label": "atopile parametric picker + Component Vault adapter" },
+    { "id": "f3", "type": "output", "source": "A3:output", "target": "A4:input", "label": "compiled .kicad_pcb + resolved BOM (rated ⊆ spec proof)" },
+    { "id": "c4", "type": "control", "source": "EXTERNAL", "target": "A4:control", "label": "C04 input contract: .kicad_pcb path chain (in_path/out_path)" },
+    { "id": "m4", "type": "mechanism", "source": "EXTERNAL", "target": "A4:mechanism", "label": "route_net2pcb / pour_planes / layout_drc_gate (existing C04 tools)" },
+    { "id": "f4", "type": "output", "source": "A2:output", "target": "A5:input", "label": "constraint-solving evidence report" },
+    { "id": "f5", "type": "output", "source": "A4:output", "target": "A5:input", "label": "DRC gate verdict" },
+    { "id": "c5", "type": "control", "source": "EXTERNAL", "target": "A5:control", "label": "validation_evidence.v1 envelope + ORACLE_TOOLS whitelist" },
+    { "id": "m5", "type": "mechanism", "source": "EXTERNAL", "target": "A5:mechanism", "label": "workflow-core readiness tracker (c06_test_plan aggregation)" },
+    { "id": "o1", "type": "output", "source": "A5:output", "target": "EXTERNAL", "label": "verification report with 5-layer trust evidence" },
+    { "id": "o2", "type": "output", "source": "A2:output", "target": "EXTERNAL", "label": "structured compile-error deficiency list (fail-fast path)" }
+  ]
+}

@@ -117,7 +117,9 @@ python3 <skill>/scripts/gate.py <verb> --repo <abs-project> [--arg folder=<stage
   to `--repo`; a relative `folder` resolves against it).
 - C04 → the gate: the MCP tool `bodesign_layout_drc_gate` (`board_path`) + the landing verb
   `c04_readiness` (`folder`).
-- C03 → the schematic analyzer's gate (`analyze_schematic.py`: no open `high` findings) — there is no
+- C03 → the schematic analyzer's gate (`analyze_schematic.py`: no open `high` findings) plus the
+  PRD-fulfilment gate: the MCP tool `bodesign_prd_bom_crosscheck` (`manifest_path` + netlist) must
+  report `gate: PASS` before C04 entry (`stages/c03-ee/GUIDE.md` § 3b) — there is no
   `c03_readiness` verb.
 - C07 → the C04 fab-release gate (`fab_release_gate.py`) — there is no `c07_readiness` verb.
 - Any milestone → landing verb `package_readiness` (`folder`) for the cross-stage roll-up.

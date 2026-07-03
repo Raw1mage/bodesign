@@ -1,0 +1,41 @@
+[
+  {
+    "id": "TV-1",
+    "description": "CC regulator role missing from resistor-only netlist → missing + BLOCKING + gate FAIL (E2E LED driver regression)",
+    "input": {
+      "manifest": { "roles": [{ "role": "current-regulator", "qty_min": 1, "patterns": ["AL5809", "regulator", "current.?sink"], "allowed_alternatives": [{ "name": "npn-linear-sink", "patterns": ["NPN", "SOT-23", "SOT-89", "BC8[0-9]{2}", "MMBT"] }] }], "approvals": [] },
+      "netlist_components": [{ "ref": "R3", "value": "140R", "footprint": "R_0603_1608Metric", "libsymbol": "Device:R" }]
+    },
+    "expected": { "gate": "FAIL", "verdicts": [{ "role": "current-regulator", "status": "missing", "blocking": true }], "blocking": ["current-regulator"] }
+  },
+  {
+    "id": "TV-2",
+    "description": "In-envelope alternative (NPN sink) present → substituted in_envelope, NOT blocking, gate PASS",
+    "input": {
+      "manifest": { "roles": [{ "role": "current-regulator", "qty_min": 1, "patterns": ["AL5809"], "allowed_alternatives": [{ "name": "npn-linear-sink", "patterns": ["NPN", "MMBT"] }] }], "approvals": [] },
+      "netlist_components": [{ "ref": "Q1", "value": "MMBT2222A", "footprint": "SOT-23", "libsymbol": "Transistor_BJT:MMBT2222A" }]
+    },
+    "expected": { "gate": "PASS", "verdicts": [{ "role": "current-regulator", "status": "substituted", "in_envelope": true, "blocking": false }], "blocking": [] }
+  },
+  {
+    "id": "TV-3",
+    "description": "Out-of-envelope substitution WITH recorded user approval → substituted approved, NOT blocking",
+    "input": {
+      "manifest": { "roles": [{ "role": "current-regulator", "qty_min": 1, "patterns": ["AL5809"], "allowed_alternatives": [] }], "approvals": [{ "role": "current-regulator", "substitute": "resistor-ballast", "approved_by": "user", "quote": "純電阻方案我批准", "date": "2026-07-03" }] },
+      "netlist_components": [{ "ref": "R3", "value": "140R", "footprint": "R_0603_1608Metric", "libsymbol": "Device:R" }]
+    },
+    "expected": { "gate": "PASS", "verdicts": [{ "role": "current-regulator", "status": "substituted", "approved": true, "blocking": false }], "blocking": [] }
+  },
+  {
+    "id": "TV-4",
+    "description": "Manifest file absent → explicit MANIFEST_MISSING error, gate never silently passes",
+    "input": { "manifest_path": "/nonexistent/main_components_structured.json", "netlist_path": "valid.net" },
+    "expected": { "error": "MANIFEST_MISSING" }
+  },
+  {
+    "id": "TV-5",
+    "description": "Determinism: same inputs twice → byte-identical report",
+    "input": { "note": "run TV-1 inputs twice; compare serialized reports" },
+    "expected": { "identical": true }
+  }
+]

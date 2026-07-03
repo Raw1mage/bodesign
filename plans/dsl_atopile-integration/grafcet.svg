@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="890" height="1440" viewBox="12.00 -2.00 44.48 72.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="12.00" y="-2.00" width="44.48" height="72.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1S1I1" data-segment-ids="S0O1S1I1:1S" d="M 20.00 7.00 L 20.00 11.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1G1I1" data-segment-ids="S1O1G1I1:1S" d="M 20.00 14.00 L 20.00 16.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1S2I1" data-segment-ids="G1O1S2I1:1S" d="M 20.00 16.00 L 20.00 20.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O2G5I1" data-segment-ids="G1O2G5I1:1E G1O2G5I1:2S G1O2G5I1:3W G1O2G5I1:4S" d="M 20.00 16.00 L 41.24 16.00 Q 41.74 16.00 41.74 16.50 L 41.74 35.50 Q 41.74 36.00 41.24 36.00 L 28.50 36.00 Q 28.00 36.00 28.00 36.50 L 28.00 42.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1G2I1" data-segment-ids="S2O1G2I1:1S" d="M 20.00 23.00 L 20.00 25.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1S3I1" data-segment-ids="G2O1S3I1:1S" d="M 20.00 25.00 L 20.00 29.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O2G5I2" data-segment-ids="G2O2G5I2:1E G2O2G5I2:2S G2O2G5I2:3W G2O2G5I2:4S" d="M 20.00 25.00 L 43.24 25.00 Q 43.74 25.00 43.74 25.50 L 43.74 37.50 Q 43.74 38.00 43.24 38.00 L 24.50 38.00 Q 24.00 38.00 24.00 38.50 L 24.00 42.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1G3I1" data-segment-ids="S3O1G3I1:1S" d="M 20.00 32.00 L 20.00 34.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S4I1" data-segment-ids="G3O1S4I1:1E G3O1S4I1:2S" d="M 20.00 34.00 L 37.24 34.00 Q 37.74 34.00 37.74 34.50 L 37.74 44.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O2G5I3" data-segment-ids="G3O2G5I3:1S" d="M 20.00 34.00 L 20.00 42.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1S5I1" data-segment-ids="S4O1S5I1:1S S4O1S5I1:2W S4O1S5I1:3S" d="M 37.74 47.00 L 37.74 52.50 Q 37.74 53.00 37.24 53.00 L 20.50 53.00 Q 20.00 53.00 20.00 53.50 L 20.00 55.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1G4I1" data-segment-ids="S5O1G4I1:1S" d="M 20.00 58.00 L 20.00 64.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G4O1S0I1" data-segment-ids="G4O1S0I1:1S G4O1S0I1:2W G4O1S0I1:3N G4O1S0I1:4E G4O1S0I1:5S" d="M 20.00 64.00 L 20.00 65.50 Q 20.00 66.00 19.50 66.00 L 16.50 66.00 Q 16.00 66.00 16.00 65.50 L 16.00 2.50 Q 16.00 2.00 16.50 2.00 L 19.50 2.00 Q 20.00 2.00 20.00 2.50 L 20.00 4.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S6O1G4I2" data-segment-ids="S6O1G4I2:1S S6O1G4I2:2E S6O1G4I2:3S S6O1G4I2:4E S6O1G4I2:5S S6O1G4I2:6W S6O1G4I2:7S" d="M 20.00 47.00 L 20.00 48.50 Q 20.00 49.00 20.50 49.00 L 35.50 49.00 Q 36.00 49.00 36.00 49.50 L 36.00 50.50 Q 36.00 51.00 36.50 51.00 L 40.24 51.00 Q 40.74 51.00 40.74 51.50 L 40.74 59.50 Q 40.74 60.00 40.24 60.00 L 24.50 60.00 Q 24.00 60.00 24.00 60.50 L 24.00 64.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G5O1S6I1" data-segment-ids="G5O1S6I1:1S" d="M 20.00 42.00 L 20.00 44.00"/>
+<rect class="step" x="18.00" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="18.25" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="20.00" y="5.50">0</text>
+<rect class="step" x="18.00" y="11.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="12.50">1</text>
+<rect class="step" x="18.00" y="20.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="21.50">2</text>
+<rect class="step" x="18.00" y="29.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="30.50">3</text>
+<rect class="step" x="35.74" y="44.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="37.74" y="45.50">4</text>
+<rect class="step" x="18.00" y="55.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="56.50">5</text>
+<rect class="step" x="18.00" y="44.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="20.00" y="45.50">6</text>
+<line class="assoc" x1="22.00" y1="5.50" x2="23.00" y2="5.50"/>
+<rect class="action" x="23.00" y="4.07" width="11.74" height="2.86"/>
+<text class="action-label" x="28.87" y="5.50"><tspan x="28.87" dy="0">Idle: awaiting ato_build request</tspan></text>
+<line class="assoc" x1="22.00" y1="12.50" x2="23.00" y2="12.50"/>
+<rect class="action" x="23.00" y="11.07" width="11.74" height="2.86"/>
+<text class="action-label" x="28.87" y="12.09"><tspan x="28.87" dy="0">Validate request + locate .ato</tspan><tspan x="28.87" dy="0.82">project; forward to ee worker</tspan></text>
+<line class="assoc" x1="22.00" y1="21.50" x2="23.00" y2="21.50"/>
+<rect class="action" x="23.00" y="20.07" width="11.74" height="2.86"/>
+<text class="action-label" x="28.87" y="21.09"><tspan x="28.87" dy="0">Run ato build: compile, unit/tolerance</tspan><tspan x="28.87" dy="0.82">check, assert constraint solve</tspan></text>
+<line class="assoc" x1="22.00" y1="30.50" x2="23.00" y2="30.50"/>
+<rect class="action" x="23.00" y="29.07" width="11.74" height="2.86"/>
+<text class="action-label" x="28.87" y="30.09"><tspan x="28.87" dy="0">Resolve parametric component picks</tspan><tspan x="28.87" dy="0.82">(vault/registry, rated ⊆ spec)</tspan></text>
+<line class="assoc" x1="39.74" y1="45.50" x2="40.74" y2="45.50"/>
+<rect class="action" x="40.74" y="44.07" width="11.74" height="2.86"/>
+<text class="action-label" x="46.61" y="45.09"><tspan x="46.61" dy="0">Emit .kicad_pcb artifact +</tspan><tspan x="46.61" dy="0.82">constraint-solving evidence report</tspan></text>
+<line class="assoc" x1="22.00" y1="56.50" x2="23.00" y2="56.50"/>
+<rect class="action" x="23.00" y="55.07" width="11.74" height="2.86"/>
+<text class="action-label" x="28.87" y="56.09"><tspan x="28.87" dy="0">Register artifact for C04 pipeline + record</tspan><tspan x="28.87" dy="0.82">constraint_solve evidence in readiness</tspan></text>
+<line class="assoc" x1="22.00" y1="45.50" x2="23.00" y2="45.50"/>
+<rect class="action" x="23.00" y="44.07" width="11.74" height="2.86"/>
+<text class="action-label" x="28.87" y="44.68"><tspan x="28.87" dy="0">Fail fast: return structured deficiency list</tspan><tspan x="28.87" dy="0.82">(malformed request / worker unavailable /</tspan><tspan x="28.87" dy="0.82">compile error / unsat constraint / pick failure)</tspan></text>
+<circle class="branch-junction" cx="20.00" cy="16.00" r="0.28"/>
+<circle class="branch-junction" cx="20.00" cy="25.00" r="0.28"/>
+<circle class="branch-junction" cx="20.00" cy="34.00" r="0.28"/>
+<line class="gate" x1="18.00" y1="64.00" x2="26.00" y2="64.00"/>
+<line class="gate" x1="18.00" y1="42.00" x2="30.00" y2="42.00"/>
+<line class="gate" x1="19.00" y1="9.00" x2="21.00" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="21.40" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="21.40" dy="0">ato_build MCP request received</tspan></text>
+<line class="gate" x1="19.00" y1="18.00" x2="21.00" y2="18.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label-left" x="18.60" y="17.32" data-label-kind="condition-stub" data-edge-id="edge:G1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="18.60" dy="0">request well-formed</tspan><tspan x="18.60" dy="0.68">AND .ato project exists</tspan><tspan x="18.60" dy="0.68">AND ee worker reachable</tspan></text>
+<line class="gate" x1="27.00" y1="40.00" x2="29.00" y2="40.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2G5I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label" x="29.40" y="39.32" data-label-kind="condition-stub" data-edge-id="edge:G1O2G5I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="29.40" dy="0">request well-formed</tspan><tspan x="29.40" dy="0.68">AND .ato project exists</tspan><tspan x="29.40" dy="0.68">AND ee worker reachable</tspan></text>
+<line class="gate" x1="19.00" y1="27.00" x2="21.00" y2="27.00" data-label-kind="condition-stub" data-edge-id="edge:G2O1S3I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label-left" x="18.60" y="26.32" data-label-kind="condition-stub" data-edge-id="edge:G2O1S3I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="18.60" dy="0">compile OK AND</tspan><tspan x="18.60" dy="0.68">all constraints</tspan><tspan x="18.60" dy="0.68">satisfiable</tspan></text>
+<line class="gate" x1="23.00" y1="40.00" x2="25.00" y2="40.00" data-label-kind="condition-stub" data-edge-id="edge:G2O2G5I2" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label" x="25.40" y="38.64" data-label-kind="condition-stub" data-edge-id="edge:G2O2G5I2" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="25.40" dy="0">compile OK AND</tspan><tspan x="25.40" dy="0.68">all constraints</tspan><tspan x="25.40" dy="0.68">satisfiable</tspan></text>
+<line class="gate" x1="36.74" y1="40.00" x2="38.74" y2="40.00" data-label-kind="condition-stub" data-edge-id="edge:G3O1S4I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="39.14" y="40.00" data-label-kind="condition-stub" data-edge-id="edge:G3O1S4I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="39.14" dy="0">all picks resolved with rated-subset proof</tspan></text>
+<line class="gate" x1="19.00" y1="36.00" x2="21.00" y2="36.00" data-label-kind="condition-stub" data-edge-id="edge:G3O2G5I3" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"/>
+<text class="gate-label-left" x="18.60" y="35.32" data-label-kind="condition-stub" data-edge-id="edge:G3O2G5I3" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"><tspan x="18.60" dy="0">all picks resolved</tspan><tspan x="18.60" dy="0.68">with rated-</tspan><tspan x="18.60" dy="0.68">subset proof</tspan></text>
+<line class="gate" x1="36.74" y1="49.00" x2="38.74" y2="49.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"/>
+<text class="gate-label" x="39.14" y="49.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"><tspan x="39.14" dy="0">artifacts written to workspace</tspan></text>
+<line class="gate" x1="19.00" y1="60.00" x2="21.00" y2="60.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1G4I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"/>
+<text class="gate-label-left" x="18.60" y="59.66" data-label-kind="condition-stub" data-edge-id="edge:S5O1G4I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"><tspan x="18.60" dy="0">validation_evidence</tspan><tspan x="18.60" dy="0.68">envelope recorded</tspan></text>
+<line class="gate" x1="23.00" y1="62.00" x2="25.00" y2="62.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1G4I2" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"/>
+<text class="gate-label" x="25.40" y="62.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1G4I2" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"><tspan x="25.40" dy="0">any failure condition raised</tspan></text>
+</svg>

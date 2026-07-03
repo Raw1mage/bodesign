@@ -1,0 +1,117 @@
+[
+  {
+    "id": "TV-1",
+    "description": "合法分壓器專案 build 成功：全鏈通（compile→solve→pick→emit→DRC）",
+    "input": {
+      "tool": "ato_build",
+      "project_path": "<workspace>/tv1_divider",
+      "component_source": "vault",
+      "ato_source": "module Divider: r_top = new Resistor; r_top.resistance = 10kohm +/- 1%; r_bottom = new Resistor; r_bottom.resistance = 10kohm +/- 1%; assert r_top.resistance + r_bottom.resistance within 15kohm to 25kohm"
+    },
+    "expected": {
+      "ok": true,
+      "pcb_path": "non-null, exists on disk",
+      "evidence.solver_verdict": "sat",
+      "evidence.picks[*]": "every pick has rated_interval ⊆ spec_interval, source=vault",
+      "downstream": "layout_drc_gate(board_path=pcb_path) runs; NOT clean pre-routing"
+    },
+    "status_note": "verified 2026-07-03 (in-container): build ok, .kicad_pcb produced, evidence sat. DRC gate on raw ato output: copper=3 unconnected=1 (unrouted board) — routing is C04's job; gate-pass belongs to the C04 chain, not to ato_build itself."
+  },
+  {
+    "id": "TV-2",
+    "description": "恆假 assert 編譯期失敗：unsat 不產物、不放寬",
+    "input": {
+      "tool": "ato_build",
+      "project_path": "<workspace>/tv2_unsat",
+      "component_source": "vault",
+      "ato_source": "module Bad: r = new Resistor; r.resistance = 10kohm +/- 1%; assert r.resistance > 20kohm"
+    },
+    "expected": {
+      "ok": false,
+      "pcb_path": null,
+      "deficiencies[0].kind": "unsat_constraint",
+      "deficiencies[0].source_anchor": "non-null (.ato file:line)"
+    },
+    "status_note": "verified 2026-07-03: real 0.12.5 output = 'Pick Error / Contradiction: Intersection of literals is empty' (solver feeds picker); parser calibrated, regression-locked."
+  },
+  {
+    "id": "TV-3",
+    "description": "vault 無解 pick fail-fast：不靜默跨源查 registry",
+    "input": {
+      "tool": "ato_build",
+      "project_path": "<workspace>/tv3_nopick",
+      "component_source": "vault",
+      "ato_source": "module Exotic: c = new Capacitor; c.capacitance = 123.456uF +/- 0.001%"
+    },
+    "expected": {
+      "ok": false,
+      "deficiencies[0].kind": "pick_failure",
+      "deficiencies[0].detail": "contains required spec_interval",
+      "network": "zero outbound registry calls (observable via worker net log / mock)"
+    },
+    "status_note": "verified 2026-07-03 for classification (pick_failure via real registry miss). NOTE: 0.12.5 picking calls cloud registry (endpoint 'capacitors') — vault-only mode deferred to vault adapter (task 2.4 增量); offline build fails as compile_error 'Uncaught compiler exception' (regression-locked)."
+  },
+  {
+    "id": "TV-4",
+    "description": "單位型別錯誤在編譯期攔截",
+    "input": {
+      "tool": "ato_build",
+      "project_path": "<workspace>/tv4_unit",
+      "component_source": "vault",
+      "ato_source": "module UnitBug: r = new Resistor; r.resistance = 10uF"
+    },
+    "expected": {
+      "ok": false,
+      "deficiencies[0].kind": "compile_error",
+      "deficiencies[0].source_anchor": "non-null"
+    },
+    "status_note": "verified 2026-07-03: 'Incompatible Unit Error' block, culprit anchor main.ato:7:4 (last Source: in block); parser calibrated."
+  },
+  {
+    "id": "TV-5",
+    "description": "monolith 環境顯式 toolchain 錯誤：無 fallback 路徑",
+    "input": {
+      "tool": "ato_build",
+      "project_path": "<workspace>/tv1_divider",
+      "environment": "monolith (no ee worker, BODESIGN_EE_WORKER_URL unset)"
+    },
+    "expected": {
+      "ok": false,
+      "deficiencies[0].kind": "worker_unavailable or toolchain_missing",
+      "behavior": "no fallback to compose_schematic path, no silent skip"
+    },
+    "status_note": "verified 2026-07-03 on host (no ato): toolchain_missing deficiency, no fallback."
+  },
+  {
+    "id": "TV-6",
+    "description": "缺 vault wrapper 顯式報錯：具名缺項",
+    "input": {
+      "tool": "ato_build",
+      "project_path": "<workspace>/tv6_nowrapper",
+      "component_source": "vault",
+      "ato_source": "module NoWrap: u = new SomeExoticFpga"
+    },
+    "expected": {
+      "ok": false,
+      "deficiencies[0].kind": "component_wrapper_missing",
+      "deficiencies[0].detail": "names the missing component class"
+    }
+  },
+  {
+    "id": "TV-7",
+    "description": "constraint_solve 三處註冊齊備（DD-4 完整性）",
+    "input": {
+      "check": "static + unittest",
+      "targets": [
+        "requirement_planning.ORACLE_TOOLS",
+        "validation_evidence._ADAPTERS",
+        "c06_test_plan._CHECKS"
+      ]
+    },
+    "expected": {
+      "ORACLE_TOOLS": "contains 'constraint_solve'",
+      "_ADAPTERS": "has constraint_solve adapter producing valid validation_evidence.v1 envelope (no ENV_TOOL_UNKNOWN)",
+      "_CHECKS": "aggregation includes constraint_solve with label"
+    }
+  }
+]

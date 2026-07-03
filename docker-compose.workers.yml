@@ -33,6 +33,9 @@ services:
     command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8077", "--tools", "ee"]
     volumes:
       - "bodesign-sessions:/var/cache/bodesign/sessions"
+      # E2E / experiments products must be host-visible in workers mode too (dev loop
+      # parity with docker-compose.dev.yml) — BR_20260703_workers_mode_infra_gaps.
+      - "./experiments:/work/experiments"
     environment:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
@@ -56,6 +59,7 @@ services:
     volumes:
       # Same session tree as the core so constraints/Enclosure.step are shared.
       - "bodesign-sessions:/var/cache/bodesign/sessions"
+      - "./experiments:/work/experiments"
     environment:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"

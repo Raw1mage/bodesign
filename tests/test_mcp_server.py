@@ -473,8 +473,10 @@ class McpServerTests(unittest.TestCase):
     def test_converged_registry_tool_count(self):
         """6.4/AC-7: GET /tools reflects the converged registry — pre-refactor 91
         non-cache tools minus 51 fully-landed verbs (c00_emit_prd_docx stays as a
-        DD-3 borderline keep for the assemble path) plus the 3 cache tools = 43."""
-        self.assertEqual(len(self.server.TOOLS), 43)
+        DD-3 borderline keep for the assemble path) plus the 3 cache tools = 43,
+        plus bodesign_ato_build (dsl/atopile-integration) and
+        bodesign_prd_bom_crosscheck (quality/prd-bom-crosscheck L1) = 45."""
+        self.assertEqual(len(self.server.TOOLS), 45)
         names = {t["name"] for t in self.server.TOOLS}
         # borderline / infrastructure keeps (design.md DD-3):
         for kept in ("bodesign_c00_emit_prd_docx", "bodesign_c02_voice_to_design",

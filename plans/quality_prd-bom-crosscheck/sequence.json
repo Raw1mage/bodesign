@@ -1,0 +1,15 @@
+[
+  {
+    "title": "PRD-BOM crosscheck gate at C03→C04 handoff",
+    "participants": ["User", "LLM", "C00_folder", "prd_bom_crosscheck", "C03_readiness", "C04_toolchain"],
+    "messages": [
+      { "from": "LLM", "to": "C00_folder", "label": "extract main_components_structured.json (one-shot, auditable)" },
+      { "from": "User", "to": "C00_folder", "label": "audit / correct manifest" },
+      { "from": "C03_readiness", "to": "prd_bom_crosscheck", "label": "run(manifest_path, netlist_path)" },
+      { "from": "prd_bom_crosscheck", "to": "C03_readiness", "label": "CrosscheckReport (verdicts + blocking)" },
+      { "from": "C03_readiness", "to": "C04_toolchain", "label": "gate PASS → C04 entry allowed" },
+      { "from": "C03_readiness", "to": "User", "label": "gate FAIL → BLOCKING list; decide: fix design or approve substitution" },
+      { "from": "User", "to": "C00_folder", "label": "record approval entry (user-owned) or request redesign" }
+    ]
+  }
+]

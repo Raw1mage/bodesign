@@ -159,11 +159,35 @@ def _adapt_spice(raw: dict[str, Any]) -> list[ValidationFinding]:
     return findings
 
 
+def _adapt_constraint_solve(raw: dict[str, Any]) -> list[ValidationFinding]:
+    """Adapt an ato_build constraint-solving result into findings (5th trust layer).
+
+    Raw shape (deterministic, from ato_bridge): {ok, solver_verdict, constraints_checked,
+    picks[], deficiencies[{kind, detail, source_anchor}]}. Every deficiency becomes a
+    major finding — a compile-time blocker is never cosmetic. No reinterpretation.
+    """
+    findings: list[ValidationFinding] = []
+    for i, d in enumerate(raw.get("deficiencies", []) or []):
+        kind = str(d.get("kind", "unknown"))
+        anchor = None
+        if d.get("source_anchor"):
+            anchor = {"kind": "source", "ref": str(d["source_anchor"])}
+        findings.append(ValidationFinding(
+            f"cts-{kind}-{i}", "major",
+            f"{kind}: {str(d.get('detail', ''))[:160]}", anchor))
+    if str(raw.get("solver_verdict", "")).lower() == "unsat" and not findings:
+        findings.append(ValidationFinding(
+            "cts-unsat", "major", "constraint system unsatisfiable",
+            {"kind": "tool_output", "ref": "constraint_solve.solver_verdict"}))
+    return findings
+
+
 _ADAPTERS: dict[str, Callable[[dict[str, Any]], list[ValidationFinding]]] = {
     "drc_gate": _adapt_drc_gate,
     "si_check": _adapt_si_check,
     "crosscheck": _adapt_crosscheck,
     "spice": _adapt_spice,
+    "constraint_solve": _adapt_constraint_solve,
 }
 
 

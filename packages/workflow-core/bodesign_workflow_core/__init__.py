@@ -143,6 +143,11 @@ from .c00_prd_template import (
     load_c00_prd_template,
     scaffold_c00_prd_package,
 )
+from .prd_bom_crosscheck import (
+    CrosscheckResult,
+    Verdict,
+    prd_bom_crosscheck,
+)
 from .c00_prd_docx import (
     C00DocxArchitecture,
     C00DocxArchitectureError,
@@ -269,7 +274,10 @@ __all__ = [
     "DesignIntentPlan",
     "PackageReadiness",
     "ReferenceCheck",
+    "CrosscheckResult",
+    "Verdict",
     "assess_c00_prd_readiness",
+    "prd_bom_crosscheck",
     "assess_package_readiness",
     "assess_c01_package_readiness",
     "assess_c02_constraint_readiness",

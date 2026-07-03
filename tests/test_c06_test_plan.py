@@ -46,7 +46,7 @@ class C06TestPlanTests(unittest.TestCase):
         res = assemble_c06_test_plan(self.work)
         self.assertEqual(res.readiness.status, "blocked")
         self.assertEqual(res.readiness.run_count, 0)
-        self.assertEqual(len(res.readiness.not_run), 4)
+        self.assertEqual(len(res.readiness.not_run), 5)
 
     def test_clean_run_is_test_plan_drafted(self):
         verdicts = {

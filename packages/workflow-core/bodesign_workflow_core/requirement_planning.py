@@ -98,7 +98,8 @@ INTERFACE_KEYWORDS = {
 # requirement is unverifiable and MUST be escalated to open_questions — never
 # silently skipped, never auto-assigned an oracle.
 ORACLE_TOOLS: tuple[str, ...] = (
-    "drc_gate", "erc", "crosscheck", "si_check", "gerber_compare", "spice", "user_judgment", "none",
+    "drc_gate", "erc", "crosscheck", "si_check", "gerber_compare", "spice",
+    "constraint_solve", "user_judgment", "none",
 )
 
 # DD-9: pass verdicts only via oracle execution records; default is unverified.

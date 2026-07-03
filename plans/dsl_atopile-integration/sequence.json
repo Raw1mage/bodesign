@@ -1,0 +1,33 @@
+[
+  {
+    "title": "ato_build happy path (compile → solve → pick → emit → evidence)",
+    "participants": ["Client", "CoreServer", "EEWorker", "AtopileCLI", "ComponentVault", "ReadinessTracker"],
+    "messages": [
+      { "from": "Client", "to": "CoreServer", "label": "call ato_build(project_path, component_source=vault)" },
+      { "from": "CoreServer", "to": "CoreServer", "label": "_route_tool: group=ee not served locally" },
+      { "from": "CoreServer", "to": "EEWorker", "label": "_forward_to_worker POST /invoke" },
+      { "from": "EEWorker", "to": "AtopileCLI", "label": "subprocess: ato build (pinned 0.12.x)" },
+      { "from": "AtopileCLI", "to": "AtopileCLI", "label": "compile + unit/tolerance check + assert solve" },
+      { "from": "AtopileCLI", "to": "ComponentVault", "label": "parametric pick via vault adapter (rated ⊆ spec)" },
+      { "from": "ComponentVault", "to": "AtopileCLI", "label": "resolved components (or pick_failure)" },
+      { "from": "AtopileCLI", "to": "EEWorker", "label": ".kicad_pcb + build log" },
+      { "from": "EEWorker", "to": "EEWorker", "label": "ato_bridge: parse log → constraint_solve evidence" },
+      { "from": "EEWorker", "to": "CoreServer", "label": "result: pcb_path + evidence envelope" },
+      { "from": "CoreServer", "to": "ReadinessTracker", "label": "record constraint_solve (validation_evidence.v1)" },
+      { "from": "CoreServer", "to": "Client", "label": "pcb_path + evidence summary (ready for C04)" }
+    ]
+  },
+  {
+    "title": "ato_build fail-fast path (compile error / unsat / pick failure)",
+    "participants": ["Client", "CoreServer", "EEWorker", "AtopileCLI"],
+    "messages": [
+      { "from": "Client", "to": "CoreServer", "label": "call ato_build(project_path)" },
+      { "from": "CoreServer", "to": "EEWorker", "label": "_forward_to_worker POST /invoke" },
+      { "from": "EEWorker", "to": "AtopileCLI", "label": "subprocess: ato build" },
+      { "from": "AtopileCLI", "to": "EEWorker", "label": "non-zero exit + error output" },
+      { "from": "EEWorker", "to": "EEWorker", "label": "ato_bridge: parse → deficiency list [{kind, detail, source_anchor}]" },
+      { "from": "EEWorker", "to": "CoreServer", "label": "structured deficiency list (no pcb artifact)" },
+      { "from": "CoreServer", "to": "Client", "label": "fail-fast: deficiency list (LLM iterates on .ato source)" }
+    ]
+  }
+]

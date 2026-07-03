@@ -1,0 +1,44 @@
+{
+  "diagram_title": "PRD-BOM crosscheck gate: enforce C00 main_components fulfilment on the C03 netlist before C04 entry",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Structure main_components",
+      "description": "One-shot upstream extraction: turn the C00 answer_state main_components sentence into a structured, human-auditable component-role manifest (roles, quantities, allowed alternatives, match patterns) persisted to disk. LLM does this once; the artifact is the auditable contract.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Parse C03 netlist",
+      "description": "Deterministic S-expr parse of the exported .net: extract ref / value / footprint / lib-symbol per component. No LLM.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Crosscheck manifest vs netlist",
+      "description": "Deterministic per-role matching (pattern over value/footprint/symbol + quantity check) producing present / substituted / missing verdicts and a BLOCKING list for missing roles and out-of-envelope substitutions without recorded user approval.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Enforce gate at C03 readiness",
+      "description": "Wire the crosscheck verdict into C03 readiness: any BLOCKING item unresolved refuses C04 entry; substitution decisions are user-owned and recorded in the manifest approvals field.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "C00 answer_state.json (main_components field)" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A2:input", "type": "input", "label": "C03 exported netlist (.net S-expr)" },
+    { "id": "AR3", "source": "A1:output", "target": "A3:input", "type": "input", "label": "main_components_structured.json (role manifest + approvals)" },
+    { "id": "AR4", "source": "A2:output", "target": "A3:input", "type": "input", "label": "parsed component list (ref/value/footprint/symbol)" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "PRD wording is the envelope SSOT; extraction must not invent roles" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "no-silent-fallback: missing manifest or unreadable netlist = explicit error" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "user-only approval for out-of-envelope substitution" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "LLM (upstream extraction only)" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "workflow-core pure function prd_bom_crosscheck" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "MCP tool bodesign_prd_bom_crosscheck + C03 readiness assessor" },
+    { "id": "AR11", "source": "A3:output", "target": "A4:input", "type": "input", "label": "crosscheck report (verdicts + BLOCKING list)" },
+    { "id": "AR12", "source": "A4:output", "target": "EXTERNAL", "type": "output", "label": "gate verdict: C04 entry allowed | refused with BLOCKING evidence" }
+  ]
+}

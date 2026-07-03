@@ -1,0 +1,86 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "C00 PRD answered; main_components field present in answer_state.json",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["main_components state == answered"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "LLM extracts main_components_structured.json (roles, qty, allowed alternatives, match patterns)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["structured manifest written to C00 folder"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Human audits structured manifest (extraction errors are visible and fixable here)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["manifest accepted or corrected"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "C03 schematic composed; netlist exported (.net)",
+    "LinkInputType": ["track", "track"],
+    "LinkInputNumber": [2, 6],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["netlist file exists"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Run bodesign_prd_bom_crosscheck: per-role verdicts present/substituted/missing + BLOCKING list",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5, 6],
+    "LinkOutputType": "selection",
+    "Condition": ["no BLOCKING items (all present or user-approved)", "BLOCKING items present"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "C03 readiness passes crosscheck gate; C04 entry allowed",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [],
+    "LinkOutputType": "track",
+    "Condition": [],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Gate FAIL: BLOCKING list reported; wait for user decision (fix design, or approve substitution into manifest approvals)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["user decision recorded (design change or approval entry)"],
+    "SubGrafcet": []
+  }
+]
