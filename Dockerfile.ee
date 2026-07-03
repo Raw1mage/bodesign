@@ -19,7 +19,7 @@ RUN apt-get update \
         software-properties-common gnupg ca-certificates curl \
         python3 python3-venv python3-pip ngspice \
         poppler-utils \
-        default-jre-headless xvfb wget \
+        default-jre xvfb wget \
  && wget -q -O /opt/freerouting.jar https://github.com/freerouting/freerouting/releases/download/v1.9.0/freerouting-1.9.0.jar \
  && add-apt-repository -y ppa:kicad/kicad-9.0-releases \
  && apt-get update \
@@ -34,6 +34,14 @@ WORKDIR /app
 COPY services/mcp/requirements.txt /app/services/mcp/requirements.txt
 RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt \
  && kicad-cli version
+
+# atopile declarative-DSL compiler (plans/dsl_atopile-integration DD-1/DD-2):
+# pinned version, fail-loud presence check (mirrors the kicad-cli check above).
+# atopile 0.12.x requires Python 3.13 (system venv is 3.12 for apt pcbnew), so it
+# lives in its own uv-managed toolchain; only the `ato` CLI is exposed on PATH.
+RUN pip install --no-cache-dir uv \
+ && UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.13 atopile==0.12.5 \
+ && ato --version
 
 COPY packages /app/packages
 COPY services /app/services

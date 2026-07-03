@@ -113,6 +113,7 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
         if fp is None:
             continue
         fps[ref] = fp
+        fp.SetReference(ref)
         if placement and ref in placement:
             x, y, *rot = placement[ref]
             fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(float(x)), pcbnew.FromMM(float(y))))
