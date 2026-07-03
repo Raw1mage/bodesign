@@ -24,6 +24,16 @@ _語言：**繁體中文** · [English](./README.en.md)_
 - **追蹤就緒度**，並為每個工程檔產出可讀伴隨檔（docx/pdf）與分享文件。所有「可靠度」皆以
   **可重現的確定性證據展示**（LLM 只負責上游抽取／裁決，驗證與比對全程不參與）。
 
+## 近期變更
+
+完整紀錄見 [`CHANGELOG.md`](CHANGELOG.md)。近期重點：
+
+- **0.2.1（2026-07-03）** — 第 5 道信任層 **PRD↔BOM 履約 crosscheck gate**（C04 缺口治理）：
+  驗收發現 C00 PRD 定義的晶片模組未落到板上，以「一級一級治」補 L1 履約 gate
+  （`bodesign_prd_bom_crosscheck`）、L2 Vault-Absent 降級協議、L3 NPN linear sink 重設計；
+  C04 全鏈實跑 `gate=PASS` + DRC clean。另落地 atopile DSL 前端（工具 43→45）。
+- **0.2.0（2026-07-02）** — R13 compute/landing split（52 verbs 落地）+ WebDAV working cache。
+
 ## 架構圖
 
 完整規格見 [`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md)。

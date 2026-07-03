@@ -4,6 +4,42 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [0.2.1] — 2026-07-03
+
+### 新增 — 第 5 道信任層：PRD↔BOM 履約 crosscheck gate（C04 缺口治理）
+- 驗收發現結構性缺口：**C00 PRD 定義的晶片模組未落到電路板上**。RCA 三層失效鏈——
+  ① C03 vault 查 `AL5809-060` absent 後降級落點選錯（落到 4×140R 純電阻鎮流，超出 PRD
+  允許集合且 140R 無 datasheet 錨定 → 60mA±10% 結構性達不到）；② 無 PRD↔BOM 履約 gate；
+  ③ DRC/ERC 只驗板子自身一致性、不驗履約 PRD。
+- **L1 履約 gate**：`prd_bom_crosscheck.py` pure function + MCP 工具
+  `bodesign_prd_bom_crosscheck`（PRD `main_components` 逐 role 比對 BOM，缺件/集合外/無
+  datasheet 錨定 → `gate=FAIL` BLOCKING）；10 tests 綠。E2E 迴歸證實舊純電阻板
+  `gate=FAIL`（current-regulator missing），與 BR 預期一致。
+- **L2 降級協議**：C03 GUIDE 補「Vault-Absent Substitution Protocol」——集合外替代一律
+  BLOCKING 等使用者、approvals user-owned；readiness DoD 接線（報告缺席=gate 未跑）；
+  architecture.md C03 資料流同步。
+- **L3 重設計**：使用者裁決 **NPN linear current sink 拓撲**重做 C03，crosscheck
+  `gate=PASS`（current-regulator substituted in_envelope matched [Q1–Q4]，6 roles present）。
+- **C04 實體閉合**：ERC 0 err、net2pcb placed=22/pads=90/unmapped=0、autoroute routed=True
+  185seg/12via、DRC clean=True、fab 25 gerber + drill + pos + STEP + PDF。板上 22 footprint
+  含 Q1–Q4 恆流器件——設計層＋實體層雙履約閉合。
+
+### 新增 — atopile DSL front-end（C03 電路描述前端）
+- atopile 0.12.5 工具鏈進 `Dockerfile.ee`（+ `default-jre` for freerouting）；工具面
+  43→45（atopile + prd-bom 兩組），無重複註冊。
+
+### 修復 — eda-bridge E2E 工作流缺口
+- T1–T8 缺口（no_connect emit、multi-node label default、gutter scaling、mkdir-before-write、
+  fab shared-copy）；autoroute 在 DSN export False / freerouting 非零 returncode / 缺 SES 時
+  fail-fast（不再無聲假成功，REF** 於 DSN export 前 annotate）。
+
+### 基礎設施
+- `docker-compose.workers.yml` 補 experiments mount（ee + me 兩 worker）+ 映像 rebuild
+  （tools:45、三容器 healthy）。
+
+### 已知邊界（誠實標記）
+- Rsense/Rbias 標 TBD（MMBT2222A Vbe datasheet absent，datasheet-grounded 天條不臆測電氣值）。
+
 ## [0.2.0] — 2026-07-02
 
 ### 破壞性變更 — R13 compute/landing split：52 個工具落地為 gate.py verbs
