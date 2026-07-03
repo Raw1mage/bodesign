@@ -182,6 +182,85 @@ class DraftsmanComposerTests(unittest.TestCase):
         self.assertNotIn("(wire (pts", sch)
         self.assertIn("(global_label", sch)
 
+    # T3: multi-node (>=3 node) signal net defaults to label (reason=multi-node);
+    # 2-node nets stay wired; explicit connection_style="wire" is honoured in full.
+    def test_t3_multi_node_net_defaults_to_label(self):
+        spec = {
+            "components": [
+                {"ref": "U1", "symbol": "Device:R"},
+                {"ref": "C1", "symbol": "Device:C"},
+                {"ref": "C2", "symbol": "Device:C"},
+                {"ref": "C3", "symbol": "Device:C"},
+                {"ref": "R1", "symbol": "Device:R"},
+            ],
+            "nets": [
+                {"name": "GNDISH", "nodes": ["U1.2", "C1.2", "C2.2", "C3.2"], "kind": "signal"},
+                {"name": "SIG2", "nodes": ["U1.1", "R1.1"], "kind": "signal"},
+            ],
+        }
+        r = compose_schematic(self.work, "t3a", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        reasons = {(d["net"], d["reason"]) for d in r.route_stats.label_fallback_reasons}
+        self.assertIn(("GNDISH", "multi-node"), reasons)
+        self.assertEqual(1, r.route_stats.wired_nets)      # SIG2 still wired
+        self.assertEqual(1, r.route_stats.labelled_nets)   # GNDISH labelled
+        sch = self._sch_text(r)
+        self.assertIn('(global_label "GNDISH"', sch)       # actually emitted as labels
+        self.assertIn('(label "SIG2"', sch)                # 2-node net still drawn wire
+
+        # explicit connection_style="wire" → honoured, multi-node net drawn again.
+        w2 = Path(tempfile.mkdtemp(prefix="bodesign-t3b-", dir=PRIVATE_BASE))
+        try:
+            r2 = compose_schematic(w2, "t3b", spec, symbol_dirs=SYMBOL_DIR,
+                                   style="draftsman", connection_style="wire")
+            reasons2 = {(d["net"], d["reason"]) for d in r2.route_stats.label_fallback_reasons}
+            self.assertNotIn(("GNDISH", "multi-node"), reasons2)
+            self.assertEqual(2, r2.route_stats.wired_nets)
+            sch2 = self._sch_text(r2)
+            self.assertNotIn('(global_label "GNDISH"', sch2)
+        finally:
+            shutil.rmtree(w2, ignore_errors=True)
+
+    # T1: spec-level nc declaration flows through compose → emit.
+    def test_t1_nc_declaration_via_spec(self):
+        spec = {
+            "components": [{"ref": "R1", "symbol": "Device:R"}, {"ref": "R2", "symbol": "Device:R"}],
+            "nets": [{"name": "NET_A", "nodes": ["R1.2", "R2.1"], "kind": "signal"}],
+            "nc": ["R1.1", "R2.2"],
+        }
+        r = compose_schematic(self.work, "t1nc", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        self.assertEqual(2, r.emit.no_connect_count)
+        sch = self._sch_text(r)
+        self.assertEqual(2, sch.count("(no_connect (at "))
+
+        spec_bad = dict(spec, nc=["R1.1", "NOPE.7"])
+        with self.assertRaises(ValueError):
+            compose_schematic(self.work, "t1bad", spec_bad, symbol_dirs=SYMBOL_DIR, style="draftsman")
+
+    # T1 + ERC: declared-NC pins no longer trip pin_not_connected.
+    @unittest.skipUnless(HAS_KICAD_CLI, "kicad-cli not installed")
+    def test_t1_nc_clears_erc(self):
+        spec = {
+            "components": [{"ref": "R1", "symbol": "Device:R"}, {"ref": "R2", "symbol": "Device:R"}],
+            "nets": [{"name": "NET_A", "nodes": ["R1.2", "R2.1"], "kind": "signal"}],
+            "nc": ["R1.1", "R2.2"],
+        }
+        r = compose_schematic(self.work, "t1erc", spec, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman", validate=True)
+        self.assertEqual("validated", r.validation.status)
+        self.assertEqual(0, r.validation.erc_errors)
+
+    # T4: 16-part small design must not balloon to A2 (gutter ladder).
+    def test_t4_small_design_gutter_keeps_sheet_small(self):
+        components = [{"ref": f"C{i}", "symbol": "Device:C", "group": f"g{i % 4}"} for i in range(1, 15)]
+        components += [{"ref": "U1", "symbol": "Device:R", "group": "g0"},
+                       {"ref": "J1", "symbol": "Connector:Conn_01x04_Pin", "group": "g1"}]
+        nets = [{"name": f"N{i}", "nodes": [f"C{i}.1", f"C{i + 1}.1"], "kind": "signal"} for i in range(1, 14)]
+        spec = {"components": components, "nets": nets}
+        r = compose_schematic(self.work, "t4", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        self.assertIsNotNone(r.sheet_fit)
+        self.assertIn(r.sheet_fit.selected_paper, ("A4", "A3"))
+        self.assertFalse(r.sheet_fit.overflow)
+
     # TV10: determinism — same input twice → identical schematic bytes.
     def test_tv10_deterministic(self):
         w2 = Path(tempfile.mkdtemp(prefix="bodesign-draftsman2-", dir=PRIVATE_BASE))

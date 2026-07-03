@@ -9,6 +9,7 @@ Manufacturing-Transfer package.
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import os
 import shutil
 import subprocess
 
@@ -29,6 +30,10 @@ class FabResult:
     status: str  # "ok" | "partial" | "failed" | "skipped-no-kicad-cli"
     outputs: dict[str, str] = field(default_factory=dict)   # format -> path (dir or file)
     warnings: list[str] = field(default_factory=list)
+    # T8: cross-container handoff — absolute path of the copy under
+    # $BODESIGN_SESSIONS_ROOT/fab/<out_dir basename>/, or None with an explicit reason.
+    shared_copy: str | None = None
+    shared_copy_reason: str | None = None
 
 
 def emit_fab_outputs(
@@ -76,4 +81,18 @@ def emit_fab_outputs(
 
     got = len(result.outputs)
     result.status = "ok" if got == len(formats) else ("partial" if got else "failed")
+
+    # T8: publish the fab set to the shared sessions volume so tools in other
+    # containers (e.g. gerber preview in core) can reach it without a manual docker cp.
+    sessions_root = os.environ.get("BODESIGN_SESSIONS_ROOT")
+    if not sessions_root:
+        result.shared_copy_reason = "BODESIGN_SESSIONS_ROOT not set in this worker"
+    elif not Path(sessions_root).is_dir():
+        result.shared_copy_reason = f"BODESIGN_SESSIONS_ROOT directory does not exist: {sessions_root}"
+    elif not result.outputs:
+        result.shared_copy_reason = "no fab outputs were produced; nothing to share"
+    else:
+        dest = Path(sessions_root) / "fab" / out_root.name
+        shutil.copytree(out_root, dest, dirs_exist_ok=True)  # copy failure must raise, never be swallowed
+        result.shared_copy = str(dest.resolve())
     return result

@@ -49,9 +49,21 @@ PLACEMENT_ITERATIONS = 60
 SPRING_K = 0.05
 REPULSE_K = 2200.0
 GRAVITY_K = 0.25  # centroid pull per iteration (contains all-pairs repulsion spread)
+# Upper bound of the cluster gutter (T4): the actual gutter scales with design
+# size via _cluster_gutter_mm() so a 16-part board is not inflated to A2.
 CLUSTER_GUTTER_MM = 30.0
 BBOX_MARGIN_MM = 2.54
 SHEET_MARGIN_MM = 12.7
+
+
+def _cluster_gutter_mm(component_count: int) -> float:
+    """Deterministic gutter ladder (T4): small designs get a tight gutter so
+    sheet-fit stays readable; CLUSTER_GUTTER_MM remains the >50-part ceiling."""
+    if component_count <= 20:
+        return 12.0
+    if component_count <= 50:
+        return 20.0
+    return CLUSTER_GUTTER_MM
 
 
 @dataclass(slots=True)
@@ -256,7 +268,7 @@ def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str
     # to scale instead of at a fixed 1-inch pitch that the forces must undo.
     ordered = sorted(members)
     dims = [max(bboxes[r]) for r in ordered if bboxes.get(r) is not None]
-    k = (max(dims) if dims else 2 * BBOX_MARGIN_MM) + CLUSTER_GUTTER_MM  # desired neighbour spacing
+    k = (max(dims) if dims else 2 * BBOX_MARGIN_MM) + _cluster_gutter_mm(len(ordered))  # desired neighbour spacing
     cols = max(1, int(len(ordered) ** 0.5 + 0.9999))
     pos: dict[str, list[float]] = {}
     for i, ref in enumerate(ordered):
@@ -373,8 +385,9 @@ def _resolve_overlaps(
     unsized = [r for r in refs if bboxes.get(r) is None]
     max_w = max((bboxes[r][0] for r in sized), default=2 * BBOX_MARGIN_MM)
     max_h = max((bboxes[r][1] for r in sized), default=2 * BBOX_MARGIN_MM)
-    cell_w = max_w + CLUSTER_GUTTER_MM
-    cell_h = max_h + CLUSTER_GUTTER_MM
+    gutter = _cluster_gutter_mm(len(refs))
+    cell_w = max_w + gutter
+    cell_h = max_h + gutter
     cols = max(1, int(len(refs) ** 0.5 + 0.9999))
     out: dict[str, tuple[float, float]] = {}
     for i, ref in enumerate(sized + unsized):
@@ -422,11 +435,15 @@ def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, f
     return SheetFit(selected_paper=paper_name, content_w=content_w, content_h=content_h, overflow=overflow)
 
 
-def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placements: dict[str, EmitComponent], pin_resolvable, emit: SchematicEmitResult) -> RouteStats:
+def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placements: dict[str, EmitComponent], pin_resolvable, emit: SchematicEmitResult, multi_node_to_label: bool = False) -> RouteStats:
     """Derive route statistics deterministically from the resolved IR.
 
     A net is wired iff: not power/bus kind, all nodes resolve, and >=2 distinct
     resolvable endpoints. Otherwise it is labelled (with an explicit reason).
+
+    multi_node_to_label (T3): when the composer routes multi-node (>=3 endpoint)
+    nets via labels by default, count them as labelled with reason "multi-node"
+    so the stats mirror what was actually emitted.
     """
     stats = RouteStats()
     unresolved_set = set(emit.unresolved_pins)
@@ -444,6 +461,10 @@ def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placement
         if len(resolvable) < 2:
             stats.labelled_nets += 1
             stats.label_fallback_reasons.append({"net": net.name, "reason": "single-pin"})
+            continue
+        if multi_node_to_label and len(resolvable) >= 3:
+            stats.labelled_nets += 1
+            stats.label_fallback_reasons.append({"net": net.name, "reason": "multi-node"})
             continue
         stats.wired_nets += 1
         if len(resolvable) >= 3:
@@ -472,7 +493,14 @@ def compose_schematic(
 
     connection_style: if the caller passes this explicitly it is honoured and
     `style` does NOT override it. When None, it is derived from `style`
-    (netlist→"label", draftsman→"wire").
+    (netlist→"label", draftsman→"wire" for 2-node nets; multi-node (>=3 node)
+    nets go to labels per-net — T3 — because drawn multi-node routing is
+    unreliable, and the label decision is passed to the emitter so stats and
+    emission cannot drift).
+
+    spec["nc"] (T1): optional list of "REF.PIN" strings declared intentionally
+    unconnected; forwarded to the emitter which places `(no_connect ...)` glyphs
+    and fail-fasts on unresolvable entries.
     """
     if style not in ("netlist", "draftsman"):
         raise ValueError(f"style must be 'netlist' or 'draftsman', got {style!r}")
@@ -482,7 +510,10 @@ def compose_schematic(
     warnings: list[str] = []
 
     # Effective connection style: explicit caller value wins; else derive from style.
-    if connection_style is not None:
+    # T3: in the derived draftsman default, multi-node nets are labelled per-net
+    # (explicit_conn=False marks that the per-net override applies).
+    explicit_conn = connection_style is not None
+    if explicit_conn:
         effective_conn = connection_style
     else:
         effective_conn = "wire" if style == "draftsman" else "label"
@@ -517,6 +548,18 @@ def compose_schematic(
             kind = str(net.get("kind", "")).strip()
             if kind:
                 net_kinds[name] = kind
+
+    # T1: declared no-connect pins (forwarded verbatim; emitter fail-fasts on
+    # unresolvable entries).
+    nc_list = [str(n) for n in spec.get("nc", [])]
+
+    # T3: per-net label override — only in the derived (non-explicit) draftsman
+    # default. Multi-node (>=3 node) nets go to labels (reason "multi-node").
+    label_nets: set[str] | None = None
+    multi_node_to_label = False
+    if style == "draftsman" and not explicit_conn:
+        multi_node_to_label = True
+        label_nets = {net.name for net in nets if len(net.nodes) >= 3}
 
     clusters: list[Cluster] = []
     sheet_fit: SheetFit | None = None
@@ -569,7 +612,7 @@ def compose_schematic(
         # Estimate a uniform cluster cell size from worst-case bbox + gutter.
         max_w = max((bb[0] for bb in bboxes.values() if bb is not None), default=2 * BBOX_MARGIN_MM)
         max_h = max((bb[1] for bb in bboxes.values() if bb is not None), default=2 * BBOX_MARGIN_MM)
-        cell = max(max_w, max_h) * 3 + CLUSTER_GUTTER_MM
+        cell = max(max_w, max_h) * 3 + _cluster_gutter_mm(len(parsed))
         for ci, cluster in enumerate(clusters):
             cx = (ci % ccols) * cell
             cy = (ci // ccols) * cell
@@ -603,6 +646,7 @@ def compose_schematic(
     emit = emit_kicad_schematic(
         out_dir, project_name, components, nets,
         symbol_dir=symbol_dirs, connection_style=effective_conn, paper=paper,
+        nc=nc_list or None, label_nets=label_nets,
     )
     warnings.extend(emit.warnings)
 
@@ -613,7 +657,7 @@ def compose_schematic(
         def _pin_resolvable(ref: str, pin: str) -> bool:
             return ref in placements
 
-        route_stats = _build_route_stats(nets, net_kinds, placements, _pin_resolvable, emit)
+        route_stats = _build_route_stats(nets, net_kinds, placements, _pin_resolvable, emit, multi_node_to_label=multi_node_to_label)
 
     result = ComposeResult(
         emit=emit,

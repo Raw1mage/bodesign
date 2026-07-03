@@ -77,6 +77,31 @@ class KiCadEmitTests(unittest.TestCase):
         self.assertTrue(result.warnings)
         self.assertEqual(["U1.1"], result.unresolved_pins)
 
+    def test_emit_places_no_connect_glyphs_for_declared_nc_pins(self):
+        components, nets = _divider()
+        # VIN leaves R1.1 attached; declare C1.2's partner-free R2.2... use a truly
+        # open pin: R1.1 is on VIN (single-pin net) — declare it NC instead.
+        result = emit_kicad_schematic(
+            self.work, "ncok", components, nets, symbol_dir=SYMBOL_DIR, nc=["R1.1"]
+        )
+
+        self.assertEqual(1, result.no_connect_count)
+        schematic = Path(result.schematic_path).read_text(encoding="utf-8")
+        self.assertIn("(no_connect (at ", schematic)
+
+    def test_emit_raises_on_unresolvable_nc_entries(self):
+        components, nets = _divider()
+
+        with self.assertRaises(ValueError) as ctx:
+            emit_kicad_schematic(
+                self.work, "ncbad", components, nets, symbol_dir=SYMBOL_DIR,
+                nc=["R1.1", "ZZ9.1", "R2.99"],
+            )
+        message = str(ctx.exception)
+        self.assertIn("ZZ9.1", message)
+        self.assertIn("R2.99", message)
+        self.assertNotIn("R1.1,", message)  # resolvable entry not reported as bad
+
     @unittest.skipUnless(HAS_KICAD_CLI, "kicad-cli is not installed")
     def test_emitted_schematic_passes_kicad_cli_erc_and_netlist(self):
         components, nets = _divider()

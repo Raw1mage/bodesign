@@ -60,6 +60,7 @@ class SchematicEmitResult:
     label_count: int = 0
     unresolved_pins: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    no_connect_count: int = 0
 
 
 @dataclass(slots=True)
@@ -217,6 +218,8 @@ def emit_kicad_schematic(
     symbol_dir: str | Path = DEFAULT_SYMBOL_DIR,
     connection_style: str = "label",
     paper: str = "A4",
+    nc: list[str] | None = None,
+    label_nets: set[str] | frozenset | None = None,
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
 
@@ -232,6 +235,15 @@ def emit_kicad_schematic(
 
     Only the connectivity emission differs by style; placement is the caller's job
     (AI supplies component.x / component.y). The tool never invents placement here.
+
+    nc: optional list of "REF.PIN" strings to mark with a KiCad `(no_connect ...)`
+    glyph (T1). Every entry MUST resolve to a placed pin endpoint; any
+    unresolvable entry raises ValueError listing ALL bad items (fail-fast, no
+    silent skip).
+
+    label_nets: optional set of net names forced onto global-label connectivity
+    even when connection_style is "wire"/"auto" (T3 — per-net override so the
+    composer's route stats and the actual emission cannot drift apart).
     """
     drawn = connection_style in ("wire", "auto")
     root = Path(project_dir)
@@ -277,11 +289,30 @@ def emit_kicad_schematic(
             return None
         return (round(component.x + endpoint[0], 4), round(component.y - endpoint[1], 4))
 
+    # T1: resolve declared no-connect pins BEFORE net emission; fail-fast on any
+    # unresolvable entry (ref missing, symbol not embedded, or pin absent).
+    nc_blocks: list[str] = []
+    bad_nc: list[str] = []
+    for item in (nc or []):
+        text = str(item).strip()
+        ref, _, pin = text.partition(".")
+        abs_pt = _pin_abs(ref.strip(), pin.strip()) if ref.strip() and pin.strip() else None
+        if abs_pt is None:
+            bad_nc.append(text)
+            continue
+        nc_blocks.append(_no_connect_block(abs_pt[0], abs_pt[1]))
+    if bad_nc:
+        raise ValueError(
+            "no_connect entries could not be resolved to a placed pin "
+            f"(expected 'REF.PIN' of an emitted component): {', '.join(bad_nc)}"
+        )
+
     label_blocks: list[str] = []
     wire_blocks: list[str] = []
     junction_blocks: list[str] = []
     unresolved: list[str] = []
     for net in nets:
+        force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
         net_unresolved = False
         for ref, pin in net.nodes:
@@ -293,13 +324,13 @@ def emit_kicad_schematic(
             endpoints.append(abs_pt)
 
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
-        if drawn and not net_unresolved and len(endpoints) == 2:
+        if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
             waypoints = _orthogonal_route(endpoints[0], endpoints[1])
             for a, b in zip(waypoints, waypoints[1:]):
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
             mid = waypoints[len(waypoints) // 2]
             label_blocks.append(_local_label_block(net.name, mid[0], mid[1]))
-        elif drawn and not net_unresolved and len(endpoints) >= 3:
+        elif drawn and not force_label and not net_unresolved and len(endpoints) >= 3:
             segments, junctions = _bus_route(endpoints)
             for (a, b) in segments:
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
@@ -314,7 +345,8 @@ def emit_kicad_schematic(
                 label_blocks.append(_global_label_block(net.name, abs_pt[0], abs_pt[1]))
 
     schematic = _schematic_document(
-        root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks, paper=paper
+        root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks,
+        nc_blocks=nc_blocks, paper=paper,
     )
     schematic_path = root / f"{project_name}.kicad_sch"
     schematic_path.write_text(schematic, encoding="utf-8")
@@ -331,6 +363,7 @@ def emit_kicad_schematic(
         label_count=len(label_blocks),
         unresolved_pins=unresolved,
         warnings=warnings,
+        no_connect_count=len(nc_blocks),
     )
 
 
@@ -382,6 +415,12 @@ def _wire_segment_block(x1: float, y1: float, x2: float, y2: float) -> str:
 def _junction_block(x: float, y: float) -> str:
     """A junction dot marks an electrical connection where 3+ wires meet."""
     return f'  (junction (at {round(x, 4)} {round(y, 4)}) (diameter 0) (color 0 0 0 0) (uuid "{_uid()}"))'
+
+
+def _no_connect_block(x: float, y: float) -> str:
+    """A no-connect cross on a pin endpoint declares the pin intentionally open,
+    so ERC does not report `pin_not_connected` for it (T1)."""
+    return f'  (no_connect (at {round(x, 4)} {round(y, 4)}) (uuid "{_uid()}"))'
 
 
 def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float]) -> list[tuple[float, float]]:
@@ -455,9 +494,9 @@ def _bus_route(endpoints: list[tuple[float, float]]) -> tuple[list[tuple[tuple[f
     return segments, junctions
 
 
-def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks, wire_blocks=(), junction_blocks=(), paper: str = "A4") -> str:
+def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks, wire_blocks=(), junction_blocks=(), nc_blocks=(), paper: str = "A4") -> str:
     lib_symbols = "\n".join(definitions)
-    body = "\n".join([*symbol_blocks, *wire_blocks, *junction_blocks, *label_blocks])
+    body = "\n".join([*symbol_blocks, *wire_blocks, *junction_blocks, *nc_blocks, *label_blocks])
     return (
         "(kicad_sch\n"
         f'  (version {SCHEMATIC_VERSION})\n'
