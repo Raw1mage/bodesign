@@ -4,6 +4,28 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [未發布] — 2026-07-03
+
+### 修復 — C04 誠實機制接線：上游履約 gate + feasibility/SI-handoff 去孤兒化
+（BR `issues/issue_20260703_tier3_honesty_mechanisms_unwired_c04_silent_passthrough.md`）
+
+- **根因**：aiguard 驗收踩坑（C00 定義的 NPU/SRAM 一顆沒落板，卻無任何工具訊號標為未完成）
+  的工具層根因——三個誠實機制存在但從未接線：`classify_product_feasibility`（tier 分診）與
+  `emit_si_constraint_export`（Tier-3 SI 交手）是生產碼零呼叫的孤兒；C04 emit 對缺 C03 netlist
+  靜默續跑；readiness 把「上游電氣全空」報成 `layout_constraints_drafted`（誤導性綠燈）。
+- **P1 上游履約 gate（治本）**：`c04_layout_constraints.py` 新增 `_assess_upstream_fulfilment(root)`
+  ——跨階段 disk-of-truth 檢查（C03-EE/、`*.net` netlist、Mechanical_Constraint_Export.json
+  是否存在），產出顯式 `gaps[]`。缺 netlist（=C00 元件未落成電氣連接）時 readiness 回
+  `status=blocked_upstream_c03_missing`、emit 的 `Layout_Constraints.json` 帶
+  `state=blocked_on_upstream`，不再是誤導的 `drafted`。**與 tier 正交**（無 netlist 一律 blocking）。
+- **P1 接線 feasibility**：`emit_c04_layout_package` / `assess_c04_layout_readiness` 新增
+  `feasibility_signals` 參數，跑 tier 分診標 `feasibility_tier` + `c04_target`。**無 signals →
+  tier=not-assessed，不臆測**（no-silent-fallback；臆測 Tier 1 會低估繞線難度）。
+- **P2 接線 si_handoff**：Tier-3 且上游齊備 → `status=layout_constraints_drafted_tier3_handoff`，
+  `next_step` 明示呼叫 `emit_si_constraint_export`（Tier-3 clean-handoff 路徑終於可達）。
+- **驗證**：`tests/test_c04_layout_constraints.py` 補 4 測；C04+feasibility+si_handoff+readiness+
+  package_readiness+guide_dod 共 41 tests 綠。架構同步 `specs/architecture.md` C04 段。
+
 ## [0.2.1] — 2026-07-03
 
 ### 新增 — 第 5 道信任層：PRD↔BOM 履約 crosscheck gate（C04 缺口治理）

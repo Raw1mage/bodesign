@@ -450,12 +450,17 @@ def _v_c03_emit_host_block_diagram(a):
 
 def _v_c04_emit_layout_package(a):
     from bodesign_workflow_core import emit_c04_layout_package
-    return emit_c04_layout_package(a["out_dir"], a.get("c01"), a.get("c03")).to_dict()
+    return emit_c04_layout_package(
+        a["out_dir"], a.get("c01"), a.get("c03"),
+        feasibility_signals=a.get("feasibility_signals"),
+    ).to_dict()
 
 
 def _v_c04_readiness(a):
     from bodesign_workflow_core import assess_c04_layout_readiness
-    return assess_c04_layout_readiness(a["folder"]).to_dict()
+    return assess_c04_layout_readiness(
+        a["folder"], feasibility_signals=a.get("feasibility_signals"),
+    ).to_dict()
 
 
 def _v_c05_scaffold_fw_spec(a):

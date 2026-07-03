@@ -28,6 +28,10 @@ _語言：**繁體中文** · [English](./README.en.md)_
 
 完整紀錄見 [`CHANGELOG.md`](CHANGELOG.md)。近期重點：
 
+- **未發布（2026-07-03）** — **C04 誠實機制接線**：修復 aiguard 踩坑的工具層根因。新增
+  C04 上游履約 gate（C03 未落 netlist → `blocked_upstream_c03_missing`，不再誤報 drafted），
+  把去孤兒化的 `classify_product_feasibility`（tier 分診，無 signals 不臆測）與
+  `emit_si_constraint_export`（Tier-3 SI 交手）接進 C04 emit/readiness；41 tests 綠。
 - **0.2.1（2026-07-03）** — 第 5 道信任層 **PRD↔BOM 履約 crosscheck gate**（C04 缺口治理）：
   驗收發現 C00 PRD 定義的晶片模組未落到板上，以「一級一級治」補 L1 履約 gate
   （`bodesign_prd_bom_crosscheck`）、L2 Vault-Absent 降級協議、L3 NPN linear sink 重設計；
