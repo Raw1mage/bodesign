@@ -1,0 +1,54 @@
+ERC report (2026-07-03T09:19:48+0000, Encoding UTF8)
+Report includes: Errors, Warnings
+
+***** Sheet /
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector'
+    ; warning
+    @(35.56 mm, 35.56 mm): Symbol J1 [USB_C_Receptacle_USB2.0_16P]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(80.01 mm, 35.56 mm): Symbol F1 [Polyfuse]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(80.01 mm, 80.01 mm): Symbol R2 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(124.46 mm, 35.56 mm): Symbol D1 [D_TVS]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(124.46 mm, 80.01 mm): Symbol C1 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Switch'
+    ; warning
+    @(170.18 mm, 35.56 mm): Symbol SW1 [SW_SPST]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(124.46 mm, 124.46 mm): Symbol D4 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(170.18 mm, 80.01 mm): Symbol C2 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(170.18 mm, 124.46 mm): Symbol D5 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(35.56 mm, 214.63 mm): Symbol R3 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(80.01 mm, 214.63 mm): Symbol R4 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_BJT'
+    ; warning
+    @(170.18 mm, 170.18 mm): Symbol Q4 [MMBT2222A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(124.46 mm, 214.63 mm): Symbol R5 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(35.56 mm, 260.35 mm): Symbol R7 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(80.01 mm, 260.35 mm): Symbol R8 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(170.18 mm, 214.63 mm): Symbol R6 [R]
+
+ ** ERC messages: 16  Errors 0  Warnings 16

@@ -1,0 +1,63 @@
+{
+  "schema": "bodesign.c00.main_components_structured.v1",
+  "source_field": "s04_system_architecture.main_components",
+  "source_text": "USB-C 16P receptacle (power-only, CC1/CC2 5.1k pull-downs), PTC polyfuse 500mA, TVS diode 5V SMA, NPN/resistor linear current sink or AL5809-ish 2-pin CC regulator, 4x 0603 white LED, slide switch SPST, decoupling 100nF+10uF",
+  "source_answer_state_sha256": "a7792346d34ecab9b1df53114f2d7731a550ef3faaa738087be2a6bda8167f8e",
+  "roles": [
+    {
+      "role": "usb-c-receptacle",
+      "description": "USB-C 16P receptacle (power-only, CC1/CC2 5.1k pull-downs)",
+      "qty_min": 1,
+      "patterns": ["USB_C", "USB-C", "USB_C_Receptacle"],
+      "allowed_alternatives": []
+    },
+    {
+      "role": "polyfuse",
+      "description": "PTC polyfuse 500mA",
+      "qty_min": 1,
+      "patterns": ["polyfuse", "PTC", "Fuse"],
+      "allowed_alternatives": []
+    },
+    {
+      "role": "tvs-diode",
+      "description": "TVS diode 5V SMA",
+      "qty_min": 1,
+      "patterns": ["TVS", "D_TVS"],
+      "allowed_alternatives": []
+    },
+    {
+      "role": "current-regulator",
+      "description": "NPN/resistor linear current sink or AL5809-ish 2-pin CC regulator",
+      "qty_min": 1,
+      "patterns": ["AL5809", "regulator", "current.?sink", "CCR"],
+      "allowed_alternatives": [
+        {
+          "name": "npn-linear-sink",
+          "patterns": ["NPN", "SOT-23", "SOT-89", "BC8[0-9]{2}", "MMBT", "Transistor_BJT"]
+        }
+      ]
+    },
+    {
+      "role": "white-led",
+      "description": "4x 0603 white LED",
+      "qty_min": 4,
+      "patterns": ["LED"],
+      "allowed_alternatives": []
+    },
+    {
+      "role": "slide-switch",
+      "description": "slide switch SPST",
+      "qty_min": 1,
+      "patterns": ["SLIDE", "SW_SPST", "Switch"],
+      "allowed_alternatives": []
+    },
+    {
+      "role": "decoupling",
+      "description": "decoupling 100nF+10uF",
+      "qty_min": 2,
+      "patterns": ["100nF", "10uF"],
+      "allowed_alternatives": []
+    }
+  ],
+  "approvals": []
+}

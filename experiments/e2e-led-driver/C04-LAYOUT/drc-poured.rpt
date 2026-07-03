@@ -1,0 +1,15 @@
+** Drc report for e2e-led-driver.poured.kicad_pcb **
+** Created on 2026-07-03T05:37:55+0000 **
+** Report includes: Errors **
+
+** Found 1 DRC violations **
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(90.0000 mm, 10.0000 mm): Footprint J1
+    @(82.0000 mm, 10.0000 mm): Footprint H2
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **

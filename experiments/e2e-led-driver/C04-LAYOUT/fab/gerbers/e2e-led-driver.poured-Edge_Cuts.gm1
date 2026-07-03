@@ -1,0 +1,26 @@
+%TF.GenerationSoftware,KiCad,Pcbnew,9.0.9-9.0.9~ubuntu24.04.1*%
+%TF.CreationDate,2026-07-03T05:38:10+00:00*%
+%TF.ProjectId,e2e-led-driver.poured,6532652d-6c65-4642-9d64-72697665722e,rev?*%
+%TF.SameCoordinates,Original*%
+%TF.FileFunction,Profile,NP*%
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 9.0.9-9.0.9~ubuntu24.04.1) date 2026-07-03 05:38:10*
+%MOMM*%
+%LPD*%
+G01*
+G04 APERTURE LIST*
+%TA.AperFunction,Profile*%
+%ADD10C,0.150000*%
+%TD*%
+G04 APERTURE END LIST*
+D10*
+X6175000Y-2955000D02*
+X97320000Y-2955000D01*
+X6175000Y-21000000D02*
+X6175000Y-2955000D01*
+X97320000Y-2955000D02*
+X97320000Y-21000000D01*
+X97320000Y-21000000D02*
+X6175000Y-21000000D01*
+M02*

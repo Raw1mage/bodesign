@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [
+    "research"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-03T04:51:42.307Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts (profile=research)"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-03T06:25:05.675Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "research profile: findings/design captured in research/ notes"
+    },
+    {
+      "from": "designed",
+      "to": "verified",
+      "at": "2026-07-03T06:28:48.220Z",
+      "by": "pkcs12",
+      "mode": "migration",
+      "reason": "administrative repair: all tasks checked + validation evidence (gap report, ERC/DRC/gerber artifacts, closing event); planned-gate requires unchecked item which finished research plan cannot satisfy"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-03T06:30:40.723Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-approved graduation (option 3): E2E validation verified, knowledge rescoped to repo, closeout passed"
+    }
+  ]
+}

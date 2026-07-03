@@ -1,0 +1,1131 @@
+{
+  "schema": "bodesign.c00.answer_state.v1",
+  "status": "answers-updated",
+  "project_name": null,
+  "include_rf": false,
+  "readiness_computed": false,
+  "prd_emitted": false,
+  "human_approved": false,
+  "allowed_states": [
+    "missing",
+    "drafted",
+    "answered",
+    "external-needed",
+    "blocked",
+    "accepted-risk"
+  ],
+  "documents": {
+    "Project_Requirements.md": {
+      "sections": [
+        {
+          "id": "s01_business_strategy",
+          "title": "1. Company Vision & Business Strategy",
+          "state": "answered",
+          "fields": {
+            "target_customer": {
+              "state": "answered",
+              "value": "Internal E2E validation (bodesign pipeline proving); persona = maker needing a USB-powered desk LED bar",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s01_business_strategy",
+              "handoff_targets": [
+                "C06"
+              ]
+            },
+            "problem_statement": {
+              "state": "answered",
+              "value": "Prove bodesign compose-path can carry a real small board from PRD to Gerber with deterministic gates; product pretext: simple USB LED illumination without firmware",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s01_business_strategy",
+              "handoff_targets": [
+                "C06"
+              ]
+            },
+            "business_goal": {
+              "state": "answered",
+              "value": "E2E pipeline validated with evidence at every stage (ERC/DRC/SI/Gerber)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s01_business_strategy",
+              "handoff_targets": [
+                "C06"
+              ]
+            },
+            "success_metric": {
+              "state": "answered",
+              "value": "All stage gates pass or fail loudly with structured evidence; Gerber package renders correctly",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s01_business_strategy",
+              "handoff_targets": [
+                "C06"
+              ]
+            },
+            "market_or_use_context": {
+              "state": "answered",
+              "value": "Desk/bench use, indoor, 5V USB power only",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s01_business_strategy",
+              "handoff_targets": [
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Who is the first real customer or user for this product?",
+            "What business outcome proves this product is worth building?",
+            "Which claim must the PRD avoid until customer or legal approval?"
+          ],
+          "handoff_targets": [
+            "C06"
+          ]
+        },
+        {
+          "id": "s02_project_overall",
+          "title": "2. Project Overall",
+          "state": "answered",
+          "fields": {
+            "product_summary": {
+              "state": "answered",
+              "value": "USB-C powered 4-LED constant-current light bar: USB-C 5V in, input protection (polyfuse + TVS), linear LED driver with resistor-set current, on/off slide switch",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s02_project_overall",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "primary_use_cases": {
+              "state": "answered",
+              "value": "Bench illumination; always-on when plugged; no dimming, no MCU, no firmware",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s02_project_overall",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "operating_environment": {
+              "state": "answered",
+              "value": "Indoor, 0-40C ambient, powered from USB-C 5V 500mA budget",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s02_project_overall",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "package_scope": {
+              "state": "answered",
+              "value": "PCB assembly only (bare board E2E validation); no enclosure in this run",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s02_project_overall",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "major_exclusions": {
+              "state": "answered",
+              "value": "No MCU/firmware, no dimming/PWM, no battery, no RF, no enclosure",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s02_project_overall",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Describe the product in one sentence as if briefing an engineering manager.",
+            "Where will the product be used physically and environmentally?",
+            "What tempting feature is explicitly out of scope for this version?"
+          ],
+          "handoff_targets": [
+            "C03",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s03_project_objectives",
+          "title": "3. Project Objectives",
+          "state": "answered",
+          "fields": {
+            "functional_objectives": {
+              "state": "answered",
+              "value": "F1: illuminate 4 white LEDs at 60mA total from USB 5V. F2: survive reverse/ESD events at connector (TVS). F3: overcurrent protection via polyfuse",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s03_project_objectives",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "performance_objectives": {
+              "state": "answered",
+              "value": "P1: LED string current 60mA +/-10% at 5.0V input. P2: board input current < 100mA. P3: no component above 60C at 25C ambient",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s03_project_objectives",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "quality_objectives": {
+              "state": "answered",
+              "value": "ERC clean; DRC copper+unconnected = 0; SI check pass on power rail; Gerber renders without missing layers",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s03_project_objectives",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            },
+            "acceptance_criteria": {
+              "state": "answered",
+              "value": "All four verification gates (ERC, DRC, SI, Gerber preview) produce pass evidence artifacts on disk",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s03_project_objectives",
+              "handoff_targets": [
+                "C03",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Which three outcomes must be true for POC success?",
+            "Which objective is allowed to be weak in POC but not in EVT/DVT?",
+            "What measurable signal proves the main function works?"
+          ],
+          "handoff_targets": [
+            "C03",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s04_system_architecture",
+          "title": "4. System Architecture",
+          "state": "missing",
+          "fields": {
+            "subsystems": {
+              "state": "answered",
+              "value": "Power input (USB-C receptacle, CC pull-downs), protection (polyfuse, TVS diode), LED driver (linear constant-current), load (4x white LED), user control (slide switch)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s04_system_architecture",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "main_components": {
+              "state": "answered",
+              "value": "USB-C 16P receptacle (power-only, CC1/CC2 5.1k pull-downs), PTC polyfuse 500mA, TVS diode 5V SMA, NPN/resistor linear current sink or AL5809-ish 2-pin CC regulator, 4x 0603 white LED, slide switch SPST, decoupling 100nF+10uF",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s04_system_architecture",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "power_flow": {
+              "state": "answered",
+              "value": "USB VBUS 5V -> polyfuse -> switch -> LED string anode; return via constant-current sink to GND; TVS clamps VBUS at connector",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s04_system_architecture",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "data_flow": {
+              "state": "answered",
+              "value": "None (no digital signals; CC pins are static resistor terminations)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s04_system_architecture",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "control_flow": {
+              "state": "answered",
+              "value": "Manual slide switch only",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s04_system_architecture",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "interfaces": {
+              "state": "missing",
+              "value": null,
+              "source": null,
+              "owner": "user",
+              "section_id": "s04_system_architecture",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "What are the required compute, sensing, connectivity, power, storage, and UI blocks?",
+            "Which subsystem choice is already fixed by business or supply constraints?",
+            "Which architecture decision needs evidence before schematic work begins?"
+          ],
+          "handoff_targets": [
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s05_id_me_requirements",
+          "title": "5. ID / Mechanical Requirements",
+          "state": "answered",
+          "fields": {
+            "industrial_design_intent": {
+              "state": "accepted-risk",
+              "value": "None for this E2E run (bare PCB)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            },
+            "dimensions": {
+              "state": "answered",
+              "value": "Target board 60x20mm 2-layer",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            },
+            "mounting": {
+              "state": "answered",
+              "value": "Two M3 mounting holes at board ends",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            },
+            "connectors": {
+              "state": "answered",
+              "value": "USB-C receptacle on short edge; slide switch on top edge",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            },
+            "display_or_ui": {
+              "state": "answered",
+              "value": "LEDs themselves are the UI; no display",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            },
+            "environment": {
+              "state": "answered",
+              "value": "Indoor desk use only",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            },
+            "assembly_constraints": {
+              "state": "answered",
+              "value": "Single-side SMT preferred",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s05_id_me_requirements",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C04"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "What physical size or enclosure constraint must the electronics respect?",
+            "Which connectors, camera, microphone, display, buttons, or LEDs are user-facing?",
+            "What must ID/ME decide before PCB placement can be safe?"
+          ],
+          "handoff_targets": [
+            "C01",
+            "C02",
+            "C04"
+          ]
+        },
+        {
+          "id": "s06_electrical_requirements",
+          "title": "6. Electrical Requirements",
+          "state": "answered",
+          "fields": {
+            "compute": {
+              "state": "answered",
+              "value": "None - no MCU by design",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "power_input": {
+              "state": "answered",
+              "value": "USB-C 5V, default USB power (500mA max), CC Rd 5.1k advertises sink",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "power_budget": {
+              "state": "answered",
+              "value": "Total < 100mA @5V (0.5W); LED string 60mA; losses in linear sink",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "battery_or_charging": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "memory": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "connectivity": {
+              "state": "answered",
+              "value": "None (power-only USB)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "sensors": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "interfaces": {
+              "state": "answered",
+              "value": "USB-C power sink only; CC1/CC2 5.1k to GND; SBU/data floating",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "compliance_targets": {
+              "state": "accepted-risk",
+              "value": "None for E2E validation run (would be CE/FCC unintentional radiator for product)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "key_parts_or_references": {
+              "state": "answered",
+              "value": "Generic: USB4085-class USB-C power connector, 0603 LEDs, SOT-23/SOT-89 current regulator; exact MPNs resolved at C03 vault stage",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s06_electrical_requirements",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Which MCU/SoC/module choices are fixed, preferred, or still open?",
+            "What power source, battery, charging, and runtime assumptions are required?",
+            "Which electrical interface must be correct for firmware and mechanical teams?"
+          ],
+          "handoff_targets": [
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s07_software_requirements",
+          "title": "7. Software Requirements",
+          "state": "answered",
+          "fields": {
+            "functional_behaviors": {
+              "state": "answered",
+              "value": "No software",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            },
+            "operating_modes": {
+              "state": "answered",
+              "value": "On/Off via physical switch",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            },
+            "state_transitions": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            },
+            "external_interfaces": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            },
+            "firmware_responsibilities": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            },
+            "logging_or_update_policy": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            },
+            "pin_map_dependency": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s07_software_requirements",
+              "handoff_targets": [
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "What should the product do from power-on to normal operation?",
+            "Which behaviors belong in firmware versus app, cloud, or manufacturing tools?",
+            "Which C03 pin or interface decisions block the FW spec?"
+          ],
+          "handoff_targets": [
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s08_roles_responsibility",
+          "title": "8. Role & Responsibility",
+          "state": "answered",
+          "fields": {
+            "owner_matrix": {
+              "state": "answered",
+              "value": "bodesign AI executes all layers; user is sole approver (E2E validation context)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s08_roles_responsibility",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "decision_owner": {
+              "state": "answered",
+              "value": "user (pkcs12)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s08_roles_responsibility",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "review_owner": {
+              "state": "answered",
+              "value": "user (pkcs12)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s08_roles_responsibility",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "external_vendor_roles": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s08_roles_responsibility",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "approval_owner": {
+              "state": "answered",
+              "value": "user (pkcs12)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s08_roles_responsibility",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Who approves PRD, circuit, layout, FW spec, verification plan, and factory release?",
+            "Which deliverables are bodesign-assisted versus engineer/vendor-owned?",
+            "Who is responsible when a handoff has an unresolved assumption?"
+          ],
+          "handoff_targets": [
+            "C01",
+            "C02",
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s09_assumptions_constraints",
+          "title": "9. Assumption & Constraints",
+          "state": "answered",
+          "fields": {
+            "assumptions": {
+              "state": "answered",
+              "value": "KiCad 9 std libs contain usable symbols/footprints for all parts; host kicad-cli available for ERC/DRC",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s09_assumptions_constraints",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "constraints": {
+              "state": "answered",
+              "value": "No vault datasheets pre-loaded (G4 cold start is part of the test); deterministic tools only for verification",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s09_assumptions_constraints",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "risks": {
+              "state": "answered",
+              "value": "Symbol/footprint availability in std libs; freerouting success on 2-layer board; SI model defaults for LED nets",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s09_assumptions_constraints",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "dependencies": {
+              "state": "answered",
+              "value": "KiCad 9.0.9 host toolchain; ee worker for container-path tools if used",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s09_assumptions_constraints",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "accepted_gaps": {
+              "state": "accepted-risk",
+              "value": "No thermal chamber test, no EMC lab - pre-compliance analysis only",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s09_assumptions_constraints",
+              "handoff_targets": [
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Which assumption would be expensive if wrong?",
+            "What evidence is missing but required before EVT/DVT?",
+            "Which gap can proceed as accepted risk and which blocks handoff?"
+          ],
+          "handoff_targets": [
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s10_project_management",
+          "title": "10. Project Management",
+          "state": "answered",
+          "fields": {
+            "milestones": {
+              "state": "answered",
+              "value": "Single-session E2E: PRD -> schematic -> layout -> Gerber",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s10_project_management",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "deliverables": {
+              "state": "answered",
+              "value": "C00 PRD md, C03 .kicad_sch + ERC report, C04 .kicad_pcb + DRC report, gerbers/ + preview png, findings.md",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s10_project_management",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "review_gates": {
+              "state": "answered",
+              "value": "ERC gate, DRC gate, SI gate, Gerber preview visual check",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s10_project_management",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "approval_process": {
+              "state": "answered",
+              "value": "User reviews findings.md at end of run",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s10_project_management",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "change_control": {
+              "state": "answered",
+              "value": "Plan-builder spec validation/prd-to-gerber-e2e tracks scope",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s10_project_management",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Is the immediate milestone POC, EVT, DVT, or production release?",
+            "Which artifact must be approved before money is spent externally?",
+            "How should requirement changes be handled after schematic kickoff?"
+          ],
+          "handoff_targets": [
+            "C01",
+            "C02",
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s11_schedule",
+          "title": "11. Project High-level Schedule",
+          "state": "answered",
+          "fields": {
+            "target_dates": {
+              "state": "answered",
+              "value": "Same-day E2E run (2026-07-03)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s11_schedule",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "dependency_order": {
+              "state": "answered",
+              "value": "C00 -> C03 -> C04 -> fab outputs",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s11_schedule",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "long_lead_items": {
+              "state": "answered",
+              "value": "None (virtual run)",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s11_schedule",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "review_windows": {
+              "state": "answered",
+              "value": "End of run",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s11_schedule",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "external_lead_times": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s11_schedule",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "What date matters, and what happens if it slips?",
+            "Which external lead time is most likely to dominate the schedule?",
+            "Which downstream team must start first after PRD approval?"
+          ],
+          "handoff_targets": [
+            "C01",
+            "C02",
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        },
+        {
+          "id": "s12_team_roster",
+          "title": "12. Company & Vendor Team Roster",
+          "state": "answered",
+          "fields": {
+            "internal_contacts": {
+              "state": "answered",
+              "value": "user pkcs12; bodesign AI agents C00-C06",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s12_team_roster",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "external_vendors": {
+              "state": "answered",
+              "value": "None",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s12_team_roster",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "reviewers": {
+              "state": "answered",
+              "value": "user pkcs12",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s12_team_roster",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "approval_contacts": {
+              "state": "answered",
+              "value": "user pkcs12",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s12_team_roster",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            },
+            "escalation_path": {
+              "state": "answered",
+              "value": "Blockers surface via orchestration spine return_blocker",
+              "source": "user",
+              "owner": "user",
+              "section_id": "s12_team_roster",
+              "handoff_targets": [
+                "C01",
+                "C02",
+                "C03",
+                "C04",
+                "C05",
+                "C06"
+              ]
+            }
+          },
+          "consultant_prompts": [
+            "Who will receive each handoff package?",
+            "Which vendor or lab must be contacted before the next milestone?",
+            "Who has final authority to approve the PRD?"
+          ],
+          "handoff_targets": [
+            "C01",
+            "C02",
+            "C03",
+            "C04",
+            "C05",
+            "C06"
+          ]
+        }
+      ]
+    }
+  }
+}

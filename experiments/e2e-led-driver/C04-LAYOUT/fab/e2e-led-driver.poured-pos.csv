@@ -1,0 +1,22 @@
+### Footprint positions - created on 2026-07-03T05:38:11+0000 ###
+### Printed by KiCad version 9.0.9-9.0.9~ubuntu24.04.1
+## Unit = inches, Angle = deg.
+## Side : All
+# Ref     Val                                                 Package                                                  PosX       PosY       Rot  Side
+C1        C_0603_1608Metric                                   C_0603_1608Metric                                      0.3937    -0.3937    0.0000  top
+C2        C_0805_2012Metric                                   C_0805_2012Metric                                      0.7087    -0.3937    0.0000  top
+D1        D_SMA                                               D_SMA                                                  1.0236    -0.3937    0.0000  top
+D2        LED_0603_1608Metric                                 LED_0603_1608Metric                                    1.3386    -0.3937    0.0000  top
+D3        LED_0603_1608Metric                                 LED_0603_1608Metric                                    1.6535    -0.3937    0.0000  top
+D4        LED_0603_1608Metric                                 LED_0603_1608Metric                                    1.9685    -0.3937    0.0000  top
+D5        LED_0603_1608Metric                                 LED_0603_1608Metric                                    2.2835    -0.3937    0.0000  top
+F1        Fuse_1206_3216Metric                                Fuse_1206_3216Metric                                   2.5984    -0.3937    0.0000  top
+J1        USB_C_Receptacle_HRO_TYPE-C-31-M-12                 USB_C_Receptacle_HRO_TYPE-C-31-M-12                    3.5433    -0.3937    0.0000  top
+R1        R_0603_1608Metric                                   R_0603_1608Metric                                      0.3937    -0.7087    0.0000  top
+R2        R_0603_1608Metric                                   R_0603_1608Metric                                      0.7087    -0.7087    0.0000  top
+R3        R_0603_1608Metric                                   R_0603_1608Metric                                      1.0236    -0.7087    0.0000  top
+R4        R_0603_1608Metric                                   R_0603_1608Metric                                      1.3386    -0.7087    0.0000  top
+R5        R_0603_1608Metric                                   R_0603_1608Metric                                      1.6535    -0.7087    0.0000  top
+R6        R_0603_1608Metric                                   R_0603_1608Metric                                      1.9685    -0.7087    0.0000  top
+SW1       SW_DIP_SPSTx01_Slide_Copal_CHS-01B_W7.62mm_P1.27mm  SW_DIP_SPSTx01_Slide_Copal_CHS-01B_W7.62mm_P1.27mm     2.2835    -0.7087    0.0000  top
+## End

@@ -1,0 +1,86 @@
+{
+  "blocking": [],
+  "gate": "PASS",
+  "manifest_stale": false,
+  "netlist_components": 22,
+  "schema": "bodesign.crosscheck.prd_bom.v1",
+  "verdicts": [
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": null,
+      "matched_refs": [
+        "J1"
+      ],
+      "role": "usb-c-receptacle",
+      "status": "present"
+    },
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": null,
+      "matched_refs": [
+        "F1"
+      ],
+      "role": "polyfuse",
+      "status": "present"
+    },
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": null,
+      "matched_refs": [
+        "D1"
+      ],
+      "role": "tvs-diode",
+      "status": "present"
+    },
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": true,
+      "matched_refs": [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4"
+      ],
+      "role": "current-regulator",
+      "status": "substituted"
+    },
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": null,
+      "matched_refs": [
+        "D2",
+        "D3",
+        "D4",
+        "D5"
+      ],
+      "role": "white-led",
+      "status": "present"
+    },
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": null,
+      "matched_refs": [
+        "SW1"
+      ],
+      "role": "slide-switch",
+      "status": "present"
+    },
+    {
+      "approved": null,
+      "blocking": false,
+      "in_envelope": null,
+      "matched_refs": [
+        "C1",
+        "C2"
+      ],
+      "role": "decoupling",
+      "status": "present"
+    }
+  ]
+}
