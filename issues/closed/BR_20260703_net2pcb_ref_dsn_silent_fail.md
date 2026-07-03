@@ -34,3 +34,10 @@ C04 佈線鏈全部呼叫者；任何經 net2pcb_board 建板的流程。
 
 - 迴歸：REF** 板 → 預期顯式報錯（非 routed:true）。
 - 正常板：E2E LED driver 案 99 seg / 4 via / unconnected=0 可重現。
+
+## RESOLUTION（2026-07-03，VERIFIED-CLOSED）
+
+- `routing.py:116` `fp.SetReference(ref)` — 已修並 commit（85d36e0）。
+- `ExportSpecctraDSN` 回 False → RuntimeError 列出 REF**/未 annotate footprint 清單（routing.py:594-599）。
+- freerouting `returncode != 0` → RuntimeError 帶 stderr 尾段；SES 檔缺失 → RuntimeError 顯式報錯（routing.py:603+）。
+- 驗證：py_compile OK；全套 768 tests 與基線零 delta（僅既有 5 失敗，與本修無關）。

@@ -33,6 +33,14 @@ def _need_pcbnew() -> None:
         raise RuntimeError("pcbnew not importable (run in the KiCad/EE worker)")
 
 
+def _ensure_parent_dir(path: str) -> None:
+    """T7 fix: create the parent directory of an output path so a write never lands in a
+    non-existent directory (which pcbnew/open silently “succeed” into a doomed container layer)."""
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+
 # ----------------------------------------------------------------------------- net → netted PCB
 _USBC = {"VBUS": ["A4", "A9", "B4", "B9"], "GND": ["A1", "A12", "B1", "B12"],
          "CC1": ["A5"], "CC2": ["B5"], "SHLD": ["S1"]}
@@ -161,6 +169,7 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             s.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(a[0]), pcbnew.FromMM(a[1])))
             s.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(b[0]), pcbnew.FromMM(b[1])))
             s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(pcbnew.FromMM(0.15)); board.Add(s)
+    _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
     return {"board": out_path, "placed": len(fps), "nets": len(nets),
             "pads_assigned": assigned, "unmapped": unmapped,
@@ -201,6 +210,7 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
             v.SetDrill(pcbnew.FromMM(drill_mm)); v.SetWidth(pcbnew.FromMM(pad_mm))
             v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); v.SetNet(p.GetNet())
             b.Add(v); added += 1
+    _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, b)
     return {"board": out_path, "vias_added": added, "process": "via-in-pad (filled+capped / JLCPCB advanced)"}
 
@@ -248,6 +258,7 @@ def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool 
                     v.SetNet(gnd); b.Add(v); stitched += 1
                 y += step
             x += step
+    _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, b)
     return {"board": out_path, "zones": out, "stitch_vias": stitched}
 
@@ -333,6 +344,7 @@ def widen_bus_tracks(in_path: str, out_path: str, nets: list[str], target_mm: fl
             track.SetWidth(target_iu); widened += 1
         else:
             kept += 1
+    _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
     return {"board": out_path, "widened": widened, "kept": kept, "target_mm": target_mm}
 
@@ -480,8 +492,10 @@ def length_match_bus(in_path: str, out_path: str, nets: list[str], budget_ps: fl
     result = {"board": out_path, "lengths": per_net, "spread_mm": round(spread_mm, 3),
               "spread_ps": round(spread_ps, 3), "within_budget": spread_ps <= float(budget_ps),
               "tuned": tuned, "total": len(nets)}
+    _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
     if report_path:
+        _ensure_parent_dir(report_path)
         with open(report_path, "w") as report:
             json.dump(result, report, indent=2)
     return result
@@ -576,11 +590,24 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40) -> dict:
         return {"routed": False, "reason": "freerouting/java not present in this worker",
                 "board": board_path}
     dsn = board_path.replace(".kicad_pcb", ".dsn"); ses = board_path.replace(".kicad_pcb", ".ses")
-    b = pcbnew.LoadBoard(board_path); pcbnew.ExportSpecctraDSN(b, dsn)
+    b = pcbnew.LoadBoard(board_path)
+    if not pcbnew.ExportSpecctraDSN(b, dsn):
+        bad = sorted(fp.GetReference() for fp in b.GetFootprints()
+                     if not fp.GetReference() or fp.GetReference().startswith("REF**"))
+        raise RuntimeError(
+            "ExportSpecctraDSN failed (no DSN written) — footprints with missing/unannotated "
+            f"references: {bad or 'none detected; inspect the board in pcbnew'}")
     xvfb = ["xvfb-run", "-a"] if subprocess.run(["which", "xvfb-run"], capture_output=True).returncode == 0 else []
-    subprocess.run(xvfb + [java, "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes)],
-                   capture_output=True)
-    b2 = pcbnew.LoadBoard(board_path); pcbnew.ImportSpecctraSES(b2, ses); pcbnew.SaveBoard(out_path, b2)
+    proc = subprocess.run(xvfb + [java, "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes)],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "")[-500:]
+        raise RuntimeError(f"freerouting exited with code {proc.returncode}: {tail}")
+    if not os.path.exists(ses):
+        raise RuntimeError(f"freerouting produced no SES session file at {ses} — autoroute did not run")
+    b2 = pcbnew.LoadBoard(board_path); pcbnew.ImportSpecctraSES(b2, ses)
+    _ensure_parent_dir(out_path)
+    pcbnew.SaveBoard(out_path, b2)
     t = b2.GetTracks()
     return {"routed": True, "board": out_path,
             "segments": sum(1 for x in t if x.GetClass() == 'PCB_TRACK'),
