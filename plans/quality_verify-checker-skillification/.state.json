@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "implementing",
+  "state": "verified",
   "profile": [],
   "history": [
     {
@@ -34,6 +34,38 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "M0/M1設計就緒，進試點實作"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-04T08:47:29.068Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "M2 parser批次(copper-spacing/placement/datasheet-derating) + M3 advisory injector + M4 收尾全數完成；registry 19 bindings(8 landed/11 T-B stub) + 17 advisory；58 tests green；architecture.md 已同步"
+    },
+    {
+      "at": "2026-07-04T08:48:05.051Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "drift detected: packages/workflow-core/bodesign_workflow_core/__init__.py, packages/workflow-core/bodesign_workflow_core/checkers/__init__.py, packages/workflow-core/bodesign_workflow_core/checkers/advisory.py, packages/workflow-core/bodesign_workflow_core/checkers/board_edge_keepout.py, packages/workflow-core/bodesign_workflow_core/checkers/board_outline.py, packages/workflow-core/bodesign_workflow_core/checkers/copper_spacing.py, packages/workflow-core/bodesign_workflow_core/checkers/datasheet_derating.py, packages/workflow-core/bodesign_workflow_core/checkers/decoupling_pdn.py, packages/workflow-core/bodesign_workflow_core/checkers/errors.py, packages/workflow-core/bodesign_workflow_core/checkers/placement_topology.py, packages/workflow-core/bodesign_workflow_core/checkers/registry.py, packages/workflow-core/bodesign_workflow_core/checkers/threshold.py, tests/test_verify_checkers.py, tests/test_verify_registry_threshold.py",
+      "result": "warned",
+      "drift": [
+        "packages/workflow-core/bodesign_workflow_core/__init__.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/__init__.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/advisory.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/board_edge_keepout.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/board_outline.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/copper_spacing.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/datasheet_derating.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/decoupling_pdn.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/errors.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/placement_topology.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/registry.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/threshold.py",
+        "tests/test_verify_checkers.py",
+        "tests/test_verify_registry_threshold.py"
+      ],
+      "commit": "7ff131d4f49c974c04e4ba0ed63fa6fdee06d80e"
     }
   ]
 }
