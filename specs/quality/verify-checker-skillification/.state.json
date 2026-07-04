@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "verified",
+  "state": "living",
   "profile": [],
   "history": [
     {
@@ -66,6 +66,33 @@
         "tests/test_verify_registry_threshold.py"
       ],
       "commit": "7ff131d4f49c974c04e4ba0ed63fa6fdee06d80e"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-04T12:02:00.231Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-confirmed graduation：M0-M4 全數完成 + T-B 盡職查核 + copper-clearance 跨 spec extend landed(9)；94 tests green；兩上游 spec 已 living"
+    },
+    {
+      "at": "2026-07-04T12:02:08.499Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "drift detected: packages/design-ir/bodesign_design_ir/__init__.py, packages/design-ir/bodesign_design_ir/roles.py, packages/gerber-core/bodesign_gerber_core/__init__.py, packages/gerber-core/bodesign_gerber_core/copper_geometry.py, packages/workflow-core/bodesign_workflow_core/checkers/copper_clearance.py, packages/workflow-core/bodesign_workflow_core/checkers/registry.py, tests/test_copper_clearance.py, tests/test_copper_geometry.py, tests/test_net_role.py",
+      "result": "warned",
+      "drift": [
+        "packages/design-ir/bodesign_design_ir/__init__.py",
+        "packages/design-ir/bodesign_design_ir/roles.py",
+        "packages/gerber-core/bodesign_gerber_core/__init__.py",
+        "packages/gerber-core/bodesign_gerber_core/copper_geometry.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/copper_clearance.py",
+        "packages/workflow-core/bodesign_workflow_core/checkers/registry.py",
+        "tests/test_copper_clearance.py",
+        "tests/test_copper_geometry.py",
+        "tests/test_net_role.py"
+      ],
+      "commit": "70424a139ddadc3f6fcb1b7045eb91abf8e07848"
     }
   ]
 }
