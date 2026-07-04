@@ -128,11 +128,24 @@ class PointAndPlaneTests(unittest.TestCase):
 
 class NoPcbnewTests(unittest.TestCase):
     def test_no_pcbnew_import(self):
-        import bodesign_gerber_core.copper_geometry as cg
-        import sys
+        # copper_geometry must stay pure-python (no pcbnew). The global sys.modules
+        # is contaminated by sibling tests that legitimately import pcbnew (layout),
+        # so assert the invariant in a FRESH interpreter for true isolation.
+        import subprocess
+        import sys as _sys
 
-        self.assertNotIn("pcbnew", sys.modules)
-        self.assertNotIn("pcbnew", cg.__dict__)
+        code = (
+            "import sys\n"
+            "import bodesign_gerber_core.copper_geometry as cg\n"
+            "assert 'pcbnew' not in sys.modules, 'pcbnew imported transitively'\n"
+            "assert 'pcbnew' not in cg.__dict__, 'pcbnew bound in module'\n"
+        )
+        proc = subprocess.run(
+            [_sys.executable, "-c", code],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(proc.returncode, 0,
+                         f"copper_geometry pulled pcbnew: {proc.stderr.strip()}")
 
 
 if __name__ == "__main__":

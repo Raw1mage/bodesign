@@ -22,6 +22,57 @@ Consequence: `.state.json` was advanced `proposed → implementing` via `mode:sy
 that closes RB-1. If/when this package graduates into `specs/`, the canonical
 artifacts are authored then from the now-real runtime (not invented up-front).
 
+## Context
+
+C00/C07 is the front-door of the C00–C07 PCB design lifecycle: it turns an incomplete
+product idea into a PRD contract that C01–C06 teams consume. This package covers the
+C00 PRD expert-consultant layer plus the C01/C02/C03 draft-grade runtime, the C00
+autonomous orchestration loop (Batch D), the toolchain worker-container topology
+(Batch E), and MCP-to-MCP collaboration (Batch F). It is a **multi-layer program**,
+not a single feature — see the RB-1 deviation note above for why it carries a custom
+artifact set instead of one canonical `idef0`/`grafcet` pair.
+
+## Goals / Non-Goals
+
+**Goals** — deterministic MCP support surfaces (scaffold, template load, readiness
+scoring, document render) with the expert questioning/synthesis kept as AI workflow
+behavior; a human-in-control boundary where every business decision, approval, and
+professional sign-off stays with the user; responsibility-grouped worker isolation so
+a heavy dependency lives in exactly one worker and its absence degrades only its tools.
+
+**Non-Goals** (also enumerated in the dedicated section below): single-shot LLM PRD
+generation; claiming compliance without human/lab approval; hiding gaps with defaults
+or fallback assumptions; forcing every consultant action through an MCP tool.
+
+## Decisions
+
+Key decisions are recorded across this package's concern docs and the Three-Way
+Boundary / Readiness Semantics sections below. Load-bearing ones: (DD) tools provide
+evidence + state, the expert AI guides the person (Product Intent); (DD) the spine
+dispatches work packets uniformly and does NOT branch on backend — external-MCP
+knowledge belongs below the spine / to the agent (F-5 REVERTED, `mcp_collaboration.md`);
+(DD) docx/pdf/pptx rendering is delegated to the client's docxmcp, bodesign stays
+self-contained emitting markdown + gracefully gating `skipped-no-soffice` (F-4 WON'T DO);
+(DD) worker grouping is by C0x responsibility, not by weight (`toolchain_workers.md`).
+
+## Risks / Trade-offs
+
+The central trade-off is the RB-1 artifact-set deviation (above): a custom artifact set
+risks lifecycle-gate friction (resolved via the `docs` lifecycle profile, not by
+fabricating canonical diagrams) in exchange for not duplicating/​drifting from the
+product's real IDEF0/GRAFCET that already live in `specs/product/pcb_ai_viewer/`.
+Secondary: build123d/OpenSCAD toolchains are worker-image-only, so C02 real-export
+validation (C02-T7/V5) is deferred to deploy — the `export_unavailable` fail-fast paths
+are tested green so the monolith degrades honestly rather than fabricating STL/STEP.
+
+## Critical Files
+
+- `services/mcp/server.py` — MCP tool registry + `_route_tool`/`_forward_to_worker`.
+- `packages/workflow-core/bodesign_workflow_core/c00_orchestration.py` — Batch D selector.
+- `packages/workflow-core/bodesign_workflow_core/c02_me_package.py` — C02 ME package + export gates.
+- `docker-compose.workers.yml`, `Dockerfile.core/.ee/.me` — Batch E worker topology.
+- `mcp_collaboration.md`, `toolchain_workers.md`, `c00_downstream_contract.md` — concern docs.
+
 ## Product Intent
 
 C00/C07 is not a document generator. It is the front-door expert consultant that turns an incomplete product idea into a PRD contract that C01-C06 teams can use. The MCP stores state, scaffolds files, renders outputs, and computes readiness. The AI workflow skill provides expert questioning, synthesis, risk interpretation, and cross-layer teaching. Humans own business choices, approval, and professional sign-off.

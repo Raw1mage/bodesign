@@ -18,12 +18,26 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load(mod_name: str, rel_path: str):
-    spec = importlib.util.spec_from_file_location(mod_name, _ROOT / rel_path)
+def _load(mod_name: str, rel_path: str, pkg_stub: str | None = None):
+    # When pkg_stub is given, register a lightweight parent package rooted at
+    # the module's directory so intra-package relative imports (e.g.
+    # `from .readiness_common import ...`) resolve WITHOUT executing the real
+    # package __init__ (which pulls optional namespace deps on a bare host).
+    import types
+
+    abs_path = _ROOT / rel_path
+    if pkg_stub is not None and pkg_stub not in sys.modules:
+        stub = types.ModuleType(pkg_stub)
+        stub.__path__ = [str(abs_path.parent)]
+        sys.modules[pkg_stub] = stub
+    full_name = f"{pkg_stub}.{abs_path.stem}" if pkg_stub else mod_name
+    spec = importlib.util.spec_from_file_location(full_name, abs_path)
     module = importlib.util.module_from_spec(spec)
     # Register before exec so dataclass(slots=True) can resolve the module via
     # sys.modules during class processing (dataclasses._is_type).
     sys.modules[mod_name] = module
+    if full_name != mod_name:
+        sys.modules[full_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -35,6 +49,7 @@ _model_render = _load(
 _c02 = _load(
     "c02_me_package_under_test",
     "packages/workflow-core/bodesign_workflow_core/c02_me_package.py",
+    pkg_stub="_bodesign_wfcore_stub",
 )
 
 

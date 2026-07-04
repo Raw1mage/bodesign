@@ -5,9 +5,21 @@ from pathlib import Path
 
 from bodesign_workflow_core import plan_c02_intent
 
-VECTORS = json.loads(
-    (Path(__file__).resolve().parents[1] / "plans" / "c02_voice-to-design" / "test-vectors.json").read_text(encoding="utf-8")
-)
+# The spec graduated from plans/ to specs/; prefer the KB location, keep the
+# legacy plans/ path as a fallback so the fixture resolves in either zone.
+def _resolve_vectors() -> str:
+    root = Path(__file__).resolve().parents[1]
+    for rel in (
+        Path("specs") / "c02" / "voice-to-design" / "test-vectors.json",
+        Path("plans") / "c02_voice-to-design" / "test-vectors.json",
+    ):
+        candidate = root / rel
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    raise FileNotFoundError("c02 voice-to-design test-vectors.json not found in specs/ or plans/")
+
+
+VECTORS = json.loads(_resolve_vectors())
 
 
 def _by_name(name: str) -> dict:

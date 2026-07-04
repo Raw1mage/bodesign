@@ -475,8 +475,10 @@ class McpServerTests(unittest.TestCase):
         non-cache tools minus 51 fully-landed verbs (c00_emit_prd_docx stays as a
         DD-3 borderline keep for the assemble path) plus the 3 cache tools = 43,
         plus bodesign_ato_build (dsl/atopile-integration) and
-        bodesign_prd_bom_crosscheck (quality/prd-bom-crosscheck L1) = 45."""
-        self.assertEqual(len(self.server.TOOLS), 45)
+        bodesign_prd_bom_crosscheck (quality/prd-bom-crosscheck L1) = 45,
+        plus bodesign_si_check + bodesign_vault_spec_check
+        (quality/verify-checker-skillification advisory checkers) = 47."""
+        self.assertEqual(len(self.server.TOOLS), 47)
         names = {t["name"] for t in self.server.TOOLS}
         # borderline / infrastructure keeps (design.md DD-3):
         for kept in ("bodesign_c00_emit_prd_docx", "bodesign_c02_voice_to_design",
@@ -616,6 +618,9 @@ class McpServerTests(unittest.TestCase):
         finally:
             self.server.SERVED_GROUPS = saved
 
+    @unittest.skipUnless(importlib.util.find_spec("httpx"),
+                         "httpx not installed (worker-forwarding is worker-only; "
+                         "monolith/unittest env legitimately lacks it per AGENTS.md §4)")
     def test_configured_worker_unreachable_reports_starting(self):
         # Worker URL set but nothing listening -> retryable "starting", NOT permanent unavailable.
         saved = self.server.SERVED_GROUPS

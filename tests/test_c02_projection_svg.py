@@ -17,13 +17,26 @@ from unittest import mock
 _ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load(mod_name: str, rel_path: str):
+def _load(mod_name: str, rel_path: str, pkg_stub: str | None = None):
     # Bypass the package __init__, which on a bare host pulls in optional
     # namespace packages (bodesign_reverse_core/bodesign_design_ir) that are
-    # not installed. c02_me_package itself has only stdlib top-level imports.
-    spec = importlib.util.spec_from_file_location(mod_name, _ROOT / rel_path)
+    # not installed. When pkg_stub is given, register a lightweight parent
+    # package rooted at the module's directory so intra-package relative
+    # imports (`from .readiness_common import ...`) resolve without executing
+    # the real __init__.
+    import types
+
+    abs_path = _ROOT / rel_path
+    if pkg_stub is not None and pkg_stub not in sys.modules:
+        stub = types.ModuleType(pkg_stub)
+        stub.__path__ = [str(abs_path.parent)]
+        sys.modules[pkg_stub] = stub
+    full_name = f"{pkg_stub}.{abs_path.stem}" if pkg_stub else mod_name
+    spec = importlib.util.spec_from_file_location(full_name, abs_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = module  # register before exec for dataclass(slots=True)
+    if full_name != mod_name:
+        sys.modules[full_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -31,6 +44,7 @@ def _load(mod_name: str, rel_path: str):
 _c02 = _load(
     "c02_me_package_under_test",
     "packages/workflow-core/bodesign_workflow_core/c02_me_package.py",
+    pkg_stub="_bodesign_wfcore_stub_svg",
 )
 
 
