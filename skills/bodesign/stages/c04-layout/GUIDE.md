@@ -298,6 +298,13 @@ These remain `pending` against the C04-freeze gate until the gate (`layout_drc_g
   via-stitching, length-match, 3W). It supplies the judgment; the MCP (`impedance_solve` /
   `length_match_bus` / `si_check` / `layout_drc_gate`) executes and the engine verifies — never
   relax a gate to pass (the floating-PSRAM lesson).
+- **`references/layout-review-method.md`** — the *review-discipline* layer: forced-find prompting
+  (kill "looks good to me"), the five review categories, independent multi-pass review, the
+  dedup-ready **finding schema** (with `rule_ref`/`confidence`/`evidence_source` grounding every
+  finding to the compendium + an evidence source), and the **Layout Review / Stackup Specification
+  report templates**. It is how to conduct the G2 design-review walkthrough rigorously and structure
+  its concerns; severities align to the deterministic gate's fail/warn split and the verdict slots
+  into `_design_review/design_review.json` — it feeds the gates, never relaxes them.
 - **KiCad analysis engine** — `../../engines/kicad/` (`ENGINE.md`). Key scripts in
   `engines/kicad/scripts/`: `analyze_pcb.py --full` (copper presence, fanout, length, DFM),
   `analyze_gerbers.py`, `cross_analysis.py` / `cross_verify.py` (schematic↔PCB sync, design intent),
