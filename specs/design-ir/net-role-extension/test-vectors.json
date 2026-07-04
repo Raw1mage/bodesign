@@ -1,0 +1,44 @@
+[
+  {
+    "id": "TV-1",
+    "description": "Back-compat: Net constructed with no role has role None and role_evidence None; existing fields unaffected",
+    "input": { "name": "N1", "connected_pads": ["U1-1", "R1-2"] },
+    "expected": { "role": null, "role_evidence": null, "connected_pads": ["U1-1", "R1-2"] }
+  },
+  {
+    "id": "TV-2",
+    "description": "set_net_role with valid enum role + evidence sets both fields",
+    "input": { "role": "power", "evidence": { "source_id": "sch1", "target_path": "netclass/PWR" } },
+    "expected": { "role": "power", "role_evidence": { "source_id": "sch1", "target_path": "netclass/PWR" } }
+  },
+  {
+    "id": "TV-3",
+    "description": "set_net_role with role but no evidence violates invariant -> raises",
+    "input": { "role": "ground", "evidence": null },
+    "expected": { "error": "ROLE_PROVENANCE_MISSING" }
+  },
+  {
+    "id": "TV-4",
+    "description": "map_netclass_to_role: known class maps to role with provenance",
+    "input": { "netclass": "PWR", "table": { "PWR": "power", "GND": "ground" } },
+    "expected": { "role": "power" }
+  },
+  {
+    "id": "TV-5",
+    "description": "map_netclass_to_role: unmapped class returns None, no heuristic",
+    "input": { "netclass": "MYSTERY", "table": { "PWR": "power" } },
+    "expected": { "role": null }
+  },
+  {
+    "id": "TV-6",
+    "description": "nets_with_role filters by role and excludes role=None nets; byte-identical repeat",
+    "input": { "roles": ["power", null, "power", "ground"], "query": "power" },
+    "expected": { "count": 2 }
+  },
+  {
+    "id": "TV-7",
+    "description": "nets_with_role with an out-of-enum role token raises",
+    "input": { "query": "clock" },
+    "expected": { "error": "ROLE_QUERY_UNKNOWN_ROLE" }
+  }
+]

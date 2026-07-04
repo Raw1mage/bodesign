@@ -1,0 +1,18 @@
+[
+  {
+    "title": "Verify-checker queries copper edge-to-edge clearance",
+    "participants": [
+      "ClearanceChecker",
+      "CopperGeometryParser",
+      "ParsedGerberArtifact"
+    ],
+    "messages": [
+      { "from": "ClearanceChecker", "to": "CopperGeometryParser", "label": "query edge_to_edge spacing for control ipc-clearance-voltage" },
+      { "from": "CopperGeometryParser", "to": "ParsedGerberArtifact", "label": "load copper layer draw/flash/region events + apertures" },
+      { "from": "ParsedGerberArtifact", "to": "CopperGeometryParser", "label": "parsed copper layer (or absent)" },
+      { "from": "CopperGeometryParser", "to": "CopperGeometryParser", "label": "materialize net-attributed primitives; mark & skip curves" },
+      { "from": "CopperGeometryParser", "to": "ClearanceChecker", "label": "distance_mm + provenance (source_layers/primitive_refs/skipped_curves/algorithm)" },
+      { "from": "CopperGeometryParser", "to": "ClearanceChecker", "label": "ALT: layer absent/zero geometry -> MissingGeometryError(missing_items[]) -> checker judges unverifiable" }
+    ]
+  }
+]

@@ -19,8 +19,30 @@ from .contracts import (
     render_geometry_svg,
     validate_gerber_export_placeholder,
 )
+from .copper_geometry import (
+    CopperGeometry,
+    CopperPrimitive,
+    GeometryProvenance,
+    GeometryQueryResult,
+    MissingGeometryError,
+    build_copper_geometry,
+    edge_to_edge,
+    from_gerber_summary,
+    plane_coverage,
+    point_to_copper,
+)
 
 __all__ = [
+    "CopperGeometry",
+    "CopperPrimitive",
+    "GeometryProvenance",
+    "GeometryQueryResult",
+    "MissingGeometryError",
+    "build_copper_geometry",
+    "edge_to_edge",
+    "from_gerber_summary",
+    "plane_coverage",
+    "point_to_copper",
     "DrillGeometrySummary",
     "DrillHit",
     "DrillTool",

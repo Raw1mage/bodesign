@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-04T09:17:50.075Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-04T09:36:36.412Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "IDEF0-first design 完成：Net.role 閉集 enum+provenance、schematic net-class→IR role 明確供給、role-aware query 介面；design.md 5 DD + spec/sequence/data-schema 填實；idef0/grafcet 經 drawmiat 驗證通過"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-04T09:40:45.313Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md 4 phase + handoff + errors/observability/test-vectors(TV-1~7) 填實"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-04T09:40:45.443Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "進實作：Net.role enum+provenance+role-aware query"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-04T09:42:22.838Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Net.role enum+role_evidence+set_net_role invariant+map_netclass_to_role+nets_with_role 實作完成；14 新測試(TV-1~7涵蓋)+65 相鄰測試全綠，零回歸；向後相容驗證通過"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-04T10:23:18.834Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示 graduate；Net.role IR 契約 verified，可供 verify-checker 消費"
+    }
+  ]
+}

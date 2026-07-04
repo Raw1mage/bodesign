@@ -1,0 +1,50 @@
+[
+  {
+    "id": "TV-1",
+    "description": "build_copper_geometry materializes track/pad primitives; curve flagged and excluded from distance math",
+    "input": { "tracks": [{"x1": 0, "y1": 0, "x2": 10, "y2": 0}], "pads": [{"x": 5, "y": 5}], "curves": [{"cx": 0, "cy": 0, "r": 2}] },
+    "expected": { "primitive_count": 3, "curve_primitives_excluded_from_distance": true }
+  },
+  {
+    "id": "TV-2",
+    "description": "build_copper_geometry with entirely empty input fails fast",
+    "input": { "tracks": [], "pads": [], "polygons": [] },
+    "expected": { "error": "ZERO_GEOMETRY" }
+  },
+  {
+    "id": "TV-3",
+    "description": "net-island grouping merges touching copper, separates disjoint copper",
+    "input": { "tracks": [{"x1": 0, "y1": 0, "x2": 1, "y2": 0}, {"x1": 1, "y1": 0, "x2": 2, "y2": 0}, {"x1": 50, "y1": 50, "x2": 51, "y2": 50}] },
+    "expected": { "island_count": 2 }
+  },
+  {
+    "id": "TV-4",
+    "description": "edge_to_edge returns min distance between two islands with provenance",
+    "input": { "island_a": [{"x1": 0, "y1": 0, "x2": 0, "y2": 10}], "island_b": [{"x1": 3, "y1": 0, "x2": 3, "y2": 10}] },
+    "expected": { "distance_mm": 3.0, "provenance_has_primitive_refs": true }
+  },
+  {
+    "id": "TV-5",
+    "description": "edge_to_edge byte-identical across repeated runs on identical input",
+    "input": { "repeat": 2 },
+    "expected": { "results_equal": true }
+  },
+  {
+    "id": "TV-6",
+    "description": "point_to_copper returns nearest distance; plane_coverage ray-casting inside polygon true",
+    "input": { "point": [5, 5], "plane": [[0, 0], [10, 0], [10, 10], [0, 10]] },
+    "expected": { "covered": true }
+  },
+  {
+    "id": "TV-7",
+    "description": "query against empty primitive set returns MissingGeometryError result, not 0/inf",
+    "input": { "query": "edge_to_edge", "island_a": [], "island_b": [] },
+    "expected": { "error": "EMPTY_PRIMITIVE_SET", "distance_mm": null }
+  },
+  {
+    "id": "TV-8",
+    "description": "query whose geometry includes a curve discloses it in provenance.skipped_curves, never chord-approximates",
+    "input": { "with_curve": true },
+    "expected": { "skipped_curves_non_empty": true }
+  }
+]

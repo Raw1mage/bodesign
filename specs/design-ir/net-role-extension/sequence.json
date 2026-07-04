@@ -1,0 +1,48 @@
+[
+  {
+    "title": "Attach Explicit Net Role And Consume Via Role-Aware Query",
+    "participants": [
+      "SchematicNetClass",
+      "IRBuilder",
+      "Net",
+      "VerifyChecker"
+    ],
+    "messages": [
+      {
+        "from": "SchematicNetClass",
+        "to": "IRBuilder",
+        "label": "explicit role token + source anchor (net-class / user annotation)"
+      },
+      {
+        "from": "IRBuilder",
+        "to": "IRBuilder",
+        "label": "validate token against closed enum (out-of-enum -> None)"
+      },
+      {
+        "from": "IRBuilder",
+        "to": "Net",
+        "label": "set role + role_evidence (invariant: role set implies provenance set)"
+      },
+      {
+        "from": "IRBuilder",
+        "to": "Net",
+        "label": "no upstream role -> leave role=None (no net-name heuristic)"
+      },
+      {
+        "from": "VerifyChecker",
+        "to": "Net",
+        "label": "role-aware query by role (e.g. high_current)"
+      },
+      {
+        "from": "Net",
+        "to": "VerifyChecker",
+        "label": "return only explicitly-roled nets; None-role nets excluded"
+      },
+      {
+        "from": "VerifyChecker",
+        "to": "VerifyChecker",
+        "label": "read role_evidence -> ground verdict source_anchor; skip role-gated check if role None"
+      }
+    ]
+  }
+]

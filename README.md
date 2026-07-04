@@ -28,6 +28,11 @@ _語言：**繁體中文** · [English](./README.en.md)_
 
 完整紀錄見 [`CHANGELOG.md`](CHANGELOG.md)。近期重點：
 
+- **未發布（2026-07-04）** — **跨 spec extend：copper-clearance checker 落地**：畢業
+  `design-ir/net-role-extension`（封閉 NET_ROLES enum）與 `gerber-core/copper-geometry-parser`
+  （真實 edge-to-edge 銅箔幾何）兩 spec，新增 `copper_clearance.py` 消費之，把
+  `control.dfm.ipc-clearance-voltage` 由 T-B stub 翻為 T-A landed（landed 8→9）。
+  拒絕 false-green——landed 由 9 個測試（含 6 個 no-fabrication fail-fast 守衛）背書。
 - **未發布（2026-07-03）** — **C04 誠實機制接線**：修復 aiguard 踩坑的工具層根因。新增
   C04 上游履約 gate（C03 未落 netlist → `blocked_upstream_c03_missing`，不再誤報 drafted），
   把去孤兒化的 `classify_product_feasibility`（tier 分診，無 signals 不臆測）與

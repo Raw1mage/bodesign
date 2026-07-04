@@ -1,0 +1,123 @@
+{
+  "diagram_title": "Attach Explicit Net Role To Design IR",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Receive Upstream Role Assignment",
+      "description": "Take an explicit role assignment for a net from the schematic net-class mapping or user annotation, together with its source anchor. Never infers role from the net name.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Validate Role Against Closed Enum",
+      "description": "Check the supplied role token against the closed enum (power/ground/high_current/rf/signal/differential). Unknown or absent token yields no role rather than a guessed default.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Bind Role Provenance To Net",
+      "description": "Attach the validated role plus its evidence_ref source_anchor onto the Net dataclass so a checker reading the role can trace where it came from.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Expose Role Aware Net Query",
+      "description": "Provide a query interface that returns only nets carrying an explicit role, letting placement-class checkers filter by role instead of by net-name heuristic.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "type": "input",
+      "label": "Schematic Net-Class Or User Annotation"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "type": "control",
+      "label": "No Net-Name Heuristic Constraint"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "type": "mechanism",
+      "label": "IR Builder Ingest Path"
+    },
+    {
+      "id": "AR4",
+      "source": "A1:output",
+      "target": "A2:input",
+      "type": "input",
+      "label": "Candidate Role Token With Source Anchor"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "Closed Role Enum Definition"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "Enum Membership Check"
+    },
+    {
+      "id": "AR7",
+      "source": "A2:output",
+      "target": "A3:input",
+      "type": "input",
+      "label": "Validated Role Or None"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "type": "control",
+      "label": "Provenance Required Constraint"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "Net Dataclass Slots"
+    },
+    {
+      "id": "AR10",
+      "source": "A3:output",
+      "target": "A4:input",
+      "type": "input",
+      "label": "Roled Net With Evidence Ref"
+    },
+    {
+      "id": "AR11",
+      "source": "EXTERNAL",
+      "target": "A4:control",
+      "type": "control",
+      "label": "Fail-Fast On Missing Role Constraint"
+    },
+    {
+      "id": "AR12",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "type": "mechanism",
+      "label": "Role Aware Query Interface"
+    },
+    {
+      "id": "AR13",
+      "source": "A4:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "Role-Filtered Net Set For Checkers"
+    }
+  ]
+}

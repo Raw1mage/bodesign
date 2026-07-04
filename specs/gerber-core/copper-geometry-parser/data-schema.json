@@ -1,0 +1,46 @@
+{
+  "schemas": [
+    {
+      "name": "CopperPrimitive",
+      "kind": "json",
+      "fields": [
+        { "name": "id", "type": "str", "notes": "stable primitive id, deterministic from source draw-event order" },
+        { "name": "primitive_type", "type": "enum(polygon|track|pad|plane|curve)", "notes": "curve = arc/circle/curve; excluded from linear distance math (DD-3)" },
+        { "name": "coords", "type": "list[tuple[float,float]]", "notes": "vertices / endpoints in source evidence frame (mm-scale); curve keeps raw params instead" },
+        { "name": "width", "type": "float | None", "notes": "track/aperture width (mm); None for polygon/plane" },
+        { "name": "net_island", "type": "str", "notes": "connected-copper-island id (geometric, NOT logical net name — logical role is design-ir plan scope)" },
+        { "name": "source_layer", "type": "str", "notes": "originating copper layer artifact id" },
+        { "name": "curve_params", "type": "dict | None", "notes": "raw arc/circle params when primitive_type=curve; None otherwise" }
+      ]
+    },
+    {
+      "name": "GeometryQueryResult",
+      "kind": "json",
+      "fields": [
+        { "name": "query_type", "type": "enum(edge_to_edge|point_to_copper|plane_coverage)", "notes": "which deterministic query was answered" },
+        { "name": "distance_mm", "type": "float | None", "notes": "computed distance; None only inside an error result (see error field)" },
+        { "name": "covered", "type": "bool | None", "notes": "plane_coverage verdict; None for distance queries" },
+        { "name": "provenance", "type": "GeometryProvenance", "notes": "DD-5: geometry source trace aligned with ValidationEvidence source_anchor/threshold_provenance" },
+        { "name": "error", "type": "MissingGeometryError | None", "notes": "populated instead of a value on fail-fast (DD-4); mutually exclusive with distance_mm/covered" }
+      ]
+    },
+    {
+      "name": "GeometryProvenance",
+      "kind": "json",
+      "fields": [
+        { "name": "source_layers", "type": "list[str]", "notes": "copper layers whose primitives fed the computation" },
+        { "name": "primitive_refs", "type": "list[str]", "notes": "CopperPrimitive.id values that participated" },
+        { "name": "skipped_curves", "type": "list[str]", "notes": "curve primitive ids excluded (DD-3) so caller knows coverage is incomplete" },
+        { "name": "algorithm", "type": "str", "notes": "e.g. segment_min_distance | ray_casting; deterministic method label" }
+      ]
+    },
+    {
+      "name": "MissingGeometryError",
+      "kind": "json",
+      "fields": [
+        { "name": "reason", "type": "enum(layer_absent|zero_geometry|empty_primitive_set)", "notes": "DD-4 fail-fast trigger class" },
+        { "name": "missing_items", "type": "list[str]", "notes": "explicit list of what was absent; caller must judge unverifiable, never pass" }
+      ]
+    }
+  ]
+}

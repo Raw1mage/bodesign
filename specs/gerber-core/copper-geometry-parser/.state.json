@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-04T09:17:50.170Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-04T09:36:36.546Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "IDEF0-first design 完成：純python零pcbnew copper-geometry parser、net-attributed primitive、edge-to-edge/point/plane 幾何查詢帶 provenance、curve-skip no-fabrication、缺layer fail-fast；design.md 6 DD + spec/sequence/data-schema 填實；idef0/grafcet 經 drawmiat 驗證通過"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-04T09:44:51.239Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md 4 phase(primitives/island/queries/tests) + handoff + errors/observability/test-vectors(TV-1~8) 填實"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-04T09:44:51.362Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "進實作：純python copper-geometry parser + 三查詢"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-04T09:47:00.043Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "copper_geometry.py 實作完成：CopperPrimitive/build_copper_geometry(fail-fast)/union-find net-island/edge_to_edge/point_to_copper/plane_coverage 帶 provenance、curve 誠實跳過；13 新測試(TV-1~8涵蓋)+65 相鄰全綠，零 pcbnew import，零回歸"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-04T10:23:26.433Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確指示 graduate；copper-geometry parser + 三查詢 verified，可供 verify-checker clearance/creepage checker 消費"
+    }
+  ]
+}

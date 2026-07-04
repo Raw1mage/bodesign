@@ -4,6 +4,27 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [未發布] — 2026-07-04
+
+### 新增 — 跨 spec extend：copper-clearance checker 落地（`control.dfm.ipc-clearance-voltage`）
+
+- **上游畢業**：`design-ir/net-role-extension` 與 `gerber-core/copper-geometry-parser`
+  兩份 verified plan graduate 至 `specs/`（living）。前者提供封閉 `NET_ROLES`
+  island-role enum（`roles.py`），後者提供真實 edge-to-edge 銅箔幾何（`copper_geometry.py`，
+  含 curve-skip provenance + 缺幾何 fail-fast）。
+- **新 checker**：`packages/workflow-core/.../checkers/copper_clearance.py` 消費上述兩能力，
+  逐對 distinct-net 銅島以 IPC-2221 工作電壓 clearance 閘檻把關；閘檻值 run-time 由
+  ragbase threshold_block 讀取（DD-3），不硬編。
+- **registry 解鎖**：`control.dfm.ipc-clearance-voltage` 由 `T-B stub`（`checker_fn=None`，
+  gated 量非 IR-readable）翻為 `T-A landed`（`check_copper_clearance`，envelope `drc_gate`）。
+  landed 計數 8→9。
+- **no-fabrication 紀律**：拒絕 false-green——landed 由真實可運作 checker + 測試背書，
+  而非空 `checker_fn`。每個缺/壞輸入（未綁閘檻、缺 source_anchor、缺 copper_geometry、
+  缺 island_roles、role 超出封閉 enum、pair 幾何不可計算）一律 fail-fast，絕不靜默通過。
+- **驗證**：新增 `tests/test_copper_clearance.py`（9 測試：pass/fail/determinism + 6 個
+  no-fabrication 守衛）全綠；回歸 `test_verify_registry_threshold`(18)/`test_verify_checkers`(40)/
+  `test_copper_geometry`(13)/`test_net_role`(14) 全綠。架構同步 Verified（無邊界/資料流變更）。
+
 ## [未發布] — 2026-07-03
 
 ### 修復 — C04 誠實機制接線：上游履約 gate + feasibility/SI-handoff 去孤兒化

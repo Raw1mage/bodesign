@@ -1,0 +1,61 @@
+{
+  "schemas": [
+    {
+      "name": "Net",
+      "kind": "json",
+      "fields": [
+        {
+          "name": "name",
+          "type": "str",
+          "notes": "既有欄位，net 名稱。role 不得由此欄以 heuristic 推導（no-fabrication）。"
+        },
+        {
+          "name": "connected_pads",
+          "type": "list[str]",
+          "notes": "既有欄位，default 空 list，不受本擴充影響。"
+        },
+        {
+          "name": "constraints",
+          "type": "dict[str, str | float]",
+          "notes": "既有欄位，default 空 dict，語義不改寫。"
+        },
+        {
+          "name": "evidence_refs",
+          "type": "list[EvidenceRef]",
+          "notes": "既有欄位，net 整體證據；role 來源不混入此欄，另設 role_evidence。"
+        },
+        {
+          "name": "role",
+          "type": "Literal['power','ground','high_current','rf','signal','differential'] | None",
+          "notes": "新增。閉集 enum 或 None，default None。由上游 schematic net-class 映射或使用者標註明確供給；缺失=None（fail-fast，不猜、不 heuristic）。閉集外 token 一律落為 None。"
+        },
+        {
+          "name": "role_evidence",
+          "type": "EvidenceRef | None",
+          "notes": "新增。role 的 provenance 來源錨點，default None。不變式：role is not None ⇔ role_evidence is not None。對齊 ValidationEvidence 的 source_anchor grounding 契約，供 checker 回溯 role 來源。"
+        }
+      ]
+    },
+    {
+      "name": "RoleAwareNetQuery",
+      "kind": "message",
+      "fields": [
+        {
+          "name": "design",
+          "type": "BoardDesign",
+          "notes": "輸入。含 nets: list[Net] 的 design IR。"
+        },
+        {
+          "name": "role",
+          "type": "Literal['power','ground','high_current','rf','signal','differential']",
+          "notes": "輸入。要篩選的閉集 role 值。"
+        },
+        {
+          "name": "result",
+          "type": "list[Net]",
+          "notes": "輸出。design.nets 中 net.role == role 的子集；role is None 的 net 一律排除。確定性、純 python、無 worker-only 依賴。"
+        }
+      ]
+    }
+  ]
+}

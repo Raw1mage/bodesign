@@ -1,0 +1,103 @@
+{
+  "diagram_title": "Parse Gerber Copper Geometry And Answer Deterministic Clearance Queries",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Parse Copper Layer Into Draw Events",
+      "description": "Consume the already-parsed gerber copper layer artifact (parse_gerber_file draw/flash/region events plus aperture table) and normalize it into ordered geometry draw events; fail fast when the layer is missing or yields zero D01/D03 geometry.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Build Net-Attributed Geometry Primitives",
+      "description": "Materialize draw events into computable primitives (polygon / track / pad / plane) with coordinates and connected-copper-island net attribution; mark arc/circle/curve primitives as curve and keep them out of linear distance math.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Answer Copper Geometry Query",
+      "description": "Compute the requested deterministic geometry query (edge-to-edge copper spacing, point-to-copper distance, plane coverage) over the primitive set and return the distance value with geometry provenance and skipped-curve disclosure.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "type": "input",
+      "label": "Parsed gerber copper layer artifact"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "type": "control",
+      "label": "No-silent-fallback fail-fast policy"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "type": "mechanism",
+      "label": "Pure-python zero-pcbnew gerber-core parser"
+    },
+    {
+      "id": "AR4",
+      "source": "A1:output",
+      "target": "A2:input",
+      "type": "output",
+      "label": "Normalized copper draw events plus apertures"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "Curve-skip no-fabrication rule"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "Connected-copper-island net attribution"
+    },
+    {
+      "id": "AR7",
+      "source": "A2:output",
+      "target": "A3:input",
+      "type": "output",
+      "label": "Net-attributed geometry primitives"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "type": "control",
+      "label": "Byte-identical determinism requirement"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "Deterministic segment distance and ray-casting math"
+    },
+    {
+      "id": "AR10",
+      "source": "A3:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "Clearance distance with geometry provenance"
+    },
+    {
+      "id": "AR11",
+      "source": "A1:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "Missing copper layer fail-fast report"
+    }
+  ]
+}

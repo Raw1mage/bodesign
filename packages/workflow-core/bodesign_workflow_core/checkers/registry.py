@@ -28,6 +28,7 @@ from typing import Any, Callable
 
 from ..requirement_planning import ORACLE_TOOLS
 from .board_edge_keepout import check_board_edge_keepout, guard_tier
+from .copper_clearance import check_copper_clearance
 from .copper_spacing import check_spacing_via_return_path
 from .datasheet_derating import check_datasheet_derating
 from .decoupling_pdn import check_decoupling_pdn
@@ -206,11 +207,15 @@ def _register_spacing_cluster(reg: "CheckerRegistry") -> None:
                    "return_vias[].x", "return_vias[].y"),
         envelope_tool="drc_gate",
     ))
+    # UNLOCKED (cross-spec extend): now landed via specs/gerber-core/
+    # copper-geometry-parser (real edge-to-edge copper spacing) +
+    # specs/design-ir/net-role-extension (closed NET_ROLES island-role enum).
     reg.register(CheckerBinding(
         control_id="control.dfm.ipc-clearance-voltage",
-        tier="T-B", trust_layer=1, stage="C04", status="stub",
-        confidence="verified", checker_fn=None,
-        ir_fields=("net_pair_spacing_mm",),  # copper edge-to-edge: NOT in IR
+        tier="T-A", trust_layer=1, stage="C04", status="landed",
+        confidence="verified", checker_fn=check_copper_clearance,
+        ir_fields=("copper_geometry", "island_roles"),
+        envelope_tool="drc_gate",
     ))
     reg.register(CheckerBinding(
         control_id="control.safety.creepage-clearance",
