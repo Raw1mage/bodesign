@@ -1,0 +1,116 @@
+{
+  "diagram_title": "Tool Generalization Check",
+  "node_reference": "A0",
+  "function": "Audit the bodesign tool suite for silent overfit and remediate the silent-failure cases",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Define the generality check (5-axis checklist + lint/test concept)"
+    },
+    {
+      "id": "A2",
+      "title": "Classify hotspots H1-H5 by severity"
+    },
+    {
+      "id": "A3",
+      "title": "Remediate silent-failure overfits"
+    },
+    {
+      "id": "A4",
+      "title": "Prove generality with non-OpenMV-board regression tests"
+    }
+  ],
+  "arrows": [
+    {
+      "id": "i1",
+      "type": "input",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Shipped tool layer (packages/*/bodesign_*, services/mcp/server.py handlers)"
+    },
+    {
+      "id": "i2",
+      "type": "input",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "label": "Session generality inventory (5 overfit hotspots, line-verified)"
+    },
+    {
+      "id": "i3",
+      "type": "input",
+      "source": "EXTERNAL",
+      "target": "A2:input",
+      "label": "workflow-core de-productized contract (the generality bar)"
+    },
+    {
+      "id": "c1",
+      "type": "control",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "label": "Bar = no SILENT overfit (overridable OR reported, never silently wrong)"
+    },
+    {
+      "id": "c2",
+      "type": "control",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "label": "Preserve pcbnew EE-worker routing and no-fabricated-success rules"
+    },
+    {
+      "id": "c3",
+      "type": "control",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "label": "Backward-compatible: existing defaults become documented defaults, not removed"
+    },
+    {
+      "id": "o1",
+      "type": "output",
+      "source": "A1:output",
+      "target": "A2:input",
+      "label": "Repeatable generality check (checklist + lint/test concept)"
+    },
+    {
+      "id": "o2",
+      "type": "output",
+      "source": "A2:output",
+      "target": "A3:input",
+      "label": "Severity-classified hotspot list (silent-failure / rule-violation / acceptable-caveat)"
+    },
+    {
+      "id": "o3",
+      "type": "output",
+      "source": "A3:output",
+      "target": "A4:input",
+      "label": "Remediated route_net2pcb + si_check with caller inputs / reporting"
+    },
+    {
+      "id": "o4",
+      "type": "output",
+      "source": "A4:output",
+      "target": "EXTERNAL",
+      "label": "Generality regression tests on a non-OpenMV board shape"
+    },
+    {
+      "id": "m1",
+      "type": "mechanism",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "label": "packages/eda-bridge/bodesign_eda_bridge"
+    },
+    {
+      "id": "m2",
+      "type": "mechanism",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "label": "services/mcp/server.py schemas + handlers"
+    },
+    {
+      "id": "m3",
+      "type": "mechanism",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "label": "tests/test_eda_bridge.py, tests/test_mcp_server.py"
+    }
+  ]
+}

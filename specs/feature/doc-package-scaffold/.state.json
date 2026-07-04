@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [
+    "docs"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-06-07T03:38:19.787Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "implementing",
+      "at": "2026-06-07T13:54:44.000Z",
+      "by": "claude-handoff",
+      "mode": "sync",
+      "reason": "Re-baseline to match reality: C00/C01/C02 runtime is committed (15 Cxx MCP tools + workflow-core c00/c01/c02/c03 modules, 144 tests green). Lifecycle was stuck at proposed. Forward gates (designed/planned) bypassed deliberately: this plan uses a custom artifact set (proposal/design/implementation-spec + PRD/ID/ME templates + rubrics) rather than plan-builder canonical artifacts (spec.md/idef0/grafcet/sequence/data-schema). Conforming to the canonical schema OR documenting the deviation is tracked as debt RB-1 in tasks.md; canonical diagrams were NOT fabricated solely to pass validation."
+    },
+    {
+      "from": "implementing",
+      "to": "implementing",
+      "at": "2026-07-04T13:58:35.806Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "RB-1: 多層 C00-C07 program 用 custom artifact set，非單 feature canonical；docs profile 讓 modeling artifacts optional"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-04T13:59:55.238Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "全量 921 tests green（修 6 個 pre-existing/跨plan 測試債）；剩餘 open task 全 [~] 環境閘/WON'T DO，unavailable 路徑均測試通過；RB-1 以 docs profile 正式解除（非 fabricate canonical diagrams）"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-04T14:03:58.383Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-confirmed graduation：verified 78/83（5 [~] toolchain-gated/WON'T DO），docs profile"
+    }
+  ]
+}
