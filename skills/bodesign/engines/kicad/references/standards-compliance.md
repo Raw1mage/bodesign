@@ -4,13 +4,37 @@ Reference tables and formulas for checking PCB designs against industry standard
 
 **When to use this reference:** Automatically for professional/industrial designs — projects with: 4+ layer boards, controlled impedance, high voltage (>50V), safety-critical functions, CE/UL certification targets, medical/automotive/aerospace applications, or any project where the user mentions standards compliance. For hobby/prototype boards, reference only when the user asks or when a specific concern (e.g., high voltage spacing) warrants it.
 
+## IPC Standards Landscape (orientation)
+
+> **Orientation-level, not value-level.** This table maps each IPC/related standard to *what it governs*, *which bodesign lifecycle stage (C00–C07) consumes it*, and *whether bodesign currently carries its values*. It deliberately carries **no numeric clause values** — those live in the value-level VERIFIED sections below (each with its own primary-source anchor). Scope wording and current revision letters here are the load-bearing facts; do not paraphrase them loosely (a common secondary-source error is conflating IPC-A-600 with IPC-A-610 — see the note under the table).
+
+| Standard | Governs (scope) | Current rev | bodesign stage | Coverage in bodesign |
+|---|---|---|---|---|
+| **IPC-2221** | *Generic* standard on printed-board **design** — spacing, current capacity, annular ring, holes, impedance, dielectric | B (2012) | C03/C04 design & layout | ✅ deep, value-level VERIFIED (primary-source checked) |
+| **IPC-2222** | *Sectional* design standard for **rigid** boards (companion to 2221) | A | C04 layout | ⚪ referenced indirectly via 2221 |
+| **IPC-2152** | **Current-carrying capacity** — modern test-based successor to the 2221 charts | (2009) | C04 layout / C06 verify | 🟡 PARTIALLY VERIFIED (methodology confirmed, formula secondary) |
+| **IPC-2226** | **HDI** board design (microvia, build-up) | A | C04 stackup | ⚪ referenced (stackup guide) |
+| **IPC-7351** | **SMD land patterns** & courtyard (footprint geometry) | B | C04 footprints | 🟡 UNVERIFIED (values secondary) |
+| **IPC-4761** | **Via protection** types (tenting/plugging/filling) | (2006) | C04 layout | ✅ VERIFIED |
+| **IPC-6012** | **Qualification & performance** of *rigid* boards — the fabricated **bare-board** acceptance spec (plating thickness, annular, aspect ratio) | E (2020) | C06 verify / C07 fab | 🟡 secondary values (batch4/6); primary pending |
+| **IPC-A-600** | **Acceptability of printed boards** — visual/target/acceptable/nonconforming criteria for the **bare board** (gold fingers → plated copper) | J (2016) | C06 verify | 🟡 Product Classification VERIFIED; rest secondary |
+| **IPC-A-610** | **Acceptability of electronic assemblies** — the **populated PCBA** (solder joints, component placement). *Distinct from IPC-A-600.* | H (2020) | C06/C07 (assembly) | ⚪ named only |
+| **IPC-2581** | **Digital data exchange** ("DPMX") — a neutral design-to-fab/assembly data format (Gerber/ODB++ alternative carrying intelligent netlist + stackup) | C | C04 export / C07 transfer | ✅ produced in C04 assembly package |
+| **IPC-D-356** | **Netlist / bare-board electrical test** data format | A | C04 export / C07 | ✅ produced in C04 |
+| **IPC-TM-650** | **Test Methods Manual** — the free, individually-published test procedures (SIR, ionic cleanliness/ROSE, electrochemical migration, peel strength…) referenced *by* the specs above | (living) | C06 verify | ✅ orientation + free primary method index (see below) |
+
+**⚠ Scope correction for a common secondary-source error:** **IPC-A-600 is the *bare-board* acceptability standard; IPC-A-610 is the *assembly (PCBA)* acceptability standard.** Blog summaries frequently attribute PCBA acceptance to IPC-A-600 — that is wrong. IPC-A-600 stops at the fabricated bare board (copper, plating, laminate, holes); anything about *soldered components* is IPC-A-610's domain. Likewise, revision letters drift in secondary sources (e.g. "IPC-A-600F" / "IPC-6012B" are superseded — current are **J** and **E**). Cite the current letter or none.
+
+> **Design vs. Qualification split (why two families):** the **2xxx** family (2221/2222/2152/2226) tells you *how to design* the board; the **6xxx** family (6012) + **A-6xx** family (A-600/A-610) tell you *how to judge the fabricated result*. bodesign's "demonstrate reliability" philosophy maps design-family rules into C03/C04 constraints and qualification-family criteria into C06 verification verdicts.
+
 ## Verification Status
 
 | Section | Standard | Status |
 |---|---|---|
 | Product Classification | IPC-A-600G, IPC-2221A | VERIFIED |
 | Conductor Spacing | IPC-2221A Table 6-1 | VERIFIED |
-| Current Capacity (classic) | IPC-2221A §6.2 | VERIFIED |
+| Current Capacity — Figure 6-4 chart | IPC-2221A §6.2 | VERIFIED |
+| Current Capacity — closed-form formula | curve-fit of IPC chart (NOT in IPC-2221) | **PROVENANCE-CORRECTED** |
 | Current Capacity caveats | IPC-2221A / IPC-2152 history | VERIFIED |
 | Annular Ring | IPC-2221A Tables 9-1/9-2 | VERIFIED |
 | Hole Sizes | IPC-2221A Tables 9-3/9-4/9-5 | VERIFIED |
@@ -25,6 +49,11 @@ Reference tables and formulas for checking PCB designs against industry standard
 | Current Capacity (updated) | IPC-2152 | **PARTIALLY VERIFIED** |
 | Safety Standard (modern) | IEC 62368-1 | **UNVERIFIED** |
 | Land Pattern Density | IPC-7351B | **UNVERIFIED** |
+| Test Methods (SIR/ROSE/CAF/ECM/TDR) | IPC-TM-650 | VERIFIED (free primary index) |
+| Rigid-board qualification | IPC-6012E | **ORIENTATION-ONLY** (paywalled) |
+| Bare-board acceptability | IPC-A-600J | **ORIENTATION-ONLY** (paywalled; Product Class VERIFIED) |
+| Assembly acceptability | IPC-A-610H | **ORIENTATION-ONLY** (paywalled) |
+| Digital data exchange (DPMX) | IPC-2581C | **ORIENTATION-ONLY** (paywalled) |
 
 ### Remaining Gaps
 
@@ -33,6 +62,10 @@ Reference tables and formulas for checking PCB designs against industry standard
 2. **IEC 62368-1** — Energy source classification thresholds (ES1/ES2/ES3 current and voltage limits) and the hazard-based safety engineering approach are described from secondary sources. Impact: **Low** — the creepage/clearance tables from ECMA-287 (which derives from the same IEC 60664-1 framework) cover the PCB-relevant requirements. IEC 62368-1 mainly adds the energy-source classification layer on top.
 
 3. **IPC-7351B** — Land pattern density levels (A/B/C) and courtyard excess values (0.50/0.25/0.10 mm) are from secondary sources. Impact: **Low** — these values are widely cited and unlikely to be wrong, but haven't been confirmed against the actual standard document.
+
+4. **IPC-6012E / IPC-A-600J / IPC-A-610H / IPC-2581C** — full texts are **paywalled** (ANSI webstore / IPC shop); no legal free full-text exists. Verified against primary this session: only the **official title, current revision letter, and scope** (from ipc.org/electronics.org store listings + free TOC-PDF XMP metadata). Current revisions confirmed: **6012E** (2020, Amd 1 2022), **A-600J** (2016), **A-610H** (2020), **2581C**. The clause-level values that exist in the repo (e.g. `batch4.md` annular/plating cite `ipc://6012E/table-3-9`) come from **secondary** summaries (summitinterconnect / atlaspcb) — keep them labelled secondary; they are **not** primary-confirmed. Impact: **Medium** — these govern C06/C07 acceptance, but bodesign's crosscheck-against-known-good philosophy does not depend on reprinting paywalled clauses. Confirmed scope correction: **IPC-A-600 = bare board; IPC-A-610 = assembly** (a common secondary-source conflation).
+
+5. **IPC-TM-650** — the **one** IPC standard in scope whose primary text is genuinely **free and legal** (per-method PDFs at ipc.org/test-methods). Method numbers/titles confirmed reachable; individual method clauses not each reproduced (orientation-level pointer). Impact: **None** — this is a positive (free primary layer for C06 test-method citation).
 
 ## Contents
 
@@ -72,7 +105,9 @@ Three product classes determine acceptable imperfection levels. Source: IPC-A-60
 
 ## Conductor Spacing (Electrical Clearance)
 
-Source: **IPC-2221A Table 6-1** (page 43), verified from PDF.
+Source: **IPC-2221 Table 6-1** (page 39), verified against the primary PDF (IPC-2221, February 1998). The 0–500 V rows below match the primary standard value-for-value.
+
+> **⚠ >500 V row corrected (2026-07-04, primary-source verified).** The previous `>500 V` per-volt adders were transcription errors and have been corrected to the primary IPC-2221 Table 6-1. The B1 error (`0.0005/V` → `0.0025/V`) is independently confirmed by the standard's own worked example in §6.3: _"a Type B1 board with 600 V → 0.25 mm + (100 V × 0.0025 mm) = 0.50 mm clearance."_ B4/A5/A6/A7 corrected to the primary `0.00305/V`. (The document was labelled IPC-2221**A** but its 0–500 V rows are byte-identical to the 1998 base revision, so the base per-volt adders are authoritative here; if a genuine IPC-2221A/B revision is later obtained, re-confirm this row.)
 
 Minimum spacing in mm between uninsulated conductors. Columns B1-B4 are bare board conditions; A5-A7 are assembly conditions.
 
@@ -87,7 +122,7 @@ Minimum spacing in mm between uninsulated conductors. Columns B1-B4 are bare boa
 | 171–250 V | 0.2 | 1.25 | 6.4 | 0.4 | 0.4 | 0.8 | 0.4 |
 | 251–300 V | 0.2 | 1.25 | 12.5 | 0.8 | 0.8 | 1.5 | 0.8 |
 | 301–500 V | 0.25 | 2.5 | 12.5 | 0.8 | 0.8 | 1.5 | 0.8 |
-| >500 V | 0.0005/V | 0.005/V | 0.025/V | 0.00167/V | 0.00167/V | 0.003/V | 0.00167/V |
+| >500 V | 0.0025/V | 0.005/V | 0.025/V | 0.00305/V | 0.00305/V | 0.00305/V | 0.00305/V |
 
 **Column selection guide:**
 - **B1** (Internal): Traces on inner layers of multilayer boards
@@ -108,9 +143,11 @@ Minimum spacing in mm between uninsulated conductors. Columns B1-B4 are bare boa
 
 ## Current Carrying Capacity
 
-Source: **IPC-2221A Section 6.2** (page 40), verified from PDF. These are the classic "IPC-2221 charts" widely used in PCB design.
+Source: **IPC-2221A Section 6.2 / Figure 6-4** (page 38–40), verified from the primary PDF (IPC-2221, February 1998, 123 pp.). These are the classic "IPC-2221 charts" widely used in PCB design.
 
-### Formula (from IPC-2221A Section 6.2)
+> **⚠ Provenance correction (verified against primary source 2026-07-04).** IPC-2221 §6.2 provides **only the Figure 6-4 design chart** (temperature-rise vs. current vs. cross-sectional area). The full 123-page standard contains **no closed-form equation** — a full-text search for `I = k`, `0.725`, `0.44`, `k = 0.048`, `k = 0.024` returns **zero matches**. The closed-form formula below is a widely-circulated **curve-fit of the Figure 6-4 chart** (popularised via IPC-2152 appendix material and EDA tooling), **not** a literal IPC-2221 clause. Use it as an engineering approximation of the chart, and cite the chart — not "the IPC-2221 formula" — as the authority. The previous `VERIFIED from PDF page 40` label on the formula was incorrect (the chart is verified; the formula is derived).
+
+### Formula (curve-fit approximation of the IPC-2221A Figure 6-4 chart — NOT a literal clause)
 
 ```
 I = k × ΔT^0.44 × A^0.725
@@ -118,7 +155,7 @@ I = k × ΔT^0.44 × A^0.725
 
 Where:
 - `I` = current capacity (Amperes)
-- `k` = 0.048 for external (outer) layers; 0.024 for internal layers
+- `k` = 0.048 for external (outer) layers; 0.024 for internal layers _(curve-fit constants; not printed in IPC-2221 — the standard halves the external chart for internal layers, see caveat below)_
 - `ΔT` = temperature rise above ambient (°C)
 - `A` = cross-sectional area of the conductor (square mils; 1 mil = 0.0254 mm)
 
@@ -542,6 +579,31 @@ Key differences from IPC-2221A:
 - For safety-critical designs: always use IPC-2152 or thermal modeling
 
 **Usage in design review:** When the IPC-2221A calculation shows a trace is marginal (less than 2× safety margin), note that IPC-2152 should be consulted for a more accurate assessment. If copper planes are present adjacent to the trace, the actual temperature rise may be significantly lower than IPC-2221A predicts.
+
+---
+
+## IPC-TM-650 Test Methods (the free primary-source layer)
+
+Source: **IPC-TM-650 Test Methods Manual** — official free index at `https://www.ipc.org/test-methods`; each method is an individually-published free PDF under `electronics.org/sites/default/files/test_methods_docs/`. **This is the one standard in the IPC set whose primary text is genuinely free and legally reachable** — unlike IPC-6012 / A-600 / A-610 / 2581, whose full texts are paywalled (only their titles/scope are primary-confirmed; see the Landscape table).
+
+> **Role in bodesign:** IPC-TM-650 is the *procedural backing* behind C06 verification. When the design-spec standards (IPC-6012 / A-600) say a board "shall pass surface insulation resistance" or "shall meet ionic cleanliness," the **method** that defines *how* to measure it lives here. bodesign does not run these physical tests (they need lab hardware), but it should **name the correct method number** in a C06 verdict when it flags a not-run test, rather than inventing a procedure.
+
+### Relevant free method numbers (verified reachable at the IPC test-methods index)
+
+| Method | What it measures | C06 relevance |
+|---|---|---|
+| **2.3.25D** | ROSE ionic cleanliness (Resistivity of Solvent Extract) | Cleanliness verdict input |
+| **2.3.28** | Ionic cleanliness by Ion Chromatography | Higher-resolution cleanliness |
+| **2.6.3.7** | Surface Insulation Resistance (SIR) | Humidity/leakage reliability |
+| **2.6.3** | Moisture & Insulation Resistance | Environmental reliability |
+| **2.6.14.1** | Electrochemical Migration Resistance | Dendrite/short-risk under bias |
+| **2.6.25C** | Conductive Anodic Filament (CAF) resistance | Hole-to-hole insulation reliability |
+| **2.5.7** | Dielectric Withstanding Voltage | HV isolation qualification |
+| **2.5.5.7** | Characteristic Impedance by TDR | Controlled-impedance verification |
+
+> **Verification note (2026-07-04):** the method numbers/titles above were confirmed reachable at the official IPC test-methods index. The individual method PDFs are free but were not each fetched value-by-value this session — treat this as an orientation-level pointer to the correct primary procedure, not a reproduction of each method's clauses. When a C06 verdict cites one, pull the specific PDF for the exact conditions.
+
+**Usage in design review:** In a C06 not-run / not-tested finding, cite the governing method number (e.g. "ionic cleanliness — not run; would require IPC-TM-650 method 2.3.25D (ROSE) or 2.3.28 (IC)") so the honest-gap statement points at the real procedure rather than a vague "needs cleanliness testing."
 
 ---
 
