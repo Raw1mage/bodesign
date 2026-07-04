@@ -38,3 +38,23 @@
 - [x] M4-1 registry 全量狀態面板：`build_pilot_registry().summary()` = total 19 / landed 8 / stub 11 / T-A 7 / T-B 12；advisory 17（`build_advisory_scenarios`）
 - [x] M4-2 `specs/architecture.md` Verification Baseline 章節同步技能化架構
 - [x] M4-3 event_record 收尾 + 驗證證據（58 tests green）
+
+## T-B Backlog — 12 stub 盡職查核（2026-07-04，使用者選「維持 backlog」）
+
+> 結論：在「純真 IR-native、不推上游、不 caller-supplied」嚴格前提下，剩 12 個 T-B stub 的
+> 可新 land 集實際為空——皆按 DD-1 定義卡在 design IR 結構讀不到門檻量。逐 body 實證核對（非臆測）。
+> 兩筆上游工是唯一真正解鎖路徑，各自應獨立立 plan：
+
+- [!] **`Net.role` IR 擴充 plan**（中）→ 解鎖 6-7 個：`ddr.ddr3-flyby-routing` / `protection.tvs-esd-layout` /
+  `protection.reverse-polarity-layout` / `placement.power-stage-hot-loop` / `power.charger-ic-layout` /
+  `power.current-sense-layout` / `power.high-current-via-ground` / `rf.transmission-line-ground`。
+  卡點：design IR `Net` 無 role 欄，分不出 power/ground/RF/high-current；net 名 heuristic 猜 role 踩
+  no-fabrication 天條。正解＝加 `Net.role` 由 schematic net-class 明確供給（datasheet-grounded）。
+- [!] **copper-geometry parser plan**（大）→ 解鎖 3-4 個：`ipc-clearance-voltage` / `safety.creepage-clearance` /
+  `safety.functional-spacing-formula` / `rf.antenna-keepout`（天線下 no-ground 區）。
+  卡點：需 edge-to-edge 銅距 / plane 幾何；gerber-core 僅 summary 級、`BoardObject.geometry` 為 opaque dict，
+  無 copper polygon/track 解析。等同新蓋 gerber/copper 幾何 parser。
+- [!] **需設計意圖（caller-supplied，使用者已否決此捷徑）**：`mech.mounting-hole-clearance`
+  （body 明標 UNVERIFIED：hole→板邊/銅 keepout mm；drill Ø vs ISO273 可驗但「哪孔配哪號螺絲」屬設計意圖 IR 無欄）、
+  `flex.bend-area-geometry` / `flex.transition-keepout` / `env.conformal-coating-thickness`（製程參數 IR 無欄）、
+  `mfg.*` / `test.ict-testpoint-geometry` / `dfm.ipc-*`（需 courtyard/aperture/annular 幾何深解析）。
