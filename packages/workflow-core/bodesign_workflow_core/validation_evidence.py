@@ -159,6 +159,36 @@ def _adapt_spice(raw: dict[str, Any]) -> list[ValidationFinding]:
     return findings
 
 
+def _adapt_erc(raw: dict[str, Any]) -> list[ValidationFinding]:
+    """Adapt a classify_erc_report ErcClassification into findings (M1-1 skillification).
+
+    Raw shape (deterministic, from eda-bridge classify_erc_report): count-per-bucket
+    {real_short, pad_net_bug, unconnected, intentional_nc, other}. Each violation
+    becomes ONE finding (count-based expansion), severity by bucket:
+    - real_short   -> critical (two named nets touching)
+    - unconnected  -> major    (should-connect pin left open)
+    - pad_net_bug  -> minor    (generator bug: empty/single second net)
+    - other        -> minor    (unparseable lines preserved, never dropped)
+    intentional_nc is EXCLUDED from findings: it is a spec-declared no-connect,
+    already demoted to INFO by the classifier and never blocking. No reinterpretation.
+    """
+    findings: list[ValidationFinding] = []
+    buckets: tuple[tuple[str, str], ...] = (
+        ("real_short", "critical"),
+        ("unconnected", "major"),
+        ("pad_net_bug", "minor"),
+        ("other", "minor"),
+    )
+    for bucket, sev in buckets:
+        count = int(raw.get(bucket, 0) or 0)
+        for i in range(count):
+            findings.append(ValidationFinding(
+                f"erc-{bucket}-{i}", sev,
+                f"{bucket.replace('_', ' ')} ERC violation",
+                {"kind": "tool_output", "ref": f"erc.{bucket}"}))
+    return findings
+
+
 def _adapt_constraint_solve(raw: dict[str, Any]) -> list[ValidationFinding]:
     """Adapt an ato_build constraint-solving result into findings (5th trust layer).
 
@@ -184,6 +214,7 @@ def _adapt_constraint_solve(raw: dict[str, Any]) -> list[ValidationFinding]:
 
 _ADAPTERS: dict[str, Callable[[dict[str, Any]], list[ValidationFinding]]] = {
     "drc_gate": _adapt_drc_gate,
+    "erc": _adapt_erc,
     "si_check": _adapt_si_check,
     "crosscheck": _adapt_crosscheck,
     "spice": _adapt_spice,

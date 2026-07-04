@@ -71,6 +71,12 @@ from .validation_evidence import (
     ValidationFinding,
     wrap_validation_evidence,
 )
+from .checkers import (
+    CheckerError,
+    check_board_edge_keepout,
+    check_decoupling_pdn,
+    guard_tier,
+)
 from .root_cause import (
     ROOT_CAUSE_SCHEMA,
     RootCauseError,
@@ -358,4 +364,8 @@ __all__ = [
     "render_gap_report_markdown",
     "scaffold_c00_prd_package",
     "scan_corpus_for_part",
+    "CheckerError",
+    "check_board_edge_keepout",
+    "check_decoupling_pdn",
+    "guard_tier",
 ]

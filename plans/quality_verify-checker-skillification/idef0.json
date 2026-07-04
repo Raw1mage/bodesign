@@ -1,0 +1,53 @@
+{
+  "diagram_title": "Skillify verify-knowledge controls into executable checkers",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Classify control executability",
+      "description": "Sort each ragbase control.* object into tier T-A (machine-checkable now), T-B (verified but IR/artifact gap), or T-C (advisory-only: qualitative or partial/todo). Partial/todo is forced to T-C by the no-fabrication rule.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Bind control thresholds",
+      "description": "Attach a machine-readable threshold block + checker_binding metadata to each T-A control so the checker reads thresholds from ragbase at run time instead of hard-coding them.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Generate deterministic checker",
+      "description": "Author a zero-LLM, fail-fast checker (classify_erc_report pattern) that reads design IR or a parsed artifact and evaluates it against the bound thresholds. Core (pure-python) or worker (pcbnew-needing) per the boundary.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Emit control-grounded evidence",
+      "description": "Wrap the checker verdict into a ValidationEvidence envelope carrying control_id + source_anchor + threshold_provenance, register the tool in ORACLE_TOOLS, and flow it back to C00 evidence_returns.",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Route advisory to design-review",
+      "description": "For T-C controls, inject the qualitative criterion as a structured DesignReviewRecord prompt at the G2 gate instead of a hard checker (no fabricated deterministic gate).",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {"id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "ragbase control.* objects (57)"},
+    {"id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "no-fabrication + confidence tier rule"},
+    {"id": "AR3", "source": "A1:output", "target": "A2:input", "type": "output", "label": "T-A controls (verified + quantifiable)"},
+    {"id": "AR4", "source": "A1:output", "target": "A5:input", "type": "output", "label": "T-C controls (qualitative / partial)"},
+    {"id": "AR5", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "datasheet-grounded thresholds"},
+    {"id": "AR6", "source": "A2:output", "target": "A3:input", "type": "output", "label": "bound threshold block + checker_binding"},
+    {"id": "AR7", "source": "EXTERNAL", "target": "A3:input", "type": "input", "label": "design IR / parsed artifact (.kicad_pcb/gerber/.net/IPC)"},
+    {"id": "AR8", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "determinism + fail-fast contract"},
+    {"id": "AR9", "source": "A3:mechanism", "target": "EXTERNAL", "type": "mechanism", "label": "gate.py landing plane / eda-bridge / design-ir"},
+    {"id": "AR10", "source": "A3:output", "target": "A4:input", "type": "output", "label": "raw checker verdict"},
+    {"id": "AR11", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "ORACLE_TOOLS + ValidationEvidence schema"},
+    {"id": "AR12", "source": "A4:mechanism", "target": "EXTERNAL", "type": "mechanism", "label": "validation_evidence adapters"},
+    {"id": "AR13", "source": "A4:output", "target": "EXTERNAL", "type": "output", "label": "ValidationEvidence envelope + checker registry"},
+    {"id": "AR14", "source": "A5:mechanism", "target": "EXTERNAL", "type": "mechanism", "label": "G2 DesignReviewRecord"},
+    {"id": "AR15", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "structured design-review prompts"}
+  ]
+}

@@ -1,0 +1,55 @@
+[
+  {
+    "id": "TV-1",
+    "description": "T-A decoupling-pdn checker: cap 距供電 pin 超門檻 → major finding, verdict 帶 control_id + source_anchor",
+    "input": {
+      "control_id": "control.power.decoupling-pdn-strategy",
+      "threshold_block": {"metric": "decoupling_distance_mm", "value": 2.0, "unit": "mm", "source_anchor": "TI SPRABV2"},
+      "ir": {"components": [{"refdes": "C1", "placement": {"x": 10.0, "y": 0.0}}], "power_pin": {"x": 15.0, "y": 0.0}}
+    },
+    "expected": {"severity": "major", "finding_count": 1, "control_id": "control.power.decoupling-pdn-strategy", "has_source_anchor": true}
+  },
+  {
+    "id": "TV-2",
+    "description": "T-A decoupling checker: cap 在門檻內 → pass, info severity, 0 findings",
+    "input": {
+      "control_id": "control.power.decoupling-pdn-strategy",
+      "threshold_block": {"metric": "decoupling_distance_mm", "value": 2.0, "unit": "mm"},
+      "ir": {"components": [{"refdes": "C1", "placement": {"x": 14.0, "y": 0.0}}], "power_pin": {"x": 15.0, "y": 0.0}}
+    },
+    "expected": {"severity": "info", "finding_count": 0}
+  },
+  {
+    "id": "TV-3",
+    "description": "no-silent-fallback: IR 缺 placement 欄位 → fail-fast 缺項清單, 不預設值續跑",
+    "input": {
+      "control_id": "control.power.decoupling-pdn-strategy",
+      "ir": {"components": [{"refdes": "C1", "placement": {}}]}
+    },
+    "expected": {"error": "CHK_IR_FIELD_MISSING", "missing_fields": ["components[0].placement.x", "power_pin"]}
+  },
+  {
+    "id": "TV-4",
+    "description": "no-fabrication: partial control 嘗試建 T-A checker → 拒絕（只允許 advisory）",
+    "input": {"control_id": "control.dfm.ipc-trace-width-current", "confidence": "partial", "requested_tier": "T-A"},
+    "expected": {"error": "CHK_TIER_FORBIDDEN_PARTIAL"}
+  },
+  {
+    "id": "TV-5",
+    "description": "ValidationEvidence 封套: tool 不在 ORACLE_TOOLS → __post_init__ 拋 ENV_TOOL_UNKNOWN",
+    "input": {"tool": "decoupling_checker_unregistered", "raw_result": {"distance_mm": 5.0}},
+    "expected": {"error": "ENV_TOOL_UNKNOWN"}
+  },
+  {
+    "id": "TV-6",
+    "description": "erc adapter (M1-1): classify_erc_report 輸出經 erc adapter → ValidationEvidence findings, intentional_nc 不進 blocking",
+    "input": {"tool": "erc", "raw_result": {"real_short": 1, "unconnected": 2, "intentional_nc": 3}},
+    "expected": {"finding_count": 3, "severity": "critical", "intentional_nc_in_findings": false}
+  },
+  {
+    "id": "TV-7",
+    "description": "determinism: 同一 IR + threshold 跑兩次 → byte-identical evidence dict",
+    "input": {"control_id": "control.power.decoupling-pdn-strategy", "runs": 2},
+    "expected": {"byte_identical": true}
+  }
+]

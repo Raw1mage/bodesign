@@ -1,0 +1,90 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Await skillification request for a control object",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["control_selected"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Classify control into tier T-A / T-B / T-C",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2, 3, 4],
+    "LinkOutputType": "or_diverge",
+    "Condition": [
+      "tier==T-A (verified + quantifiable + readable)",
+      "tier==T-B (verified but IR/artifact gap)",
+      "tier==T-C (qualitative or partial/todo)"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Bind machine-readable threshold block + checker_binding, generate deterministic checker",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["threshold_bound AND checker_authored"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Record IR/artifact schema-extension backlog (stub checker, no false gate)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["backlog_recorded"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Inject qualitative criterion into G2 DesignReviewRecord prompt",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["advisory_prompt_registered"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Run checker, emit control-grounded ValidationEvidence, register in ORACLE_TOOLS + registry",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["evidence_emitted AND registered"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A0",
+    "StepType": "normal",
+    "StepAction": "Update checker registry status, return to await next control",
+    "LinkInputType": ["or_converge", "or_converge", "or_converge"],
+    "LinkInputNumber": [5, 3, 4],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["registry_updated"],
+    "SubGrafcet": []
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "title": "T-A control skillification (author-time + run-time)",
+    "participants": ["Planner", "ragbase", "Checker", "ValidationEvidence", "C00 evidence_returns"],
+    "messages": [
+      {"from": "Planner", "to": "ragbase", "label": "classify control → tier T-A"},
+      {"from": "Planner", "to": "ragbase", "label": "attach threshold block + checker_binding metadata"},
+      {"from": "Checker", "to": "ragbase", "label": "run-time: read threshold block for control_id"},
+      {"from": "Checker", "to": "Checker", "label": "read design IR / parsed artifact, evaluate (zero-LLM, fail-fast)"},
+      {"from": "Checker", "to": "ValidationEvidence", "label": "wrap verdict + control_id + source_anchor"},
+      {"from": "ValidationEvidence", "to": "ValidationEvidence", "label": "__post_init__: assert tool in ORACLE_TOOLS"},
+      {"from": "ValidationEvidence", "to": "C00 evidence_returns", "label": "flow envelope back (bodesign.c00.evidence_return.v1)"}
+    ]
+  },
+  {
+    "title": "T-B / T-C routing (no false gate)",
+    "participants": ["Planner", "Backlog", "G2 DesignReview"],
+    "messages": [
+      {"from": "Planner", "to": "Backlog", "label": "T-B: record parser/IR-extension need, stub checker (no hard-coded field)"},
+      {"from": "Planner", "to": "G2 DesignReview", "label": "T-C: inject qualitative criterion as structured DesignReviewRecord prompt"}
+    ]
+  }
+]

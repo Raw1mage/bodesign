@@ -1,0 +1,40 @@
+{
+  "schemas": [
+    {
+      "name": "checker_binding",
+      "kind": "json",
+      "fields": [
+        {"name": "control_id", "type": "string", "notes": "ragbase control.* id this checker realises"},
+        {"name": "tier", "type": "enum(T-A|T-B|T-C)", "notes": "executability tier from DD-1"},
+        {"name": "trust_layer", "type": "int(1..5)", "notes": "which of the 5 trust layers (ERC/DRC·crosscheck·SPICE·EMC·constraint)"},
+        {"name": "stage", "type": "enum(C00..C04)", "notes": "pipeline stage the checker runs at"},
+        {"name": "checker_fn", "type": "string|null", "notes": "ORACLE_TOOLS tool id; null for T-B stub / T-C advisory"},
+        {"name": "ir_fields", "type": "string[]", "notes": "design-ir field paths / artifact keys the checker reads; empty for T-C"},
+        {"name": "status", "type": "enum(landed|stub|advisory)", "notes": "skillification progress"}
+      ]
+    },
+    {
+      "name": "threshold_block",
+      "kind": "json",
+      "fields": [
+        {"name": "metric", "type": "string", "notes": "the quantity being gated, e.g. impedance_se_50ohm, decoupling_distance_mm"},
+        {"name": "value", "type": "number|bool", "notes": "threshold value read at run time (not hard-coded)"},
+        {"name": "unit", "type": "string", "notes": "um/mm/ohm/pct/… ; explicit, never assumed"},
+        {"name": "tol_pct", "type": "number|null", "notes": "tolerance band if the control specifies one"},
+        {"name": "source_anchor", "type": "string", "notes": "verbatim datasheet/standard citation backing this value (datasheet-grounded天條)"}
+      ]
+    },
+    {
+      "name": "control_grounded_evidence",
+      "kind": "message",
+      "fields": [
+        {"name": "tool", "type": "string", "notes": "ORACLE_TOOLS member; ValidationEvidence.__post_init__ enforces"},
+        {"name": "findings", "type": "ValidationFinding[]", "notes": "existing envelope shape, unchanged"},
+        {"name": "severity", "type": "enum(critical|major|minor|info)", "notes": "max across findings"},
+        {"name": "control_id", "type": "string", "notes": "NEW: which control drove this verdict (carried in inputs/anchors)"},
+        {"name": "source_anchor", "type": "string", "notes": "NEW: control's verbatim source, for traceability"},
+        {"name": "raw_result", "type": "dict", "notes": "native checker output preserved untouched (DD-6)"}
+      ]
+    }
+  ]
+}

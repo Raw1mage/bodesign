@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "state": "implementing",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-04T05:32:49.283Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-04T05:49:42.988Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "方法設計收斂：control三層分類(T-A 3/T-B 29/T-C 25)+DD-1~DD-7+IDEF0/GRAFCET drawmiat通過"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-04T05:54:39.386Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "M0 設計完成 + 全 artifact 填實；進 M1 三試點實作"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-04T05:55:21.687Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "M0/M1設計就緒，進試點實作"
+    }
+  ]
+}
