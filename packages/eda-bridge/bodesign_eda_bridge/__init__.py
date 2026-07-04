@@ -2,14 +2,17 @@ from .contracts import KiCadBridgePlan, KiCadNativeCapability, KiCadNativeExtens
 from .kicad_emit import (
     EmitComponent,
     EmitNet,
+    ErcClassification,
     KiCadValidationResult,
     SchematicEmitResult,
+    classify_erc_report,
     emit_kicad_schematic,
     load_symbol,
     validate_kicad_schematic,
 )
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .bom_export import BomResult, export_bom, export_netlist
+from .component_fetch import fetch_component, search_components
 from .dxf_dwg import dwg_to_dxf, dxf_to_dwg
 from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
@@ -37,6 +40,8 @@ from .routing import (
 __all__ = [
     "analyzer_engine_status",
     "resolve_skill",
+    "fetch_component",
+    "search_components",
     "autoroute",
     "drc_gate",
     "length_match_bus",
@@ -51,6 +56,8 @@ __all__ = [
     "ComposeResult",
     "EmitComponent",
     "EmitNet",
+    "ErcClassification",
+    "classify_erc_report",
     "FabResult",
     "FootprintCandidate",
     "KiCadBridgePlan",

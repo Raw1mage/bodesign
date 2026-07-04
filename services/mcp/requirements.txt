@@ -7,3 +7,6 @@ uvicorn
 pygerber
 # ezdxf normalizes DXF (R2000 + LWPOLYLINE) before the LibreDWG dxf2dwg roundtrip.
 ezdxf
+# easyeda2kicad: real MPN -> authoritative KiCad symbol + footprint + 3D STEP from
+# the LCSC/EasyEDA vendor library (component_fetch; the 100%-fidelity source gate).
+easyeda2kicad

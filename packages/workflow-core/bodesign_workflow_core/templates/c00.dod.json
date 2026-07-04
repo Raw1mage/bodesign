@@ -12,7 +12,7 @@
      "required": true},
     {"id": "rf_requirements", "title": "RF requirements", "guide_row": 3,
      "any_of": ["C00-PRD/RF_Requirements.md", "C00-PRD/RF_Requirements.generated.md",
-                "C00-PRD/C00_射頻需求規格書.md"],
+                "C00-PRD/C00_射頻需求規格書.md", "C00-PRD/02_build/RF_Requirements.md"],
      "required": true, "condition": "rf"},
     {"id": "handoff", "title": "Handoff report", "guide_row": 4,
      "any_of": ["C00-PRD/C00_Handoff_Report.md", "C00-PRD/Handoff_Report.md"], "required": true}

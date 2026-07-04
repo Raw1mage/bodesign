@@ -64,6 +64,62 @@ class SchematicEmitResult:
 
 
 @dataclass(slots=True)
+class ErcClassification:
+    """Deterministic three-way classification of KiCad ERC violations.
+
+    A senior reviewer does not treat every ERC short/unconnected as a real defect
+    (knowledge object: concept.no-connect-classification). This buckets each parsed
+    violation into one of five categories; `intentional_nc` is INFO (not blocking),
+    all other populated buckets are defects.
+
+    Buckets
+    -------
+    - ``real_shorts``   : two distinct named nets touch -> CRITICAL, board will fault.
+    - ``pad_net_bugs``  : a net-less pad touched by a trace (second net empty / single
+                          net) -> generator bug.
+    - ``unconnected``   : a pin that should be connected is open (not in ``declared_nc``).
+    - ``intentional_nc``: a pin deliberately left open (declared no-connect, e.g.
+                          power-only USB-C D+/D-/SBU) -> INFO, demoted from error.
+    - ``other``         : any violation line that does not match a known shape. NEVER
+                          dropped (no silent fallback); the raw description is kept.
+
+    Each list element preserves the raw violation description line for traceability.
+    """
+
+    real_shorts: list[str] = field(default_factory=list)
+    pad_net_bugs: list[str] = field(default_factory=list)
+    unconnected: list[str] = field(default_factory=list)
+    intentional_nc: list[str] = field(default_factory=list)
+    other: list[str] = field(default_factory=list)
+
+    @property
+    def real_short_count(self) -> int:
+        return len(self.real_shorts)
+
+    @property
+    def pad_net_bug_count(self) -> int:
+        return len(self.pad_net_bugs)
+
+    @property
+    def unconnected_count(self) -> int:
+        return len(self.unconnected)
+
+    @property
+    def intentional_nc_count(self) -> int:
+        return len(self.intentional_nc)
+
+    @property
+    def other_count(self) -> int:
+        return len(self.other)
+
+    @property
+    def blocking_count(self) -> int:
+        """Defects that must block a fab release. ``intentional_nc`` is excluded;
+        ``other`` is excluded (unclassified, surfaced for human review, not auto-gated)."""
+        return len(self.real_shorts) + len(self.pad_net_bugs) + len(self.unconnected)
+
+
+@dataclass(slots=True)
 class KiCadValidationResult:
     kicad_cli: str = "unavailable"
     status: str = "skipped-no-kicad-cli"
@@ -72,6 +128,7 @@ class KiCadValidationResult:
     netlist_components: int = 0
     netlist_nets: list[dict[str, object]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    erc_classification: "ErcClassification | None" = None
 
 
 def _uid() -> str:
@@ -518,7 +575,11 @@ def _project_document() -> str:
     return '{\n  "board": {},\n  "schematic": {},\n  "sheets": [],\n  "version": 1\n}\n'
 
 
-def validate_kicad_schematic(schematic_path: str | Path, output_dir: str | Path | None = None) -> KiCadValidationResult:
+def validate_kicad_schematic(
+    schematic_path: str | Path,
+    output_dir: str | Path | None = None,
+    declared_nc: list[str] | None = None,
+) -> KiCadValidationResult:
     import shutil
 
     cli = shutil.which("kicad-cli")
@@ -537,6 +598,7 @@ def validate_kicad_schematic(schematic_path: str | Path, output_dir: str | Path 
         report_text = erc_report.read_text(encoding="utf-8", errors="ignore")
         result.erc_violations = _int_after(report_text, r"ERC messages:\s*(\d+)")
         result.erc_errors = _int_after(report_text, r"Errors\s+(\d+)")
+        result.erc_classification = classify_erc_report(report_text, declared_nc)
     elif erc.returncode != 0:
         result.status = "erc-failed"
         result.warnings.append((erc.stderr or erc.stdout or "kicad-cli sch erc failed").strip()[:300])
@@ -560,6 +622,151 @@ def validate_kicad_schematic(schematic_path: str | Path, output_dir: str | Path 
 def _int_after(text: str, pattern: str) -> int | None:
     match = re.search(pattern, text)
     return int(match.group(1)) if match else None
+
+
+# ERC report line shapes -------------------------------------------------------
+#
+# `pin_not_connected` shape is verified against real kicad-cli 9.0.9 output
+# (experiments/e2e-led-driver/C03-EE/e2e-led-driver.erc.rpt):
+#
+#   [pin_not_connected]: Pin not connected
+#       ; error
+#       @(350.52 mm, 116.84 mm): Symbol J1 Pin A7 [D-, Bidirectional, Line]
+#
+# i.e. the violation code sits on a `[code]: message` header line and the
+# affected symbol/pin sits on a following `@(...): Symbol <REF> Pin <NUM> [...]`
+# detail line. `<REF>.<NUM>` is what a spec no_connect declaration references.
+#
+# The short / net-conflict shapes below are an ASSUMPTION grounded in
+# concept.no-connect-classification semantics (two named nets => real short;
+# a second net that is empty / a single net => pad-net bug). No real kicad-cli
+# short-violation fixture was available to verify the exact wording, so the
+# matcher keys on the SEMANTIC signature (count of quoted/named nets in the
+# description) rather than an unverified literal string, and anything it cannot
+# place is preserved verbatim in `other` (no silent fallback).
+_ERC_HEADER_RE = re.compile(r"^\[(?P<code>[a-z0-9_]+)\]:\s*(?P<msg>.*)$")
+_ERC_SYMBOL_PIN_RE = re.compile(r"Symbol\s+(?P<ref>\S+)\s+Pin\s+(?P<pin>\S+)\b")
+# Named nets appear as `nets FOO and BAR` or quoted `"FOO"`. Capture both a
+# `nets X and Y` construction and any quoted net tokens so we can count them.
+_ERC_NETS_AND_RE = re.compile(r"\bnets?\s+(?P<a>[^\s]+)\s+and\s+(?P<b>[^\s]*)", re.IGNORECASE)
+_ERC_QUOTED_NET_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"")
+_ERC_SHORT_CODES = frozenset({
+    "net_conflict",
+    "different_units_net",
+    "conflicting_netclasses",
+    "multiple_net_names",
+    "pin_to_pin",
+})
+
+
+def _erc_short_kind(description: str) -> str | None:
+    """Sub-classify a short-like violation from its description text.
+
+    Returns ``"real_short"`` when two distinct named nets are present, ``"pad_net_bug"``
+    when the second net is empty / only one net is named, or ``None`` when the line
+    carries no short signature at all (caller falls through to `other`).
+
+    Signature source: concept.no-connect-classification (ASSUMPTION — see module note).
+    """
+    m = _ERC_NETS_AND_RE.search(description)
+    if m is not None:
+        a = m.group("a").strip().strip("'\"),;")
+        b = m.group("b").strip().strip("'\"),;")
+        if a and b and a != b:
+            return "real_short"
+        return "pad_net_bug"
+    quoted = [g1 or g2 for g1, g2 in _ERC_QUOTED_NET_RE.findall(description)]
+    named = [q for q in quoted if q.strip()]
+    if len(named) >= 2:
+        # two distinct quoted nets touching
+        if named[0] != named[1]:
+            return "real_short"
+        return "pad_net_bug"
+    if len(quoted) >= 2 and len(named) < 2:
+        # a second net token exists but is empty -> pad has no net
+        return "pad_net_bug"
+    return None
+
+
+def classify_erc_report(report_text: str, declared_nc: list[str] | None = None) -> ErcClassification:
+    """Classify a KiCad ERC report into deterministic reviewer buckets (pure-python, zero-LLM).
+
+    Parameters
+    ----------
+    report_text:
+        Full text of a `<stem>.erc.rpt` file (as emitted by `kicad-cli sch erc`).
+        This function NEVER runs a subprocess; it only parses the text passed in,
+        so it is independently unit-testable without kicad-cli.
+    declared_nc:
+        Optional list of ``"REF.PIN"`` strings that the spec declares as intentional
+        no-connect. A `pin_not_connected` violation whose ``REF.PIN`` appears here is
+        demoted to `intentional_nc` (INFO) instead of `unconnected` (defect).
+
+    Determinism
+    -----------
+    Same ``report_text`` + ``declared_nc`` yields byte-identical output. No hidden
+    state, no ordering dependence beyond the report's own line order.
+
+    No silent fallback
+    ------------------
+    A violation line that matches no known shape is preserved verbatim in `other`;
+    nothing is dropped.
+    """
+    declared = frozenset(declared_nc or ())
+    result = ErcClassification()
+
+    lines = report_text.splitlines()
+    i = 0
+    n = len(lines)
+    while i < n:
+        header = _ERC_HEADER_RE.match(lines[i].strip())
+        if header is None:
+            i += 1
+            continue
+        code = header.group("code")
+        # Gather this violation's detail lines: everything up to the next header
+        # or a blank line. The raw description we keep is the header + detail block
+        # so traceability is preserved.
+        block = [lines[i].rstrip()]
+        j = i + 1
+        while j < n:
+            stripped = lines[j].strip()
+            if not stripped or _ERC_HEADER_RE.match(stripped):
+                break
+            block.append(lines[j].rstrip())
+            j += 1
+        raw = "\n".join(block)
+        detail = " ".join(block)
+
+        if code == "pin_not_connected":
+            sym = _ERC_SYMBOL_PIN_RE.search(detail)
+            ref_pin = f"{sym.group('ref')}.{sym.group('pin')}" if sym else None
+            if ref_pin is not None and ref_pin in declared:
+                result.intentional_nc.append(raw)
+            else:
+                result.unconnected.append(raw)
+        elif code in _ERC_SHORT_CODES:
+            kind = _erc_short_kind(detail)
+            if kind == "real_short":
+                result.real_shorts.append(raw)
+            elif kind == "pad_net_bug":
+                result.pad_net_bugs.append(raw)
+            else:
+                # short-family code but no recognizable net signature -> keep, do not guess
+                result.other.append(raw)
+        else:
+            # Unknown-but-net-shaped lines: still try a short signature before giving up.
+            kind = _erc_short_kind(detail)
+            if kind == "real_short":
+                result.real_shorts.append(raw)
+            elif kind == "pad_net_bug":
+                result.pad_net_bugs.append(raw)
+            else:
+                result.other.append(raw)
+
+        i = j
+
+    return result
 
 
 def _parse_netlist_nets(net_text: str) -> list[dict[str, object]]:

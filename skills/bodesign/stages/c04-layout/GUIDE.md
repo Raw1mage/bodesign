@@ -168,6 +168,13 @@ fab-grade controlled-impedance routing, coupled/symmetric differential pairs, BG
 autorouter handles bulk; the finishing tools widen/pour/check; the human closes the impedance and
 length budget. Reference: `openmv/N6_board/C04_Layout/Routing_Rules.md`.
 
+> **How to actually do those human steps in KiCad** — the interactive-router modes
+> (walk-around / shove / highlight-collisions), net-class-driven routing, keepout rule
+> areas, copper-to-edge clearance, filleted outlines/cutouts, schematic⇔PCB cross-probe,
+> STEP-model sourcing, and datum/hotkey throughput — are documented operationally in
+> **`references/kicad-interactive-layout.md`**. It is a *usage manual for the KiCad UI*;
+> every operation there produces copper the C04 gate grades — none of it relaxes the gate.
+
 For via-in-pad on dense BGAs: `bodesign_via_in_pad` (`in_path`, `out_path`, `refs`, `drill_mm`,
 `pad_mm`, `keep_rings`).
 
@@ -278,6 +285,13 @@ These remain `pending` against the C04-freeze gate until the gate (`layout_drc_g
 
 ## Tools & companion skills
 
+- **`references/kicad-interactive-layout.md`** — the *operator* layer behind the "what stays
+  human" steps: the concrete KiCad PCB-editor operations (origin/datum, filleted outline +
+  cutouts, keepout rule areas, schematic⇔PCB cross-probe, net classes, copper-to-edge
+  clearance, interactive-router modes, STEP-model sourcing, text-align, hotkeys) that close
+  what the autorouter + finishing chain leave open. Each operation maps back to the
+  deliverable/gate it feeds — it teaches *how to produce* gate-gradable copper, never how to
+  pass without it.
 - **`references/stackup-and-placement.md`** — the *design-intent* layer behind the MCP calls:
   stackup choice (2L/4L/6L + plane adjacency), placement partitioning (power/noise/thermal,
   decoupling-at-pin), and how to **realise C03's SI requirements** (return-path continuity,

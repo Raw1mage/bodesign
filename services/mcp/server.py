@@ -465,6 +465,16 @@ def _h_autoroute(a: dict) -> Any:
     return autoroute(a["board_path"], a["out_path"], passes=a.get("passes", 40))
 
 
+def _h_component_search(a: dict) -> Any:
+    from bodesign_eda_bridge import search_components
+    return search_components(a["keyword"], limit=int(a.get("limit", 8)))
+
+
+def _h_component_fetch(a: dict) -> Any:
+    from bodesign_eda_bridge import fetch_component
+    return fetch_component(a["lcsc_id"], a["output_lib"], overwrite=a.get("overwrite", True))
+
+
 def _h_render_gerber_preview(a: dict) -> Any:
     from bodesign_gerber_core import render_gerber_preview
     return render_gerber_preview(a["gerber_dir"], a["out_path"], a["mode"],
@@ -682,6 +692,12 @@ TOOLS: list[dict] = [
     {"name": "bodesign_autoroute", "handler": _h_autoroute,
      "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}}, "required": ["board_path", "out_path"]}},
+    {"name": "bodesign_component_search", "handler": _h_component_search,
+     "description": "Search the LCSC/EasyEDA vendor component library by MPN or keyword; returns real candidate parts [{mpn, lcsc_id, package, manufacturer, stock, rohs, price1}] for the 100%-fidelity source gate. No fabrication: an empty vendor result is reported found=0, never padded with guesses. Pair with bodesign_component_fetch to pull the chosen lcsc_id's authoritative symbol/footprint/3D.",
+     "schema": {"type": "object", "properties": {"keyword": _STR, "limit": {"type": "integer"}}, "required": ["keyword"]}},
+    {"name": "bodesign_component_fetch", "handler": _h_component_fetch,
+     "description": "Fetch a real component's AUTHORITATIVE KiCad symbol + footprint + 3D STEP model from the LCSC/EasyEDA vendor library by LCSC id (e.g. C2869036), via the pinned easyeda2kicad CLI. Returns on-disk paths {kicad_sym, footprint, step_model, wrl_model, has_3d, lib_nickname}. This is the 100%-fidelity source-data path: use it INSTEAD of scaling a generic package as a stand-in body. No-fallback/honest: has_3d=false when the vendor carries no STEP (a real source-data gap to surface, not a substituted model); ok=false with 'rebuild image' when the CLI is absent.",
+     "schema": {"type": "object", "properties": {"lcsc_id": _STR, "output_lib": _STR, "overwrite": {"type": "boolean"}}, "required": ["lcsc_id", "output_lib"]}},
     {"name": "bodesign_render_gerber_preview", "handler": _h_render_gerber_preview,
      "description": "C04 Gerber preview evidence: render a real Gerber layer through the gerber-core pygerber raster path. Unsupported composite modes return render-unavailable instead of drawing a decorative fallback.",
       "schema": {"type": "object", "properties": {"gerber_dir": _STR, "out_path": _STR, "mode": _STR, "drill_dir": _STR, "layer_glob": _STR}, "required": ["gerber_dir", "out_path", "mode"]}},
@@ -897,6 +913,9 @@ _EE_GROUP_TOOLS = {
     "bodesign_layout_drc_gate",
     "bodesign_si_check",
     "bodesign_autoroute",
+    # Authentic component data (LCSC/EasyEDA vendor lib; the 100%-fidelity source gate)
+    "bodesign_component_search",
+    "bodesign_component_fetch",
     # C03 declarative front-end (atopile toolchain lives in the ee image; DD-2)
     "bodesign_ato_build",
 }
