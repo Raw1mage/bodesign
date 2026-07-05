@@ -1,0 +1,32 @@
+[
+  {
+    "id": "TV-1",
+    "description": "Gate fail-fast: emit on folder without 01_refs/ raises RefsGateError, zero files written",
+    "input": { "folder": "tmp dir, no 01_refs", "call": "emit_c01_rockbox_package / emit_c02_enclosure_package" },
+    "expected": { "raises": "RefsGateError REFS_SSOT_MISSING", "files_written": 0 }
+  },
+  {
+    "id": "TV-2",
+    "description": "Provenance tagging: answered field → kind=answer; corpus-inferred → kind=derived with matched keyword",
+    "input": { "answers": { "exposed_components": ["camera"] }, "c00": "text mentioning usb-c" },
+    "expected": { "camera.provenance.kind": "answer", "usb-c.provenance.kind": "derived" }
+  },
+  {
+    "id": "TV-3",
+    "description": "BR §5b: components present but unattributed → dod_ok false with named gaps (old behavior returned true)",
+    "input": { "package": "constraints with components lacking resolvable provenance" },
+    "expected": { "dod_ok": false, "provenance_gaps_nonempty": true }
+  },
+  {
+    "id": "TV-4",
+    "description": "BR §5a: clean SSOT fixture rerun → every item resolves, no fabricated entries, schema v2",
+    "input": { "fixture": "01_refs/ with markdown SSOT naming exact component set" },
+    "expected": { "all_items_kind_in": ["refs", "answer"], "schema": "bodesign.c01.interface_constraints.v2" }
+  },
+  {
+    "id": "TV-5",
+    "description": "BR §5c: legacy regression — existing c01/c02 tests with refs fixtures added stay green; v1 file read does not crash readiness (reports gap instead)",
+    "input": { "suite": "test_c01_id_package + test_c02_me_package + full suite", "legacy_file": "v1 Interface_Constraints.json" },
+    "expected": { "suite": "green", "v1_readiness": "dod_ok=false + provenance_missing gap, no exception" }
+  }
+]

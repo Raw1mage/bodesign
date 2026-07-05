@@ -1,0 +1,74 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "receive emit call (c01_emit_package / c02_emit_enclosure_package) for a stage folder",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["emit verb invoked"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "require_refs(stage folder, layer): scan 01_refs/, raise RefsGateError(REFS_SSOT_MISSING) when absent/empty",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["RefsManifest.complete == true (else terminal fail-fast)"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "tag every constraint item with provenance {kind: refs|answer|derived, source, detail}; caller-unattributed items marked derived",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["model built"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "write constraint JSON v2 (per-item provenance + refs_manifest summary) and companion markdown",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["files written"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "readiness resolves provenance: kind not in {refs, answer} or unresolvable refs source -> dod_ok=false + provenance_gaps[]",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["readiness assessed"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "downstream (C04 placement) consumes only dod_ok constraint packages; gaps route back to owner adjudication",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [],
+    "LinkOutputType": "track",
+    "Condition": [],
+    "SubGrafcet": []
+  }
+]

@@ -1,0 +1,51 @@
+{
+  "diagram_title": "refs-first C01/C02 constraint emission with provenance-gated readiness",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Gate on 01_refs SSOT",
+      "description": "emit entry calls refs_gate.require_refs(stage folder, layer); missing/empty SSOT raises RefsGateError, nothing is generated",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Build provenance-tagged model",
+      "description": "classify every constraint item source: refs (01_refs path+anchor) / answer (answer_state field) / derived (corpus keyword); unattributed caller input marked derived",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Emit constraint JSON v2",
+      "description": "write Interface_Constraints.json (v2) / Mechanical_Constraints.json with per-item provenance and refs_manifest summary",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Readiness provenance gate",
+      "description": "readiness resolves each item's provenance; any non-refs/answer kind or unresolvable refs source drops dod_ok to false with provenance_gaps list",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Acceptance validation",
+      "description": "BR §5 checks: clean-SSOT rerun has no fabricated items, no-provenance package fails dod, legacy flows regress green with refs fixtures",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "stage folder + 01_refs/ SSOT" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "REFS_SSOT_MISSING fail-fast (天條 1/2)" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "refs_gate.require_refs" },
+    { "id": "AR4", "source": "A1:output", "target": "A2:input", "type": "output", "label": "RefsManifest" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:input", "type": "input", "label": "c00 summary + answers/constraints dict" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "provenance taxonomy DD-2" },
+    { "id": "AR7", "source": "A2:output", "target": "A3:input", "type": "output", "label": "provenance-tagged model" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "c01/c02 emitters (workflow-core)" },
+    { "id": "AR9", "source": "A3:output", "target": "A4:input", "type": "output", "label": "constraint JSON v2 on disk" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "dod_ok contract (guide_dod)" },
+    { "id": "AR11", "source": "A4:output", "target": "A5:input", "type": "output", "label": "readiness verdict + provenance_gaps" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A5:mechanism", "type": "mechanism", "label": "unittest suite + aiguard clean SSOT case" },
+    { "id": "AR13", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "traceable C01/C02 constraints for C04 placement" }
+  ]
+}

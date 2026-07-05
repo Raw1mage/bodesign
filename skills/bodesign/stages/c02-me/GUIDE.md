@@ -92,9 +92,14 @@ it. Companion skills (named in *Tools*) are accelerators, not prerequisites.
 
 ### 1. Ingest C03 export + C01 + C00 into one constraint set
 
-Start from `assets/Mechanical_Constraints.template.json`. Pull the C03 export's `constraints`
+Start from `assets/Mechanical_Constraints.template.json`. **Refs-first gate
+(capability_refs-first-emitters)**: `c02_emit_enclosure_package` refuses to run without the
+stage's `01_refs/` SSOT (`RefsGateError REFS_SSOT_MISSING`). Pull the C03 export's `constraints`
 object verbatim (it's already provenance-tagged: each height/heat-source carries `source` and
-`status: "explicit"`). Then **layer in** the C00/C01 facts:
+`status: "explicit"`). A top-level `provenance` map (`{constraint_key: {kind, source, detail}}`,
+kinds `refs`/`answer`/`derived`) attributes each present constraint; present-but-unattributed
+constraints become a `constraint_provenance` blocker item in readiness and land in
+`constraint_status.provenance_gaps`. Then **layer in** the C00/C01 facts:
 
 - `connector_openings[]` — one per C01 exposed component routed to C02 (camera, USB-C, RJ45,
   microSD, LED, button, display window…). Set `preferred_edge` from C01's `placement_preference`;
@@ -222,6 +227,8 @@ installed on this worker", and say so in `STEP_Draft_Handoff.md`. Never fabricat
 
 - Every C01 component routed to C02 appears as a `connector_opening` or `antenna_keepout`.
 - Every C03 explicit height/heat-source is carried with its `source` intact (provenance not laundered).
+- Readiness shows no `constraint_provenance` blocker — every present constraint is attributed to
+  `01_refs/` or a user answer (`constraint_status.provenance_gaps` empty).
 - No board-outline / mounting / dimension is asserted as *decided* — provisional values say so, and
   truly-absent ones are `engineering_pending` with an owner, not invented.
 - The `.scad` variables are all derived from constraints; `opening_notes()` covers every opening.

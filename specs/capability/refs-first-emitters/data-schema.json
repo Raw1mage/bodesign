@@ -1,0 +1,32 @@
+{
+  "schemas": [
+    {
+      "name": "Provenance",
+      "kind": "json",
+      "fields": [
+        { "name": "kind", "type": "string", "notes": "refs | answer | derived — BINDING enum (DD-2); only refs/answer pass the dod gate" },
+        { "name": "source", "type": "string", "notes": "kind=refs: relative path under 01_refs/; kind=answer: answer_state.json; kind=derived: derivation label (c00_corpus / caller_unattributed)" },
+        { "name": "detail", "type": "string", "notes": "kind=refs: anchor (heading/line); kind=answer: field key; kind=derived: matched keyword or reason" }
+      ]
+    },
+    {
+      "name": "InterfaceConstraintsV2",
+      "kind": "json",
+      "fields": [
+        { "name": "schema", "type": "string", "notes": "bodesign.c01.interface_constraints.v2" },
+        { "name": "exposed_components", "type": "array", "notes": "v1 item fields preserved + provenance: Provenance per item" },
+        { "name": "refs_manifest", "type": "object", "notes": "RefsManifest.to_dict() summary captured at emit time (source_count, authority_order, unadjudicated)" },
+        { "name": "provenance_gaps", "type": "array", "notes": "emit-time known gaps (derived items); readiness recomputes authoritatively" }
+      ]
+    },
+    {
+      "name": "ReadinessProvenanceGap",
+      "kind": "json",
+      "fields": [
+        { "name": "item", "type": "string", "notes": "component/opening name" },
+        { "name": "reason", "type": "string", "notes": "kind_derived | refs_source_unresolvable | provenance_missing (v1 legacy file)" },
+        { "name": "fix", "type": "string", "notes": "actionable: answer the field / add 01_refs source / re-emit with attribution" }
+      ]
+    }
+  ]
+}

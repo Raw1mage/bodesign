@@ -19,6 +19,8 @@ from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
 from .guide_dod import guide_compliance_for
+from .provenance import KIND_ANSWER, KIND_DERIVED, KIND_REFS, collect_provenance_gaps, make_provenance
+from .refs_gate import require_refs
 
 
 C01_OUTPUTS = {
@@ -150,6 +152,7 @@ class C01PackageReadiness:
     id_native_readiness: dict[str, Any] | None = None
     root_visible: bool = True
     warnings: list[str] = field(default_factory=list)
+    provenance_gaps: list[dict[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -162,6 +165,7 @@ class C01PackageReadiness:
             "human_approved": self.human_approved,
             "root_visible": self.root_visible,
             "warnings": list(self.warnings),
+            "provenance_gaps": list(self.provenance_gaps),
             "artifacts": [
                 {"key": a.key, "rel_path": a.rel_path, "status": a.status, "next_action": a.next_action}
                 for a in self.artifacts
@@ -175,6 +179,10 @@ class C01PackageReadiness:
         if gc is not None:
             out["guide_compliance"] = gc
             out["dod_ok"] = bool(gc.get("dod_ok"))
+        # refs-first gate (capability_refs-first-emitters DD-3): unattributed /
+        # derived constraint items can NEVER silently satisfy DoD.
+        if self.provenance_gaps:
+            out["dod_ok"] = False
         return out
 
 
@@ -258,9 +266,14 @@ def emit_c01_rockbox_package(
     c00: dict[str, Any] | str | None = None,
     answers: dict[str, Any] | None = None,
 ) -> C01PackageResult:
-    """Create a Rockbox-like C01 package with non-empty structured scripts."""
+    """Create a Rockbox-like C01 package with non-empty structured scripts.
+
+    refs-first (DD-1): the stage's ``01_refs/`` SSOT must exist — a missing/empty
+    SSOT raises RefsGateError and NOTHING is generated (no template fallback)."""
     root = Path(out_dir)
+    manifest = require_refs(root, "C01")
     model = _build_model(c00, answers or {})
+    model["refs_manifest"] = manifest.to_dict()
     files = {
         C01_OUTPUTS["ai_file"]: _render_design_direction(model),
         C01_OUTPUTS["cmf"]: _render_cmf_direction(model),
@@ -463,6 +476,22 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
         next_question = c01_next_question(root)
         if next_question.status != "complete":
             field_next_step = f"Ask C01 preference `{next_question.target_field}`: {next_question.question}"
+    # refs-first provenance gate (DD-3): adjudicate every constraint item's
+    # provenance against this folder's 01_refs/. Any derived/unattributed/
+    # unresolvable item is a named gap; gaps force dod_ok=false in to_dict.
+    provenance_gaps: list[dict[str, str]] = []
+    constraints_path = root / C01_OUTPUTS["constraints"]
+    if constraints_path.exists():
+        try:
+            cdata = json.loads(constraints_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            cdata = None
+        if isinstance(cdata, dict) and isinstance(cdata.get("exposed_components"), list):
+            provenance_gaps = collect_provenance_gaps(
+                [(str(c.get("name", "?")), c.get("provenance") if isinstance(c, dict) else None)
+                 for c in cdata["exposed_components"]],
+                folder=root,
+            )
     readiness_pct = min(file_readiness_pct, field_readiness_pct) if field_readiness_pct is not None else file_readiness_pct
     usable = not pending and not field_gaps
     if pending:
@@ -494,6 +523,7 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
         False,
         companion_readiness,
         id_native_readiness,
+        provenance_gaps=provenance_gaps,
     )
 
 
@@ -775,14 +805,28 @@ _COMPONENT_CONSTRAINT_MAP = {
 
 
 def _component_list(value: Any, corpus: str) -> list[dict[str, Any]]:
+    # Provenance tagging (DD-2): answered list items → kind=answer; dict items
+    # carrying an 01_refs-relative `source` → kind=refs; corpus-keyword inference
+    # → kind=derived (visible draft, blocks dod). Never silent.
+    entries: list[tuple[str, dict[str, str]]] = []
     if isinstance(value, list) and value:
-        names = [str(v) for v in value]
+        for v in value:
+            if isinstance(v, dict) and v.get("name") and v.get("source"):
+                entries.append((str(v["name"]),
+                                make_provenance(KIND_REFS, str(v["source"]), str(v.get("detail", "")))))
+            else:
+                name = str(v.get("name")) if isinstance(v, dict) else str(v)
+                entries.append((name, make_provenance(KIND_ANSWER, "answer_state.json", "exposed_components")))
     else:
-        names = [name for name, keywords in EXPOSED_COMPONENT_KEYWORDS.items() if any(k in corpus for k in keywords)]
-    if not names:
-        names = ["missing — exposed component list not confirmed"]
+        for name, keywords in EXPOSED_COMPONENT_KEYWORDS.items():
+            hit = next((k for k in keywords if k in corpus), None)
+            if hit is not None:
+                entries.append((name, make_provenance(KIND_DERIVED, "c00_corpus", hit)))
+    if not entries:
+        entries = [("missing — exposed component list not confirmed",
+                    make_provenance(KIND_DERIVED, "c00_corpus", "no keyword match"))]
     out: list[dict[str, Any]] = []
-    for name in names:
+    for name, prov in entries:
         missing = name.startswith("missing")
         targets, risk = _COMPONENT_CONSTRAINT_MAP.get(
             name.lower(),
@@ -795,6 +839,7 @@ def _component_list(value: Any, corpus: str) -> list[dict[str, Any]]:
             "owner": "C00 user + ID designer",
             "downstream_targets": [] if missing else list(targets),
             "risk_notes": "exposed component list not confirmed — cannot assess risk yet" if missing else risk,
+            "provenance": prov,
         })
     return out
 
@@ -889,11 +934,17 @@ If the product has no screen, `Display UI/UX` still maps to LED/button/buzzer/ap
 
 
 def _constraints(m: dict[str, Any]) -> dict[str, Any]:
+    # v2 (DD-4): per-item provenance + emit-time refs_manifest snapshot. v1 keys
+    # all preserved; readiness recomputes gaps authoritatively against 01_refs/.
     return {
-        "schema": "bodesign.c01.interface_constraints.v1",
+        "schema": "bodesign.c01.interface_constraints.v2",
         "state": "drafted",
         "product_name": m["product_name"],
         "source": "C00-derived C01 Rockbox-like script emitter",
+        "refs_manifest": m.get("refs_manifest"),
+        "provenance_gaps": collect_provenance_gaps(
+            [(str(c.get("name", "?")), c.get("provenance")) for c in m["components"]]
+        ),
         "exposed_components": m["components"],
         "downstream_targets": {
             "C02": ["form archetype", "openings", "primary/user-facing surfaces", "mounting and handling assumptions"],

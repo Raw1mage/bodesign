@@ -1,0 +1,15 @@
+[
+  {
+    "title": "c01_emit_package refs-first flow",
+    "participants": ["gate.py (host verb)", "c01_id_package.emit", "refs_gate", "provenance", "readiness"],
+    "messages": [
+      { "from": "gate.py (host verb)", "to": "c01_id_package.emit", "label": "emit_c01_rockbox_package(out_dir, c00, answers)" },
+      { "from": "c01_id_package.emit", "to": "refs_gate", "label": "require_refs(out_dir, 'C01')" },
+      { "from": "refs_gate", "to": "c01_id_package.emit", "label": "RefsManifest (or RefsGateError → abort, no files)" },
+      { "from": "c01_id_package.emit", "to": "provenance", "label": "tag components: answer/derived/refs per DD-2" },
+      { "from": "c01_id_package.emit", "to": "gate.py (host verb)", "label": "files written (Interface_Constraints v2 + markdown)" },
+      { "from": "gate.py (host verb)", "to": "readiness", "label": "assess_c01_package_readiness(folder)" },
+      { "from": "readiness", "to": "gate.py (host verb)", "label": "dod_ok + provenance_gaps[] (gap ⇒ dod_ok=false)" }
+    ]
+  }
+]

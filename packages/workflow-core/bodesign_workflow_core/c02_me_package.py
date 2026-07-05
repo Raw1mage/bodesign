@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
+from .provenance import collect_provenance_gaps
+from .refs_gate import require_refs
 
 
 REQUIRED_FOR_CAD = (
@@ -220,9 +222,13 @@ def emit_c02_enclosure_package(
     prototype_intent: str | None = None,
     printer_profile: dict[str, Any] | str | None = None,
 ) -> C02PackageResult:
-    """Emit deterministic C02 support files without generating CAD artifacts."""
+    """Emit deterministic C02 support files without generating CAD artifacts.
+
+    refs-first (DD-1): the stage's ``01_refs/`` SSOT must exist — a missing/empty
+    SSOT raises RefsGateError and NOTHING is generated (no template fallback)."""
     root = Path(out_dir)
-    model = _build_package_model(constraints or {}, project_summary, prototype_intent, printer_profile)
+    require_refs(root, "C02")
+    model = _build_package_model(constraints or {}, project_summary, prototype_intent, printer_profile, folder=root)
     files = {
         C02_OUTPUTS["constraints"]: json.dumps(model["constraints"], ensure_ascii=False, indent=2) + "\n",
         C02_OUTPUTS["assumptions"]: _render_assumptions(model),
@@ -637,6 +643,21 @@ def assess_c02_constraint_readiness(
         _item("battery_envelope", data, "C03 EE / user", "Battery envelope is needed when the product is battery-powered.", ["battery_compartment"]),
         _item("environment_targets", data, "C00 user / C06 verification", "Environment targets drive waterproofing, dust, drop, material, and test assumptions.", ["compliance_review", "vendor_handoff"]),
     ]
+    # refs-first provenance gate (DD-3): a PRESENT constraint whose provenance is
+    # absent / derived / unresolvable is a named blocker item — existence alone
+    # no longer reads as owner-grounded.
+    prov_map = data.get("provenance") if isinstance(data.get("provenance"), dict) else {}
+    present_keys = [item.key for item in items if item.status == "present"]
+    provenance_gaps = collect_provenance_gaps(
+        [(k, prov_map.get(k)) for k in present_keys], folder=folder)
+    if provenance_gaps:
+        items.append(C02ConstraintItem(
+            key="constraint_provenance", status="missing",
+            owner="C00 owner / 01_refs SSOT",
+            message="present constraints lack resolvable provenance: "
+                    + ", ".join(f"{g['item']}({g['reason']})" for g in provenance_gaps),
+            blocks=["dod"],
+        ))
     present = {item.key for item in items if item.status == "present"}
     can_generate = all(key in present for key in REQUIRED_FOR_CAD)
     can_place_openings = "connector_openings" in present
@@ -682,8 +703,9 @@ def _build_package_model(
     project_summary: dict[str, Any] | str | None,
     prototype_intent: str | None,
     printer_profile: dict[str, Any] | str | None,
+    folder: str | Path | None = None,
 ) -> dict[str, Any]:
-    normalized = _normalized_constraints(constraints)
+    normalized = _normalized_constraints(constraints, folder=folder)
     readiness = assess_c02_constraint_readiness(normalized)
     return {
         "summary": _summary_text(project_summary),
@@ -694,9 +716,13 @@ def _build_package_model(
     }
 
 
-def _normalized_constraints(constraints: dict[str, Any]) -> dict[str, Any]:
+def _normalized_constraints(constraints: dict[str, Any], folder: str | Path | None = None) -> dict[str, Any]:
     normalized = dict(constraints)
     readiness = assess_c02_constraint_readiness(constraints)
+    prov_map = constraints.get("provenance") if isinstance(constraints.get("provenance"), dict) else {}
+    present_keys = [item.key for item in readiness.items if item.status == "present"]
+    provenance_gaps = collect_provenance_gaps(
+        [(k, prov_map.get(k)) for k in present_keys], folder=folder)
     pending = [
         {
             "key": item.key,
@@ -712,6 +738,7 @@ def _normalized_constraints(constraints: dict[str, Any]) -> dict[str, Any]:
         "source": "bodesign_c02_emit_enclosure_package",
         "notes": "Package emitter preserves missing data as engineering_pending; it does not generate CAD dimensions.",
         "pending": pending,
+        "provenance_gaps": provenance_gaps,
     }
     normalized["approval_status"] = {
         "source_ready": False,

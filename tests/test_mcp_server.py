@@ -21,6 +21,16 @@ GATE = importlib.util.module_from_spec(_GATE_SPEC)
 _GATE_SPEC.loader.exec_module(GATE)
 
 
+def _seed_refs(work: Path) -> None:
+    """Minimal 01_refs/ SSOT so the refs-first emit gate passes (DD-7)."""
+    refs = work / "01_refs"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "owner_brief.md").write_text(
+        "# Owner brief\n\nDecomposed from the owner authority source.\n",
+        encoding="utf-8",
+    )
+
+
 def run_landing(verb: str, args: dict) -> dict:
     """Run a landed verb through gate.py's handler, with run_tool-shaped output."""
     try:
@@ -53,6 +63,7 @@ class McpServerTests(unittest.TestCase):
     def test_run_tool_c01_emit_and_readiness(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-", dir=PRIVATE_BASE))
+        _seed_refs(work)
         try:
             r = run_landing("c01_emit_package", {
                 "out_dir": str(work),
@@ -72,6 +83,7 @@ class McpServerTests(unittest.TestCase):
     def test_run_tool_c01_next_question_and_update_answers(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c01-interact-", dir=PRIVATE_BASE))
+        _seed_refs(work)
         try:
             question = run_landing("c01_next_question", {"folder": str(work)})
             self.assertTrue(question["ok"])
@@ -217,6 +229,7 @@ class McpServerTests(unittest.TestCase):
     def test_run_tool_c02_emit_enclosure_package(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="bodesign-mcp-c02-", dir=PRIVATE_BASE))
+        _seed_refs(work)
         try:
             result = run_landing("c02_emit_enclosure_package", {
                 "out_dir": str(work),

@@ -156,13 +156,21 @@ To turn the status model into a verifiable state diagram, hand it to **drawmiat*
 
 ### 5. Emit `Interface_Constraints.json` — the bridge
 
-This is the heart of the downstream value. Use schema `bodesign.c01.interface_constraints.v1`
-(an asset template lives in `assets/Interface_Constraints.template.json`). Structure:
+This is the heart of the downstream value. Use schema `bodesign.c01.interface_constraints.v2`
+(an asset template lives in `assets/Interface_Constraints.template.json`). **Refs-first gate
+(capability_refs-first-emitters)**: the emitter refuses to run without the stage's `01_refs/`
+SSOT (`RefsGateError REFS_SSOT_MISSING`) — decompose the owner authority source first. Structure:
 
-- top-level: `schema`, `state: "drafted"`, `product_name`, `source`.
+- top-level: `schema`, `state: "drafted"`, `product_name`, `source`, `refs_manifest` (emit-time
+  snapshot of the `01_refs/` SSOT), `provenance_gaps` (emit-time known gaps; readiness recomputes
+  authoritatively).
 - `exposed_components[]` — one object per user-visible component, each with:
   - `name`, `placement_preference` (honest `draft/missing…` until decided), `decision_status`,
     `owner` (e.g. "C00 user + ID designer"),
+  - `provenance {kind, source, detail}` — where the item came from: `refs` (path under `01_refs/`
+    + anchor), `answer` (user answered the field), or `derived` (keyword-inferred draft). Only
+    `refs`/`answer` pass the readiness DoD gate; `derived` items surface as `provenance_gaps` and
+    force `dod_ok:false` until the owner grounds them,
   - `downstream_targets` — which stages must honour it (e.g. camera → `["C02","C04"]`;
     LED → `["C02","C04","C05"]`; USB-C → `["C02","C03","C04"]`; antenna → `["C03","C04"]`),
   - `risk_notes` — the *measurable* constraint ME/EE/Layout must respect, phrased as a concrete
@@ -236,8 +244,10 @@ A template for the JSON lives in `assets/Interface_Constraints.template.json`.
 C01 is **genuinely done** (vs still draft) only when:
 
 - All five core artifacts exist and the self-check (step 7) passes.
-- `Interface_Constraints.json` validates against `bodesign.c01.interface_constraints.v1` and every
+- `Interface_Constraints.json` validates against `bodesign.c01.interface_constraints.v2` and every
   exposed component carries `downstream_targets` + a concrete `risk_notes` constraint.
+- Every exposed component's `provenance.kind` is `refs` or `answer` (readiness `provenance_gaps`
+  is empty) — keyword-derived drafts are visible starting points, never a finished constraint.
 - Every `draft`/`drafted`/`pending` status carries a *reason* (an open decision or a named missing
   input), not a bare label.
 

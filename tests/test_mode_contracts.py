@@ -15,10 +15,21 @@ from bodesign_workflow_core import (
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 
 
+def _seed_refs(work: Path) -> None:
+    """Minimal 01_refs/ SSOT so the refs-first emit gate passes (DD-7)."""
+    refs = work / "01_refs"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "owner_brief.md").write_text(
+        "# Owner brief\n\nDecomposed from the owner authority source.\n",
+        encoding="utf-8",
+    )
+
+
 class ModeContractTests(unittest.TestCase):
     def setUp(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
         self.work = Path(tempfile.mkdtemp(prefix="bodesign-mode-", dir=PRIVATE_BASE))
+        _seed_refs(self.work)
 
     def tearDown(self):
         shutil.rmtree(self.work, ignore_errors=True)
