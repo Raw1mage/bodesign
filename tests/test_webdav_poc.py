@@ -265,11 +265,23 @@ class CacheLifecycleLogicTests(CacheEnvBase):
         self.assertFalse(self.server._cache_soft_cap_status(self.store, "bob")["over"])
 
     def test_mcp_tool_handlers_provision_export_close(self):
+        # R14.6 (BR_20260706): default payload carries NO credential — the
+        # opt-in flag mints it. Default is byte-identical modulo the additive
+        # host_provision observability field (R14.5).
         r = self.server._h_cache_provision({"owner_identity": "alice", "subject_id": "s"})
         self.assertIn("token", r)
+        self.assertNotIn("webdav_password", r)
+        self.assertNotIn("webdav_username", r)
+        self.assertIn("/dav/" + r["token"], r["mount_url"])
+        # R14.5: explicit per-host provision state on every provision payload
+        self.assertEqual(r["host_provision"]["state"], "provisioned")
+        self.assertEqual(r["host_provision"]["provider"], "builtin")
+        # opt-in: same idempotent token, credential minted + verifiable
+        r = self.server._h_cache_provision(
+            {"owner_identity": "alice", "subject_id": "s",
+             "issue_webdav_credential": True})
         self.assertEqual(r["webdav_username"], "alice")
         self.assertTrue(r["webdav_password"])
-        self.assertIn("/dav/" + r["token"], r["mount_url"])
         # password is real: the provider verifies it
         self.assertTrue(self.ap.default_provider().credentials.verify(
             "alice", r["webdav_password"]))
@@ -290,6 +302,44 @@ class CacheLifecycleLogicTests(CacheEnvBase):
         self.assertTrue(r["exported"])
         r = self.server._h_cache_close({"cache_token": token, "owner_identity": "alice"})
         self.assertTrue(r["closed"])
+
+    def test_credential_optin_rotates_and_default_never_rotates(self):
+        """R14.6: issue() ROTATES — a default (no-flag) provision must NOT
+        invalidate a previously minted credential."""
+        r1 = self.server._h_cache_provision(
+            {"owner_identity": "alice", "subject_id": "s",
+             "issue_webdav_credential": True})
+        pw1 = r1["webdav_password"]
+        creds = self.ap.default_provider().credentials
+        self.assertTrue(creds.verify("alice", pw1))
+        # default provision (another subject): credential untouched
+        r2 = self.server._h_cache_provision(
+            {"owner_identity": "alice", "subject_id": "s2"})
+        self.assertNotIn("webdav_password", r2)
+        self.assertTrue(creds.verify("alice", pw1))
+        # opt-in again: rotation invalidates the old password
+        r3 = self.server._h_cache_provision(
+            {"owner_identity": "alice", "subject_id": "s3",
+             "issue_webdav_credential": True})
+        self.assertFalse(creds.verify("alice", pw1))
+        self.assertTrue(creds.verify("alice", r3["webdav_password"]))
+
+    def test_host_provision_state_fail_fast_on_unknown_provider(self):
+        """R14.5: unknown BODESIGN_AUTH_PROVIDER is a typed error, never
+        silently coerced to builtin (天條 11)."""
+        state = self.ap.host_provision_state()
+        self.assertEqual(state["state"], "provisioned")
+        self.assertFalse(state["explicit"])  # env not set in tests
+        os.environ["BODESIGN_AUTH_PROVIDER"] = "builtin"
+        try:
+            state = self.ap.host_provision_state()
+            self.assertTrue(state["explicit"])
+            os.environ["BODESIGN_AUTH_PROVIDER"] = "gateway"
+            with self.assertRaises(self.ap.AuthError) as cm:
+                self.ap.host_provision_state()
+            self.assertEqual(cm.exception.code, "AUTH_PROVIDER_UNKNOWN")
+        finally:
+            os.environ.pop("BODESIGN_AUTH_PROVIDER", None)
 
     def test_cache_tools_registered_additively(self):
         names = {t["name"] for t in self.server.TOOLS}

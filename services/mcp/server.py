@@ -630,11 +630,24 @@ def _h_cache_provision(a: dict) -> Any:
         meta = store.provision_cache(owner, subject)
     except StoreOpError as exc:
         return {"error": exc.code, "message": str(exc)}
-    password = ap.default_provider().credentials.issue(owner)
-    return {"token": meta.token, "subject_id": meta.subject_id, "owner": meta.owner_identity,
-            "mount_url": f"{_base()}/dav/{meta.token}/",
-            "webdav_username": owner, "webdav_password": password,
-            "soft_cap": _cache_soft_cap_status(store, owner)}
+    # R14.5 (BR_20260706): explicit per-host provision state — additive
+    # observability so the caller decides webdav-mount vs stage-inline
+    # (R14.7) from an explicit signal, never by implication.
+    out = {"token": meta.token, "subject_id": meta.subject_id, "owner": meta.owner_identity,
+           "mount_url": f"{_base()}/dav/{meta.token}/",
+           "soft_cap": _cache_soft_cap_status(store, owner),
+           "host_provision": ap.host_provision_state()}
+    # R14.6 (BR_20260706): credential issuance over the MCP rail is OPT-IN.
+    # Holding the MCP socket IS the capability, but rotation is destructive
+    # (each issue() invalidates the previous password — it would break a
+    # live mount), so the default payload carries NO credential (天條 11:
+    # no silent extra side effects). Aligned with the docxmcp reference
+    # issue_webdav_credential flag.
+    if bool(a.get("issue_webdav_credential")):
+        password = ap.default_provider().credentials.issue(owner)
+        out["webdav_username"] = owner
+        out["webdav_password"] = password
+    return out
 
 
 def _h_cache_export(a: dict) -> Any:
@@ -821,8 +834,8 @@ TOOLS: list[dict] = [
 
     # ── Deliverable-cache lifecycle (plan mcp_r13-landing-webdav-cache, DD-5/DD-6) ──
     {"name": "bodesign_cache_provision", "handler": _h_cache_provision,
-     "description": "Provision (find-or-mint, idempotent per owner+subject) a per-deliverable WebDAV working cache. Returns the cache token, the /dav/{token}/ mount URL, and the owner's WebDAV Basic credential — the password is returned plaintext ONCE and rotated on every provision (stored salted-hashed). soft_cap is a WARN-FIRST per-owner usage signal; it never blocks. Mount with rclone/davfs2 (class-2 DAV), let heavy tools read/write the same namespace, then bodesign_cache_export + bodesign_cache_close.",
-     "schema": {"type": "object", "properties": {"owner_identity": _STR, "subject_id": _STR},
+     "description": "Provision (find-or-mint, idempotent per owner+subject) a per-deliverable WebDAV working cache. Returns the cache token, the /dav/{token}/ mount URL, and host_provision (explicit per-host provision state — decide webdav-mount vs stage-inline from this field). Set issue_webdav_credential=true to ALSO mint the owner's WebDAV Basic credential: the password is returned plaintext ONCE and ROTATED on every issuance (stored salted-hashed; rotation invalidates the previous password, so don't re-issue under a live mount). Default payload carries NO credential. soft_cap is a WARN-FIRST per-owner usage signal; it never blocks. Mount with rclone/davfs2 (class-2 DAV), let heavy tools read/write the same namespace, then bodesign_cache_export + bodesign_cache_close.",
+     "schema": {"type": "object", "properties": {"owner_identity": _STR, "subject_id": _STR, "issue_webdav_credential": {"type": "boolean", "description": "opt-in: mint+rotate the owner's WebDAV Basic credential and include it in the payload (R14.6)"}},
                 "required": ["owner_identity", "subject_id"]}},
     {"name": "bodesign_cache_export", "handler": _h_cache_export,
      "description": "Export (land) a deliverable cache's whole tree to an absolute host-visible target directory and stamp last_export_at (the close dirty-gate reference). The target's PARENT must already exist — ancestors are never auto-created and no alternative target is guessed (typed EXPORT_TARGET_UNREACHABLE otherwise). Cross-owner access returns typed CACHE_FORBIDDEN. `cache_token` is the cache token from bodesign_cache_provision (do NOT pass it as the generic file-model `token` arg).",
@@ -1582,7 +1595,9 @@ def build_cache_dav_routes() -> list:
              "mount_path": f"{_base()}/dav/{meta.token}",
              "webdav_username": identity.owner_identity,
              "webdav_password": password,
-             "soft_cap": soft_cap},
+             "soft_cap": soft_cap,
+             # R14.5 (BR_20260706): explicit per-host provision state.
+             "host_provision": ap.host_provision_state()},
             status_code=201)
 
     async def cache_list_mine(request: Request) -> Response:

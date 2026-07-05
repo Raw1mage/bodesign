@@ -213,6 +213,43 @@ class BuiltinAuthProvider(AuthProvider):
         )
 
 
+# ── per-host provision state (fleet standard R14.5) ────────────────────
+
+def host_provision_state() -> dict:
+    """Explicit per-host WebDAV provision state (fleet standard R14.5,
+    BR_20260706).
+
+    "Capability compiled in" ≠ "mount provisioned on this host" — the
+    service MUST report which state it is in, so callers decide
+    webdav-mount vs R14.7 stage-inline fallback from an explicit field,
+    never by implication.
+
+    bodesign ships ONLY the builtin Basic-auth provider (DD-6 — no
+    gateway variant), so a correctly configured host is always
+    ``provisioned``. Deterministic, pure observability, NO behaviour
+    change and NO new fallback mechanism (天條 11). An unknown
+    ``BODESIGN_AUTH_PROVIDER`` value fails fast — never silently
+    coerced to builtin.
+    """
+    raw = os.environ.get("BODESIGN_AUTH_PROVIDER")
+    explicit = raw is not None
+    kind = raw if explicit else "builtin"
+    if kind != "builtin":
+        raise AuthError(
+            "AUTH_PROVIDER_UNKNOWN",
+            f"BODESIGN_AUTH_PROVIDER={kind!r} is not supported: bodesign "
+            "ships only the builtin Basic-auth provider (DD-6); fix the "
+            "deployment env — no silent fallback (天條 11)")
+    return {
+        "state": "provisioned",
+        "provider": "builtin",
+        "explicit": explicit,
+        "basis": ("auth provider builtin: standalone Basic-auth; credentials "
+                  "issuable via the MCP rail with issue_webdav_credential "
+                  "(R14.6) or rotated on HTTP /caches provision"),
+    }
+
+
 # Module-level singleton.
 _default_provider: Optional[AuthProvider] = None
 

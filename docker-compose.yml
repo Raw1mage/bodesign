@@ -36,6 +36,12 @@ services:
       BODESIGN_VAULT_DIR: "/run/bodesign/vault"
       # Gateway prefix for in-page links (gateway strips it for the UDS route).
       BODESIGN_HTTP_BASE: "/bodesign"
+      # R14.5 (BR_20260706): explicit per-host WebDAV provision — "capability
+      # compiled in" ≠ "mount provisioned on this host". bodesign ships only
+      # the builtin Basic-auth provider (DD-6); declaring it here makes the
+      # provision state explicit (host_provision.explicit=true) instead of
+      # implied by the image.
+      BODESIGN_AUTH_PROVIDER: "builtin"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "test", "-S", "/run/bodesign/bodesign.sock"]
