@@ -1,0 +1,130 @@
+{
+  "diagram_title": "bodesign refs-derived 設計範式：從 owner 權威來源逆向拆解到可驗證交付",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "逆向拆解 owner 權威來源建各層 SSOT",
+      "description": "把 owner 權威來源（PDF/PPTX）逆向拆解，把各層擁有的資料落該層 01_refs/ SSOT；SSOT 可追溯到來源錨點。對應切面 1（refs-first gate 範式核心）。",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "組裝上游凍結約束鏈",
+      "description": "把上游 stage 凍結的約束（C01 face-layout、C02 envelope/開孔、mechanical-constraint）組裝為下游必要輸入 JSON；lifecycle 有向性——缺上游約束則拒絕。對應切面 4。",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "約束驅動生成物理實現",
+      "description": "消費 A2 約束產生 placement（連接器綁定面/邊）、castellated 半孔、stamp 模組；走安全 board-surgery wrapper，禁徒手 pcbnew scripting。對應切面 2/3。",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "DoD refs 回溯驗證與知識暴露",
+      "description": "交付驗證檢查每個座標/腳位/元件是否回溯 SSOT（非表面存在性）；修 6 個 DoD 裂縫；翻轉後能力經 bodesign-kb skill 暴露。對應切面 5/6/7。",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "type": "input",
+      "label": "owner 權威來源（N6_X01 PDF / 正式需求書 PPTX）"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "type": "control",
+      "label": "refs-first gate 規則 + No-fabrication 天條"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "type": "mechanism",
+      "label": "workflow-core 逆向拆解 gate（LLM 抽取）"
+    },
+    {
+      "id": "AR4",
+      "source": "A1:output",
+      "target": "A2:input",
+      "type": "output",
+      "label": "各層 01_refs/ SSOT（可追溯錨點）"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "lifecycle 方向性（下游只消費不發明）"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "workflow-core 約束組裝（core / pure-python）"
+    },
+    {
+      "id": "AR7",
+      "source": "A2:output",
+      "target": "A3:input",
+      "type": "output",
+      "label": "上游凍結約束 JSON（face-layout / envelope / mechanical）"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "type": "control",
+      "label": "連接器面/邊綁定 + 專利規則 R1-R18 + 確定性 seed"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "eda-bridge ee worker（placement/castellated/安全 board-surgery）"
+    },
+    {
+      "id": "AR10",
+      "source": "A3:output",
+      "target": "A4:input",
+      "type": "output",
+      "label": "placement + castellated/stamp 物理實現"
+    },
+    {
+      "id": "AR11",
+      "source": "EXTERNAL",
+      "target": "A4:control",
+      "type": "control",
+      "label": "DoD refs 回溯判準（每數字→SSOT→來源錨點）"
+    },
+    {
+      "id": "AR12",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "type": "mechanism",
+      "label": "gate.py DoD gate + bodesign-kb skill"
+    },
+    {
+      "id": "AR13",
+      "source": "A4:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "refs 回溯報告 + DRC/SI freeze 可送廠板（無憑空發明）"
+    },
+    {
+      "id": "AR14",
+      "source": "A4:output",
+      "target": "A1:control",
+      "type": "control",
+      "label": "回溯失敗回饋（fail-fast 缺項清單→補 SSOT）"
+    }
+  ]
+}

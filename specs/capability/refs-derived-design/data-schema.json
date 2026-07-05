@@ -1,0 +1,46 @@
+{
+  "schemas": [
+    {
+      "name": "refs_ssot_entry",
+      "kind": "json",
+      "fields": [
+        {"name": "layer", "type": "enum(C00..C07)", "notes": "SSOT 所屬設計層"},
+        {"name": "key", "type": "string", "notes": "資料鍵（如 component_ref / face / pin）"},
+        {"name": "value", "type": "any", "notes": "凍結值（座標/腳位數/元件型號等）"},
+        {"name": "source_anchor", "type": "object", "notes": "owner 來源錨點：{doc, page/slide, region}；無錨點則 gate 拒收（No fabrication）"},
+        {"name": "frozen_at", "type": "iso8601", "notes": "凍結時間戳，用於 lifecycle 方向性判斷"}
+      ]
+    },
+    {
+      "name": "upstream_constraint",
+      "kind": "json",
+      "fields": [
+        {"name": "constraint_type", "type": "enum(face-layout|envelope|mechanical)", "notes": "上游凍結約束種類"},
+        {"name": "owner_layer", "type": "enum(C01|C02)", "notes": "約束擁有層"},
+        {"name": "payload", "type": "object", "notes": "face-layout: {connector: face/edge}；envelope: {L,W,H,openings[]}"},
+        {"name": "required_by", "type": "array<enum(C03..C07)>", "notes": "哪些下游 verb 以此為必要輸入"},
+        {"name": "ssot_refs", "type": "array<string>", "notes": "回溯到 refs_ssot_entry.key，確保約束非發明"}
+      ]
+    },
+    {
+      "name": "refs_gate_result",
+      "kind": "message",
+      "fields": [
+        {"name": "ok", "type": "bool", "notes": "true=放行；false=fail-fast 拒絕"},
+        {"name": "verb", "type": "string", "notes": "被 gate 的下游 verb 名"},
+        {"name": "missing", "type": "array<object>", "notes": "缺項清單 {layer, key, reason}；ok=false 時非空"},
+        {"name": "error_code", "type": "enum(REFS_SSOT_MISSING|REFS_ANCHOR_MISSING|UPSTREAM_CONSTRAINT_MISSING)", "notes": "typed error code；無 silent fallback"}
+      ]
+    },
+    {
+      "name": "dod_traceback_report",
+      "kind": "json",
+      "fields": [
+        {"name": "deliverable_item", "type": "string", "notes": "座標/腳位/元件識別"},
+        {"name": "traceable", "type": "bool", "notes": "是否可追溯 SSOT→來源錨點"},
+        {"name": "trace_chain", "type": "array<string>", "notes": "item → ssot key → source_anchor 的追溯鏈"},
+        {"name": "blocking", "type": "bool", "notes": "traceable=false → blocking=true（憑空發明擋交付）"}
+      ]
+    }
+  ]
+}

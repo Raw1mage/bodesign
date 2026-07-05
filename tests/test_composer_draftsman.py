@@ -236,6 +236,36 @@ class DraftsmanComposerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             compose_schematic(self.work, "t1bad", spec_bad, symbol_dirs=SYMBOL_DIR, style="draftsman")
 
+    # BR_20260703 compose_nc_emit_flaky_first_write: reproduction guard.
+    # The BR reported an intermittent no_connect raise on the FIRST compose into
+    # an already-non-empty dir; RCA (待確認). This test lands the RCA: repeatedly
+    # composing the SAME nc-bearing spec into the SAME persistent (non-empty)
+    # directory must be deterministic — the same no_connect_count, no raise, no
+    # warnings drift. It reproduces the exact reported trigger (first write into a
+    # dir already holding a prior schematic) so a real regression would fail here.
+    def test_br_nc_repeated_write_same_dir_is_deterministic(self):
+        spec = {
+            "components": [{"ref": "R1", "symbol": "Device:R"}, {"ref": "R2", "symbol": "Device:R"}],
+            "nets": [{"name": "NET_A", "nodes": ["R1.2", "R2.1"], "kind": "signal"}],
+            "nc": ["R1.1", "R2.2"],
+        }
+        # Pre-populate the dir with an unrelated schematic so the target is NON-empty
+        # on the very first nc-bearing compose (the BR's exact first-write trigger).
+        compose_schematic(self.work, "pre_existing", {
+            "components": [{"ref": "R9", "symbol": "Device:R"}],
+            "nets": [], "nc": [],
+        }, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        first_count = None
+        for i in range(4):
+            r = compose_schematic(self.work, "nc_repeat", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+            self.assertEqual(2, r.emit.no_connect_count, f"iteration {i}: nc count drifted")
+            sch = self._sch_text(r)
+            self.assertEqual(2, sch.count("(no_connect (at "), f"iteration {i}: emitted nc glyph count drifted")
+            if first_count is None:
+                first_count = r.emit.no_connect_count
+            else:
+                self.assertEqual(first_count, r.emit.no_connect_count)
+
     # T1 + ERC: declared-NC pins no longer trip pin_not_connected.
     @unittest.skipUnless(HAS_KICAD_CLI, "kicad-cli not installed")
     def test_t1_nc_clears_erc(self):

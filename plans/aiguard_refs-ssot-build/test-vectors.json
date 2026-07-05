@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TV-1",
+    "description": "C01 layer with 2 real PDFs freezes to status=frozen with page anchors",
+    "input": { "layer": "C01", "sources": ["Product_UIUX_Flow.pdf", "Product_CMF_Direction.pdf"] },
+    "expected": { "status": "frozen", "files_nonempty": true, "every_value_has_anchor": true }
+  },
+  {
+    "id": "TV-2",
+    "description": "C03 layer with no owner source is blocked, not fabricated",
+    "input": { "layer": "C03", "sources": [] },
+    "expected": { "status": "blocked_missing_source", "files": [], "required_authority_named": true, "phantom_file_created": false }
+  },
+  {
+    "id": "TV-3",
+    "description": "require_refs fail-fasts on a blocked layer (天条1)",
+    "input": { "verb": "refs_ingest", "layer": "C03" },
+    "expected": { "raises": "RefsGateError", "code": "REFS_SSOT_MISSING" }
+  },
+  {
+    "id": "TV-4",
+    "description": "require_refs loads frozen C01 SSOT successfully",
+    "input": { "verb": "refs_ingest", "layer": "C01" },
+    "expected": { "loaded": true, "artifacts": ["uiux_flow.json", "cmf.json"] }
+  },
+  {
+    "id": "TV-5",
+    "description": "C03-EE stage dir is structurally present after scaffold",
+    "input": { "path": ".work/aiguard/C03-EE" },
+    "expected": { "dir_exists": true, "marked_blocked": true }
+  },
+  {
+    "id": "TV-6",
+    "description": "REGRESSION.md reports per-layer pass/block + required owner source",
+    "input": { "artifact": ".work/aiguard/01_refs/REGRESSION.md" },
+    "expected": { "has_per_layer_result": true, "blocked_layers_list_required_source": true, "no_faked_green": true }
+  }
+]

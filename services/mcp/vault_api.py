@@ -41,12 +41,16 @@ def error_payload(error: VaultError) -> dict[str, Any]:
 
 @contextmanager
 def open_repository(vault_dir: str | None = None) -> Iterator[VaultRepository]:
-    """Open the server vault (BODESIGN_VAULT_DIR env, else explicit dir).
+    """Open the server vault: per-call ``vault_dir`` override, else the
+    configured ``BODESIGN_VAULT_DIR`` store.
 
-    Storage errors propagate untranslated: VAULT-E001 (corrupt — never
-    recreated), VAULT-E002 (unwritable/unconfigured), VAULT-E003 (version).
+    ``vault_dir`` is a genuine per-call re-root (BR_20260705_vault_split D2):
+    it wins over the env store and a nonexistent path fails fast (VAULT-E002)
+    instead of silently resolving to the configured store (no-silent-fallback
+    天条). Storage errors propagate untranslated: VAULT-E001 (corrupt — never
+    recreated), VAULT-E002 (unwritable/unconfigured/bad-override), VAULT-E003.
     """
-    storage = open_vault(vault_dir)
+    storage = open_vault(override=vault_dir)
     try:
         yield VaultRepository(storage)
     finally:
@@ -168,8 +172,8 @@ def vault_diagnostics(limit: int = 20, vault_dir: str | None = None) -> dict[str
     Reports the live server-vault status through the same storage boundary as
     normal tools. It never falls back to a temp vault or Docker host paths.
     """
-    configured_dir = os.environ.get(VAULT_DIR_ENV) or vault_dir
-    storage = open_vault(vault_dir)
+    configured_dir = vault_dir or os.environ.get(VAULT_DIR_ENV)
+    storage = open_vault(override=vault_dir)
     try:
         repo = VaultRepository(storage)
         queue = repo.knowledge_queue(limit=limit)

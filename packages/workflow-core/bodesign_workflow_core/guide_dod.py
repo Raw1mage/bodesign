@@ -127,6 +127,22 @@ def assess_guide_dod(base, stage_or_manifest, *, conditions: dict | None = None)
         except Exception:
             status_override = {}
 
+    # BR_20260703: dod_status.json is only honoured at the product root (``base``).
+    # A dod_status.json misplaced in a C0*-* stage subfolder was silently ignored,
+    # so an engineer's recorded honest status had no effect and the deliverable
+    # still read as blocking with no hint why. Surface it loudly (warn, non-blocking)
+    # rather than silently drop it (no-silent-fallback).
+    stage_scoped_warnings: list[str] = []
+    try:
+        for misplaced in sorted(base.glob("C0*-*/dod_status.json")):
+            stage_scoped_warnings.append(
+                f"dod_status.json found in a stage subfolder ({misplaced.relative_to(base)}) "
+                "but DoD status is only read from the product root; move it to "
+                f"{base.name}/dod_status.json for it to take effect."
+            )
+    except OSError:
+        pass
+
     default_honest = manifest.get("honest_states") or []
     items: list[dict] = []
     missing_blocking: list[str] = []
@@ -186,4 +202,7 @@ def assess_guide_dod(base, stage_or_manifest, *, conditions: dict | None = None)
         if blocking:
             missing_blocking.append(did)
 
-    return {"dod_ok": not missing_blocking, "deliverables": items, "missing_blocking": missing_blocking}
+    result = {"dod_ok": not missing_blocking, "deliverables": items, "missing_blocking": missing_blocking}
+    if stage_scoped_warnings:
+        result["warnings"] = stage_scoped_warnings
+    return result

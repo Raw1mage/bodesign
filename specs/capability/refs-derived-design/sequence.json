@@ -1,0 +1,14 @@
+[
+  {
+    "title": "refs-derived 全鏈：從 owner 來源到可送廠板",
+    "participants": ["Client Agent", "workflow-core (refs gate)", "01_refs SSOT", "eda-bridge ee worker", "gate.py DoD"],
+    "messages": [
+      {"from": "Client Agent", "to": "workflow-core (refs gate)", "label": "呼叫 C0x 生成 verb"},
+      {"from": "workflow-core (refs gate)", "to": "01_refs SSOT", "label": "檢查該層 SSOT 存在且可追溯錨點"},
+      {"from": "01_refs SSOT", "to": "workflow-core (refs gate)", "label": "缺項 → typed error（fail-fast）/ 齊備 → 約束 JSON"},
+      {"from": "workflow-core (refs gate)", "to": "eda-bridge ee worker", "label": "forward 約束驅動 placement/castellated（僅在 SSOT 齊備）"},
+      {"from": "eda-bridge ee worker", "to": "gate.py DoD", "label": "placement + castellated 物理實現"},
+      {"from": "gate.py DoD", "to": "Client Agent", "label": "refs 回溯驗證：全數可追溯 → freeze 板 / 有憑空 → BLOCKING"}
+    ]
+  }
+]

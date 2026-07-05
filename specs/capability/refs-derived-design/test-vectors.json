@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TV-1",
+    "description": "refs-gate 缺 SSOT → fail-fast typed error + 缺項清單（切面 1）",
+    "input": {"verb": "c04_generate_placement", "layer_refs_present": [], "owner_anchor": null},
+    "expected": {"ok": false, "error_code": "REFS_SSOT_MISSING", "missing_nonempty": true, "artifact_produced": false}
+  },
+  {
+    "id": "TV-2",
+    "description": "refs-gate SSOT 齊備且可追溯 → 放行（切面 1）",
+    "input": {"verb": "c04_generate_placement", "layer_refs_present": ["C01", "C02", "C03"], "owner_anchor": {"doc": "N6_X01.pdf", "page": 3}},
+    "expected": {"ok": true, "error_code": null, "missing_nonempty": false}
+  },
+  {
+    "id": "TV-3",
+    "description": "缺上游凍結約束 → placement verb 拒絕（切面 4 lifecycle 方向性）",
+    "input": {"verb": "c04_generate_placement", "upstream_constraint": null},
+    "expected": {"ok": false, "error_code": "UPSTREAM_CONSTRAINT_MISSING", "artifact_produced": false}
+  },
+  {
+    "id": "TV-4",
+    "description": "連接器綁定 C01 face-layout（USB-C=BOTTOM）→ placement 面向正確（切面 2）",
+    "input": {"face_layout": {"USB-C": "BOTTOM", "microSD": "LEFT"}, "component": "USB-C"},
+    "expected": {"placed_face": "BOTTOM", "movable_by_c04": false}
+  },
+  {
+    "id": "TV-5",
+    "description": "DoD refs 回溯：憑空發明版（漏 WiFi/BT/PHY/IMU）被擋（切面 5）",
+    "input": {"deliverable_components": ["MCU", "LED", "R1"], "ssot_components": ["MCU", "LED", "R1", "LBEE5KL1YN", "RTL8211FI-CG", "LSM6DSMTR"]},
+    "expected": {"blocking": true, "untraceable_nonempty": true}
+  },
+  {
+    "id": "TV-6",
+    "description": "DoD refs 回溯：refs-derived 版全數可追溯 → 通過（切面 5）",
+    "input": {"deliverable_components_all_have_ssot_anchor": true},
+    "expected": {"blocking": false, "traceable_all": true}
+  }
+]

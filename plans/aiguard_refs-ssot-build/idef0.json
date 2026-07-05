@@ -1,0 +1,45 @@
+{
+  "diagram_title": "aiguard 01_refs consolidated SSOT harvest + datasheet expansion + refs-derived regen",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Harvest existing SSOT",
+      "description": "Extract real user-PRD fields + existing constraint values + 2 C01 PDFs into frozen 01_refs/<layer>, dropping immature derivation",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Reuse + expand datasheet SSOT",
+      "description": "Reuse the 26 vault datasheets for PRD-named parts; pull+ingest real datasheets for parts absent from the vault, page-anchored",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Kill-and-regen immature products",
+      "description": "Regenerate immature drafted C00~C04 products refs-derived from the frozen SSOT; add new C03-EE stage",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Run refs-derived regression",
+      "description": "Drive refs_ingest + chain; emit per-layer SSOT-cited pass/block report",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "C00 user PRD + C01/C02/C04/C05 constraints + 2 C01 PDFs" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "SSOT-input vs generated-product distinction (DD-2) + never-discard-SSOT" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "harvest / extract with source anchors" },
+    { "id": "AR4", "source": "A1:output", "target": "A2:input", "type": "output", "label": "harvested 01_refs skeleton (PRD + human_seed values)" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "reuse-before-pull (DD-3) + expansion-not-fabrication (DD-4, 天条4)" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:mechanism", "type": "mechanism", "label": "bodesign_vault_spec_check / datasheet_lookup / vault_ingest + .run/vault" },
+    { "id": "AR7", "source": "A2:output", "target": "A3:input", "type": "output", "label": "frozen 01_refs SSOT (PRD + datasheet-grounded)" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "kill-and-regen not in-place edit (DD-7) + require_refs fail-fast (天条1)" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "refs-derived stage generators (living EPIC modules, read-only)" },
+    { "id": "AR10", "source": "A3:output", "target": "A4:input", "type": "output", "label": "regenerated C00~C04 products + new C03-EE" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "honest per-layer pass/block, SSOT-cited, no faked green" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "refs_ingest verb + bodesign workflow-core" },
+    { "id": "AR13", "source": "A4:output", "target": "EXTERNAL", "type": "output", "label": "REGRESSION.md: per-layer pass/block + SSOT citations + residual owner-source list" }
+  ]
+}

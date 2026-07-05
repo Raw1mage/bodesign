@@ -450,11 +450,37 @@ class VaultStorage:
         self.conn.close()
 
 
-def resolve_vault_dir(explicit_path: str | Path | None = None) -> Path:
-    """Resolve vault directory: env BODESIGN_VAULT_DIR, else explicit argument.
+def resolve_vault_dir(
+    explicit_path: str | Path | None = None,
+    *,
+    override: str | Path | None = None,
+) -> Path:
+    """Resolve the vault directory.
+
+    Two distinct inputs, never conflated (BR_20260705_vault_split D2):
+    - ``override`` — a per-call re-root (the MCP ``vault_dir`` param). When
+      given it WINS unconditionally and must already exist; it is NEVER
+      auto-created and NEVER silently falls through to the configured store
+      (no-silent-fallback 天条). A missing/unwritable override -> VAULT-E002.
+    - ``explicit_path`` — the default-store resolution used by library/test
+      callers when ``BODESIGN_VAULT_DIR`` is unset; the configured env store
+      takes precedence and the resolved dir is auto-created if absent.
 
     No cwd guessing. Missing or unwritable -> VAULT-E002.
     """
+    if override is not None:
+        vault_dir = Path(override)
+        # A per-call override re-roots the reader onto an EXISTING store; a
+        # bad path fails fast rather than resolving to the configured store.
+        if not vault_dir.is_dir():
+            raise VaultStorageError(
+                "VAULT-E002",
+                f"vault_dir override does not exist: {vault_dir} "
+                "(per-call override never auto-creates nor falls back to the configured store)",
+            )
+        if not os.access(vault_dir, os.W_OK):
+            raise VaultStorageError("VAULT-E002", f"vault_dir override is not writable: {vault_dir}")
+        return vault_dir
     raw = os.environ.get(VAULT_DIR_ENV) or explicit_path
     if not raw:
         raise VaultStorageError(
@@ -491,14 +517,20 @@ def apply_migrations(conn: sqlite3.Connection, db_path: Path) -> None:
         raise
 
 
-def open_vault(explicit_path: str | Path | None = None) -> VaultStorage:
+def open_vault(
+    explicit_path: str | Path | None = None,
+    *,
+    override: str | Path | None = None,
+) -> VaultStorage:
     """Open (or initialize) the vault database.
 
     - New DB file: initialize schema via migrations.
     - Existing DB file: integrity-check first; corrupt/unreadable raises
       VAULT-E001 and the file is NEVER overwritten or recreated.
+    - ``override`` (per-call vault_dir re-root) is threaded to
+      ``resolve_vault_dir`` where it wins and must already exist.
     """
-    vault_dir = resolve_vault_dir(explicit_path)
+    vault_dir = resolve_vault_dir(explicit_path, override=override)
     db_path = vault_dir / DB_FILENAME
     existed = db_path.exists()
     conn = sqlite3.connect(db_path, isolation_level=None)

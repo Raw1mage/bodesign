@@ -87,5 +87,7 @@ ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/compo
     BODESIGN_SPICE_SKILL=/opt/bodesign-engines/spice \
     BODESIGN_EMC_SKILL=/opt/bodesign-engines/emc
 
-ENTRYPOINT ["python", "/app/services/mcp/server.py"]
+# uid-aligned privilege drop (BR_20260705_work_dir_root_owned): start as root,
+# chown the writable mounts to HOST_UID/HOST_GID, re-exec dropped via setpriv.
+ENTRYPOINT ["sh", "/app/services/mcp/docker-entrypoint.sh"]
 CMD ["--transport", "stdio"]

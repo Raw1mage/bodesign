@@ -20,15 +20,20 @@ services:
       - "./.run:/run/bodesign"
       # Token file store + analysis cache (host-invisible named volume).
       - "bodesign-sessions:/var/cache/bodesign/sessions"
-      # Component Vault (R10): vault.db + blobs/ persist across container
-      # restarts. Corrupt DB fails fast (VAULT-E001) — never recreated; restore
-      # from a volume backup instead.
-      - "bodesign-vault:/var/lib/bodesign/vault"
+      # Component Vault (R10): repo-local, host-visible, long-term store under
+      # ./.run/vault (vault.db + blobs/). It is the SAME ./.run bind mount above,
+      # so the vault lives at /run/bodesign/vault inside the container and
+      # accumulates day-to-day ingested datasheets on the host — persistent,
+      # readable AND writable, survives restarts. Corrupt DB fails fast
+      # (VAULT-E001) — never recreated; restore from a host-side backup of
+      # ./.run/vault instead. (Was a docker named volume; re-pointed to the
+      # repo-local bind so the populated vault is the one the server serves —
+      # BR_20260705_vault_split.)
     environment:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
       BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
-      BODESIGN_VAULT_DIR: "/var/lib/bodesign/vault"
+      BODESIGN_VAULT_DIR: "/run/bodesign/vault"
       # Gateway prefix for in-page links (gateway strips it for the UDS route).
       BODESIGN_HTTP_BASE: "/bodesign"
     restart: unless-stopped
@@ -42,7 +47,6 @@ services:
 volumes:
   bodesign-sessions:
     driver: local
-  # Component Vault persistence (R10). The vault tools live in the `core`
-  # group, so in the workers overlay only the core front needs this mount.
-  bodesign-vault:
-    driver: local
+  # NOTE: the Component Vault (R10) is no longer a docker named volume — it is a
+  # repo-local bind mount at ./.run/vault (see BODESIGN_VAULT_DIR above). The
+  # vault tools live in the `core` group, so only the core front serves it.

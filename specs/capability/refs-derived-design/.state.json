@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-04T14:20:16.444Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-04T14:32:26.821Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "proposal/design/idef0/grafcet/spec/sequence/data-schema 齊備且 drawmiat 驗證通過；EPIC 統攝 8 筆 session BR"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-04T14:33:40.367Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md/handoff.md 齊備；spec/sequence/data-schema/test-vectors/errors/observability 全填實無 scaffold marker；planned gate PASS"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-04T17:15:29.074Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "fast-forward pass-through (burst implementation; all tasks checked + validation evidence): core+worker 全達標 952 tests OK DRC roundtrip 實跑通過；使用者同意"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-04T17:15:29.074Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "core+worker 全達標 952 tests OK DRC roundtrip 實跑通過；使用者同意"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-04T17:23:31.851Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "core+worker 全達標 952 tests OK；使用者明確指示 graduate"
+    }
+  ]
+}

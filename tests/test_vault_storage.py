@@ -221,6 +221,40 @@ class StorageLifecycleTests(VaultTestCase):
             del os.environ["BODESIGN_VAULT_DIR"]
         self.assertEqual(env_dir, resolved)
 
+    def test_override_wins_over_env(self):
+        # BR_20260705_vault_split D2: a per-call override re-roots the reader
+        # even when BODESIGN_VAULT_DIR points elsewhere.
+        env_dir = Path(self._temp.name) / "env-vault"
+        env_dir.mkdir()
+        os.environ["BODESIGN_VAULT_DIR"] = str(env_dir)
+        try:
+            resolved = resolve_vault_dir(override=self.vault_dir)
+        finally:
+            del os.environ["BODESIGN_VAULT_DIR"]
+        self.assertEqual(self.vault_dir, resolved)
+
+    def test_override_nonexistent_fails_fast_no_fallback(self):
+        # A bad override must NOT silently fall through to the configured
+        # store (no-silent-fallback 天条) — it fails fast with VAULT-E002.
+        env_dir = Path(self._temp.name) / "env-vault"
+        env_dir.mkdir()
+        os.environ["BODESIGN_VAULT_DIR"] = str(env_dir)
+        bad = Path(self._temp.name) / "nonexistent" / "xyz"
+        try:
+            with self.assertRaises(VaultStorageError) as ctx:
+                resolve_vault_dir(override=bad)
+        finally:
+            del os.environ["BODESIGN_VAULT_DIR"]
+        self.assertEqual("VAULT-E002", ctx.exception.code)
+
+    def test_override_never_auto_creates(self):
+        # Unlike the default-store path, an override is never mkdir'd.
+        missing = Path(self._temp.name) / "absent-override"
+        with self.assertRaises(VaultStorageError) as ctx:
+            resolve_vault_dir(override=missing)
+        self.assertEqual("VAULT-E002", ctx.exception.code)
+        self.assertFalse(missing.exists())
+
     def test_schema_version_beyond_known_is_rejected(self):
         self.storage.close()
         raw = sqlite3.connect(self.vault_dir / "vault.db")

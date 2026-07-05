@@ -1,0 +1,38 @@
+{
+  "schemas": [
+    {
+      "name": "refs_manifest",
+      "kind": "json",
+      "fields": [
+        { "name": "layer", "type": "string", "notes": "C-layer id, e.g. C00/C01/C02/C03/C04" },
+        { "name": "status", "type": "enum(frozen|blocked_missing_source)", "notes": "frozen = real SSOT harvested/grounded; blocked = genuinely-absent SSOT only (DD-6)" },
+        { "name": "authority_tier", "type": "enum(user_prd|datasheet|human_seed|mixed)", "notes": "user_prd = C00 answer_state user fields; datasheet = vault/pulled datasheet (Tier-2); human_seed = C01 PDFs; mixed = combination" },
+        { "name": "files", "type": "string[]", "notes": "real on-disk harvested/grounded SSOT artifacts ONLY; empty when blocked (天条2 no phantom)" },
+        { "name": "required_authority", "type": "string|null", "notes": "named owner artifact needed to unblock a genuinely-absent field; null when frozen" },
+        { "name": "source_anchors", "type": "SourceAnchor[]", "notes": "provenance for every frozen value (PRD field or datasheet page) (天条4)" }
+      ]
+    },
+    {
+      "name": "SourceAnchor",
+      "kind": "json",
+      "fields": [
+        { "name": "tier", "type": "enum(user_prd|datasheet|human_seed)", "notes": "provenance tier of this specific anchor" },
+        { "name": "source", "type": "string", "notes": "for user_prd: answer_state.json document; for datasheet: MPN / blob path; for human_seed: PDF path" },
+        { "name": "locator", "type": "string", "notes": "for user_prd: {section_id, field}; for datasheet: page number; for human_seed: PDF page" },
+        { "name": "note", "type": "string", "notes": "what was harvested/grounded from this anchor" }
+      ]
+    },
+    {
+      "name": "top_manifest",
+      "kind": "json",
+      "fields": [
+        { "name": "project", "type": "string", "notes": "aiguard" },
+        { "name": "ssot_root", "type": "string", "notes": "01_refs (consolidated harvested SSOT, DD-1)" },
+        { "name": "layers", "type": "refs_manifest[]", "notes": "one entry per C-layer with harvested status" },
+        { "name": "vault_reused", "type": "string[]", "notes": "MPNs whose already-ingested vault datasheet was reused (DD-3)" },
+        { "name": "vault_expanded", "type": "string[]", "notes": "MPNs newly pulled+ingested during execution (DD-4)" },
+        { "name": "generated_at", "type": "iso8601", "notes": "build timestamp" }
+      ]
+    }
+  ]
+}

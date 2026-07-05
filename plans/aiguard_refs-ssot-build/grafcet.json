@@ -1,0 +1,74 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A0",
+    "StepType": "initial",
+    "StepAction": "Idle: aiguard has rich but unconsolidated SSOT (user PRD + constraints + 26-datasheet vault); no 01_refs, immature C00~C04 products",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["plan implementing started"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Harvest C00 user PRD + C01/C02/C04 real values + 2 C01 PDFs into frozen 01_refs/<layer>, anchored; drop immature derivation",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["harvested SSOT written with source anchors"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Reuse vault datasheets for PRD-named parts; pull+ingest datasheets for parts absent from vault; fold grounded values into C02/C03",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["datasheet SSOT linked/expanded, page-anchored"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Kill-and-regen immature C00~C04 products refs-derived from frozen 01_refs; create+ground new C03-EE stage",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["products regenerated; genuinely-absent fields marked blocked"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Run refs_ingest; frozen layers load, genuinely-absent-SSOT fields fail-fast REFS_SSOT_MISSING; capture per-layer result",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["per-layer load/block result captured with SSOT citations"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A0",
+    "StepType": "final",
+    "StepAction": "Verified-ready: consolidated 01_refs SSOT live, products regenerated, REGRESSION.md written; await user graduate gate",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [],
+    "LinkOutputType": "track",
+    "Condition": [],
+    "SubGrafcet": []
+  }
+]

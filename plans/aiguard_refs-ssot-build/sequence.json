@@ -1,0 +1,17 @@
+[
+  {
+    "title": "aiguard refs-derived regression run",
+    "participants": ["Operator", "refs_ingest", "refs_gate", "01_refs manifest", "workflow-core stage"],
+    "messages": [
+      { "from": "Operator", "to": "refs_ingest", "label": "refs_ingest(folder=.work/aiguard)" },
+      { "from": "refs_ingest", "to": "01_refs manifest", "label": "read top + per-layer manifests" },
+      { "from": "01_refs manifest", "to": "refs_ingest", "label": "C01 frozen; C00/C02/C03/C04 blocked_missing_source" },
+      { "from": "refs_ingest", "to": "refs_gate", "label": "require_refs(folder, layer=C01)" },
+      { "from": "refs_gate", "to": "refs_ingest", "label": "OK: frozen SSOT loaded (uiux_flow.json, cmf.json)" },
+      { "from": "refs_ingest", "to": "workflow-core stage", "label": "C01 stage runs refs-derived" },
+      { "from": "refs_ingest", "to": "refs_gate", "label": "require_refs(folder, layer=C03)" },
+      { "from": "refs_gate", "to": "refs_ingest", "label": "raise RefsGateError[REFS_SSOT_MISSING] (天条1)" },
+      { "from": "refs_ingest", "to": "Operator", "label": "REGRESSION.md: per-layer pass/block + required owner source" }
+    ]
+  }
+]

@@ -863,6 +863,7 @@ LANDED_VERBS = frozenset({
     "c00_orchestration_tick", "reference_board_workflow",
     # Read / gate
     "ingest_project", "package_readiness", "datasheet_lookup", "spec_check", "rca_spec_audit",
+    "refs_ingest", "c04_face_placement", "c04_castellation", "c04_dod_traceback",
     # Pure functions
     "plan_design_intent", "evidence_manifest", "pin_allocation", "reference_crosscheck",
     "impedance_solve",

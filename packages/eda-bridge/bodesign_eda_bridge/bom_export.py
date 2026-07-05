@@ -24,6 +24,7 @@ class BomResult:
     xlsx_path: str | None = None
     netlist_path: str | None = None
     line_count: int = 0
+    component_count: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -92,4 +93,13 @@ def export_netlist(schematic_path: str | Path, out_dir: str | Path, fmt: str = "
                           capture_output=True, text=True)
     if not net_path.exists():
         return BomResult(status="failed", warnings=[f"netlist: {(proc.stderr or proc.stdout or 'no output').strip()[:200]}"])
-    return BomResult(status="ok", netlist_path=str(net_path))
+    # BR_20260703: report line_count + component_count (was left at the dataclass
+    # default 0, misreporting a real netlist as empty). Line count is the raw
+    # file lines; component_count counts (comp (ref ...)) entries via the same
+    # regex the emitter uses, so a populated netlist never reads as zero.
+    import re
+    net_text = net_path.read_text(encoding="utf-8", errors="ignore")
+    component_count = len(re.findall(r"\(comp\s+\(ref\b", net_text))
+    return BomResult(status="ok", netlist_path=str(net_path),
+                     line_count=len(net_text.splitlines()),
+                     component_count=component_count)

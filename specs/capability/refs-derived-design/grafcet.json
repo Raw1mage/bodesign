@@ -1,0 +1,122 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "待命：等待 owner 權威來源進場（PDF/PPTX）",
+    "LinkInputType": ["convergence_or"],
+    "LinkInputNumber": [8, 9],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["owner 權威來源可用"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "逆向拆解 owner 來源，把各層資料落 01_refs/ SSOT（帶來源錨點）",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["拆解完成"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "refs-first gate：檢查各層 01_refs/ SSOT 是否存在且可追溯",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3, 8],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["SSOT 完整=前進 step3", "SSOT 缺項=fail-fast 跳 step8"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "組裝上游凍結約束 JSON（C01 face-layout / C02 envelope / mechanical-constraint）",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["上游約束齊備"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "lifecycle 方向性 gate：下游 verb 確認上游約束為必要輸入",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5, 8],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["上游約束存在=前進 step5", "缺上游約束=fail-fast 跳 step8"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "約束驅動生成 placement（連接器綁定面/邊）",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [6],
+    "LinkOutputType": "track",
+    "Condition": ["placement 完成"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "castellated 半孔 / stamp 模組生成（安全 board-surgery wrapper，禁徒手 pcbnew scripting）",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [5],
+    "LinkOutputNumber": [7],
+    "LinkOutputType": "track",
+    "Condition": ["物理實現完成"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "DoD refs 回溯驗證：每個座標/腳位/元件是否可追溯 SSOT→來源錨點",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [6],
+    "LinkOutputNumber": [9, 8],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["全數回溯=前進 step9", "有憑空發明=fail-fast 跳 step8"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 8,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "fail-fast：輸出缺項清單，回退補 SSOT / 補上游約束（不 silent fallback）",
+    "LinkInputType": ["convergence_or"],
+    "LinkInputNumber": [2, 4, 7],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["缺項補齊後重新進場"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 9,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "產出 refs 回溯報告 + DRC/SI freeze 可送廠板；經 bodesign-kb skill 暴露能力",
+    "LinkInputType": ["divergence_or"],
+    "LinkInputNumber": [7],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["交付完成，回待命"],
+    "SubGrafcet": []
+  }
+]

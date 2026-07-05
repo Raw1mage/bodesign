@@ -284,6 +284,25 @@ VERBS = {
                              "Cross-check generated nets vs a reference product's nets."),
     "impedance_solve": (_EB, "solve_impedance", ("stackup", "targets"),
                         "Pure-python C04 impedance estimate from stackup + targets."),
+    # refs-first gate (EPIC refs-derived-design, 切面 1)
+    "refs_ingest": (_WC, "ingest_refs", ("folder",),
+                    "Scan a stage's 01_refs/ SSOT into a manifest (classify sources, "
+                    "parse authority order, flag rich media as unadjudicated). Read-only; "
+                    "root not visible → root_visible:false (loud, not a false-empty)."),
+    # constraint-driven placement / castellated (EPIC refs-derived-design, 切面 2/3/4)
+    "c04_face_placement": (_WC, "solve_face_placement", ("face_layout",),
+                           "Deterministic constraint-driven placement: bind each connector to its "
+                           "FROZEN upstream C01 face/edge (DD-4: face is not a C04 degree of freedom). "
+                           "Same input → same output. Requires a parsed face_layout dict."),
+    "c04_castellation": (_WC, "build_castellation", ("spec", "board_outline"),
+                         "Build castellated (stamp-module) edge pads as segfault-free S-expression "
+                         "injection (DD-5); refuses the known-unsafe pcbnew mutation paths. "
+                         "Deterministic; provenance-gated (no-fabrication)."),
+    "c04_dod_traceback": (_WC, "dod_refs_traceback", ("deliverable_items", "ssot_required_refs"),
+                          "DoD refs-traceback (切面 5): upgrade DoD from surface-existence to SSOT "
+                          "traceability. Every delivered item must trace to an SSOT anchor "
+                          "(untraceable=憑空發明); every SSOT-required ref must appear "
+                          "(unfulfilled=漏做). Either non-empty → blocking. Deterministic, no LLM."),
 }
 
 # Path-like arg keys resolved against --repo when relative; folder/out_dir
@@ -307,6 +326,30 @@ def _jsonable(value):
 def _v_c00_scaffold_prd(a):
     from bodesign_workflow_core import scaffold_c00_prd_package
     return scaffold_c00_prd_package(a["out_dir"], a.get("project_name"), bool(a.get("include_rf", False))).to_dict()
+
+
+def _v_refs_ingest(a):
+    from bodesign_workflow_core import ingest_refs
+    return ingest_refs(a["folder"]).to_dict()
+
+
+def _v_c04_face_placement(a):
+    from bodesign_workflow_core import parse_face_layout, solve_face_placement
+    fl = parse_face_layout(a["face_layout"])
+    return {"schema": "bodesign.c04.face_placement.v1",
+            "placements": [p.to_dict() for p in solve_face_placement(fl)]}
+
+
+def _v_c04_castellation(a):
+    from bodesign_workflow_core import build_castellation, parse_castellation_request
+    req = parse_castellation_request(a["spec"])
+    return build_castellation(req, a["board_outline"], path=a.get("path", "sexpr_injection"))
+
+
+def _v_c04_dod_traceback(a):
+    from bodesign_workflow_core import dod_refs_traceback
+    return dod_refs_traceback(a["deliverable_items"], a["ssot_required_refs"],
+                              ssot_anchors=a.get("ssot_anchors")).to_dict()
 
 
 def _v_c00_readiness(a):

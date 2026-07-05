@@ -14,6 +14,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 SOCK="$RUN_DIR/bodesign.sock"
 PROJECT="bodesign-${USER:-$(id -un)}"
+
+# Inject the host uid/gid so the container entrypoint (docker-entrypoint.sh) drops
+# privilege to the invoking user — bind-mounted products under .work/ and
+# .run/vault stay host-writable, no sudo needed (BR_20260705_work_dir_root_owned).
+export HOST_UID="$(id -u)"
+export HOST_GID="$(id -g)"
 COMPOSE=(docker compose -p "$PROJECT" -f "$ROOT_DIR/docker-compose.yml")
 # BODESIGN_DEV=1 → bind-mount the live source so restart picks up code with no rebuild.
 if [ "${BODESIGN_DEV:-}" = "1" ]; then

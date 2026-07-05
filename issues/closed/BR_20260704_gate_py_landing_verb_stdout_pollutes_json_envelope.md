@@ -1,5 +1,13 @@
 # BR: gate.py landing-verb stdout 混入非 JSON 前綴行,破壞程式化 pipe 消費
 
+> **[CLOSED 2026-07-04 — false-positive for this repo / stale skill mirror]**
+> 本 repo 權威副本 `skills/bodesign/scripts/gate.py` 已符合契約:`_log()` (L46-47)
+> 走 `sys.stderr`,`_emit()` (L52) 只在 stdout 印單一 `json.dumps(envelope)`,
+> traceback (L759) 亦走 stderr。實測 `gate.py c00_readiness ... 2>/dev/null`
+> 回 exit 0 純 JSON,`2>&1 >/dev/null` 可見 landing_verb 診斷行。
+> BR 現象證據路徑為 `/mnt/d/users/.../thesmart_products`(另一 host 的 stale
+> skill mirror,`bun run install-skills` 未同步),非本 repo 缺陷。無需改碼。
+
 - **Date**: 2026-07-04
 - **Component**: bodesign skill — `scripts/gate.py`(landing-verb runner)
 - **Severity**: medium(不阻塞人工使用,但阻塞所有程式化 pipe 消費 readiness/gate 結果)

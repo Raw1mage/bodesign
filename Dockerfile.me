@@ -39,6 +39,8 @@ COPY services /app/services
 ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/component-knowledge:/app/packages/component-kb:/app/packages/doc-core:/app/packages/source-core:/app/packages/reverse-core:/app/packages/gerber-core:/app/packages/eda-bridge:/app/packages/workflow-core:/app/packages/storage-core:/app/packages/kicad-plugin:/app/services/mcp:/app" \
     BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions
 
-ENTRYPOINT ["python", "/app/services/mcp/server.py"]
+# uid-aligned privilege drop (BR_20260705_work_dir_root_owned): start as root,
+# chown the writable mounts to HOST_UID/HOST_GID, re-exec dropped via setpriv.
+ENTRYPOINT ["sh", "/app/services/mcp/docker-entrypoint.sh"]
 # Serve only the mechanical tool group over TCP on the internal compose network.
 CMD ["--transport", "http", "--host", "0.0.0.0", "--port", "8077", "--tools", "me"]

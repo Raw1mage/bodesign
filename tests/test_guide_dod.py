@@ -61,6 +61,32 @@ class CheckerTests(unittest.TestCase):
         self.assertTrue(r["dod_ok"])
         self.assertEqual(r["missing_blocking"], [])
 
+    def test_br_c00_rf_requirements_matches_02build_intermediate_path(self):
+        # BR_20260703 c00_dod_rf_requirements_asymmetric_02build_path: RF `.md` is a
+        # GC-able intermediate that lives in 02_build/ (stage root holds only the
+        # .docx deliverable). The c00 manifest `rf_requirements.any_of` must include
+        # the 02_build/ symmetric path (as `prd` already did) so a correctly-placed
+        # RF deliverable is not a false-positive blocking.
+        self._mk("C00-PRD/answer_state.json",
+                 "C00-PRD/02_build/Project_Requirements.md",
+                 "C00-PRD/02_build/RF_Requirements.md",
+                 "C00-PRD/C00_Handoff_Report.md")
+        r = guide_dod.assess_guide_dod(self.t, "c00", conditions={"rf": True})
+        statuses = {d["id"]: d["status"] for d in r["deliverables"]}
+        self.assertEqual(statuses["rf_requirements"], "present",
+                         "RF .md in 02_build/ must satisfy the manifest (02_build symmetry)")
+        self.assertEqual(statuses["prd"], "present")
+        self.assertTrue(r["dod_ok"])
+
+    def test_stage_scoped_dod_status_json_surfaced_not_silently_ignored(self):
+        # BR_20260703: a dod_status.json misplaced in a stage subfolder was
+        # silently ignored. It must now surface a loud (non-blocking) warning.
+        (self.t / "C04-Layout").mkdir(parents=True, exist_ok=True)
+        (self.t / "C04-Layout" / "dod_status.json").write_text("{}")
+        r = guide_dod.assess_guide_dod(self.t, "c04")
+        self.assertTrue(r.get("warnings"))
+        self.assertIn("C04-Layout/dod_status.json", r["warnings"][0])
+
     def test_honest_status_override_not_blocking(self):
         self._mk(*[f"C02-ME/{fn}" for fn in ["Mechanical_Constraints.json", "Mechanical_Assumptions.md",
                    "Enclosure.scad", "Assembly_Notes.md", "Print_Settings.md", "Vendor_Handoff.md",
