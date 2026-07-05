@@ -50,6 +50,14 @@
       "by": "pkcs12",
       "mode": "graduate",
       "reason": "user-directed graduation: package moved plans/mcp_r13-landing-webdav-cache -> specs/mcp/r13-landing-webdav-cache"
+    },
+    {
+      "from": "living",
+      "to": "living",
+      "at": "2026-07-05T17:23:20.376Z",
+      "by": "pkcs12",
+      "mode": "amend",
+      "reason": "BR_20260706: R14.5 host_provision state + compose BODESIGN_AUTH_PROVIDER; R14.6 credential opt-in flag (was provision-bound rotate); tests +2, 61 pass"
     }
   ]
 }

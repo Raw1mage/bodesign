@@ -1,57 +1,83 @@
 [
   {
-    "step": "S0",
-    "name": "idle",
-    "initial": true,
-    "action": "Await agent verb / provision / DAV request / export / close",
-    "transition": "agent verb request arrives -> S1"
+    "StepNumber": 0,
+    "ModuleRef": "server.py",
+    "StepType": "Initial",
+    "StepAction": "idle — await agent verb / provision / DAV request / export / close",
+    "LinkInput": [2, 7],
+    "LinkOutput": [1],
+    "Condition": ["agent verb request arrives"]
   },
   {
-    "step": "S1",
-    "name": "route_verb",
-    "action": "Classify verb: landing vs compute vs cache-lifecycle (mcp.json instructions R13.5)",
-    "transition": "deterministic repo-local verb -> S2; heavy verb needing bulk exchange -> S3"
+    "StepNumber": 1,
+    "ModuleRef": "mcp.json R13.5",
+    "StepType": "Normal",
+    "StepAction": "route_verb — classify landing vs compute vs cache-lifecycle",
+    "LinkInput": [0],
+    "LinkOutput": [2, 3],
+    "Condition": ["deterministic repo-local verb -> landing_exec", "heavy verb needing bulk exchange -> cache_provision"]
   },
   {
-    "step": "S2",
-    "name": "landing_exec",
-    "action": "gate.py assembles PYTHONPATH over packages/*, runs pure-python verb against --repo tree, writes directly into caller repo, emits JSON envelope or typed LANDING_* error",
-    "transition": "verb completed or typed error -> S0"
+    "StepNumber": 2,
+    "ModuleRef": "gate.py",
+    "StepType": "Normal",
+    "StepAction": "landing_exec — PYTHONPATH over packages/*, run pure-python verb against --repo, write into caller repo, JSON envelope or typed LANDING_* error",
+    "LinkInput": [1],
+    "LinkOutput": [0],
+    "Condition": ["verb completed or typed error"]
   },
   {
-    "step": "S3",
-    "name": "cache_provision",
-    "action": "Resolve identity (Basic credential), find-or-mint deliverable-cache token, return mount URL + credential",
-    "transition": "cache provisioned; inputs staged via DAV mount -> S4"
+    "StepNumber": 3,
+    "ModuleRef": "_auth_provider.py + token_store",
+    "StepType": "Normal",
+    "StepAction": "cache_provision — find-or-mint deliverable-cache token; return mount URL + host_provision state (R14.5); mint credential ONLY on opt-in issue_webdav_credential (R14.6, rotate-on-issue)",
+    "LinkInput": [1],
+    "LinkOutput": [4],
+    "Condition": ["cache provisioned; inputs staged via DAV mount"]
   },
   {
-    "step": "S4",
-    "name": "heavy_compute",
-    "action": "Container tool reads cache tree; pcbnew/ngspice/OpenSCAD/render pipeline runs; artifacts written into cache namespace",
-    "transition": "host-side inspects/edits over WebDAV -> S5; deliverable ready -> S6"
+    "StepNumber": 4,
+    "ModuleRef": "container compute plane",
+    "StepType": "Normal",
+    "StepAction": "heavy_compute — container tool reads cache tree; pcbnew/ngspice/OpenSCAD/render pipeline writes artifacts into cache namespace",
+    "LinkInput": [3, 5, 6],
+    "LinkOutput": [5, 6],
+    "Condition": ["host-side inspects/edits over WebDAV -> dav_serve", "deliverable ready -> export_land"]
   },
   {
-    "step": "S5",
-    "name": "dav_serve",
-    "action": "Dispatch DAV method (PROPFIND/GET/PUT/MKCOL/MOVE/COPY/LOCK) with identity + traversal + lock guards + audit log",
-    "transition": "next heavy tool call in relay chain -> S4"
+    "StepNumber": 5,
+    "ModuleRef": "_webdav.py",
+    "StepType": "Normal",
+    "StepAction": "dav_serve — dispatch DAV method (PROPFIND/GET/PUT/MKCOL/MOVE/COPY/LOCK) with identity + traversal + lock guards + audit log",
+    "LinkInput": [4],
+    "LinkOutput": [4],
+    "Condition": ["next heavy tool call in relay chain"]
   },
   {
-    "step": "S6",
-    "name": "export_land",
-    "action": "Export cache tree to caller truth store, stamp last_export_at; typed EXPORT_TARGET_UNREACHABLE on bad target",
-    "transition": "export landed clean; close requested -> S7; further iterations -> S4"
+    "StepNumber": 6,
+    "ModuleRef": "cache lifecycle routes",
+    "StepType": "Normal",
+    "StepAction": "export_land — export cache tree to caller truth store, stamp last_export_at; typed EXPORT_TARGET_UNREACHABLE on bad target",
+    "LinkInput": [4],
+    "LinkOutput": [7, 4],
+    "Condition": ["export landed clean; close requested -> close_reap", "further iterations -> heavy_compute"]
   },
   {
-    "step": "S7",
-    "name": "close_reap",
-    "action": "Verify working tree clean since last export (or force), close cache, reaper frees namespace",
-    "transition": "cache closed -> S0"
+    "StepNumber": 7,
+    "ModuleRef": "token_store reaper",
+    "StepType": "Normal",
+    "StepAction": "close_reap — verify working tree clean since last export (or force), close cache, reaper frees namespace",
+    "LinkInput": [6],
+    "LinkOutput": [0],
+    "Condition": ["cache closed"]
   },
   {
-    "step": "SB",
-    "name": "blocked",
-    "action": "Typed error surfaced (AUTH_*, LANDING_PACKAGES_NOT_FOUND, WORKSPACE_CLOSE_DIRTY, EXPORT_TARGET_UNREACHABLE) — no silent fallback",
-    "transition": "caller resolves (credential / packages / export / force) -> resume prior step"
+    "StepNumber": 8,
+    "ModuleRef": "typed error surface",
+    "StepType": "Normal",
+    "StepAction": "blocked — typed error surfaced (AUTH_*, AUTH_PROVIDER_UNKNOWN, LANDING_PACKAGES_NOT_FOUND, WORKSPACE_CLOSE_DIRTY, EXPORT_TARGET_UNREACHABLE) — no silent fallback",
+    "LinkInput": [1, 2, 3, 4, 5, 6, 7],
+    "LinkOutput": [0],
+    "Condition": ["caller resolves (credential / packages / export / force) -> resume prior step"]
   }
 ]
