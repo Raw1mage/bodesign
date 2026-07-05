@@ -1,3 +1,4 @@
+# BR_20260703 — render_prd.py readiness pct 與 canonical assess_c00_prd_readiness 分歧（render 自算 vs gate 判定）
 
 ## RESOLUTION（2026-07-03，VERIFIED-CLOSED）
 
