@@ -24,6 +24,8 @@ from .simulate import SimResult, simulate_schematic
 from .pcb_verify import PcbVerifyResult, analyze_emc, analyze_thermal
 from .skill_paths import analyzer_engine_status, resolve_skill
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints
+from .placement_rules import RULES as PLACEMENT_RULES, get_rule as get_placement_rule
+from .preplace import PartGeom, PreplaceResult, preplace
 from .routing import (
     autoroute,
     drc_gate,
@@ -46,6 +48,11 @@ __all__ = [
     "drc_gate",
     "length_match_bus",
     "net2pcb_board",
+    "PLACEMENT_RULES",
+    "get_placement_rule",
+    "PartGeom",
+    "PreplaceResult",
+    "preplace",
     "pour_planes",
     "resolve_connector_pads",
     "si_check",

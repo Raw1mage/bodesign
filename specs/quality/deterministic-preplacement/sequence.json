@@ -1,0 +1,16 @@
+[
+  {
+    "title": "route_net2pcb with strategy=deterministic",
+    "participants": ["MCP client", "server.py", "routing.net2pcb_board", "preplace (pure core)", "pcbnew"],
+    "messages": [
+      { "from": "MCP client", "to": "server.py", "label": "bodesign_route_net2pcb(strategy=deterministic, seed)" },
+      { "from": "server.py", "to": "routing.net2pcb_board", "label": "net2pcb_board(..., strategy, seed)" },
+      { "from": "routing.net2pcb_board", "to": "pcbnew", "label": "load footprints, extract bbox+pads → PartGeom" },
+      { "from": "routing.net2pcb_board", "to": "preplace (pure core)", "label": "preplace(parts, nets, board_mm, seed, rules)" },
+      { "from": "preplace (pure core)", "to": "routing.net2pcb_board", "label": "PreplaceResult (placement + violations + effective)" },
+      { "from": "routing.net2pcb_board", "to": "pcbnew", "label": "SetPosition/SetOrientation per ref; assign nets; outline; save" },
+      { "from": "routing.net2pcb_board", "to": "server.py", "label": "result dict incl. placement_violations, hpwl_mm, effective" },
+      { "from": "server.py", "to": "MCP client", "label": "JSON result" }
+    ]
+  }
+]

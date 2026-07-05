@@ -1,0 +1,50 @@
+{
+  "diagram_title": "Deterministic electrically-aware PCB pre-placement (C04 G3)",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Extract geometry & netlist",
+      "description": "Parse KiCad netlist (comps/nets) and extract footprint bbox + pad coordinates via pcbnew adapter into pure PartGeom records",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Anchor & affinity clustering",
+      "description": "Select main IC anchor (max pad count, deterministic tie-break) and assign passives to served pins (decap→power pin, crystal C→crystal pin, pullup→signal pin, connectors→board edge band)",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Greedy ring-band initial placement",
+      "description": "Place parts largest-first (R4) on ring-band grid slots minimizing affinity distance without AABB overlap",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Fixed-seed SA refinement",
+      "description": "Refine placement with simulated annealing over HPWL + affinity excess + overlap + edge penalties, sole randomness = random.Random(seed)",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Post-place rule check",
+      "description": "Check R1 decap distance and R8 die-shadow proxy; emit explainable violation list with source anchors",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "KiCad netlist + footprint libs" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "pcbnew adapter (EE worker)" },
+    { "id": "AR3", "source": "A1:output", "target": "A2:input", "type": "output", "label": "PartGeom records + nets" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "affinity priors (DD-7)" },
+    { "id": "AR5", "source": "A2:output", "target": "A3:input", "type": "output", "label": "anchor + cluster assignment" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "placement rules R4 (anchored)" },
+    { "id": "AR7", "source": "A3:output", "target": "A4:input", "type": "output", "label": "initial placement" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "seed + SA weights (explicit, echoed)" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "pure-python SA engine" },
+    { "id": "AR10", "source": "A4:output", "target": "A5:input", "type": "output", "label": "refined placement" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A5:control", "type": "control", "label": "rules R1/R8 with source anchors (DD-5)" },
+    { "id": "AR12", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "{ref:(x,y,rot)} + violation list" }
+  ]
+}

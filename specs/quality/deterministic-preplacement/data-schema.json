@@ -1,0 +1,39 @@
+{
+  "schemas": [
+    {
+      "name": "PartGeom",
+      "kind": "json",
+      "fields": [
+        { "name": "ref", "type": "string", "notes": "refdes, e.g. U1" },
+        { "name": "w_mm", "type": "number", "notes": "courtyard/bbox width" },
+        { "name": "h_mm", "type": "number", "notes": "courtyard/bbox height" },
+        { "name": "pads", "type": "object", "notes": "{pad_number: [dx_mm, dy_mm]} relative to part origin" },
+        { "name": "value", "type": "string", "notes": "component value string, used by affinity priors (e.g. 100nF)" },
+        { "name": "kind", "type": "string", "notes": "prefix-derived: C/R/L/U/J/Y/H..." }
+      ]
+    },
+    {
+      "name": "PreplaceResult",
+      "kind": "json",
+      "fields": [
+        { "name": "placement", "type": "object", "notes": "{ref: [x_mm, y_mm, rot_deg]}" },
+        { "name": "violations", "type": "array", "notes": "[{rule, source, refs, measured_mm, limit_mm, note}]" },
+        { "name": "effective", "type": "object", "notes": "echoed params: seed, weights, die_shadow_margin_mm, board_mm" },
+        { "name": "anchor", "type": "string", "notes": "chosen main IC ref" },
+        { "name": "clusters", "type": "object", "notes": "{ref: {target_ref, target_pad, priority}} affinity assignment" },
+        { "name": "hpwl_mm", "type": "number", "notes": "final half-perimeter wirelength for baseline comparison" }
+      ]
+    },
+    {
+      "name": "PlacementRule",
+      "kind": "config",
+      "fields": [
+        { "name": "id", "type": "string", "notes": "R1/R4/R8/R16" },
+        { "name": "source", "type": "string", "notes": "patent number / literature id — MANDATORY (DD-5)" },
+        { "name": "value", "type": "number", "notes": "threshold value" },
+        { "name": "unit", "type": "string", "notes": "mm etc." },
+        { "name": "phase", "type": "string", "notes": "generate | check" }
+      ]
+    }
+  ]
+}

@@ -76,10 +76,40 @@ def _parse_netlist(path: str) -> tuple[dict, dict]:
     return comps, nets
 
 
+def _extract_part_geoms(fps: dict) -> tuple[dict, list[str]]:
+    """Build pure PartGeom records from loaded pcbnew footprints (deterministic strategy).
+    Returns (parts, missing) — refs whose bbox/pads are unusable go to `missing`."""
+    from .preplace import PartGeom
+    parts: dict = {}
+    missing: list[str] = []
+    for ref, fp in fps.items():
+        try:
+            box = fp.GetBoundingBox()
+            w = pcbnew.ToMM(box.GetWidth())
+            h = pcbnew.ToMM(box.GetHeight())
+            origin = fp.GetPosition()
+            pads = {}
+            for p in fp.Pads():
+                pos = p.GetPosition()
+                pads[p.GetNumber()] = (pcbnew.ToMM(pos.x - origin.x),
+                                       pcbnew.ToMM(pos.y - origin.y))
+            value = fp.GetValue() or ""
+        except Exception:
+            missing.append(ref)
+            continue
+        if w <= 0 or h <= 0 or not pads:
+            missing.append(ref)
+            continue
+        parts[ref] = PartGeom(ref=ref, w_mm=w, h_mm=h, pads=pads, value=value)
+    return parts, missing
+
+
 def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
                   plane_layers: list[str] | None = None, track_mm: float | None = None,
                   placement: dict | None = None, fpdir: str | None = None,
-                  clearance_mm: float = 0.13, connectors: dict | None = None) -> dict:
+                  clearance_mm: float = 0.13, connectors: dict | None = None,
+                  strategy: str = "grid", seed: int = 42,
+                  board_mm: tuple[float, float] | list | None = None) -> dict:
     """Build a netted .kicad_pcb from a netlist: load footprints, place, assign nets, set
     copper-layer count / reserved plane layers / default track width, draw a board outline.
 
@@ -88,8 +118,17 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
     pass ``connectors = {refdes: {net_name: [pads]}}`` to map an arbitrary connector; when
     omitted, any USB-C footprint (by FPID, on ANY refdes — not just J1) uses the built-in
     USB-C table. The result reports ``applied_pinmaps`` and ``unmapped_connectors`` so a
-    USB-C/declared connector that got no expansion is surfaced, not lost."""
+    USB-C/declared connector that got no expansion is surfaced, not lost.
+
+    Placement strategy (G3): ``strategy="grid"`` keeps the historical 8mm naive grid
+    (baseline, regression-frozen); ``strategy="deterministic"`` runs the pure-python
+    electrically-aware pre-placement (anchor + affinity clustering + greedy + fixed-seed
+    SA + R1/R8 anchored checks) and requires an explicit ``board_mm`` — missing geometry
+    or board size FAILS FAST (no silent fallback to grid). An explicit ``placement`` map
+    always wins over either strategy for the refs it names."""
     _need_pcbnew()
+    if strategy not in ("grid", "deterministic"):
+        raise ValueError(f"PREPLACE_UNKNOWN_STRATEGY: {strategy!r} (grid|deterministic)")
     comps, nets = _parse_netlist(netlist_path)
     board = pcbnew.CreateEmptyBoard()
     if layers > 2:
@@ -119,6 +158,11 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             if fp is not None:
                 break
         if fp is None:
+            if strategy == "deterministic":
+                raise ValueError(
+                    f"PREPLACE_MISSING_GEOMETRY: footprint {fpid!r} for {ref} not found "
+                    f"in {[fpdir] if fpdir else []} + [{stock}] — deterministic strategy "
+                    "does not skip parts")
             continue
         fps[ref] = fp
         fp.SetReference(ref)
@@ -127,11 +171,34 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(float(x)), pcbnew.FromMM(float(y))))
             if rot:
                 fp.SetOrientationDegrees(float(rot[0]))
-        else:
+        elif strategy == "grid":
             fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(10 + gx), pcbnew.FromMM(10 + gy)))
             gx += 8
             if gx > 80: gx = 0; gy += 8
         board.Add(fp)
+    preplace_out: dict = {}
+    if strategy == "deterministic":
+        from .preplace import preplace
+        if not board_mm:
+            raise ValueError("PREPLACE_BOARD_TOO_SMALL: strategy=deterministic requires "
+                             "an explicit board_mm=(width, height); it is not derivable "
+                             "before placement")
+        parts, missing = _extract_part_geoms(fps)
+        if missing:
+            raise ValueError("PREPLACE_MISSING_GEOMETRY: no usable bbox/pads for refs: "
+                             + ", ".join(sorted(missing)))
+        pin_nets = {net: [(r, p) for r, p in nodes if r in parts]
+                    for net, nodes in nets.items()}
+        res = preplace(parts, pin_nets, board_mm, seed=seed)
+        for ref, (x, y, rot) in res.placement.items():
+            if placement and ref in placement:
+                continue  # explicit caller placement wins
+            fp = fps[ref]
+            fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(float(x)), pcbnew.FromMM(float(y))))
+            fp.SetOrientationDegrees(float(rot))
+        preplace_out = {"placement_violations": res.violations, "anchor": res.anchor,
+                        "hpwl_mm": res.hpwl_mm, "overlap_pairs": res.overlap_pairs,
+                        "effective": res.effective}
     # H1: per-connector effective pin map — explicit caller map, else built-in USB-C
     # table for any USB-C footprint (detected by FPID on ANY refdes). Tracked + reported.
     connectors = connectors or {}
@@ -171,10 +238,12 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(pcbnew.FromMM(0.15)); board.Add(s)
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
-    return {"board": out_path, "placed": len(fps), "nets": len(nets),
-            "pads_assigned": assigned, "unmapped": unmapped,
-            "applied_pinmaps": sorted(applied_pinmaps),
-            "unmapped_connectors": unmapped_connectors}
+    out = {"board": out_path, "placed": len(fps), "nets": len(nets),
+           "pads_assigned": assigned, "unmapped": unmapped,
+           "applied_pinmaps": sorted(applied_pinmaps),
+           "unmapped_connectors": unmapped_connectors, "strategy": strategy}
+    out.update(preplace_out)
+    return out
 
 
 # --------------------------------------------------------------------------- via-in-pad BGA fanout

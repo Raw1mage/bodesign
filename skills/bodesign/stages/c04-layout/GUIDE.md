@@ -128,9 +128,16 @@ handoffs, then the `c04_readiness` landing verb (`folder`) reports the gate verd
 
 **Step-by-step** (when you need control over routing/finishing):
 1. **Place + route from the netlist** — `bodesign_route_net2pcb` (`netlist_path`, `out_path`,
-   `layers`, `plane_layers`, `track_mm`, `placement`, `fpdir`, `clearance_mm`, `connectors`) builds
-   the board and the `net2pcb` pad-mapping sidecar (the unmapped-pad gate reads this). For bulk
-   autorouting, `bodesign_autoroute` (`board_path`, `out_path`, `passes`).
+   `layers`, `plane_layers`, `track_mm`, `placement`, `fpdir`, `clearance_mm`, `connectors`,
+   `strategy`, `seed`, `board_mm`) builds
+   the board and the `net2pcb` pad-mapping sidecar (the unmapped-pad gate reads this). Placement:
+   `strategy="deterministic"` runs the electrically-aware pure-python pre-placement (main-IC
+   anchoring → decap/crystal pin-affinity clustering → largest-first greedy (R4) → fixed-seed SA)
+   and returns source-anchored `placement_violations` (R1 decap distance / R8 die-shadow proxy),
+   `hpwl_mm`, and echoed `effective` params; it REQUIRES `board_mm` and fails fast on missing
+   footprint geometry — never silently falls back. `strategy="grid"` (default) keeps the naive
+   8mm grid as the comparison baseline. An explicit `placement` map always wins for the refs it
+   names. For bulk autorouting, `bodesign_autoroute` (`board_path`, `out_path`, `passes`).
 2. **Finish** (high-speed) — step 4's tools.
 3. **Export fab outputs** — `bodesign_emit_fab` (`board_path`, `out_dir`, `formats`, `pdf_layers`):
    gerbers / drill / pos (CPL) / step / pdf via `kicad-cli`.

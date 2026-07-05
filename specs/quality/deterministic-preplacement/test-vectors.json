@@ -1,0 +1,32 @@
+[
+  {
+    "id": "TV-1",
+    "description": "Determinism: identical input + seed twice → identical placement and violations",
+    "input": { "parts": "synthetic 6-part set", "seed": 42, "runs": 2 },
+    "expected": { "placement_equal": true, "violations_equal": true }
+  },
+  {
+    "id": "TV-2",
+    "description": "Affinity clustering: 100nF decap on VDD net assigns to nearest IC power pin; crystal load C assigns to crystal",
+    "input": { "parts": "U1 + C1(100nF,VDD) + Y1 + C2/C3(load caps)" },
+    "expected": { "clusters.C1.target_ref": "U1", "clusters.C2.target_ref": "Y1" }
+  },
+  {
+    "id": "TV-3",
+    "description": "R1 violation reporting: decap forced >3mm away emits anchored violation",
+    "input": { "board_mm": "tiny board forcing distance", "rule": "R1" },
+    "expected": { "violations[0].rule": "R1", "violations[0].source": "US7929315B2" }
+  },
+  {
+    "id": "TV-4",
+    "description": "Fail-fast: missing footprint geometry under strategy=deterministic raises with missing-ref list, no partial board",
+    "input": { "parts": "one ref without geometry" },
+    "expected": { "raises": "PREPLACE_MISSING_GEOMETRY" }
+  },
+  {
+    "id": "TV-5",
+    "description": "Baseline: LED-driver-like 16-part 10-net case — deterministic beats grid on decap distance and HPWL",
+    "input": { "case": "synthetic LED driver reconstruction", "strategies": ["grid", "deterministic"] },
+    "expected": { "decap_distance_improved": true, "hpwl_improved": true, "overlap_pairs": 0 }
+  }
+]

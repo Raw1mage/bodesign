@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-03T06:30:53.486Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-05T06:50:54.705Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "design artifacts filled from E2E gap evidence + arxiv/patent knowledge; spike concluded REJECT-vendor (DD-2)"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-05T06:50:54.840Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks/handoff ready; delegation slices defined"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-05T06:50:54.979Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "start implementation: pure-core preplace + rules + wiring + tests"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-05T10:46:56.946Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "all tasks checked; 14 preplace tests + full suite 969 green; baseline quantified (decap 17.53→2.50mm, HPWL -70%)"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-05T10:51:01.991Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-confirmed graduation"
+    }
+  ]
+}
