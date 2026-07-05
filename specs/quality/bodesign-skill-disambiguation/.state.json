@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [
+    "docs"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-05T05:35:44.079Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts (profile=docs)"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-05T05:48:19.810Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "audit complete: 18 misleading sources located, pilot chosen (compendium), tasks defined"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-05T05:48:53.362Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks defined (P0-P2), pilot=compendium; ready to implement"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-05T05:48:53.483Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "start pilot: compendium Engineer Mode refactor"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-05T06:34:10.454Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "pilot 全檔重構 + 18 筆誤導源全修；eval loop 驗證 with_skill 6/6 vs baseline 0/6（assertion 化 grading，viewer 已交付）；KB 沉澱 failure-mode + control 完成"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-05T06:37:15.144Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-confirmed graduation"
+    }
+  ]
+}

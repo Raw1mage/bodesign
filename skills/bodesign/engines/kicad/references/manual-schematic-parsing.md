@@ -1,6 +1,6 @@
 # Manual Schematic Parsing (Script Fallback)
 
-When `analyze_schematic.py` fails (unsupported format, newer KiCad version, corrupted file), fall back to direct file parsing. This is more expensive (reading raw S-expressions) but always works as long as the file is valid KiCad.
+When `analyze_schematic.py` fails (unsupported format, newer KiCad version, corrupted file), fall back to direct file parsing. This is more expensive (reading raw S-expressions) and works whenever the file is a **well-formed KiCad S-expression document** — “valid” means *parseable* (balanced parentheses, readable text), not *semantically complete*. A truncated/corrupted file still fails, and a legacy `.sch` without its companion `.lib` yields only partial results (component lists without pin-level connectivity). On degraded input, present partial extraction as partial — never as a complete analysis.
 
 ## Table of Contents
 

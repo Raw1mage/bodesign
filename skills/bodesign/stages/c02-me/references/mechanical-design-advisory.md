@@ -60,7 +60,7 @@ default.
 
 ### FDM / SLA prototype (bodesign's printable-draft track)
 
-**Print-geometry limits** (FDM, 0.4 mm nozzle unless noted):
+**Print-geometry limits** — rule-of-thumb values, every row conditioned on **FDM with a 0.4 mm nozzle** (SLA where noted) and common PLA/PETG. A different nozzle, material, or process shifts every number below (e.g. min wall = 3 perimeters × nozzle width, so a 0.6 mm nozzle → 1.8 mm). Re-derive per printer profile; do not hard-code these as universal CAD gates:
 
 | Feature | Rule of thumb | Why |
 |---|---|---|

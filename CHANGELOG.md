@@ -4,6 +4,31 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [未發布] — 2026-07-05
+
+### 修復 — skill 語料去誤導化（`quality/bodesign-skill-disambiguation` pilot + 推廣）
+
+- **稽核**：全語料 505 筆 `should/must/always/never` 命中逐鯣，逾九成為刻意的
+  honesty-model 契約語（保留）；真正誤導源 18 筆，高度集中於 2 份 rule-base。
+- **P0 安全 bug（R20）**：`pcb-layout-rules-compendium.md` HV 間距列標籤
+  「IPC-2221 B1, bare outer」自相矛盾（B1=Internal），數值實為跨欄拼湊——對裸外層板
+  低壓間距偏小 4.6 倍（0.13 vs 0.6mm）→ DRC 過鬆。改為指向 `standards-compliance.md`
+  主源表 + column-selection 教學（單一真源，不重述）。稽核 subagent 自身也被該標籤騙倒
+  （誤報『差 2 倍』）——誤導標籤騙遝每個下游讀者的活標本。
+- **provenance 三級制**：compendium 新增 `[primary:]`/`[fab:]`/`[rot]` 標註紀律；
+  `[rot]`（經驗法則）禁入 DRC gate / 送廠文件。R1 電流線寬去 IPC-2152 誤歸屬；
+  P8 熱過孔/S9 傳播延遲/G12 PDN 範例/D9 soldermask/P12 courtyard 逐筆補條件與失效邊界。
+- **契約邊界語（7 檔）**：`datasheet-verification.md`（空結果=UNVERIFIED≠PASS，明列
+  零 findings 不涵蓋項）；c04 GUIDE + `kicad-interactive-layout.md`（mirror→point-in-time
+  copy 漂移警語）；kicad scripts README（12mm snapping 低信心、Vref 猜值清單外即錯）；
+  `methodology_schematic.md`（1053 板未觀察≠安全證明）；`manual-schematic-parsing.md`
+  （valid=parseable≠complete）；`report-manufacturing.md`（Skipped:never 讀法 key +
+  fab 預設值=placeholder 禁直接送廠）；`mechanical-design-advisory.md`（FDM 值条件化）。
+- **驗證**：skill-creator eval loop，3 測試案例 × 新舊版雙盲 subagent：新版 6/6、
+  舊版 0/6（舊版實際答錯 HV 間距、誤歸屬 IPC-2152、把經驗值硬寫進 DRC gate）。
+  KB 沉澱：`failure-mode.knowledge-base.misleading-provenance-label-cross-column-splice`
+  + `control.knowledge-base.anti-misleading-writing-pattern`。
+
 ## [未發布] — 2026-07-04
 
 ### 新增 — 跨 spec extend：copper-clearance checker 落地（`control.dfm.ipc-clearance-voltage`）

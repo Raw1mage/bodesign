@@ -381,7 +381,7 @@ The harness is the authoritative validation layer; all new detector work validat
 
 ## Known Remaining Limitations
 
-- **Legacy pin mapping**: `.sch` pin-to-net mapping uses heuristic geometry snapping (up to 12mm radius) when `.lib` symbols are incomplete or resolved from fallback sources
-- **Vout estimation**: Feedback divider Vout uses hardcoded Vref guesses (0.6, 0.8, 1.0, 1.22, 1.25V) without a component database
+- **Legacy pin mapping**: `.sch` pin-to-net mapping uses heuristic geometry snapping (up to 12mm radius) when `.lib` symbols are incomplete or resolved from fallback sources. Pin-net assignments produced this way are **low-confidence guesses**, not exact connectivity — a 12 mm radius can snap to the wrong pin on dense sheets. Treat legacy-path pin-net output as advisory and verify critical nets manually
+- **Vout estimation**: Feedback divider Vout uses hardcoded Vref guesses (0.6, 0.8, 1.0, 1.22, 1.25V) without a component database. An estimated Vout is only meaningful if the regulator's actual Vref is in that list — for any part outside it the estimate is **wrong, not approximately right**. Label such Vout values as unverified and confirm against the part datasheet before using them in rail-voltage checks
 - **Regulator output_rail**: Switching regulators sometimes show null output_rail when the power net is on the inductor output side
 - **Eagle files**: Not parseable — output 0 components

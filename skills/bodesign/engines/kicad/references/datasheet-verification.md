@@ -18,7 +18,7 @@ Automated cross-check of schematic connections against structured datasheet extr
 
 The verification bridge (`datasheet_verify.py`) compares what the schematic analyzer found (net voltages, connected components, decoupling caps) against what the datasheet says should be there (pin voltage limits, required external components, application circuit recommendations).
 
-It runs as part of the schematic analysis pipeline. When the `datasheets/extracted/` cache directory exists and contains extraction JSON files for the design's ICs, the verifier activates automatically. When no extractions are available, it returns an empty result with a note.
+It runs as part of the schematic analysis pipeline. When the `datasheets/extracted/` cache directory exists and contains extraction JSON files for the design's ICs, the verifier activates automatically. When no extractions are available, it returns an empty result with a note — an empty result means **UNVERIFIED (no datasheet evidence)**, not PASS; never report a design as “datasheet-checked” on the strength of an empty result.
 
 **What it catches:**
 
@@ -26,6 +26,8 @@ It runs as part of the schematic analysis pipeline. When the `datasheets/extract
 - Net voltage exceeding a pin's recommended operating range (potential malfunction)
 - Missing capacitors, resistors, inductors, or diodes that the datasheet requires on specific pins
 - Decoupling capacitor count or value falling short of application circuit recommendations
+
+**What a clean result does NOT certify.** The checks are one-sided upper-bound comparisons on ICs only. A run with zero findings still leaves unverified: negative-voltage violations (pins with −0.3 V clamps are never examined — see Limitations), non-IC components, pins whose net voltage could not be estimated (silently skipped), and `required_external` phrasings outside the keyword list (silently skipped). Report such a run as “no violations found in the checked subset”, never as “datasheet verification passed”.
 
 ---
 

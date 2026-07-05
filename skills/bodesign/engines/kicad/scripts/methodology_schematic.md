@@ -859,7 +859,7 @@ Power symbols (`#PWR`, `#FLG`) and DNP components are excluded from the BOM coun
 
 2. **Value parsing generosity**: `parse_value()` extracts the first numeric-looking substring. A transistor's `"2N3904"` could be parsed as `2.0` if the caller doesn't check component type first. All signal detectors guard against this by checking type before using parsed values.
 
-3. **Coordinate tolerance**: `EPSILON = 0.01mm`. Points closer than this are treated as the same location. Extremely dense layouts could theoretically have false coordinate merges, though this hasn't been observed in practice across 1,053 tested schematics.
+3. **Coordinate tolerance**: `EPSILON = 0.01mm`. Points closer than this are treated as the same location. Extremely dense layouts could theoretically have false coordinate merges, though this hasn't been observed in practice across 1,053 tested schematics. Absence of observed merges across that corpus is **not** proof of safety on denser artwork — if an unusually dense design shows impossible connectivity, suspect a false coordinate merge here first.
 
 4. **High-fanout filter rejection**: RC/LC filters on nets with >6 connections are rejected as likely buses. This may miss legitimate filters on high-fanout nets (e.g., a filter feeding multiple ICs).
 

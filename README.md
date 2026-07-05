@@ -28,6 +28,10 @@ _語言：**繁體中文** · [English](./README.en.md)_
 
 完整紀錄見 [`CHANGELOG.md`](CHANGELOG.md)。近期重點：
 
+- **未發布（2026-07-05）** — **skill 語料去誤導化**：稽核出 18 筆會誤導 agent 的語料
+  （含 R20 HV 間距跨欄拼湊安全 bug，裸外層板低壓間距偏小 4.6 倍）全數修畢；
+  建立 provenance 三級制（`[primary:]`/`[fab:]`/`[rot]`，經驗值禁入 DRC gate）與
+  clean-result 邊界語紀律。雙盲 eval：新版 6/6 vs 舊版 0/6。
 - **未發布（2026-07-04）** — **跨 spec extend：copper-clearance checker 落地**：畢業
   `design-ir/net-role-extension`（封閉 NET_ROLES enum）與 `gerber-core/copper-geometry-parser`
   （真實 edge-to-edge 銅箔幾何）兩 spec，新增 `copper_clearance.py` 消費之，把

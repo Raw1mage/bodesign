@@ -10,6 +10,9 @@ PCB fabrication house, assembly house, test technicians.
 
 ## Sections
 
+> Reading key: `Skipped when: never` means the section is **always generated** (there is no
+> condition under which it is omitted) — not “never triggered”.
+
 ### Front Matter
 - **Data source:** kidoc config (`project` fields)
 - **Produces:** title page, revision history
@@ -57,7 +60,7 @@ PCB fabrication house, assembly house, test technicians.
 ## Customization
 
 - `reports.documents[].sections` -- override section list
-- Fab note defaults (1.6mm thickness, 1oz copper, HASL/ENIG, Class 2) should be manually updated to match actual board specs after generation
+- Fab note defaults (1.6mm thickness, 1oz copper, HASL/ENIG, Class 2) are **generator placeholders, not measured board data** — the generator cannot know the real stackup. They MUST be replaced with the actual board specs before the document goes to a fab; a manufacturing PDF still carrying these defaults is an unreviewed draft, not a release document
 
 ## Example
 

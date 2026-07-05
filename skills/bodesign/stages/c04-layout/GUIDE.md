@@ -92,8 +92,10 @@ generation tools (`route_net2pcb`/`autoroute` → `pour_planes`/`widen_bus_track
 Wire to both: generate with the MCP, analyse/cross-check/gate with the local engine.
 
 The `openmv/C04-Layout/` worked example (its `generated/tools/` and `DELIVERABLES.md`) is that
-reference board's own local mirror of these operations — read it for the deliverable contract and
-ground truth, but drive generation through the MCP, not those scripts.
+reference board's own **point-in-time local copy** of these operations (“mirror” = worked example,
+**not** a synced 1:1 twin — it can drift from current MCP behaviour) — read it for the deliverable
+contract shape, but drive generation through the MCP, not those scripts; where the two disagree,
+the MCP's current behaviour wins.
 
 ### 1. Assemble the layout constraints
 
@@ -317,7 +319,9 @@ These remain `pending` against the C04-freeze gate until the gate (`layout_drc_g
   `pour_planes` · `widen_bus_tracks` · `length_match_bus` · `via_in_pad` · `si_check` ·
   `layout_drc_gate` · `emit_fab` · `render_gerber_preview`, gated by `c04_readiness`. The
   `openmv/…/generated/tools/` scripts named throughout the worked examples are that reference
-  board's local mirror of these same operations — read them for ground truth, but drive the MCP.
+  board's point-in-time local copy of these same operations (can drift from current MCP
+  behaviour) — read them for the contract shape, but drive the MCP; the MCP's current behaviour
+  is authoritative where they disagree.
   Analysis stays local (the engine bullet above); only *generation* goes to the MCP.
 - **`jlcpcb` / `pcbway`** — validate the manufacturer's design rules against your stackup/min
   trace-space and prepare the fab order (hand the *frozen* outputs over in C07; don't order a draft).

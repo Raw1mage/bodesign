@@ -70,7 +70,7 @@ Canonical uses in C04: no-pour ring around a relay / HV node, antenna keepout (f
 A rule area is a **local, layer-scoped** exception — distinct from the board-wide
 copper-to-edge clearance in §6.
 
-## 4. Schematic ⇄ PCB cross-probe — the manual mirror of `net2pcb` mapping
+## 4. Schematic ⇄ PCB cross-probe — manual counterpart of `net2pcb` mapping (diagnostic, NOT equivalent)
 
 With both editors open, selecting a symbol/pin in one **highlights the same object** in the
 other — down to individual pads. This is the human-inspection counterpart of C04's

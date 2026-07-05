@@ -23,6 +23,21 @@ standard/experience). Numbers anchored to JLCPCB are that fab's **published** ca
 (2025/26) — a concrete, real reference tier bodesign already has `jlcpcb`/`pcbway` skills for;
 treat other fabs' minimums as their own published tables, not universal law.
 
+> **Provenance discipline (Engineer-Mode SPEC-REF gate).** Every number here carries one of
+> three provenance grades — **do not read them as interchangeable**:
+> - **`[primary: <std §>]`** — traced to the primary standard, value-for-value (e.g. a row in
+>   `standards-compliance.md` verified against the IPC PDF). Use directly.
+> - **`[fab: <vendor>]`** — a named fab's published capability table. Real, but that fab's, not
+>   universal law.
+> - **`[rot]`** — rule-of-thumb / curve-fit / heuristic. A design starting point, **not** a
+>   verifiable spec value. Never write a `[rot]` number into a DRC gate or a fab/送廠 doc as if
+>   it were a standard clause.
+>
+> Where a primary table already exists in `standards-compliance.md`, **this file does not restate
+> the numbers** — it points there (single source of truth). Restating invites drift, and a
+> restated number that silently conflates table columns is exactly the HV-spacing defect this
+> convention was added to kill (see R20).
+
 ---
 
 ## 1. Component placement (C04 — `Placement_Constraints.md`)
@@ -36,11 +51,11 @@ treat other fabs' minimums as their own published tables, not universal law.
 | P5 | High-speed parts (CPU/RAM) near their connector/each other | "shortest trace"; cluster clock/DDR group | short nets → less delay/reflection/EMI | Y (net length, spacing) | C04 (bounded by C03 SI list) | common |
 | P6 | Decoupling cap hard against IC power pin | 1 cap per power pin; HF cap **< 5 mm** to pin, closest wins | minimise supply-loop inductance | Y (cap→pin dist, per-pin coverage) | C04 place / C03 BOM | common |
 | P7 | Heat sources (reg/MOSFET/high-I) at board edge / airflow | qualitative (check dist to edge) | promote heat spreading | partial | C04 + C02 thermal | common |
-| P8 | Thermal-via array under QFN/BGA exposed pad | **~1 via / 100 mW**; via Ø0.2–0.3 mm, pitch 1.0–1.2 mm | conduct heat pad→inner/back copper | Y (via count / power) | C04 | specialist |
+| P8 | Thermal-via array under QFN/BGA exposed pad | `[rot]` **~1 via / 100 mW**; via Ø0.2–0.3 mm, pitch 1.0–1.2 mm — starting point, NOT a spec; real sizing = package θJA/θJC from the part's datasheet + board copper | conduct heat pad→inner/back copper | Y (via count / power) | C04 | specialist |
 | P9 | Copper pour as heat spreader + flood empty area | fill unused area | spreads heat, lowers GND-Z, cuts loop area → less EMI | Y (pour coverage, copper balance) | C04 | common |
 | P10 | Heat-sensitive parts (electrolytics) away from heat | qualitative | high temp shortens electrolytic life | partial | C04 | common |
 | P11 | Same-type parts same orientation (R/C/diode) | align rotation | faster assembly, fewer pick-place errors, no bridging | Y (rotation consistency) | C04 DFA / C07 | common |
-| P12 | No courtyard overlap; each part its clear zone | **IPC-7351 courtyard excess 0.25 mm** (density A); 0.15 mm (B, tight); 0.5 mm (C, loose) | overlap → un-assemblable / rejected | Y (courtyard overlap = std DRC) | C04 + C07 | specialist |
+| P12 | No courtyard overlap; each part its clear zone | IPC-7351 courtyard excess 0.25 mm (density A); 0.15 mm (B); 0.5 mm (C) — **secondary-source values, not yet confirmed against the primary 7351B document** (see `standards-compliance.md` §Courtyard caveat) | overlap → un-assemblable / rejected | Y (courtyard overlap = std DRC) | C04 + C07 | specialist |
 | P13 | Prefer single-side SMD (top-dominant) | count double-side parts | single-side reflow = simpler/cheaper | Y | C04 | common |
 | P14 | Mounting-hole keepout (no trace/copper intrusion) | keepout ≈ screw-head r + 0.5 mm; ≥1–2 mm ring | prevent short / assembly interference | Y (hole keepout) | C04 (from C02) | common |
 | P15 | Crystal/oscillator: shortest traces, ground under, guard ring | load traces **< 10 mm**, solid GND under, guard ring + stitching vias | osc is loudest EMI source + most sensitive | Y (trace len, GND completeness) | C04 (realise C03 SI) | specialist |
@@ -52,7 +67,7 @@ treat other fabs' minimums as their own published tables, not universal law.
 
 | # | Rule | Number | Why | MC | Stage | Tier |
 |---|---|---|---|---|---|---|
-| R1 | Trace width vs current (IPC-2152) | external ~**1 A / 20 mil** (10 °C rise, 1 oz); internal ~50–60 % of that (~1 A / 40 mil) | I²R heating; undersized trace overheats/opens | Y (needs C03 current/net) | C03 current → C04 width; C06 | common |
+| R1 | Trace width vs current | `[rot]` external ~**1 A / 20 mil** (10 °C rise, 1 oz) — a shorthand of the **IPC-2221 Figure 6-4 chart**, NOT an IPC-2152 clause; the internal "half of external" factor is undocumented lore (see `standards-compliance.md` §Current Carrying Capacity caveats). Precise sizing: use the chart/curve-fit there | I²R heating; undersized trace overheats/opens | Y (needs C03 current/net) | C03 current → C04 width; C06 | common |
 | R2 | Min track/space vs copper weight (JLCPCB) | 1 oz **0.10/0.10 mm**; 2 oz 0.16; 2.5 oz 0.20; 3.5 oz 0.25; 4.5 oz 0.30 mm; width tol **±20 %** | heavier copper etches wider | Y | C04 DRC | common |
 | R3 | Power/GND traces wide + short + parallel | widen to current; parallel traces split current | minimise IR drop, stable supply | partial | C04 | common |
 | R4 | No 90° corners — use 45° / arcs | replace right angle with two 45° | Z discontinuity → reflection; acid-trap etch risk (low speed = cosmetic/DFM) | Y (90° vertex detect) | C04 | common |
@@ -71,7 +86,7 @@ treat other fabs' minimums as their own published tables, not universal law.
 | R17 | No dangling (floating) trace | 0 one-end-unconnected tracks | antenna effect: radiates/receives EMI | Y (dangling-endpoint detect) | C04 (ERC-ish) | common |
 | R18 | No self-loop across layers | no net loops back on itself via vias/layers | self-loop = radiating loop antenna | Y (cycle detect per net) | C04 | common |
 | R19 | Minimum loop area (signal + return) | keep enclosed area as small as possible | loop area ∝ radiated emission & susceptibility | partial (needs return-path geom) | C04 / C06 | specialist |
-| R20 | Min spacing per voltage (IPC-2221 B1, bare outer, uncoated, sea level) | ≤15 V **0.05 mm**; 30 V 0.1; 50–100 V 0.13; 150 V 0.4; 300 V 0.78; 500 V **2.5 mm**; >500 V ~0.005 mm/V | insufficient gap → arc/breakdown | Y (net-net spacing vs voltage) | C03 voltage → C04 spacing DRC | common→specialist (HV) |
+| R20 | Min spacing per voltage (IPC-2221 Table 6-1) | **`[primary]` — do NOT read numbers off this row.** The full, column-correct table (B1 internal / B2 external-uncoated / B3 high-alt / B4 coated / A5–A7 assembly, incl. the primary-verified `>500 V` per-volt adders) lives in `engines/kicad/references/standards-compliance.md` §Conductor Spacing. Pick the column that matches the board condition (bare outer = **B2**, inner = B1, coated/assembled = B4/A5–A7). | insufficient gap → arc/breakdown | Y (net-net spacing vs voltage, per correct column) | C03 voltage → C04 spacing DRC | common→specialist (HV) |
 | R21 | Same-net & pad/via clearances (JLCPCB) | same-net 0.25 mm; pad-track 0.1 mm; via-track 0.2 mm; PTH-track 0.28 mm (0.35 rec); SMD pad-pad diff-net 0.15 mm | below fab resolution → shorts/scrap | Y (DRC) | C04 | common |
 
 ## 3. Stackup & transmission-line (C04)
@@ -86,7 +101,7 @@ treat other fabs' minimums as their own published tables, not universal law.
 | S6 | Close GND–PWR plane pair | dielectric **0.05–0.1 mm** (≤10 mil "close"; ~40 mil "wide" barely decouples) | thin dielectric → high plane capacitance (best HF decoupling) | Y (plane-pair dielectric) | C04 | specialist |
 | S7 | Plane copper weight vs rail current | signal 1 oz; high-current GND/PWR **2 oz**; size to IPC-2152 | keep IR drop / plane R in budget | Y (compute) | C04 | common |
 | S8 | λ/10 rule (treat as T-line) | length > λ/10 of highest sig freq (f_knee ≈ 0.35/t_rise; FR-4 λ≈(11.8/√εr)/f_GHz in) → controlled-Z; rule: t_rise < 2× prop-delay → T-line | below λ/10 lumped is fine; above, reflections dominate | Y (length vs freq/edge) | C03 flags → C04 routes | common |
-| S9 | FR-4 propagation delay | ≈ **150–180 ps/in (6–7 ps/mm)** microstrip; ~180 ps/in stripline | convert length-match tolerance ↔ ps skew | Y (length→delay) | C04 | common |
+| S9 | FR-4 propagation delay | `[rot]` ≈ **150–180 ps/in (6–7 ps/mm)** microstrip; ~180 ps/in stripline — assumes εr≈4.2 FR-4; delay scales with √εr, so re-derive per actual stackup/laminate before converting length↔ps | convert length-match tolerance ↔ ps skew | Y (length→delay) | C04 | common |
 
 ## 4. Grounding & power integrity (C03 topology + C04 layout + C06 verify)
 
@@ -103,7 +118,7 @@ treat other fabs' minimums as their own published tables, not universal law.
 | G9 | 20H rule (plane-edge setback) | recess PWR-plane edge **20 × H** (H = PWR-GND dielectric); ~1 mm practical; 70 % field @20H, 98 % @100H | contain fringing field → less edge radiation (modest, nice-to-have) | Y (PWR outline offset ≥20·H, needs H) | C04 | specialist |
 | G10 | Stitching-via spacing ≤ λ/20 | λ/20 @ f_max: 7.5 mm@1 GHz, 2.5 mm@3 GHz, 1.5 mm@5 GHz, 0.75 mm@10 GHz; general 5–10 mm | keeps inter-via gap non-radiating + breaks cavity resonance | Y (max nn-spacing in fence ≤ λ/20) | C04 / C06 | specialist |
 | G11 | Edge via-fence setback | λ/20 pitch, **50–100 mil (1.3–2.5 mm)** from edge, continuous around cutouts; 10–20 dB edge-radiation cut | forces plane-pair V→0 at edge | Y (perimeter ring + spacing + edge dist) | C04 / C06 | specialist |
-| G12 | PDN target impedance | **Z_target = ΔV / I_transient**; e.g. 1.0 V/5 %/10 A → 5 mΩ; 0.9 V/3 %/25 A → 1.1 mΩ; 3.3 V/5 %/1 A → 165 mΩ | Ohm's-law ceiling so worst-case current step stays in ripple budget | Y (compute per rail from C03) | C03 EE | specialist |
+| G12 | PDN target impedance | **Z_target = ΔV / I_transient** (the formula is the rule). Worked examples — NOT real rail targets, recompute per rail from C03 specs: 1.0 V/5 %/10 A → 5 mΩ; 0.9 V/3 %/25 A → 1.1 mΩ; 3.3 V/5 %/1 A → 165 mΩ | Ohm's-law ceiling so worst-case current step stays in ripple budget | Y (compute per rail from C03) | C03 EE | specialist |
 | G13 | Flat Z below target to knee freq | Z ≤ Z_target DC → **f_knee ≈ 0.35/t_rise** (not just spot freqs) | little energy above knee; spot pass can spike between caps | N (needs PDN sim) | C06 PI sim | specialist |
 | G14 | Decap cascade values | HF **0.01–0.1 µF** (0402/0201) at pins; mid **1 µF**; bulk **10–100 µF** at VRM; bulk = 2–10× local | each value owns a band centred on its SRF | partial (band coverage per rail Y) | C03 | common |
 | G15 | HF cap placement distance by freq | small HF cap **≤10 mm** of pin (100 MHz); 1 nF ~touching; ≤λ/20 of switching edge; bulk 100 µF ~10 cm OK | placement is a frequency/propagation problem | Y (cap→power-pin dist by value) | C04 / C06 | common |
@@ -138,7 +153,7 @@ treat other fabs' minimums as their own published tables, not universal law.
 | D6 | Hole-to-hole spacing | via 0.2 mm; pad hole-to-hole 0.45 mm | Y | C04 |
 | D7 | Copper-to-edge | **≥0.2 mm** routed; **≥0.4 mm** V-cut (<0.2 → mask flakes) | Y | C04 |
 | D8 | Soldermask dam/bridge | **≥0.10 mm** (colour 1 oz); 0.13 mm black/white; 0.20 mm 2 oz | Y | C04 |
-| D9 | Soldermask expansion | 1:1 (post-2025 LDI); ≥0.09 mm to neighbour trace | Y | C04 |
+| D9 | Soldermask expansion | 1:1 — **JLCPCB post-2025 LDI process only**; other fabs / older processes expand 0.05–0.1 mm: check that fab's DFM table; ≥0.09 mm to neighbour trace | Y | C04 |
 | D10 | **Don't draw pads as filled polygons** | pad must be a real pad primitive | Y | C04 (false-COMPLETE class) |
 | D11 | No overlapping pads | 0 pad-pad overlap | Y | C04 (false-COMPLETE class) |
 | D12 | Silkscreen | line ≥0.15 mm, text height ≥1.0 mm (40 mil), char W:H 1:6, pad-to-silk ≥0.15 mm, silk off pads | Y | C04 |
