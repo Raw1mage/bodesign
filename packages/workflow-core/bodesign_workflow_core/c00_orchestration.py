@@ -24,6 +24,7 @@ from .agent_registry import DOWNSTREAM_CODES, load_agent_registry
 from .c00_prd_template import assess_c00_prd_readiness
 from .mode_contracts import enter_c01_mode
 from .orchestration import dispatch_work_packet, list_blockers, list_work_packets
+from .refs_gate import RefsGateError, require_refs
 
 _C00_ANSWER_STATE_REL = Path("C00-PRD") / "answer_state.json"
 
@@ -239,6 +240,26 @@ def c00_orchestration_tick(folder: str | Path, *, auto_dispatch: bool = True) ->
         code = ready_undispatched[0]
         role = load_agent_registry().get(code)
         backend_kind = (role.backend or {}).get("kind", "native")  # metadata only (native|worker)
+        # F7 pre-flight: C01 dispatch emits the package inline (enter_c01_mode →
+        # refs-first gate). Check the 01_refs/ SSOT FIRST and surface a gate
+        # failure as a user-owned blocker NextAction — never a raw traceback,
+        # never a dispatch that fabricates a package without authority sources.
+        if code == "C01":
+            try:
+                require_refs(root, "C01")
+            except RefsGateError as exc:
+                return NextAction(
+                    kind="resolve_blocker", owner="user", layer="C01",
+                    question=("C01's refs-first SSOT (01_refs/) is missing or empty. "
+                              "Which owner authority sources (formal deck / BOM / "
+                              "heritage docs) define this product? Decompose them "
+                              "into 01_refs/ before C01 generates anything."),
+                    message=(f"C01 gate is satisfied but its 01_refs/ SSOT failed: {exc} "
+                             "Populate the refs SSOT, then re-run the tick. Nothing was "
+                             "generated (refs-first, no template fallback)."),
+                    evidence={"blocker_id": None, "severity": "blocked",
+                              "refs_gate_code": exc.code, **exc.detail},
+                )
         if not auto_dispatch:
             return NextAction(
                 kind="dispatch", owner="downstream_agent", layer=code,

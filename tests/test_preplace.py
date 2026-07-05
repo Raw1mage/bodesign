@@ -46,6 +46,54 @@ def _small_case():
     return parts, nets
 
 
+class TestPinned(unittest.TestCase):
+    """F4: caller-pinned positions are frozen, obstacle-participating, metric-true."""
+
+    def test_pinned_ref_frozen_and_in_metrics(self):
+        parts, nets = _small_case()
+        r = preplace(parts, nets, (30, 25), seed=42, sa_iterations=100,
+                     pinned={"R1": (25.0, 20.0, 90.0)})
+        # frozen exactly where the caller put it (rot included)
+        self.assertEqual(r.placement["R1"], (25.0, 20.0, 90.0))
+        # reported in effective + participates in overlap accounting
+        self.assertEqual(r.effective["pinned_refs"], ["R1"])
+        self.assertEqual(r.overlap_pairs, 0)
+        # HPWL covers the pinned part's nets (SIG spans U1..R1) — far pin makes
+        # HPWL strictly larger than the same run without the pin.
+        base = preplace(copy.deepcopy(parts), copy.deepcopy(nets), (30, 25),
+                        seed=42, sa_iterations=100)
+        self.assertGreater(r.hpwl_mm, base.hpwl_mm)
+
+    def test_pinned_decap_far_from_ic_reports_r1_violation(self):
+        parts, nets = _small_case()
+        r = preplace(parts, nets, (30, 25), seed=42, sa_iterations=50,
+                     pinned={"C1": (28.0, 23.0)})
+        rules = {v["rule"] for v in r.violations if "C1" in v["refs"]}
+        self.assertIn("R1", rules)  # F4: pinned parts are checked, not phantom
+
+    def test_pinned_unknown_ref_fails_fast(self):
+        parts, nets = _small_case()
+        with self.assertRaisesRegex(ValueError, "PREPLACE_UNKNOWN_PINNED_REF"):
+            preplace(parts, nets, (30, 25), pinned={"ZZ9": (1.0, 1.0)})
+
+    def test_pinned_off_board_fails_fast(self):
+        parts, nets = _small_case()
+        with self.assertRaisesRegex(ValueError, "PREPLACE_PINNED_OFF_BOARD"):
+            preplace(parts, nets, (30, 25), pinned={"R1": (99.0, 5.0)})
+
+    def test_pinned_malformed_fails_fast(self):
+        parts, nets = _small_case()
+        with self.assertRaisesRegex(ValueError, "PREPLACE_INVALID_PINNED"):
+            preplace(parts, nets, (30, 25), pinned={"R1": ("a", "b")})
+
+    def test_determinism_with_pinned(self):
+        parts, nets = _small_case()
+        kw = dict(seed=42, sa_iterations=100, pinned={"R1": (25.0, 20.0)})
+        r1 = preplace(copy.deepcopy(parts), copy.deepcopy(nets), (30, 25), **kw)
+        r2 = preplace(copy.deepcopy(parts), copy.deepcopy(nets), (30, 25), **kw)
+        self.assertEqual(r1.placement, r2.placement)
+
+
 class TestPriors(unittest.TestCase):
     def test_cap_parse(self):
         self.assertAlmostEqual(parse_cap_farads("100nF"), 1e-7)

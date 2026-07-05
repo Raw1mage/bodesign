@@ -58,6 +58,14 @@
       "by": "pkcs12",
       "mode": "amend",
       "reason": "review c790e8b hardening: F1 answer-claim cross-check vs answer_state.json (answer_unverified gap), F2 ../ traversal+symlink containment in _refs_source_resolves, F3 folderless refs claim fails closed + c02 internal readiness now folder-aware, F5 R16 phase=planned (not wired), F6 dict entry without name fails fast / without source = derived caller_unattributed; +6 negative tests, 76 tests green"
+    },
+    {
+      "from": "living",
+      "to": "living",
+      "at": "2026-07-05T12:22:43.626Z",
+      "by": "pkcs12",
+      "mode": "amend",
+      "reason": "review F4/F7: preplace pinned 餵入（explicit placement 凍結參與指標/R1R8 檢查，杜絕 phantom metrics）+ c00 tick C01 dispatch 預飛 require_refs → resolve_blocker NextAction（含 refs_gate strict 01_refs 解析，移除 stage-tree silent fallback）"
     }
   ]
 }

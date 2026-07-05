@@ -189,10 +189,12 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
                              + ", ".join(sorted(missing)))
         pin_nets = {net: [(r, p) for r, p in nodes if r in parts]
                     for net, nodes in nets.items()}
-        res = preplace(parts, pin_nets, board_mm, seed=seed)
+        # F4: explicit caller placement enters preplace as PINNED (frozen but
+        # obstacle/metric-participating), so reported hpwl/overlaps/R1/R8 describe
+        # the true final board instead of a phantom solver-only layout.
+        pinned = {r: tuple(placement[r]) for r in placement} if placement else None
+        res = preplace(parts, pin_nets, board_mm, seed=seed, pinned=pinned)
         for ref, (x, y, rot) in res.placement.items():
-            if placement and ref in placement:
-                continue  # explicit caller placement wins
             fp = fps[ref]
             fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(float(x)), pcbnew.FromMM(float(y))))
             fp.SetOrientationDegrees(float(rot))

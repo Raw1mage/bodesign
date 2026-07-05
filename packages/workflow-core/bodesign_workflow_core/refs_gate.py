@@ -199,11 +199,12 @@ def ingest_refs(refs_root: str | Path) -> RefsManifest:
     """
     root = Path(refs_root)
     if root.name != REFS_DIRNAME:
-        candidate = root / REFS_DIRNAME
-        # Prefer an existing 01_refs child; else treat the given path as-is so
-        # an already-01_refs-shaped path still works.
-        if candidate.exists() or not root.exists():
-            root = candidate
+        # STRICT resolution (review F7): a stage folder ALWAYS resolves to its
+        # 01_refs/ child. The old "treat the given path as-is when the child is
+        # missing" fallback silently scanned the whole stage tree, so scaffolded
+        # PRD files masqueraded as refs sources and the gate passed with a
+        # fabricated manifest — the exact silent fallback the 天條 forbids.
+        root = root / REFS_DIRNAME
 
     if not root.exists() or not root.is_dir():
         return RefsManifest(

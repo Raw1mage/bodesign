@@ -267,11 +267,15 @@ def _edge_slots(board):
     return slots
 
 
-def greedy_initial(parts: dict, clusters: dict, anchor: str, board) -> dict:
+def greedy_initial(parts: dict, clusters: dict, anchor: str, board,
+                   pinned: dict | None = None) -> dict:
     W, H = board
-    placement = {anchor: (W / 2.0, H / 2.0, 0.0)}
+    placement = dict(pinned) if pinned else {}
+    if anchor not in placement:
+        placement[anchor] = (W / 2.0, H / 2.0, 0.0)
     prio_rank = {"decap": 0, "crystal": 1, "signal": 2, "free": 3}
-    inner = [r for r, c in clusters.items() if c["priority"] != "edge"]
+    inner = [r for r, c in clusters.items()
+             if c["priority"] != "edge" and r not in placement]
     # R4: within each priority, largest footprint first (source-anchored ordering)
     inner.sort(key=lambda r: (prio_rank[clusters[r]["priority"]],
                               -(parts[r].w_mm * parts[r].h_mm), r))
@@ -285,7 +289,8 @@ def greedy_initial(parts: dict, clusters: dict, anchor: str, board) -> dict:
         else:
             target = (W / 2.0, H / 2.0)
         placement[ref] = (*_find_slot(parts[ref], target, placement, parts, board), 0.0)
-    edge = sorted(r for r, c in clusters.items() if c["priority"] == "edge")
+    edge = sorted(r for r, c in clusters.items()
+                  if c["priority"] == "edge" and r not in placement)
     edge.sort(key=lambda r: (-(parts[r].w_mm * parts[r].h_mm), r))
     for ref in edge:
         part = parts[ref]
@@ -345,10 +350,12 @@ def _energy(placement, parts, clusters, nets, board, weights) -> float:
 
 
 def sa_refine(placement, parts, clusters, nets, board, anchor, seed, weights,
-              iterations: int = SA_ITERATIONS):
+              iterations: int = SA_ITERATIONS, pinned: dict | None = None):
     rng = random.Random(seed)
+    fixed = set(pinned or ())
     movable = [r for r in sorted(placement)
-               if r != anchor and clusters.get(r, {}).get("priority") != "edge"]
+               if r != anchor and r not in fixed
+               and clusters.get(r, {}).get("priority") != "edge"]
     if not movable:
         return dict(placement)
     by_kind: dict = {}
@@ -431,8 +438,15 @@ def check_rules(placement, parts, clusters, die_shadow_margin_mm: float | None =
 # --------------------------------------------------------------- top level
 def preplace(parts: dict, nets: dict, board_mm, *, seed: int = 42,
              weights: dict | None = None, die_shadow_margin_mm: float | None = None,
-             sa_iterations: int = SA_ITERATIONS) -> PreplaceResult:
-    """Deterministic pre-placement. parts={ref:PartGeom}, nets={net:[(ref,pad),..]}."""
+             sa_iterations: int = SA_ITERATIONS,
+             pinned: dict | None = None) -> PreplaceResult:
+    """Deterministic pre-placement. parts={ref:PartGeom}, nets={net:[(ref,pad),..]}.
+
+    ``pinned`` maps ref -> (x_mm, y_mm[, rot_deg]): caller-fixed positions (e.g.
+    explicit placement from upstream). Pinned parts are frozen — never moved by
+    greedy or SA — but fully participate as obstacles and in HPWL / overlap /
+    R1/R8 checks, so reported metrics reflect the true final board (review F4).
+    Unknown or off-board pinned refs FAIL FAST (no silent skip)."""
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise ValueError(f"PREPLACE_INVALID_SEED: seed must be an int, got {seed!r}")
     if not board_mm or len(board_mm) != 2 or board_mm[0] <= 0 or board_mm[1] <= 0:
@@ -450,14 +464,33 @@ def preplace(parts: dict, nets: dict, board_mm, *, seed: int = 42,
         raise ValueError(f"PREPLACE_BOARD_TOO_SMALL: parts need ≥{need:.0f}mm², "
                          f"board offers {board[0] * board[1]:.0f}mm²")
 
+    pin: dict = {}
+    if pinned:
+        unknown = sorted(set(pinned) - set(parts))
+        if unknown:
+            raise ValueError("PREPLACE_UNKNOWN_PINNED_REF: pinned refs without "
+                             "part geometry: " + ", ".join(unknown))
+        for ref in sorted(pinned):
+            pos = pinned[ref]
+            try:
+                x, y = float(pos[0]), float(pos[1])
+                rot = float(pos[2]) if len(pos) > 2 else 0.0
+            except (TypeError, ValueError, IndexError):
+                raise ValueError(f"PREPLACE_INVALID_PINNED: {ref} -> {pos!r} "
+                                 "(need (x_mm, y_mm[, rot_deg]))") from None
+            if not (0.0 <= x <= board[0] and 0.0 <= y <= board[1]):
+                raise ValueError(f"PREPLACE_PINNED_OFF_BOARD: {ref} at ({x}, {y}) "
+                                 f"outside board {board[0]}x{board[1]}mm")
+            pin[ref] = (x, y, rot)
+
     eff_weights = dict(DEFAULT_WEIGHTS)
     if weights:
         eff_weights.update(weights)
     anchor = select_anchor(parts)
     clusters = build_clusters(parts, nets, anchor)
-    placement = greedy_initial(parts, clusters, anchor, board)
+    placement = greedy_initial(parts, clusters, anchor, board, pinned=pin)
     placement = sa_refine(placement, parts, clusters, nets, board, anchor,
-                          seed, eff_weights, iterations=sa_iterations)
+                          seed, eff_weights, iterations=sa_iterations, pinned=pin)
     violations = check_rules(placement, parts, clusters, die_shadow_margin_mm)
     return PreplaceResult(
         placement={r: tuple(placement[r]) for r in sorted(placement)},
@@ -466,7 +499,7 @@ def preplace(parts: dict, nets: dict, board_mm, *, seed: int = 42,
                    "die_shadow_margin_mm": RULES["R8"]["value"]
                    if die_shadow_margin_mm is None else die_shadow_margin_mm,
                    "board_mm": list(board), "sa_iterations": sa_iterations,
-                   "grid_mm": GRID_MM},
+                   "grid_mm": GRID_MM, "pinned_refs": sorted(pin)},
         anchor=anchor,
         clusters=clusters,
         hpwl_mm=round(compute_hpwl(placement, parts, nets), 3),

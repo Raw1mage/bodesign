@@ -17,6 +17,15 @@ from bodesign_workflow_core import (
 PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache")) / "claude-work"
 
 
+def _seed_refs(folder: Path) -> None:
+    """Minimal 01_refs/ SSOT so the C01 refs-first pre-flight (F7) passes."""
+    refs = folder / "01_refs"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "Reference_Baseline.md").write_text(
+        "# Reference Baseline\n\nauthority order: formal deck\n", encoding="utf-8")
+    (refs / "formal_deck_requirement.md").write_text("# req\n", encoding="utf-8")
+
+
 def _answer_all(folder: Path) -> None:
     sp = folder / "C00-PRD" / "answer_state.json"
     st = json.loads(sp.read_text())
@@ -59,6 +68,7 @@ class C00OrchestrationTests(unittest.TestCase):
     def test_full_progression_dispatches_each_layer_once_then_done(self):
         scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
         _answer_all(self.work)
+        _seed_refs(self.work)
         dispatched = []
         for _ in range(12):
             act = c00_orchestration_tick(self.work)
@@ -75,6 +85,7 @@ class C00OrchestrationTests(unittest.TestCase):
     def test_c04_dispatched_only_after_its_upstream(self):
         scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
         _answer_all(self.work)
+        _seed_refs(self.work)
         order = []
         for _ in range(12):
             act = c00_orchestration_tick(self.work)
@@ -89,6 +100,7 @@ class C00OrchestrationTests(unittest.TestCase):
     def test_unresolved_blocker_preempts_everything(self):
         scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
         _answer_all(self.work)
+        _seed_refs(self.work)
         # Dispatch one layer, then it returns a blocker.
         c00_orchestration_tick(self.work)  # dispatches C01
         pkt = list_work_packets(self.work)[0]
@@ -101,6 +113,7 @@ class C00OrchestrationTests(unittest.TestCase):
     def test_dry_run_recommends_without_dispatching(self):
         scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
         _answer_all(self.work)
+        _seed_refs(self.work)
         act = c00_orchestration_tick(self.work, auto_dispatch=False)
         self.assertEqual(act.kind, "dispatch")
         self.assertEqual(act.layer, "C01")
@@ -125,6 +138,7 @@ class C00OrchestrationTests(unittest.TestCase):
         # The spine dispatches every layer uniformly (work packet); backend is metadata.
         scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
         _answer_all(self.work)
+        _seed_refs(self.work)
         dispatched = []
         for _ in range(12):
             act = c00_orchestration_tick(self.work)
@@ -134,6 +148,39 @@ class C00OrchestrationTests(unittest.TestCase):
             elif act.kind == "done":
                 break
         self.assertEqual(dispatched, ["C01", "C02", "C03", "C04", "C05", "C06"])
+
+    # ── F7: C01 refs-first pre-flight at the tick boundary ──────────────────
+    def test_tick_blocks_c01_dispatch_when_refs_ssot_missing(self):
+        scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
+        _answer_all(self.work)  # gate ready, but NO 01_refs/
+        act = c00_orchestration_tick(self.work)
+        self.assertEqual(act.kind, "resolve_blocker")
+        self.assertEqual(act.owner, "user")
+        self.assertEqual(act.layer, "C01")
+        self.assertEqual(act.evidence["refs_gate_code"], "REFS_SSOT_MISSING")
+        self.assertTrue(act.question)
+        # Nothing dispatched, nothing generated — fail-fast, no fabricated package.
+        self.assertEqual(list_work_packets(self.work), [])
+        self.assertFalse((self.work / "C01-ID").exists())
+
+    def test_tick_blocks_c01_when_refs_ssot_empty(self):
+        scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
+        _answer_all(self.work)
+        (self.work / "01_refs").mkdir()  # visible but EMPTY
+        act = c00_orchestration_tick(self.work)
+        self.assertEqual(act.kind, "resolve_blocker")
+        self.assertEqual(act.evidence["reason"], "no_sources")
+        self.assertEqual(list_work_packets(self.work), [])
+
+    def test_tick_dispatches_c01_once_refs_seeded(self):
+        scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
+        _answer_all(self.work)
+        act = c00_orchestration_tick(self.work)
+        self.assertEqual(act.kind, "resolve_blocker")  # blocked first
+        _seed_refs(self.work)
+        act = c00_orchestration_tick(self.work)
+        self.assertEqual(act.kind, "dispatch")
+        self.assertEqual(act.layer, "C01")
 
     def test_status_board_lists_all_downstream_layers(self):
         scaffold_c00_prd_package(self.work, project_name="X", include_rf=False)
