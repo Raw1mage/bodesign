@@ -278,7 +278,7 @@ def emit_c01_rockbox_package(
         C01_OUTPUTS["ai_file"]: _render_design_direction(model),
         C01_OUTPUTS["cmf"]: _render_cmf_direction(model),
         C01_OUTPUTS["display_uiux"]: _render_uiux_requirements(model),
-        C01_OUTPUTS["constraints"]: json.dumps(_constraints(model), ensure_ascii=False, indent=2) + "\n",
+        C01_OUTPUTS["constraints"]: json.dumps(_constraints(model, folder=root), ensure_ascii=False, indent=2) + "\n",
         C01_OUTPUTS["handoff"]: _render_handoff(model),
     }
     written: list[str] = []
@@ -492,6 +492,8 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
                  for c in cdata["exposed_components"]],
                 folder=root,
             )
+            provenance_gaps.extend(
+                _c01_answer_claim_gaps(root, cdata["exposed_components"]))
     readiness_pct = min(file_readiness_pct, field_readiness_pct) if field_readiness_pct is not None else file_readiness_pct
     usable = not pending and not field_gaps
     if pending:
@@ -525,6 +527,54 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
         id_native_readiness,
         provenance_gaps=provenance_gaps,
     )
+
+
+def _c01_answer_claim_gaps(root: Path, components: list[Any]) -> list[dict[str, str]]:
+    """Review F1 hardening: a ``kind=answer`` claim must be backed by the on-disk
+    ``answer_state.json``. The emitter tags caller-supplied names as answers, but
+    only the c01_update_answers flow actually writes the state file — a spoofed
+    ``answers=`` dict must not satisfy DoD (天條 1/2). Unbacked claims stay
+    visible as ``answer_unverified`` gaps."""
+    claimed = [
+        c for c in components
+        if isinstance(c, dict)
+        and isinstance(c.get("provenance"), dict)
+        and c["provenance"].get("kind") == KIND_ANSWER
+    ]
+    if not claimed:
+        return []
+
+    def _gap(name: str, why: str) -> dict[str, str]:
+        return {
+            "item": name,
+            "reason": "answer_unverified",
+            "fix": f"{why}; answer via c01_update_answers (writes answer_state.json) "
+                   "or attribute the item to an 01_refs/ source, then re-emit",
+        }
+
+    if not (root / C01_ANSWER_STATE_REL_PATH).exists():
+        return [_gap(str(c.get("name", "?")), "no answer_state.json backs this kind=answer claim")
+                for c in claimed]
+    try:
+        state = _read_c01_answer_state(root)
+    except (OSError, ValueError):
+        return [_gap(str(c.get("name", "?")), "answer_state.json exists but is unreadable/invalid")
+                for c in claimed]
+    field = (state.get("fields") or {}).get("exposed_components") or {}
+    value = field.get("value")
+    if isinstance(value, str):
+        names = [part.strip() for part in value.split(",") if part.strip()]
+    elif isinstance(value, list):
+        names = [str(part).strip() for part in value]
+    else:
+        names = []
+    known = {n.lower() for n in names}
+    return [
+        _gap(str(c.get("name", "?")),
+             f"answer_state.json field 'exposed_components' does not contain {str(c.get('name', '?'))!r}")
+        for c in claimed
+        if str(c.get("name", "?")).strip().lower() not in known
+    ]
 
 
 def c01_next_question(folder: str | Path) -> C01NextQuestionResult:
@@ -811,12 +861,22 @@ def _component_list(value: Any, corpus: str) -> list[dict[str, Any]]:
     entries: list[tuple[str, dict[str, str]]] = []
     if isinstance(value, list) and value:
         for v in value:
-            if isinstance(v, dict) and v.get("name") and v.get("source"):
-                entries.append((str(v["name"]),
-                                make_provenance(KIND_REFS, str(v["source"]), str(v.get("detail", "")))))
+            if isinstance(v, dict):
+                if not v.get("name"):
+                    raise ValueError(
+                        "exposed_components dict entries must carry a non-empty 'name' "
+                        f"(got {v!r}); no placeholder names are fabricated (天條 2)")
+                if v.get("source"):
+                    entries.append((str(v["name"]),
+                                    make_provenance(KIND_REFS, str(v["source"]), str(v.get("detail", "")))))
+                else:
+                    # DD-2 taxonomy: an unattributed caller dict is DERIVED, not an
+                    # owner answer — it stays visible but never satisfies DoD.
+                    entries.append((str(v["name"]),
+                                    make_provenance(KIND_DERIVED, "caller_unattributed",
+                                                    "dict entry without 01_refs source")))
             else:
-                name = str(v.get("name")) if isinstance(v, dict) else str(v)
-                entries.append((name, make_provenance(KIND_ANSWER, "answer_state.json", "exposed_components")))
+                entries.append((str(v), make_provenance(KIND_ANSWER, "answer_state.json", "exposed_components")))
     else:
         for name, keywords in EXPOSED_COMPONENT_KEYWORDS.items():
             hit = next((k for k in keywords if k in corpus), None)
@@ -933,9 +993,11 @@ If the product has no screen, `Display UI/UX` still maps to LED/button/buzzer/ap
 """
 
 
-def _constraints(m: dict[str, Any]) -> dict[str, Any]:
+def _constraints(m: dict[str, Any], folder: Path | None = None) -> dict[str, Any]:
     # v2 (DD-4): per-item provenance + emit-time refs_manifest snapshot. v1 keys
     # all preserved; readiness recomputes gaps authoritatively against 01_refs/.
+    # folder is passed at emit time so refs sources are resolved against the real
+    # 01_refs/ (fail-closed adjudication without a folder would flag them all).
     return {
         "schema": "bodesign.c01.interface_constraints.v2",
         "state": "drafted",
@@ -943,7 +1005,8 @@ def _constraints(m: dict[str, Any]) -> dict[str, Any]:
         "source": "C00-derived C01 Rockbox-like script emitter",
         "refs_manifest": m.get("refs_manifest"),
         "provenance_gaps": collect_provenance_gaps(
-            [(str(c.get("name", "?")), c.get("provenance")) for c in m["components"]]
+            [(str(c.get("name", "?")), c.get("provenance")) for c in m["components"]],
+            folder=folder,
         ),
         "exposed_components": m["components"],
         "downstream_targets": {

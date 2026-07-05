@@ -165,5 +165,57 @@ class RefsFirstEmitterTests(unittest.TestCase):
         self.assertEqual("board_outline", gaps[0]["item"])
 
 
+    # ── Review hardening (F1/F2/F3/F6, review of c790e8b) ────────────────
+    def test_f1_answer_claim_without_answer_state_is_a_gap(self):
+        _seed_refs(self.work)
+        emit_c01_rockbox_package(
+            self.work, answers={"exposed_components": ["flux capacitor", "warp coil"]})
+        out = assess_c01_package_readiness(self.work).to_dict()
+        self.assertFalse(out["dod_ok"])
+        self.assertEqual(
+            {"answer_unverified"}, {g["reason"] for g in out["provenance_gaps"]})
+
+    def test_f1_answer_claim_backed_by_answer_state_passes(self):
+        from bodesign_workflow_core import c01_update_answers
+        _seed_refs(self.work)
+        c01_update_answers(self.work, {"exposed_components": "camera, led"})
+        out = assess_c01_package_readiness(self.work).to_dict()
+        reasons = {g["reason"] for g in out["provenance_gaps"]}
+        self.assertNotIn("answer_unverified", reasons)
+
+    def test_f2_refs_source_traversal_escaping_refs_is_a_gap(self):
+        _seed_refs(self.work)
+        (self.work / "outside.md").write_text("outside the SSOT\n", encoding="utf-8")
+        emit_c01_rockbox_package(
+            self.work,
+            answers={"exposed_components": [{"name": "camera", "source": "../outside.md"}]})
+        out = assess_c01_package_readiness(self.work).to_dict()
+        self.assertFalse(out["dod_ok"])
+        self.assertEqual(
+            {"refs_source_unresolvable"}, {g["reason"] for g in out["provenance_gaps"]})
+
+    def test_f3_folderless_refs_claim_fails_closed(self):
+        readiness = assess_c02_constraint_readiness({
+            "board_outline": {"width_mm": 80, "height_mm": 50},
+            "provenance": {"board_outline": {"kind": "refs", "source": "totally_bogus.md"}},
+        })
+        keys = {item.key for item in readiness.items}
+        self.assertIn("constraint_provenance", keys)
+
+    def test_f6_dict_component_without_name_fails_fast(self):
+        _seed_refs(self.work)
+        with self.assertRaises(ValueError):
+            emit_c01_rockbox_package(
+                self.work, answers={"exposed_components": [{"source": "owner_brief.md"}]})
+
+    def test_f6_dict_component_without_source_is_derived_caller_unattributed(self):
+        _seed_refs(self.work)
+        emit_c01_rockbox_package(
+            self.work, answers={"exposed_components": [{"name": "camera"}]})
+        data = json.loads((self.work / C01_CONSTRAINTS_REL).read_text(encoding="utf-8"))
+        prov = data["exposed_components"][0]["provenance"]
+        self.assertEqual(("derived", "caller_unattributed"), (prov["kind"], prov["source"]))
+
+
 if __name__ == "__main__":
     unittest.main()

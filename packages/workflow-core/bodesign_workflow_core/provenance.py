@@ -8,7 +8,8 @@ Taxonomy (BINDING):
   * kind="refs"    — item traces to a file under the stage's ``01_refs/`` SSOT.
                      source = path relative to 01_refs/; detail = anchor
                      (heading / line hint). Passes the gate IFF the source
-                     resolves on disk (when a folder is available to check).
+                     resolves to a real path INSIDE 01_refs/ (traversal and
+                     symlink escapes rejected; no folder to check → fail closed).
   * kind="answer"  — the user answered the field via answer_state.json.
                      source = "answer_state.json"; detail = field key.
                      Owner input by definition → passes the gate.
@@ -48,7 +49,14 @@ def _refs_source_resolves(source: str, folder: Path) -> bool:
     candidate = Path(source)
     if candidate.is_absolute():
         return False  # refs sources are 01_refs-relative by contract
-    return (folder / REFS_DIRNAME / candidate).exists()
+    refs_root = (folder / REFS_DIRNAME).resolve()
+    try:
+        resolved = (refs_root / candidate).resolve(strict=True)
+    except OSError:
+        return False
+    # Containment check (review F2): `../` traversal or a symlink pointing
+    # outside 01_refs/ must not count as an owner-grounded SSOT source.
+    return resolved.is_relative_to(refs_root)
 
 
 def provenance_gap_for(
@@ -61,9 +69,10 @@ def provenance_gap_for(
     Gap reasons (errors.md):
       * provenance_missing        — no/invalid provenance dict (legacy v1)
       * kind_derived              — emitter-inferred, needs owner grounding
-      * refs_source_unresolvable  — kind=refs but source does not resolve
-        under <folder>/01_refs/ (only checked when a folder is given; with no
-        folder the source string must at least be non-empty)
+      * refs_source_unresolvable  — kind=refs but source does not resolve to a
+        real path INSIDE <folder>/01_refs/ (traversal/symlink escapes rejected).
+        With no folder to resolve against, the claim fails CLOSED (review F3):
+        an unverifiable refs claim never passes the gate.
     """
     if not isinstance(provenance, dict) or provenance.get("kind") not in PROVENANCE_KINDS:
         return {
@@ -81,14 +90,19 @@ def provenance_gap_for(
         }
     if kind == KIND_REFS:
         source = str(provenance.get("source") or "")
-        resolvable = (
-            _refs_source_resolves(source, Path(folder)) if folder is not None else bool(source)
-        )
-        if not resolvable:
+        if folder is None:
             return {
                 "item": item_name,
                 "reason": "refs_source_unresolvable",
-                "fix": f"fix provenance.source ({source!r}) to a path relative to {REFS_DIRNAME}/ that exists",
+                "fix": f"refs provenance ({source!r}) cannot be verified without a package folder; "
+                       "re-run the adjudication with folder= (fail-closed, no weak mode)",
+            }
+        if not _refs_source_resolves(source, Path(folder)):
+            return {
+                "item": item_name,
+                "reason": "refs_source_unresolvable",
+                "fix": f"fix provenance.source ({source!r}) to a path relative to {REFS_DIRNAME}/ that exists "
+                       f"and stays inside {REFS_DIRNAME}/",
             }
     return None
 

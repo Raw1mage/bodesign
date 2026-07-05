@@ -706,7 +706,7 @@ def _build_package_model(
     folder: str | Path | None = None,
 ) -> dict[str, Any]:
     normalized = _normalized_constraints(constraints, folder=folder)
-    readiness = assess_c02_constraint_readiness(normalized)
+    readiness = assess_c02_constraint_readiness(normalized, folder=folder)
     return {
         "summary": _summary_text(project_summary),
         "prototype_intent": prototype_intent or "missing — user must choose visual review, fit check, demo enclosure, or vendor RFQ intent",
@@ -718,7 +718,7 @@ def _build_package_model(
 
 def _normalized_constraints(constraints: dict[str, Any], folder: str | Path | None = None) -> dict[str, Any]:
     normalized = dict(constraints)
-    readiness = assess_c02_constraint_readiness(constraints)
+    readiness = assess_c02_constraint_readiness(constraints, folder=folder)
     prov_map = constraints.get("provenance") if isinstance(constraints.get("provenance"), dict) else {}
     present_keys = [item.key for item in readiness.items if item.status == "present"]
     provenance_gaps = collect_provenance_gaps(

@@ -239,7 +239,7 @@ class TestRulesTable(unittest.TestCase):
     def test_all_rules_anchored(self):
         for rid, rule in RULES.items():
             self.assertTrue(rule.get("source"), f"{rid} missing source anchor")
-            self.assertIn(rule["phase"], ("generate", "check"))
+            self.assertIn(rule["phase"], ("generate", "check", "planned"))
 
 
 if __name__ == "__main__":

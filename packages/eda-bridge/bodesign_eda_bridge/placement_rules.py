@@ -14,7 +14,8 @@ Sources (see specs/validation/prd-to-gerber-e2e/research/patent-placement-rules.
        shadow; proxied as the served IC's courtyard bbox expanded by
        die_shadow_margin_mm (no die geometry available).
   R16 US7919840B2 (IBM)             — regulator close to load: attraction
-       weight in the SA energy, shortening high-current loops.
+       weight for the SA affinity energy. phase=planned: NOT yet consumed by
+       preplace.py — do not claim R16 compliance until it is wired in.
 """
 from __future__ import annotations
 
@@ -37,8 +38,9 @@ RULES: dict[str, dict] = {
     },
     "R16": {
         "id": "R16", "source": "US7919840B2", "value": 1.0, "unit": "weight",
-        "phase": "generate",
-        "note": "regulator-near-load attraction weight folded into affinity energy",
+        "phase": "planned",
+        "note": "regulator-near-load attraction weight for the SA affinity energy — "
+                "NOT yet consumed by preplace.py (wire before claiming R16)",
     },
 }
 

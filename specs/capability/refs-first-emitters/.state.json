@@ -50,6 +50,14 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "user-confirmed graduation"
+    },
+    {
+      "from": "living",
+      "to": "living",
+      "at": "2026-07-05T11:55:16.072Z",
+      "by": "pkcs12",
+      "mode": "amend",
+      "reason": "review c790e8b hardening: F1 answer-claim cross-check vs answer_state.json (answer_unverified gap), F2 ../ traversal+symlink containment in _refs_source_resolves, F3 folderless refs claim fails closed + c02 internal readiness now folder-aware, F5 R16 phase=planned (not wired), F6 dict entry without name fails fast / without source = derived caller_unattributed; +6 negative tests, 76 tests green"
     }
   ]
 }
