@@ -50,6 +50,7 @@ class EmitComponent:
     footprint: str = ""
     x: float = 0.0
     y: float = 0.0
+    unit: int = 1  # KiCad multi-unit symbol unit index (1-based); default single-unit
 
 
 @dataclass(slots=True)
@@ -467,6 +468,20 @@ def emit_kicad_schematic(
             return None
         return (round(component.x + endpoint[0], 4), round(component.y - endpoint[1], 4))
 
+    def _pin_side(ref: str, pin: str) -> float:
+        """Which side of its symbol body a pin sticks out of, from the sign of its
+        symbol-LOCAL x (same convention as `_pin_name_box_abs`): local ex<0 => left
+        side (body is to +x, so external stub must run -x, away from the body);
+        ex>0 => right side (stub runs +x). Pins on the vertical axis (ex==0) return
+        +1 (default outward = +x). Returns -1.0 (left) or +1.0 (right)."""
+        component = placements.get(ref)
+        if component is None or component.lib_id not in pin_maps:
+            return 1.0
+        endpoint = pin_maps[component.lib_id].get(pin)
+        if endpoint is None:
+            return 1.0
+        return -1.0 if endpoint[0] < -0.01 else 1.0
+
     # T1: resolve declared no-connect pins BEFORE net emission; fail-fast on any
     # unresolvable entry (ref missing, symbol not embedded, or pin absent).
     nc_blocks: list[str] = []
@@ -604,6 +619,10 @@ def emit_kicad_schematic(
     for net in nets:
         force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
+        # side[i] = -1.0 (left-side pin) / +1.0 (right-side pin) for endpoints[i];
+        # power-port stubs use this to expand AWAY from the symbol body (BR: left
+        # pin stub orientation blind) instead of a column-midpoint heuristic.
+        endpoint_sides: list[float] = []
         net_unresolved = False
         for ref, pin in net.nodes:
             abs_pt = _pin_abs(ref, pin)
@@ -612,6 +631,7 @@ def emit_kicad_schematic(
                 net_unresolved = True
                 continue
             endpoints.append(abs_pt)
+            endpoint_sides.append(_pin_side(ref, pin))
 
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
@@ -622,9 +642,9 @@ def emit_kicad_schematic(
                 # (collinearity-free by construction). Recorded, never silent.
                 fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
                 kind = _power_net_kind(net.name) if power_ports else None
-                for abs_pt in endpoints:
+                for abs_pt, side in zip(endpoints, endpoint_sides):
                     if kind is not None:
-                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1]))
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], side))
                     else:
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
                 continue
@@ -646,9 +666,9 @@ def emit_kicad_schematic(
                 # deterministically → down-grade to label fallback (visible).
                 fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
                 kind = _power_net_kind(net.name) if power_ports else None
-                for abs_pt in endpoints:
+                for abs_pt, side in zip(endpoints, endpoint_sides):
                     if kind is not None:
-                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1]))
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], side))
                     else:
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
                 continue
@@ -670,9 +690,9 @@ def emit_kicad_schematic(
             # are the industry convention for edge connectors and are collinearity-
             # free by construction. Net membership is identical either way.
             kind = _power_net_kind(net.name) if power_ports else None
-            for abs_pt in endpoints:
+            for abs_pt, side in zip(endpoints, endpoint_sides):
                 if kind is not None:
-                    power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1]))
+                    power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], side))
                 else:
                     label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
 
@@ -691,24 +711,24 @@ def emit_kicad_schematic(
     # ports are crowded push every other one outward on a longer stub — the same
     # staggering the label path uses, so the net-name text separates vertically.
     flagged_nets: set[str] = set()
-    _pwr_columns: dict[float, list[tuple[str, str, float, float]]] = {}
+    # Group by (x column, pin SIDE). Facing comes from the pin's own side (BR: left
+    # pin stub orientation blind) — a left-side pin (side=-1) expands its port -x
+    # AWAY from the body, a right-side pin (+1) expands +x. This replaces the old
+    # column-midpoint heuristic, which mis-faced left pins of a per-page BGA subset
+    # that sits entirely in +x space (their stub ran INTO the symbol body).
+    _pwr_columns: dict[tuple[float, float], list[tuple[str, str, float, float, float]]] = {}
     for ep in power_endpoints:
-        _pwr_columns.setdefault(round(ep[2], 2), []).append(ep)
-    # Left/right facing cannot come from the sign of x (a per-page BGA subset sits
-    # entirely in +x space). Split columns at the MIDPOINT of the occupied x span:
-    # columns left of centre stagger further left (away from the body), right of
-    # centre stagger right. This keeps the net-name text clear of the symbol pins.
-    _all_col_x = sorted(_pwr_columns)
-    _x_mid = (_all_col_x[0] + _all_col_x[-1]) / 2 if _all_col_x else 0.0
-    for col_x in _all_col_x:
-        col_items = sorted(_pwr_columns[col_x], key=lambda t: t[3])
-        direction = -1.0 if col_x < _x_mid else 1.0
+        side = ep[4] if len(ep) > 4 else 1.0
+        _pwr_columns.setdefault((round(ep[2], 2), side), []).append(ep)
+    for (col_x, side) in sorted(_pwr_columns):
+        col_items = sorted(_pwr_columns[(col_x, side)], key=lambda t: t[3])
+        direction = side
         # Track the last y placed at EACH tier so we only advance tiers until the
         # current port clears the nearest already-placed one — a tight column then
         # fans across as many stagger lanes as its density needs.
         tier_last_y: dict[int, float] = {}
         n_tiers = 8
-        for net_name, kind, px, py in col_items:
+        for net_name, kind, px, py, _side in col_items:
             tier = 0
             for t in range(n_tiers):
                 last = tier_last_y.get(t)
@@ -747,6 +767,38 @@ def emit_kicad_schematic(
                 flag_y = round(port_y + _STUB_MM, 4) if kind == "gnd" else round(port_y - _STUB_MM, 4)
                 wire_blocks.append(_wire_segment_block(port_x, port_y, port_x, flag_y))
                 symbol_blocks.append(_pwr_flag_instance(port_x, flag_y, project_name, root_uuid))
+
+    # Post-emit bbox assert (BR: left-pin stub orientation blind, guard C). Every
+    # power-port glyph must sit OUTSIDE every component's symbol-body bbox — a port
+    # landing inside a body is the exact "stub drawn into the symbol" defect. The
+    # body bbox is the pin-endpoint extent (symbol-local) shifted to the placement,
+    # shrunk by a margin so a port legitimately abutting the body edge is allowed.
+    _body_boxes: list[tuple[str, tuple[float, float, float, float]]] = []
+    for component in components:
+        pmap = pin_maps.get(component.lib_id)
+        if not pmap:
+            continue
+        xs = [component.x + ex for (ex, _ey) in pmap.values()]
+        ys = [component.y - ey for (_ex, ey) in pmap.values()]
+        if not xs:
+            continue
+        inset = _PWR_STUB_STEP_MM / 4.0  # tolerate a port hugging the body edge
+        _body_boxes.append((component.ref,
+            (min(xs) + inset, max(xs) - inset, min(ys) + inset, max(ys) - inset)))
+    _port_intrusions: list[str] = []
+    for ep in power_endpoints:
+        ex_pt, ey_pt = ep[2], ep[3]
+        for ref, (bx0, bx1, by0, by1) in _body_boxes:
+            if bx0 < ex_pt < bx1 and by0 < ey_pt < by1:
+                _port_intrusions.append(f"{ep[0]}@({ex_pt},{ey_pt}) inside {ref}")
+                break
+    if _port_intrusions:
+        raise ValueError(
+            "POWER_PORT_INSIDE_SYMBOL_BODY: power-port endpoints fell inside a "
+            "component symbol body (stub orientation defect — BR left-pin stub "
+            f"blind): {'; '.join(_port_intrusions[:12])}"
+            + (f" (+{len(_port_intrusions) - 12} more)" if len(_port_intrusions) > 12 else "")
+        )
 
     schematic = _schematic_document(
         root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks,

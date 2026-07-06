@@ -393,5 +393,64 @@ class InkMetricsTests(unittest.TestCase):
         self.assertGreater(r.route_stats.wired_nets, 0)
 
 
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+class LeftPinStubOrientationTests(unittest.TestCase):
+    """BR: left-pin stub orientation blind. A power port on a LEFT-side pin must
+    expand its stub AWAY from the symbol body (-x), a RIGHT-side pin toward +x.
+    LM358 has both left pins (local ex=-7.62) and right pins (ex=+7.62)."""
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-leftpin-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def _power_symbol_xs(self, sch_text, net):
+        # power-port instances carry the net name as their Value; lib_id is
+        # power_gnd_<net> / power_supply_<net>. Grab each instance's (at x y).
+        xs = []
+        for m in re.finditer(r'\(lib_id "power_(?:gnd|supply)_' + re.escape(net)
+                             + r'"\)\s*\(at ([-\d.]+) ([-\d.]+)', sch_text):
+            xs.append(float(m.group(1)))
+        return xs
+
+    def test_left_and_right_pin_ports_face_outward(self):
+        # LM358 left pin 3 -> GND (single-pin net => else/power-port path);
+        # right pin 1 -> VCC (single-pin => power-port). Single-pin nets land a
+        # power-port glyph on a left-side and a right-side pin of the SAME symbol,
+        # exercising the stub-orientation branch directly.
+        spec = {
+            "components": [
+                {"ref": "U1", "symbol": "Amplifier_Operational:LM358", "group": "a"},
+            ],
+            "nets": [
+                {"name": "GND", "nodes": ["U1.3"], "kind": "power"},
+                {"name": "VCC", "nodes": ["U1.1"], "kind": "power"},
+            ],
+        }
+        r = compose_schematic(self.work, "leftpin", spec, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman", power_ports=True)
+        sch = Path(r.emit.schematic_path).read_text(encoding="utf-8")
+        # U1 placement -> its left/right pin absolute x, to know the body span.
+        m = re.search(r'\(lib_id "Amplifier_Operational:LM358"\)\s*\(at ([-\d.]+) ([-\d.]+)', sch)
+        self.assertIsNotNone(m, "U1 symbol not emitted")
+        u1x = float(m.group(1))
+        left_pin_x = u1x - 7.62   # local ex=-7.62
+        right_pin_x = u1x + 7.62  # local ex=+7.62
+        gnd_xs = self._power_symbol_xs(sch, "GND")   # on left pin U1.3
+        vcc_xs = self._power_symbol_xs(sch, "VCC")   # on right pin U1.1
+        self.assertTrue(gnd_xs, "no GND power port emitted")
+        self.assertTrue(vcc_xs, "no VCC power port emitted")
+        # left-pin port must NOT sit to the +x (body) side of the left pin;
+        # right-pin port must NOT sit to the -x (body) side of the right pin.
+        for x in gnd_xs:
+            self.assertLessEqual(x, left_pin_x + 0.01,
+                f"GND port at x={x} drawn toward body (left pin at {left_pin_x})")
+        for x in vcc_xs:
+            self.assertGreaterEqual(x, right_pin_x - 0.01,
+                f"VCC port at x={x} drawn toward body (right pin at {right_pin_x})")
+
+
 if __name__ == "__main__":
     unittest.main()
