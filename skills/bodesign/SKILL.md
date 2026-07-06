@@ -277,11 +277,21 @@ tool. This table remains a *family* router; `--list` / `/tools` decide which pla
 | C01 | `c01_emit_package` · `c01_emit_concept_prompts` · `c01_generate_concept_image` · `c01_readiness` |
 | C02 | `c02_emit_enclosure_package` · `c02_generate_openscad` · `c02_export_{stl,step,skp}` · `c02_readiness` |
 | C03 | `emit_symbol` · `compose_schematic` · `pin_allocation` · `export_bom` · `export_netlist` · `c03_export_mechanical_constraints` |
-| C04 | `c04_emit_layout_package` (one-shot) **or** `impedance_solve` · `route_net2pcb`/`autoroute` · `pour_planes` · `widen_bus_tracks` · `length_match_bus` · `via_in_pad` · `si_check` · `layout_drc_gate` · `emit_fab` · `c04_readiness` |
+| C04 | `c04_emit_layout_package` (one-shot) **or** `impedance_solve` · `c04_face_placement` · `route_net2pcb`/`autoroute` · `c04_castellation` · `pour_planes` · `widen_bus_tracks` · `length_match_bus` · `via_in_pad` · `si_check` · `layout_drc_gate` · `emit_fab` · `c04_readiness` · `c04_dod_traceback` |
 | C05 | `c05_scaffold_fw_spec` · `c05_readiness` |
 | C06 | `c06_assemble_test_plan` · `reference_crosscheck` · `simulate` · `analyze_emc` · `analyze_thermal` · `c06_readiness` |
 | C07 | `package_readiness` · `render_companion` · `emit_doc` |
-| files/orchestration | `stage_dir` · `ingest_project` · `datasheet_lookup`/`register`/`spec_check` · `dispatch_work_packet` · `mcp_call` |
+| files/orchestration | `stage_dir` · `ingest_project` · `refs_ingest` · `datasheet_lookup`/`register`/`spec_check` · `dispatch_work_packet` · `mcp_call` |
+
+**Refs-derived design verbs** (EPIC capability-inversion 切面 1/2/3/5; landing verbs via `gate.py`) —
+these make the refs-first workflow executable end-to-end; the stage guides wire them into their SOPs:
+
+| Verb | 切面 | One-line purpose |
+|---|---|---|
+| `refs_ingest` | 1 | Scan a stage's `01_refs/` SSOT into a ranked, read-only source manifest (authority order from the baseline file; rich media flagged unadjudicated; absent root → `root_visible:false`, loud — never a clean empty). Run as **step 0 of every stage** — the refs-gated emitters hard-fail `REFS_SSOT_MISSING` without the SSOT. |
+| `c04_face_placement` | 2 | Deterministic placement bands binding each connector to its **frozen** C01 face/edge (DD-4: the face is not a C04 degree of freedom). Output feeds `placement_to_coords` → `route_net2pcb(placement=…)`. |
+| `c04_castellation` | 3 | Stamp-module castellated edge pads as segfault-free S-expression injection (DD-5: refuses the known-crash pcbnew mutation paths); provenance-gated (天條 2). |
+| `c04_dod_traceback` | 5 | Upgrade DoD from surface-existence to SSOT traceability: every delivered item must trace to an SSOT anchor (`untraceable` = 憑空發明) and every SSOT-required ref must be delivered (`unfulfilled` = 漏做). Either non-empty → **blocking**. |
 
 **Do not hardcode tool schemas from this table** — it is a router, not a contract. The server is
 self-describing: open `/tools` and `/tools/{name}` (or the `/` landing page) on the running

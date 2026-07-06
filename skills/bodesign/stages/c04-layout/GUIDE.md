@@ -97,6 +97,16 @@ reference board's own **point-in-time local copy** of these operations (“mirro
 contract shape, but drive generation through the MCP, not those scripts; where the two disagree,
 the MCP's current behaviour wins.
 
+### 0. Ingest the refs SSOT first (refs-first gate)
+
+Run the **`refs_ingest`** landing verb (`folder` = the stage dir or an explicit `01_refs/` path;
+via `gate.py`) before assembling anything: it scans the stage's `01_refs/` SSOT (physical
+constraints, board-edge→face mapping, stamp-hole definitions) into a read-only, authority-ranked
+manifest (absent root → `root_visible: false`, loud — never a clean empty). Everything this stage
+places or injects must trace back to it: `c04_face_placement` requires per-connector `provenance`,
+`c04_castellation` requires an SSOT footprint anchor, and the Gate section's `c04_dod_traceback`
+verifies every delivered item against these anchors. No manifest → nothing to trace against.
+
 ### 1. Assemble the layout constraints
 
 Author `Layout_Constraints.json` (schema `bodesign.c04.layout_constraints.v1`) and
@@ -127,7 +137,17 @@ assembles the whole C04 package (board + constraints + renders + assembly output
 handoffs, then the `c04_readiness` landing verb (`folder`) reports the gate verdict.
 
 **Step-by-step** (when you need control over routing/finishing):
-1. **Place + route from the netlist** — `bodesign_route_net2pcb` (`netlist_path`, `out_path`,
+1. **Bind connectors to their frozen faces first** — the `c04_face_placement` landing verb
+   (`face_layout`; via `gate.py`) takes C01's frozen `Face_Layout.json` (every connector needs
+   `ref`, `face`, and an SSOT `provenance` anchor — missing provenance is fail-fast, 天條 2) and
+   returns deterministic placement bands, all `movable_by_c04: false` (DD-4: **the face is not a
+   C04 degree of freedom** — C04 places *within* the frozen face, never across it). Convert the
+   bands to concrete `{ref: [x_mm, y_mm, rot_deg]}` anchors with `placement_to_coords` (requires
+   a real board outline — positive `width_mm`/`height_mm` — a frozen face without a physical
+   board is fail-fast, never a fabricated coordinate) and feed the result to `route_net2pcb`'s
+   `placement=` map: an explicit `placement` map always wins for the refs it names, so the frozen
+   faces survive whatever `strategy` places the rest.
+2. **Place + route from the netlist** — `bodesign_route_net2pcb` (`netlist_path`, `out_path`,
    `layers`, `plane_layers`, `track_mm`, `placement`, `fpdir`, `clearance_mm`, `connectors`,
    `strategy`, `seed`, `board_mm`) builds
    the board and the `net2pcb` pad-mapping sidecar (the unmapped-pad gate reads this). Placement:
@@ -138,16 +158,42 @@ handoffs, then the `c04_readiness` landing verb (`folder`) reports the gate verd
    footprint geometry — never silently falls back. `strategy="grid"` (default) keeps the naive
    8mm grid as the comparison baseline. An explicit `placement` map always wins for the refs it
    names. For bulk autorouting, `bodesign_autoroute` (`board_path`, `out_path`, `passes`).
-2. **Finish** (high-speed) — step 4's tools.
-3. **Export fab outputs** — `bodesign_emit_fab` (`board_path`, `out_dir`, `formats`, `pdf_layers`):
+3. **Finish** (high-speed) — step 4's tools.
+4. **Export fab outputs** — `bodesign_emit_fab` (`board_path`, `out_dir`, `formats`, `pdf_layers`):
    gerbers / drill / pos (CPL) / step / pdf via `kicad-cli`.
-4. **Gate** — step "Gate / done-criteria" below.
+5. **Gate** — step "Gate / done-criteria" below.
 
 > **Freerouting needs the network the first time.** `bodesign_autoroute` bootstraps a JRE +
 > `freerouting.jar` on demand and runs headless — **not available offline**. If it cannot run,
 > route interactively in KiCad (the honest path for fab-grade boards anyway — see step 4) and pass
 > the already-routed `.kicad_pcb` straight to finishing/export. Do not claim a routed board exists
 > if the autoroute step did not run.
+
+### 3b. Stamp-module / castellated boards (`c04_castellation`)
+
+A multi-board product built around a castellated core module (stamp module soldered onto carrier
+boards) needs plated half-hole edge pads. The **only sanctioned path** is the `c04_castellation`
+landing verb (`spec`, `board_outline`, optional `path`; via `gate.py`):
+
+- **spec** — `{edge, pad_count, pitch_mm, pad_width_mm, pad_height_mm, drill_mm, net_names[],
+  provenance}`. All numerics must be positive; `provenance` is **required** — a stamp-module edge
+  must trace to an SSOT footprint anchor (天條 2 no-fabrication). `pad_count` stays parameterised
+  until the SSOT freezes it — don't invent a count.
+- **board_outline** — real `width_mm`/`height_mm` (> 0), never guessed; the verb centres the pad
+  row along the frozen edge at `pitch_mm`.
+- **output** — `{path, edge, pads[], sexpr_block}`: each pad as a deterministic, injectable KiCad
+  S-expression (`thru_hole oval`, `*.Cu`/`*.Mask`, `castellated=true` property). The ee worker
+  injects `sexpr_block` into the real `.kicad_pcb`.
+
+**Why S-expr injection and nothing else (DD-5):** the pcbnew scripting mutation paths for edge-pad
+construction are known SwigPyObject **segfault** paths that crash the interpreter and can corrupt
+the board file (`issues/BR_20260704_pcbnew_scripting_segfault_hazards.md`). The verb hard-refuses
+them (`BOARD_SURGERY_UNSAFE_PATH`) — do not hand-drive pcbnew for castellation.
+
+**Net assignment discipline:** which nets may cross the castellated boundary is an upstream SSOT
+constraint, not a C04 choice — typically low-speed signals and power only; high-speed memory buses
+stay on-module. Pull the allowed `net_names` from the stage's `01_refs/` SSOT and let
+`c04_dod_traceback` (Gate section) prove the assignment traces back to it.
 
 ### 4. The finishing chain (MCP) — and what stays human
 
@@ -243,7 +289,15 @@ completeness; cross-check the schematic-intent side with the local
 - **unmapped pads > 0** in the `net2pcb` map sidecar — a footprint whose pad names don't match the
   symbol leaves pads floating (this is exactly the PSRAM bug; the gate catches it);
 - any of gerbers / drill / per-layer PNGs / fab PNG / CPL / IPC-2581 / assembly missing;
-- **SI `worst == "fail"`** (reflections/overshoot over limit).
+- **SI `worst == "fail"`** (reflections/overshoot over limit);
+- **DoD refs-traceback blocking** — run the `c04_dod_traceback` landing verb
+  (`deliverable_items` = every delivered component/pin/coordinate with its `provenance` anchor of
+  the form `<ssot_file>:<locator>`; `ssot_required_refs` = what the `01_refs/` SSOT requires the
+  design to cover; optional `ssot_anchors` allowlist of valid SSOT filenames). Any `untraceable`
+  entry (no SSOT anchor = 憑空發明) **or** any `unfulfilled` ref (SSOT-required but not delivered
+  = 漏做) → `blocking: true`, and the stage's `dod_ok` is false. This upgrades the DoD from
+  "files exist" to "every item traces to the SSOT" (EPIC 切面 5) — existence alone no longer
+  passes a refs-derived board.
 
 It **WARNS** (does not fail) on:
 - **silkscreen overlaps** — cosmetic;
@@ -322,9 +376,11 @@ These remain `pending` against the C04-freeze gate until the gate (`layout_drc_g
   C06), `../../engines/datasheets`.
 - **The gated build workflow (bodesign MCP)** — generation runs through the MCP, not local scripts
   (see `../../SKILL.md` § "Relationship to the bodesign MCP server"): `c04_emit_layout_package`
-  (one-shot build+gate) or the granular tools `impedance_solve` · `route_net2pcb` / `autoroute` ·
-  `pour_planes` · `widen_bus_tracks` · `length_match_bus` · `via_in_pad` · `si_check` ·
-  `layout_drc_gate` · `emit_fab` · `render_gerber_preview`, gated by `c04_readiness`. The
+  (one-shot build+gate) or the granular tools `impedance_solve` · `c04_face_placement` (frozen-face
+  placement bands → `placement_to_coords`) · `route_net2pcb` / `autoroute` · `c04_castellation`
+  (stamp-module edge pads, S-expr injection) · `pour_planes` · `widen_bus_tracks` ·
+  `length_match_bus` · `via_in_pad` · `si_check` · `layout_drc_gate` · `emit_fab` ·
+  `render_gerber_preview`, gated by `c04_readiness` + `c04_dod_traceback`. The
   `openmv/…/generated/tools/` scripts named throughout the worked examples are that reference
   board's point-in-time local copy of these same operations (can drift from current MCP
   behaviour) — read them for the contract shape, but drive the MCP; the MCP's current behaviour

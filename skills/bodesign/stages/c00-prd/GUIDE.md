@@ -90,6 +90,23 @@ optionally to `.docx`. Working from a structured answer-state — not free-typin
 open items visible and prevents silent default-filling. The real examples
 (`thesmart_products/openmv/C00-PRD/`, `thesmart_products/rockbox/c00-prd/`) follow exactly this shape.
 
+### 0. Ingest the refs SSOT first (refs-first gate)
+
+Before scaffolding anything, run the **`refs_ingest`** landing verb (`folder` = the stage dir or an
+explicit `01_refs/` path; via `gate.py`). It scans the stage's `01_refs/` SSOT into a read-only
+manifest: sources classified by media type, ranked against the authority order declared in the
+baseline file, rich media flagged as unadjudicated. An absent/invisible root comes back
+`root_visible: false` with a warning — loud, never a clean empty indistinguishable from a genuinely
+empty folder. Two reasons this is step 0, not paperwork:
+
+- **The interview cites by rank.** Step 2's answers carry `source` fields; the manifest's authority
+  order is what resolves conflicting sources deterministically — not whichever file you opened
+  first.
+- **Downstream emitters are refs-gated.** The C00→C01 orchestration handoff and the C01/C02
+  emitters refuse to run without the target stage's `01_refs/` SSOT (`RefsGateError
+  REFS_SSOT_MISSING`). Preparing the refs tree now is what keeps the pipeline from failing at
+  emit time instead of at intake.
+
 ### 1. Scaffold the answer-state
 
 Copy `assets/answer_state.template.json` to `<project>/C00-PRD/answer_state.json`. It defines the

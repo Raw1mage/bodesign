@@ -73,6 +73,18 @@ In all commands, `ENG=../../engines/kicad/scripts` (the KiCad engine script dir)
 `--analysis-dir analysis/` so every run lands in one timestamped folder tracked by
 `analysis/manifest.json`.
 
+### 0. Ingest the refs SSOT first (refs-first gate)
+
+Before authoring anything, run the **`refs_ingest`** landing verb (`folder` = the stage dir or an
+explicit `01_refs/` path; via `gate.py`): it scans the stage's `01_refs/` SSOT into a read-only,
+authority-ranked source manifest (absent root → `root_visible: false`, loud — never a clean empty).
+C03 is where fabrication-adjacent claims are born — pin allocation, BOM lines, netlist connectivity
+— and every one of them must trace back to an `01_refs/` source, because downstream C04 runs
+`c04_dod_traceback` against provenance anchors of the form `<ssot_file>:<locator>`: an item with no
+anchor is `untraceable` (憑空發明) and **blocks** the C04 DoD. Build the manifest first, cite
+against it as you author (steps 1–2), and keep the anchors in the exported tables (steps 7–8) so
+the traceback gate has something to verify.
+
 ### 1. Write the Design Definition + Architecture
 
 Author `Design_Definition.md` (or `EE_Design_Specification.md`): design intent, the block
