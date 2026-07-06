@@ -104,3 +104,12 @@ C03 netlist + C04_物理約束SSOT
 | `pcbnew_scripting_segfault_hazards` | 佐證：因缺此二 verb，唯一替代路徑（徒手 pcbnew）已證實是地雷 |
 
 **不需要 aiguard 端再做任何事**——上游 SSOT 已備妥。球在 bodesign。
+
+## Resolution（2026-07-06 closed）
+
+兩個 verb 均已落地（`gate.py --list` 現 56 landing verbs）：
+
+- **verb A（placement）** = `c04_face_placement`（約束驅動、solver 產座標、面向凍結不可被 C04 移動）+ worker-side `placement_to_coords` → `net2pcb_board(placement=...)`；高速 keep-on-core 類語意約束由 upstream frozen-constraint JSON 承載（`require_upstream_constraints()` 強制消費）。
+- **verb B（castellated）** = `c04_castellation`（`pins_per_edge`/pitch/drill 全參數化、net_map 承接、S-expression 注入）。
+- 本 repo 驗收：TV 系列 + `tests/test_worker_side_placement_roundtrip.py`（solver→adapter→net2pcb→kicad-cli DRC 全鏈實跑）。
+- **殘留（aiguard 端動作）**：拿 aiguard 5 SSOT 實檔跑 §3 端到端鏈回歸 → C04 freeze → 解鎖 C07 fab inventory。此為消費端回歸，bodesign 端無阻塞項。

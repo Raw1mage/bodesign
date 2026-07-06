@@ -50,3 +50,10 @@ Placement solver 可先做簡單版（grid / ring / edge-band 三種 pattern）�
 - `emit_castellated` 產出的半孔 pad → pcbnew 實讀 pad.GetAttribute()==PTH、位置落在 Edge.Cuts 上、net 正確掛上。
 - `resize_board` 後 `GetBoardEdgesBoundingBox()` == 指定尺寸。
 - 端到端：CCM 從 authentic 板 → place → castellated → route_net2pcb → autoroute 全鏈跑通，無需徒手 pcbnew。
+
+## Resolution（2026-07-06 closed）
+
+- **placement**：`c04_face_placement` landing verb（`upstream_constraints.py solve_face_placement()`，約束驅動、確定性、面向凍結）+ `placement_to_coords` adapter + `net2pcb_board(placement=...)`；另 `preplace.py` G3 確定性 pre-placement（patent-anchored placement_rules，quality/deterministic-preplacement graduated）。DRC roundtrip 實板驗證：`tests/test_worker_side_placement_roundtrip.py`（pcbnew + kicad-cli 9.0.9 實跑）。
+- **castellated**：`c04_castellation` landing verb（`board_surgery.py build_castellation()`，pitch/pad_count/drill 全參數化、provenance-gated、S-expression 注入 segfault-free）。
+- **resize_board**：未做獨立 verb——板框為上游凍結約束（C02 envelope）而非 C04 自由度（EPIC 切面 4），`net2pcb` 依 placement/約束產 Edge.Cuts；與本 BR 原提案的範式差異屬刻意設計（refs-derived paradigm）。
+- **安全 wrapper**：見姊妹 BR resolution（`assert_safe_surgery_path()` + `UNSAFE_PATHS`）。

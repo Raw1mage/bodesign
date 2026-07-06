@@ -98,3 +98,19 @@ bodesign 目前的 C00~C04 是「**從薄空氣生成 artifact**」的範式—�
 | (20260703) workers_mode_infra_gaps_block_c04_realization | 2, 5 |
 | (20260703) prd_bom_crosscheck_gap_cc_regulator_missing | 5 |
 | (docxmcp repo) pptx_decompose_session_cache_reclaimed | source gap 3 |
+
+---
+
+## Resolution（2026-07-06 closed）
+
+能力翻轉已完成，spec `specs/capability/refs-derived-design/`（living，950 tests green）。對照 7 條驗收準則：
+
+1. **refs-first gate** ✅ `refs_gate.py`（`require_refs()` chokepoint、`REFS_SSOT_MISSING` typed fail-fast）+ `refs_ingest` landing verb。
+2. **約束驅動 placement 引擎** ✅ `upstream_constraints.py` `solve_face_placement()`（DD-4 connector face 凍結、`CONNECTOR_FACE_CONFLICT`）+ `placement_to_coords` adapter → `net2pcb_board(placement=...)`，worker-side DRC roundtrip 實跑通過（`tests/test_worker_side_placement_roundtrip.py`）；另有 G3 確定性 preplacement（`preplace.py`，quality/deterministic-preplacement graduated，commit 100ada0）。
+3. **castellated 原生 verb** ✅ `board_surgery.py` `build_castellation()`（S-expression 注入，segfault-free）+ `c04_castellation` landing verb。
+4. **lifecycle 方向性工具化** ✅ `require_upstream_constraints()`（缺上游 JSON → `UPSTREAM_CONSTRAINT_MISSING`，全缺項一次列）。
+5. **DoD refs 回溯** ✅ `dod_traceback.py` `dod_refs_traceback()`（untraceable + unfulfilled 任一非空 → blocking）+ 20260703 五筆 DoD/交付驗證 BR 已折入 P2 修畢（見 tasks.md §3）。
+6. **介面摩擦** 部分✅：gate.py stdout 為 stale-mirror false-positive 已關（DD-7）；ragbase id 契約/query accessor 屬 specbase repo，已於該 repo 發 BR 追蹤（cross-repo）。
+7. **KB skill** ✅ `skills/bodesign-kb/SKILL.md`（refs-derived client 契約）。
+
+**殘留（consumer-side，非本 repo）**：aiguard 5 SSOT 實檔端到端回歸由 aiguard 端解鎖後執行（本 repo 驗收已以 TV-1~TV-6 + roundtrip 測試覆蓋）。

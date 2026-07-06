@@ -102,3 +102,8 @@ enablement snapshot（`prompts/enablement.json`）列有 `specbase-kb`，但 `sk
 - 落地後：客戶端 agent 僅憑 `skill(<mcp>-kb)` 完成一輪 recall→deposit→distill，全程未直接呼叫 `gate.ts`/`producer.ts`、未讀 sqlite 結構，且知識正確寫入 + 可召回。
 - 迴歸：`refresh_capability_layer` 後 enablement 登記的 KB skill 均可 `skill()` 載入（修掉硬證據 3 的登記/落地落差）。
 - 跨 MCP：兩個以上 MCP 各自的 `<mcp>-kb` skill 遵守同一四動作骨架，且 promote 至同一 central tier 後可跨庫 query 聚合。
+
+## Resolution（2026-07-06 closed — bodesign 端）
+
+- **`bodesign-kb` skill 已交付**：`skills/bodesign-kb/SKILL.md`——客戶端唯一知識介面（refs-derived 契約：refs 迴圈 6 步 + typed error 對照表 + landing verb quick-ref），客戶端不需懂 ragbase schema / sqlite / gate.py 內部（EPIC task 4.3）。
+- **殘留（cross-repo，非 bodesign）**：`specbase-kb` 骨架範本落地、mcp-integration standard spec 新增 KB-skill exposure contract 章節、ragbase producer id 契約 / query accessor 直覺化——均屬 specbase/opencode repo，該側已有對應 BR 追蹤（specbase `issues/BR_2026070*_ragbase_*`）。bodesign 端無剩餘動作。

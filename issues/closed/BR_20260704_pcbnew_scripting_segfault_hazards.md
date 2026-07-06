@@ -44,3 +44,9 @@ bodesign eda-bridge 提供一個 **safe-pcbnew wrapper 模組**（container 內�
 - wrapper 做「搬件 + 改板框 + 放大 refdes + 建 PTH castellated pad」全套 → 存檔成功、pcbnew 實讀驗證（字級變大、pad 為 PTH 落在板緣、net 正確），**零 segfault**。
 - 對照組：同樣操作用 naive pcbnew（`.py` 檔 + `SetTextSize` + `PAD()`）→ 重現 cast/segfault，證明 wrapper 確實繞過。
 - 回歸：single-load 契約下連續 100 次 load-edit-save 無 flaky cast。
+
+## Resolution（2026-07-06 closed）
+
+- `packages/workflow-core/bodesign_workflow_core/board_surgery.py`：safe board-surgery 層——`UNSAFE_PATHS` frozenset（`pcbnew_settextsize` 等已知 segfault 路徑）+ `assert_safe_surgery_path()`（命中即 `BOARD_SURGERY_UNSAFE_PATH` typed fail-fast）；castellated PTH 半孔改走 `.kicad_pcb` 文字層 S-expression 注入（DD-5），完全避開 `PAD()` 建構與 `SetTextSize` 兩個 segfault 源。
+- known-hazard 已文件化：`specs/capability/refs-derived-design/design.md` / `errors.md` + `skills/bodesign/stages/c04-layout/GUIDE.md`。
+- pcbnew 互動集中在 worker-side `net2pcb_board`（single-load、materialized list 慣例），agent 不再徒手 raw pcbnew。

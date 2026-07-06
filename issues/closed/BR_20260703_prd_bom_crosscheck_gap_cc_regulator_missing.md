@@ -53,3 +53,10 @@
 - 迴歸：AL5809 缺席 + 純電阻 netlist → crosscheck 回 `substituted (out-of-envelope)` BLOCKING。
 - 正案：補齊恆流器件後 crosscheck 全 `present`，C04 gate 放行。
 - E2E 重跑：新板 P1 可由 SPICE/datasheet 錨定證據支撐。
+
+## Resolution（2026-07-06 closed）
+
+- **工具層**：`packages/workflow-core/bodesign_workflow_core/prd_bom_crosscheck.py` 已落地——確定性履約檢核（C00 `main_components_structured.json` manifest ↔ C03 netlist），逐項 `present / substituted / missing` verdict；out-of-envelope 替代未經使用者批准 → BLOCKING。輸出 `prd_bom_crosscheck.report.json`，manifest 過期有 loud `MANIFEST_STALE` warning。
+- **降級協議**：`skills/bodesign/stages/c03-ee/GUIDE.md` 已補 vault-absent substitution protocol 段——降級落點必過 PRD 允許集合比對；集合外一律 BLOCKING 等使用者裁決，approvals 寫入 user-owned 檔。
+- **Spec**：`specs/quality/prd-bom-crosscheck/`（living，tasks 全 [x]）。
+- **殘留（非工具層）**：E2E LED driver 案的板重做屬產品側補救，由使用者裁決拓撲後另案執行。

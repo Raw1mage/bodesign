@@ -61,3 +61,11 @@
 | `no_refs_decomposition_gate_design_root_bypass` | 承其 refs-first gate 主張，落到 c01/c02 emitter + readiness 兩個具體修點 |
 
 **aiguard 端已自行清乾淨**（C01/C02 SSOT + 兩個 constraint JSON 已 deck 對齊、gate 綠、殘留複查 0）——本 BR 是把「為什麼會髒」的根因回饋給 bodesign emitter，避免下個產品重踩。
+
+## Resolution（2026-07-06 closed）
+
+Spec `specs/capability/refs-first-emitters/`（living）三修全落地：
+
+1. **emitter 去模板**：C01/C02 emit 入口掛 refs gate——無 `01_refs/` SSOT 不得起手，不再以 "modular platform" variant 模板為預設（commit c790e8b）。
+2. **per-item provenance**：`Interface_Constraints.json` / `Mechanical_Constraints.json` 每個 component/opening 帶 provenance 指回 SSOT；readiness 驗 provenance 非空且可解析，缺回溯 → `dod_ok:false`（commit c790e8b + 硬化 3c27725 F1/F2/F3/F5/F6 + 0a8dc04 F4/F7）。
+3. **variant 命名去除**：產品架構由 refs 決定，slug/product_name 不再注入架構假設。

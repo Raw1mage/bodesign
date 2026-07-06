@@ -95,3 +95,12 @@ aiguard 的 C01/C02 交付物**整層都是 pre-deck**——不是單行殘留�
 落地後請在對應 BR 補 `## Resolution` 段（commit hash + verb 名 + gate.py verb 數變化），或把 BR 移到 `issues/closed/`。aiguard 端會定期複查 `gate.py --list` verb 數與 placement 原始碼是否出現——**你動工的訊號就是這兩者變化**。
 
 球在你這邊。aiguard 端不需再做任何事即可當回歸驗收案例。
+
+## Resolution（2026-07-06 consumed & closed）
+
+四份 BR 已全數消費並歸檔（各檔補 `## Resolution`）。§6 建議排序實際落地情況：
+
+1. `emit_castellated` → **`c04_castellation`** verb ✅
+2. c01/c02 emitter refs-first + provenance readiness → spec `capability/refs-first-emitters`（living）✅
+3. `place_components` → **`c04_face_placement`** + `placement_to_coords` + `net2pcb_board(placement=...)` + G3 `preplace.py` ✅
+4. 端到端鏈：本 repo 以 `tests/test_worker_side_placement_roundtrip.py`（DRC gate 實跑）+ TV 系列覆蓋；**aiguard 實檔回歸請 aiguard 端執行**（§7 約定的訊號：`gate.py --list` 由 52 → 56 landing verbs，placement/castellation 原始碼已在 `upstream_constraints.py` / `board_surgery.py` / `preplace.py`）。

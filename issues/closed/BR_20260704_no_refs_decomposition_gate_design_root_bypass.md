@@ -54,3 +54,11 @@ bodesign 有 honesty-model（「引用來源才能斷言 IC/net/mechanical 事�
 - `requirement_decompose` 對正式需求書 PPTX → requirement_spec.json 含尺寸/castellated 腳位/元件清單，每條 trace 頁碼。
 - 故意用憑空座標產 placement 但不 trace → `c04_readiness` 應判 `dod_ok:false` 並具名 design-root 缺失。
 - 正常流程（先 ingest+decompose 再 place）→ readiness 綠。
+
+## Resolution（2026-07-06 closed）
+
+- **`refs_ingest`** ✅ landing verb（`refs_gate.py ingest_refs()`）：掃 `01_refs/` 產 `refs_manifest.json`（`bodesign.refs.manifest.v1`，含 authority order 解析、富媒體標 unadjudicated；root 不可見回 `root_visible:false` loud 而非假空）。
+- **Design-root gate** ✅ `require_refs()` chokepoint（缺 SSOT → `REFS_SSOT_MISSING` fail-fast，掛進生成 verb 前置）+ `c04_dod_traceback`（交付物項目無 SSOT 錨點=untraceable、SSOT 要求項缺席=unfulfilled，任一非空 blocking）。
+- **`requirement_decompose`**：未做成 verb——權威源判讀/拆解是 LLM 裁決工作（DD-12 哲學：LLM 只做上游抽取/裁決），由 client agent 依 `skills/bodesign-kb/SKILL.md` 的 refs 迴圈執行，工具層以 manifest（輸入側）+ dod_traceback（輸出側）兩端夾住，確保拆解結果可被機器驗證回溯。
+- **軸B skill 紀律** ✅ `bodesign-kb` skill 明文 design-root contract（「既有 artifact 不是設計根源」）。
+- 驗收：`tests/test_refs_gate.py`（6 案）+ `tests/test_refs_gate_aiguard_acceptance.py`（TV-1/TV-2）+ `tests/test_dod_traceback.py`（TV-5 憑空發明版 blocking / TV-6 refs-derived 過）。

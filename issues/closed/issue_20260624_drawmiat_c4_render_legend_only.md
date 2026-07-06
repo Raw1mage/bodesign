@@ -46,3 +46,7 @@
 
 - 本 BR 不阻塞 aiguard 交付（已用 graphviz fallback 產出合格架構圖並嵌入 docx）。
 - 未提供 drawmiat 內部 code anchor（render 實作在 drawmiat repo，非本次勘查範圍）；symptom + 重現 payload 形狀已具足。維護者可用第 2 節重現步驟定位。
+
+## Resolution（2026-07-06 closed — obsolete）
+
+drawmiat 已**退役 C4 圖類型**（drawmiat CHANGELOG：移除 `c4_renderer.py` / `c4_to_mermaid.py` / c4 schema/template 與兩個 refs submodule），本 bug 的 render 路徑已不存在。plan-builder 側同步將 `c4.json` 降為 opt-in lint（見 plan-builder SKILL.md §12.1）。C00 架構圖官方路徑改走 IDEF0/block-diagram + graphviz，本 issue 無剩餘動作。
