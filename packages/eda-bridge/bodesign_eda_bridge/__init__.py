@@ -1,3 +1,22 @@
+# BR3 (2026-07-06): engine revision stamp. Content-hash of the core engine
+# source files so "which copy is live" (host / engpatch / site-packages) is
+# one-glance provable. compose_schematic prints it; sync_engine.sh verifies it.
+import hashlib as _hashlib
+from pathlib import Path as _Path
+
+
+def _compute_engine_rev() -> str:
+    h = _hashlib.sha256()
+    here = _Path(__file__).parent
+    for fn in ("composer.py", "kicad_emit.py", "fidelity.py", "render_qa.py"):
+        fp = here / fn
+        if fp.exists():
+            h.update(fp.read_bytes())
+    return h.hexdigest()[:12]
+
+
+__engine_rev__ = _compute_engine_rev()
+
 from .contracts import KiCadBridgePlan, KiCadNativeCapability, KiCadNativeExtensionContract, build_kicad_native_extension_contract, plan_kicad_bridge
 from .kicad_emit import (
     EmitComponent,
@@ -10,6 +29,8 @@ from .kicad_emit import (
     load_symbol,
     validate_kicad_schematic,
 )
+from .fidelity import FidelityError, FidelityReport, verify_partition_fidelity
+from .render_qa import TextQAReport, qa_svg_text
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .bom_export import BomResult, export_bom, export_netlist
 from .component_fetch import fetch_component, search_components
@@ -107,4 +128,10 @@ __all__ = [
     "match_footprints",
     "plan_kicad_bridge",
     "validate_kicad_schematic",
+    "__engine_rev__",
+    "FidelityError",
+    "FidelityReport",
+    "verify_partition_fidelity",
+    "TextQAReport",
+    "qa_svg_text",
 ]

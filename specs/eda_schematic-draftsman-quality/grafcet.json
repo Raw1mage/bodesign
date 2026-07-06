@@ -6,9 +6,33 @@
     "StepAction": "Await compose request",
     "LinkInputType": [],
     "LinkInputNumber": [],
-    "LinkOutputNumber": [1],
+    "LinkOutputNumber": [
+      8
+    ],
     "LinkOutputType": "track",
-    "Condition": ["compose_schematic called with spec"],
+    "Condition": [
+      "compose_schematic called with spec"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 8,
+    "ModuleRef": "A7",
+    "StepType": "normal",
+    "StepAction": "Lint per-page density budget against calibrated thresholds; reject over-budget single page (force pagination, fail-fast)",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      0
+    ],
+    "LinkOutputNumber": [
+      1
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "density within budget (else DENSITY_BUDGET_EXCEEDED raised)"
+    ],
     "SubGrafcet": []
   },
   {
@@ -16,11 +40,19 @@
     "ModuleRef": "A1",
     "StepType": "normal",
     "StepAction": "Cluster components by declared group or net-degree",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [0],
-    "LinkOutputNumber": [2],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      0
+    ],
+    "LinkOutputNumber": [
+      2
+    ],
     "LinkOutputType": "track",
-    "Condition": ["clusters resolved"],
+    "Condition": [
+      "clusters resolved"
+    ],
     "SubGrafcet": []
   },
   {
@@ -28,11 +60,19 @@
     "ModuleRef": "A2",
     "StepType": "normal",
     "StepAction": "Run deterministic force-directed refinement within each cluster",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [1],
-    "LinkOutputNumber": [3],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      1
+    ],
+    "LinkOutputNumber": [
+      3
+    ],
     "LinkOutputType": "track",
-    "Condition": ["iterations exhausted"],
+    "Condition": [
+      "iterations exhausted"
+    ],
     "SubGrafcet": []
   },
   {
@@ -40,11 +80,19 @@
     "ModuleRef": "A2",
     "StepType": "normal",
     "StepAction": "Re-space overlapping clusters with deterministic gutter",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [2],
-    "LinkOutputNumber": [4],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      2
+    ],
+    "LinkOutputNumber": [
+      4
+    ],
     "LinkOutputType": "track",
-    "Condition": ["no bbox overlap remains"],
+    "Condition": [
+      "no bbox overlap remains"
+    ],
     "SubGrafcet": []
   },
   {
@@ -52,11 +100,19 @@
     "ModuleRef": "A3",
     "StepType": "normal",
     "StepAction": "Route nets as wires; fall back to label for power, bus and single-pin",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [3],
-    "LinkOutputNumber": [5],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      3
+    ],
+    "LinkOutputNumber": [
+      5
+    ],
     "LinkOutputType": "track",
-    "Condition": ["all nets routed or labelled"],
+    "Condition": [
+      "all nets routed or labelled"
+    ],
     "SubGrafcet": []
   },
   {
@@ -64,11 +120,19 @@
     "ModuleRef": "A4",
     "StepType": "normal",
     "StepAction": "Fit smallest standard sheet to content bbox and center",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [4],
-    "LinkOutputNumber": [6],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      4
+    ],
+    "LinkOutputNumber": [
+      6
+    ],
     "LinkOutputType": "track",
-    "Condition": ["sheet selected and content placed"],
+    "Condition": [
+      "sheet selected and content placed"
+    ],
     "SubGrafcet": []
   },
   {
@@ -76,11 +140,19 @@
     "ModuleRef": "A5",
     "StepType": "normal",
     "StepAction": "Emit grid-snapped kicad_sch and run kicad-cli validate",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [5],
-    "LinkOutputNumber": [7],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      5
+    ],
+    "LinkOutputNumber": [
+      7
+    ],
     "LinkOutputType": "track",
-    "Condition": ["schematic emitted and validated"],
+    "Condition": [
+      "schematic emitted and validated"
+    ],
     "SubGrafcet": []
   },
   {
@@ -88,11 +160,59 @@
     "ModuleRef": "A6",
     "StepType": "normal",
     "StepAction": "Measure ink coverage if render toolchain present, else report measurement-unavailable, then return result",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [6],
-    "LinkOutputNumber": [0],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      6
+    ],
+    "LinkOutputNumber": [
+      9
+    ],
     "LinkOutputType": "track",
-    "Condition": ["result returned; await next compose request"],
+    "Condition": [
+      "ink metrics reported or measurement-unavailable"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 9,
+    "ModuleRef": "A8",
+    "StepType": "normal",
+    "StepAction": "Verify net partition fidelity: spec expected partition vs kicad-cli exported netlist connected components (node-set equivalence, names ignored)",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      7
+    ],
+    "LinkOutputNumber": [
+      10
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "partition diff == 0/0 (else FidelityError raised, never ship shorted schematic)"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 10,
+    "ModuleRef": "A9",
+    "StepType": "normal",
+    "StepAction": "Scan rendered SVG text bboxes for overlaps (>15% intersection = violation); report per-page violation count",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      9
+    ],
+    "LinkOutputNumber": [
+      0
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "violations == 0 for presentation-done claim; result returned, await next request"
+    ],
     "SubGrafcet": []
   }
 ]

@@ -11,6 +11,7 @@ from bodesign_eda_bridge import (
     load_symbol,
     validate_kicad_schematic,
 )
+from bodesign_eda_bridge.kicad_emit import _collinear_overlap, _segment_fuses
 
 SYMBOL_DIR = Path(os.environ.get("KICAD_SYMBOL_DIR", "/usr/share/kicad/symbols"))
 HAS_SYMBOLS = (SYMBOL_DIR / "Device.kicad_sym").exists()
@@ -55,12 +56,20 @@ class KiCadEmitTests(unittest.TestCase):
 
         result = emit_kicad_schematic(self.work, "divider", components, nets, symbol_dir=SYMBOL_DIR)
 
-        self.assertEqual(3, result.component_count)
-        self.assertEqual(["Device:C", "Device:R"], result.embedded_symbols)
+        # component_count counts ALL emitted symbol blocks: the 3 user parts PLUS
+        # any synthesized power-port / PWR_FLAG glyphs (GND is a power net here, so
+        # its endpoints become power ports + one flag). Assert the user-part floor
+        # rather than a brittle exact total that shifts with power-symbol emission.
+        self.assertGreaterEqual(result.component_count, 3)
+        # embedded_symbols now also carries synthesized power-port / PWR_FLAG defs
+        # (GND/VIN become power ports); assert the user part libs are present rather
+        # than an exact list that shifts with power-symbol emission.
+        self.assertLessEqual({"Device:C", "Device:R"}, set(result.embedded_symbols))
         self.assertEqual([], result.unresolved_pins)
         self.assertEqual([], result.warnings)
-        # MID has 3 nodes, GND has 2, VIN has 1 -> 6 global labels placed on pins.
-        self.assertEqual(6, result.label_count)
+        # MID has 3 nodes (signal net -> global labels); GND/VIN are power nets now
+        # emitted as power ports instead of labels, so only MID's 3 pins carry labels.
+        self.assertEqual(3, result.label_count)
         schematic = Path(result.schematic_path).read_text(encoding="utf-8")
         self.assertIn("(lib_symbols", schematic)
         self.assertIn('(global_label "MID"', schematic)
@@ -115,6 +124,76 @@ class KiCadEmitTests(unittest.TestCase):
         nets_by_name = {net["name"]: set(net["nodes"]) for net in validation.netlist_nets}
         self.assertEqual({"R1.2", "R2.1", "C1.1"}, nets_by_name["MID"])
         self.assertEqual({"R2.2", "C1.2"}, nets_by_name["GND"])
+
+    # DD-11 anti-fusion guard: two DIFFERENT nets whose drawn wires would run
+    # COLLINEAR on the same x column must NOT share any collinear-overlapping
+    # segment after emit (KiCad fuses those into one net = short). The guard
+    # deterministically jogs the free axis or down-grades to label (recorded).
+    def _wire_segments(self, sch: str) -> list[tuple]:
+        # parse every (wire (pts (xy X Y) (xy X Y))) into ((x1,y1),(x2,y2)).
+        import re as _re
+        out = []
+        for m in _re.finditer(
+            r"\(wire \(pts \(xy (-?[\d.]+) (-?[\d.]+)\) \(xy (-?[\d.]+) (-?[\d.]+)\)\)", sch):
+            x1, y1, x2, y2 = map(float, m.groups())
+            out.append(((x1, y1), (x2, y2)))
+        return out
+
+    def test_anti_fusion_guard_prevents_collinear_cross_net_wires(self):
+        # Four resistors stacked on ONE x column. NET_A joins R1.2→R4.1 (a long
+        # vertical run spanning the column); NET_B joins R2.2→R3.1 which is NESTED
+        # inside NET_A's span on the SAME column — the two runs are collinear and
+        # their intervals overlap, so KiCad would fuse them into one net. The guard
+        # must jog NET_B off the column (or down-grade it).
+        components = [
+            EmitComponent("R1", "Device:R", "", "", 100, 100),
+            EmitComponent("R2", "Device:R", "", "", 100, 110),
+            EmitComponent("R3", "Device:R", "", "", 100, 120),
+            EmitComponent("R4", "Device:R", "", "", 100, 130),
+        ]
+        nets = [
+            EmitNet("NET_A", [("R1", "2"), ("R4", "1")]),
+            EmitNet("NET_B", [("R2", "2"), ("R3", "1")]),
+        ]
+        result = emit_kicad_schematic(
+            self.work, "fusion", components, nets,
+            symbol_dir=SYMBOL_DIR, connection_style="wire")
+        sch = Path(result.schematic_path).read_text(encoding="utf-8")
+        segs = self._wire_segments(sch)
+        # Assert NO two emitted wire segments collinearly overlap. If the guard
+        # down-graded a net to label, that net contributes no wire segment (so no
+        # overlap) AND is recorded in fusion_label_fallbacks (visible).
+        for i in range(len(segs)):
+            for j in range(i + 1, len(segs)):
+                self.assertFalse(
+                    _collinear_overlap(segs[i], segs[j]),
+                    f"collinear cross-segment fusion survived: {segs[i]} X {segs[j]}")
+        # The guard must have acted (either jogged NET_B off the column or
+        # down-graded it): the fusion never silently ships.
+        acted = bool(result.fusion_jogged_nets) or bool(result.fusion_label_fallbacks)
+        self.assertTrue(acted, "guard did not act on a collinear cross-net layout")
+
+    def test_anti_fusion_guard_untouched_when_no_collision(self):
+        # A layout with NO cross-net collinearity (two horizontally-separated Rs on
+        # a single 2-node net) must not trip the guard at all: no jog, no label
+        # down-grade. Guard only mutates geometry on a detected collision (R6).
+        components = [
+            EmitComponent("R1", "Device:R", "", "", 100, 100),
+            EmitComponent("R2", "Device:R", "", "", 140, 100),
+        ]
+        nets = [EmitNet("NET_X", [("R1", "2"), ("R2", "1")])]
+        r = emit_kicad_schematic(self.work, "clean", components, nets,
+                                 symbol_dir=SYMBOL_DIR, connection_style="wire")
+        self.assertEqual([], r.fusion_label_fallbacks)
+        self.assertEqual([], r.fusion_jogged_nets)
+
+    def test_collinear_overlap_helper_semantics(self):
+        # unit-level guard math: same vertical line, overlapping interval = fuse.
+        self.assertTrue(_collinear_overlap(((5, 0), (5, 10)), ((5, 4), (5, 12))))
+        # same line, only touching at one point = NOT a fusing overlap.
+        self.assertFalse(_collinear_overlap(((5, 0), (5, 10)), ((5, 10), (5, 20))))
+        # different vertical lines = no overlap.
+        self.assertFalse(_collinear_overlap(((5, 0), (5, 10)), ((6, 0), (6, 10))))
 
 
 if __name__ == "__main__":

@@ -88,17 +88,21 @@ def _h_emit_symbol(a: dict) -> Any:
 
 
 def _h_compose(a: dict) -> Any:
+    import bodesign_eda_bridge as _eb
     from bodesign_eda_bridge import compose_schematic
     r = compose_schematic(a["out_dir"], a["project_name"], a["spec"],
                           symbol_dirs=a.get("symbol_dirs", "/usr/share/kicad/symbols"),
                           validate=a.get("validate", True),
                           connection_style=a.get("connection_style"),
                           style=a.get("style", "netlist"),
-                          measure_ink=a.get("measure_ink", False))
+                          measure_ink=a.get("measure_ink", False),
+                          fidelity=a.get("fidelity", False))
     out = {"placed": r.placed, "nets": r.nets, "schematic": r.emit.schematic_path,
-           "style": r.style,
+           "style": r.style, "engine_rev": _eb.__engine_rev__,
            "unresolved_pins": r.emit.unresolved_pins, "warnings": r.warnings,
            "validation": _jsonable(r.validation) if r.validation else None}
+    if r.fidelity is not None:
+        out["fidelity"] = _jsonable(r.fidelity)
     if r.clusters:
         out["clusters"] = [c.to_dict() for c in r.clusters]
     if r.route_stats is not None:
@@ -433,7 +437,8 @@ def _h_pour_planes(a: dict) -> Any:
                        stitch_net=a.get("stitch_net", "GND"),
                        stitch_pitch_mm=a.get("stitch_pitch_mm", 14.0),
                        stitch_drill_mm=a.get("stitch_drill_mm", 0.3),
-                       stitch_pad_mm=a.get("stitch_pad_mm", 0.6))
+                       stitch_pad_mm=a.get("stitch_pad_mm", 0.6),
+                       pad_connection=a.get("pad_connection", "thermal"))
 
 
 def _h_widen_bus_tracks(a: dict) -> Any:
@@ -684,14 +689,14 @@ def _h_cache_close(a: dict) -> Any:
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
     {"name": "bodesign_route_net2pcb", "handler": _h_route_net2pcb,
-     "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part). Placement strategy: 'grid' (default, naive 8mm baseline) or 'deterministic' — electrically-aware pure-python pre-placement (main-IC anchoring, decap/crystal pin-affinity clustering, largest-first greedy per R4, fixed-seed SA) plus R1/R8 post-place checks; returns source-anchored placement_violations, hpwl_mm, anchor and echoed effective params. deterministic REQUIRES board_mm and FAILS FAST on missing footprint geometry — it never falls back to grid.",
+     "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Board outline semantics: pass board_mm=[W,H] to draw the Edge.Cuts rectangle at exactly (0,0)-(W,H) on ANY strategy (this is the single source of truth and matches the deterministic preplace R_edge boundary); when board_mm is omitted the outline auto-frames from pad extents + 3mm margin. The result reports outline_source='board_mm'|'pad_extent'. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part). Placement strategy: 'grid' (default, naive 8mm baseline) or 'deterministic' — electrically-aware pure-python pre-placement (main-IC anchoring, decap/crystal pin-affinity clustering, largest-first greedy per R4, fixed-seed SA) plus R1/R8 post-place checks; returns source-anchored placement_violations, hpwl_mm, anchor and echoed effective params. deterministic REQUIRES board_mm and FAILS FAST on missing footprint geometry — it never falls back to grid.",
      "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}, "connectors": {"type": "object", "description": "{refdes: {net_name: [pad ids]}} explicit connector pin expansion; omit to use the built-in USB-C table for USB-C footprints"}, "strategy": {"type": "string", "enum": ["grid", "deterministic"], "description": "placement strategy; default grid (baseline). deterministic = electrically-aware anchoring/clustering/greedy/SA + R1/R8 anchored checks"}, "seed": {"type": "integer", "description": "SA seed for strategy=deterministic (default 42); echoed in result.effective"}, "board_mm": {"type": "array", "items": {"type": "number"}, "description": "[width, height] mm board outline — required for strategy=deterministic"}}, "required": ["netlist_path", "out_path"]}},
     {"name": "bodesign_via_in_pad", "handler": _h_via_in_pad,
      "description": "Fine-pitch BGA via-in-pad fanout: drop a through-via through each netted ball pad of the given refs (except the outer keep_rings rings, which escape on the surface) so inner balls reach inner signal layers. via geometry is caller-overridable (drill_mm/pad_mm/keep_rings); defaults (0.2/0.3mm, 2 rings) are a JLCPCB-advanced filled+capped (POFV) process reference — tune for other pad pitches/processes.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "refs": {"type": "array", "items": _STR}, "drill_mm": {"type": "number"}, "pad_mm": {"type": "number"}, "keep_rings": {"type": "integer"}}, "required": ["in_path", "out_path", "refs"]}},
     {"name": "bodesign_pour_planes", "handler": _h_pour_planes,
-     "description": "Pour filled copper plane zones (e.g. ['In1.Cu:GND','In4.Cu:V3V3']) + optional stitching vias, giving high-speed nets a solid impedance reference plane. Stitch net + grid/via geometry are caller-overridable (stitch_net/stitch_pitch_mm/stitch_drill_mm/stitch_pad_mm); defaults (GND, 14mm, 0.3/0.6mm) are a JLCPCB-class process reference, not a hidden assumption.",
-     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR}, "stitch": {"type": "boolean"}, "stitch_net": _STR, "stitch_pitch_mm": {"type": "number"}, "stitch_drill_mm": {"type": "number"}, "stitch_pad_mm": {"type": "number"}}, "required": ["in_path", "out_path", "planes"]}},
+     "description": "Pour filled copper plane zones + optional stitching vias, giving high-speed nets a solid impedance reference plane. Each plane spec is a \"LAYER:NET\" string (e.g. 'B.Cu:GND', 'In1.Cu:GND', 'In4.Cu:V3V3') \u2014 layer first, net second; a malformed spec (wrong colon count, swapped fields, non-pcbnew layer) fails fast with POUR_PLANES_BAD_SPEC rather than a misleading pcbnew AttributeError. Stitch net + grid/via geometry are caller-overridable (stitch_net/stitch_pitch_mm/stitch_drill_mm/stitch_pad_mm); defaults (GND, 14mm, 0.3/0.6mm) are a JLCPCB-class process reference, not a hidden assumption. pad_connection='thermal' (default) keeps thermal-relief spokes; 'solid' bonds zone-net pads FULLY (ZONE_CONNECTION_FULL) to avoid starved_thermal DRC errors on isolated PTH/plane-net pads.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR, "description": "list of \"LAYER:NET\" specs, e.g. ['B.Cu:GND','In4.Cu:V3V3']"}, "stitch": {"type": "boolean"}, "stitch_net": _STR, "stitch_pitch_mm": {"type": "number"}, "stitch_drill_mm": {"type": "number"}, "stitch_pad_mm": {"type": "number"}, "pad_connection": {"type": "string", "enum": ["thermal", "solid"], "description": "zone-net pad bonding; 'thermal' (default) keeps relief spokes, 'solid' = ZONE_CONNECTION_FULL to avoid starved_thermal on isolated pads"}}, "required": ["in_path", "out_path", "planes"]}},
     {"name": "bodesign_widen_bus_tracks", "handler": _h_widen_bus_tracks,
      "description": "Clearance-safe C04 bus finishing: widen selected routed bus tracks to target_mm only where foreign copper/pads keep clearance_mm; writes a new .kicad_pcb and returns widened/kept counts.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "target_mm": {"type": "number"}, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "target_mm"]}},
@@ -740,7 +745,8 @@ TOOLS: list[dict] = [
      "description": "Compose a schematic from a design spec (components + REF.PIN nets); place + emit + kicad-cli validate. style='netlist' (default, unchanged) uses a naive index grid + global labels (back-compat). style='draftsman' (opt-in) does subsystem-clustered deterministic force-directed placement + drawn wires + sheet-fit for engineer-readable schematics. connection_style overrides the style-derived default when given ('label' global labels; 'wire' orthogonal wires). Components may carry group (subsystem cluster) and x/y (caller-supplied placement). measure_ink=true (draftsman only) renders + measures ink%/content-fill% (toolchain-gated).",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "spec": {"type": "object"},
                 "symbol_dirs": {}, "validate": {"type": "boolean"}, "style": {"type": "string", "enum": ["netlist", "draftsman"]},
-                "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"}}, "required": ["out_dir", "project_name", "spec"]}},
+                "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"},
+                "fidelity": {"type": "boolean", "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."}}, "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
      "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "components": {"type": "array"},

@@ -357,6 +357,65 @@ cheap causes. The mandatory order:
 This is the same principle as "verify the premise before stacking fixes": a structural change
 made while a cheap explanation is still alive destroys evidence and multiplies blast radius.
 
+## Delivery contract — hard rules for generate→render deliverables (learned 2026-07-06)
+
+A single "draw a placement/schematic" request once burned ~3.5 h and 15+ relay
+subagents into an engine-R&D marathon that shipped nothing. The post-mortem
+(`issues/BR_20260706_*`) distilled five rules. They are not advisory:
+
+1. **Capability-triage gate (do at task start).** List *engine capabilities the
+   deliverable needs* vs *what exists today*. If a gap plausibly needs **>2 rounds
+   of engine change** to close, STOP delegating in the delivery session — open a
+   plan in the bodesign repo and run that gap through the real R&D lifecycle. Ship
+   the delivery with existing capability + an honest limitations note (e.g. "CCM 5
+   pages electrically PASS; known text-overlap list attached") so the user can
+   approve *direction* while the engine improves separately. Never braid a delivery
+   deadline and engine quality-engineering onto one thread.
+2. **Two-round convergence stop-loss.** Same class of defect fails to converge for
+   **2 fix rounds → forbidden to try a 3rd at the same layer.** Escalate the root
+   cause up a layer (call-site → emit → placement → methodology) and report to the
+   user for a ruling. The session's 4-round text-overlap loop is the anti-pattern.
+3. **Delivery-layer QA first.** For any generate→render deliverable, the FIRST
+   step is to define + implement the *render-layer* machine gate (e.g.
+   `render_qa.qa_svg_text` scanning the rendered SVG) and run a baseline — *before*
+   any fix iteration. A model-layer QA passing is NEVER grounds to declare the
+   presentation done. "A measurable QA that isn't at the delivery layer doesn't
+   count when it passes."
+4. **Single engine ownership.** Parallel subagents must have disjoint file scopes.
+   The engine directory has **at most one writer at a time**; the orchestrator
+   states ownership explicitly on dispatch. (Two subagents shared the engine and
+   one's rollback pulled the other's environment out from under it.)
+5. **Engine-change snapshot + no git rollback.** Before any engine edit:
+   `tar -C packages/eda-bridge -cf <cache>/engine_snap_<ts>.tar bodesign_eda_bridge`.
+   `git checkout`/`reset`/`stash` on UNCOMMITTED engine files is banned in the
+   dispatch template — a frustrated subagent's `git checkout` erased 6 relays of
+   uncommitted work (recovered only by luck from a container copy).
+6. **Standardized relay handoff.** Every engine-touching relay MUST hand back:
+   the `__engine_rev__` stamp after its change, a one-paragraph change summary,
+   and the QA baseline numbers (e.g. per-page `qa_svg_text` violations). The next
+   relay's FIRST action is verifying that stamp (`scripts/sync_engine.sh`) — no
+   re-archaeology of "which copy is live / what did the last relay change".
+
+Deploy discipline for the engine: there is exactly ONE legitimate in-container
+copy — `/app/packages` (a read-only bind mount of the host working tree in dev
+mode; host edits are live immediately, deploy = restart + verify). The old
+`/tmp/engpatch` overlay is **RETIRED** (2026-07-06, BR2): it was never on the
+server process PYTHONPATH and existed only as a session workaround — a pure
+drift source. Use `scripts/sync_engine.sh` as the SINGLE deploy/verify action —
+it asserts engpatch is absent (fail-loud if recreated) and proves
+`__engine_rev__` + live `compose_schematic` signature match the host. Never
+hand-roll `docker cp`. `bodesign_compose_schematic` returns `engine_rev` in its
+result; if "which copy is live?" is ever in doubt, that stamp answers it.
+
+### Built-in fidelity + render gates (use them, don't reinvent)
+
+- **`compose_schematic(..., fidelity=True)`** runs a post-emit partition-fidelity
+  check: the spec's expected net partition vs KiCad's exported partition, compared
+  by node-set (NOT net name). Diverge → `FidelityError` (fail-loud). This catches
+  collinear-wire net FUSION that ERC is blind to (fewer nets, no dangling). Turn it
+  on for every connector-dense board. Standalone: `verify_partition_fidelity`.
+- **`render_qa.qa_svg_text(svg)`** is the render-layer text-overlap gate (rule 3).
+
 ## The one rule that overrides convenience
 
 Everything here serves a single discipline: **a bodesign package is trustworthy because it never

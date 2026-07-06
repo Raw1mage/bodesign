@@ -28,6 +28,12 @@ _語言：**繁體中文** · [English](./README.en.md)_
 
 完整紀錄見 [`CHANGELOG.md`](CHANGELOG.md)。近期重點：
 
+- **未發布（2026-07-06）** — **BR_20260706 五筆 BR 閉環（schematic 交付保真閘群）**：spec
+  `eda_schematic-draftsman-quality` extend DD-8..DD-11 至 living——`compose_schematic`
+  新增 `fidelity`（net 劃分保真閘，抓 ERC 盲區的共線熔合短路）與 `density_budget`
+  （頁面密度超標 fail-fast 強制分頁）；kicad_emit 防熔合 guard（確定性 jog 錯開）；
+  `qa_svg_text` 渲染層文字 QA landing verb；`/tmp/engpatch` 部署漂移源退場 +
+  `engine_rev` 回報；SKILL.md 交付契約六硬規。62 tests OK。
 - **未發布（2026-07-05）** — **skill 語料去誤導化**：稽核出 18 筆會誤導 agent 的語料
   （含 R20 HV 間距跨欄拼湊安全 bug，裸外層板低壓間距偏小 4.6 倍）全數修畢；
   建立 provenance 三級制（`[primary:]`/`[fab:]`/`[rot]`，經驗值禁入 DRC gate）與

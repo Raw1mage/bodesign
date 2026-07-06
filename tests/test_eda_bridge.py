@@ -1,6 +1,7 @@
 import unittest
 
 from bodesign_eda_bridge import build_kicad_native_extension_contract, length_match_bus, plan_kicad_bridge, resolve_connector_pads, si_status, solve_impedance, widen_bus_tracks
+from bodesign_eda_bridge.routing import PCBNEW_AVAILABLE, _parse_plane_spec, pour_planes
 
 
 class EdaBridgeTests(unittest.TestCase):
@@ -111,6 +112,39 @@ class EdaBridgeTests(unittest.TestCase):
         self.assertEqual("fail", si_status(15.0, 2.0, 5.0, 10.0))
         # A looser device: same 15% is a pass when pass<20.
         self.assertEqual("pass", si_status(15.0, 2.0, 20.0, 30.0))
+
+
+class PourPlanesSpecTests(unittest.TestCase):
+    """BR fix 2b: plane spec parsing fails fast with a clear POUR_PLANES_BAD_SPEC
+    message BEFORE any getattr(pcbnew, ...), so a swapped/malformed spec never leaks
+    a misleading `AttributeError: pcbnew has no attribute 'GND'`. Pure, pcbnew-free."""
+
+    @unittest.skipUnless(PCBNEW_AVAILABLE, "pcbnew not importable on this host")
+    def test_valid_spec_parses(self):
+        self.assertEqual(("B.Cu", "GND"), _parse_plane_spec("B.Cu:GND"))
+
+    def test_swapped_fields_raise_bad_spec_not_attributeerror(self):
+        # "GND:B.Cu" would have hit getattr(pcbnew, 'GND') -> misleading error.
+        with self.assertRaisesRegex(ValueError, "POUR_PLANES_BAD_SPEC"):
+            _parse_plane_spec("GND:B.Cu")
+
+    def test_missing_colon_raises_bad_spec(self):
+        with self.assertRaisesRegex(ValueError, "POUR_PLANES_BAD_SPEC"):
+            _parse_plane_spec("B.Cu-GND")
+
+    def test_too_many_colons_raises_bad_spec(self):
+        with self.assertRaisesRegex(ValueError, "POUR_PLANES_BAD_SPEC"):
+            _parse_plane_spec("B.Cu:GND:extra")
+
+    def test_empty_field_raises_bad_spec(self):
+        with self.assertRaisesRegex(ValueError, "POUR_PLANES_BAD_SPEC"):
+            _parse_plane_spec("B.Cu:")
+
+    def test_illegal_pad_connection_fails_fast_before_pcbnew(self):
+        # pad_connection validation happens before _need_pcbnew(), so it raises on
+        # any host regardless of pcbnew availability.
+        with self.assertRaisesRegex(ValueError, "POUR_PLANES_BAD_PAD_CONNECTION"):
+            pour_planes("in.kicad_pcb", "out.kicad_pcb", ["B.Cu:GND"], pad_connection="bogus")
 
 
 if __name__ == "__main__":

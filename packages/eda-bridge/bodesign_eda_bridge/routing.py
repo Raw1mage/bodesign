@@ -225,25 +225,42 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
     # Connectors that look like they need expansion (USB-C footprint or an explicit caller
     # entry) but matched no net name -> reported, never a silent no-op.
     unmapped_connectors = sorted((usb_refs | set(connectors)) - applied_pinmaps)
-    # board outline from pad extents
-    xs = []; ys = []
-    for fp in fps.values():
-        for p in fp.Pads():
-            pos = p.GetPosition(); xs.append(pcbnew.ToMM(pos.x)); ys.append(pcbnew.ToMM(pos.y))
-    if xs:
-        m = 3.0
-        x1, y1, x2, y2 = min(xs) - m, min(ys) - m, max(xs) + m, max(ys) + m
-        for a, b in [((x1, y1), (x2, y1)), ((x2, y1), (x2, y2)), ((x2, y2), (x1, y2)), ((x1, y2), (x1, y1))]:
+    # Board outline: an explicit board_mm is the single source of truth for the
+    # Edge.Cuts rectangle (0,0)-(W,H) — it must match the preplace R_edge boundary
+    # exactly, on ANY strategy (not just deterministic). Only when board_mm is
+    # absent do we fall back to a pad-extent + 3mm auto-frame.
+    outline_source = None
+    if board_mm:
+        w, h = float(board_mm[0]), float(board_mm[1])
+        corners = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]
+        for a, b in [(corners[0], corners[1]), (corners[1], corners[2]),
+                     (corners[2], corners[3]), (corners[3], corners[0])]:
             s = pcbnew.PCB_SHAPE(board); s.SetShape(pcbnew.SHAPE_T_SEGMENT)
             s.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(a[0]), pcbnew.FromMM(a[1])))
             s.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(b[0]), pcbnew.FromMM(b[1])))
             s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(pcbnew.FromMM(0.15)); board.Add(s)
+        outline_source = "board_mm"
+    else:
+        xs = []; ys = []
+        for fp in fps.values():
+            for p in fp.Pads():
+                pos = p.GetPosition(); xs.append(pcbnew.ToMM(pos.x)); ys.append(pcbnew.ToMM(pos.y))
+        if xs:
+            m = 3.0
+            x1, y1, x2, y2 = min(xs) - m, min(ys) - m, max(xs) + m, max(ys) + m
+            for a, b in [((x1, y1), (x2, y1)), ((x2, y1), (x2, y2)), ((x2, y2), (x1, y2)), ((x1, y2), (x1, y1))]:
+                s = pcbnew.PCB_SHAPE(board); s.SetShape(pcbnew.SHAPE_T_SEGMENT)
+                s.SetStart(pcbnew.VECTOR2I(pcbnew.FromMM(a[0]), pcbnew.FromMM(a[1])))
+                s.SetEnd(pcbnew.VECTOR2I(pcbnew.FromMM(b[0]), pcbnew.FromMM(b[1])))
+                s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(pcbnew.FromMM(0.15)); board.Add(s)
+            outline_source = "pad_extent"
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
     out = {"board": out_path, "placed": len(fps), "nets": len(nets),
            "pads_assigned": assigned, "unmapped": unmapped,
            "applied_pinmaps": sorted(applied_pinmaps),
-           "unmapped_connectors": unmapped_connectors, "strategy": strategy}
+           "unmapped_connectors": unmapped_connectors, "strategy": strategy,
+           "outline_source": outline_source}
     out.update(preplace_out)
     return out
 
@@ -287,32 +304,65 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
 
 
 # -------------------------------------------------------------------------------- copper planes
+def _parse_plane_spec(spec: str) -> tuple[str, str]:
+    """Parse a "LAYER:NET" plane spec (e.g. "B.Cu:GND") into (layer_name, netname).
+
+    Fail-fast on a malformed spec BEFORE any getattr(pcbnew, ...) — otherwise a
+    caller who swaps the fields ("GND:B.Cu") or omits the layer gets a misleading
+    `AttributeError: module 'pcbnew' has no attribute 'GND'` instead of a spec error."""
+    if not isinstance(spec, str) or spec.count(":") != 1:
+        raise ValueError(
+            f'POUR_PLANES_BAD_SPEC: expected "LAYER:NET" e.g. "B.Cu:GND", got {spec!r}')
+    layer_name, netname = spec.split(":")
+    layer_name = layer_name.strip(); netname = netname.strip()
+    if not layer_name or not netname:
+        raise ValueError(
+            f'POUR_PLANES_BAD_SPEC: expected "LAYER:NET" e.g. "B.Cu:GND", got {spec!r}')
+    if not hasattr(pcbnew, layer_name.replace(".", "_")):
+        raise ValueError(
+            f'POUR_PLANES_BAD_SPEC: expected "LAYER:NET" e.g. "B.Cu:GND", got {spec!r} '
+            f'(layer {layer_name!r} is not a pcbnew layer)')
+    return layer_name, netname
+
+
 def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool = True,
                 stitch_net: str = "GND", stitch_pitch_mm: float = 14.0,
-                stitch_drill_mm: float = 0.3, stitch_pad_mm: float = 0.6) -> dict:
+                stitch_drill_mm: float = 0.3, stitch_pad_mm: float = 0.6,
+                pad_connection: str = "thermal") -> dict:
     """Pour filled copper zones. `planes` = ["F.Cu:GND", "In1.Cu:GND", "In4.Cu:V3V3", ...].
     Optionally adds stitching vias on `stitch_net`; dangling ones are stripped.
 
     H5: the stitch net + grid/via geometry are caller-overridable. Defaults
     (GND, 14mm pitch, 0.3/0.6mm drill/pad) are a JLCPCB-class process reference,
     not a hidden assumption — pass stitch_net/stitch_pitch_mm/stitch_drill_mm/
-    stitch_pad_mm for a different ground name or denser/looser stitching."""
+    stitch_pad_mm for a different ground name or denser/looser stitching.
+
+    pad_connection ("thermal"|"solid", default "thermal"): how zone-net pads bond
+    to the pour. "thermal" keeps KiCad thermal-relief spokes (default); "solid"
+    sets ZONE_CONNECTION_FULL so PTH/plane-net pads bond fully to copper, avoiding
+    the starved_thermal DRC error on isolated islands. An illegal value fails fast."""
+    if pad_connection not in ("thermal", "solid"):
+        raise ValueError(
+            f'POUR_PLANES_BAD_PAD_CONNECTION: expected "thermal" or "solid", '
+            f'got {pad_connection!r}')
     _need_pcbnew()
     b = pcbnew.LoadBoard(in_path)
     box = b.GetBoardEdgesBoundingBox(); m = pcbnew.FromMM(0.3)
     x1, y1, x2, y2 = box.GetLeft() + m, box.GetTop() + m, box.GetRight() - m, box.GetBottom() - m
     out = []
     for spec in planes:
-        layer_name, netname = spec.split(":")
+        layer_name, netname = _parse_plane_spec(spec)
         lid = getattr(pcbnew, layer_name.replace(".", "_")); net = b.FindNet(netname)
         z = pcbnew.ZONE(b); z.SetLayer(lid); z.SetAssignedPriority(0)
         if net is not None:
             z.SetNet(net)
+        if pad_connection == "solid":
+            z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
         pts = pcbnew.VECTOR_VECTOR2I()
         for (x, y) in [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]:
             pts.append(pcbnew.VECTOR2I(int(x), int(y)))
         z.AddPolygon(pts); b.Add(z)
-        out.append({"layer": layer_name, "net": netname})
+        out.append({"layer": layer_name, "net": netname, "pad_connection": pad_connection})
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     stitched = 0
     gnd = b.FindNet(stitch_net)

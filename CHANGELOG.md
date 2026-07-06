@@ -4,6 +4,25 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [未發布] — 2026-07-06
+
+### Added
+- **BR_20260706 五筆 BR 闉環（spec `eda_schematic-draftsman-quality` extend DD-8..DD-11，living）**：
+  - **保真閘接線**：`bodesign_compose_schematic` 新增 `fidelity` 參數（透傳 `fidelity.py verify_partition_fidelity`，spec 期望 net 劃分 vs kicad-cli 匯出連通分量節點集等價比對，diff!=0/0 即 `FidelityError`），結果回 `engine_rev` 戳。ERC 對共線熔合短路天然盲，此閘實戰抓出三次短路。
+  - **防熔合 guard（治本）**：`kicad_emit.py` 全局 fusion_registry——drawn-wire segment 落盤前檢查跨 net 共線重疊/端點落線，衝突→ net-hash 確定性 jog 錯開（重試≤3）→仍衝突降級 label（`fusion_label_fallbacks` 可見）；無衝突輸入 byte-equivalent。
+  - **密度預算 lint**：`compose_schematic(density_budget=...)` 前置檢查（nets/components/pins-per-symbol，aiguard 04_wireless PASS / 03_memory FAIL 兩點標定），超標 raise `DENSITY_BUDGET_EXCEEDED` 強制分頁；`None` 預設關閉零破壞。
+  - **渲染層文字 QA**：`render_qa.qa_svg_text` 收編 + `gate.py` landing verb `qa_svg_text`（免容器）；aiguard CCM 5 頁回歸基線 13/6/18/3/2 只降不升。
+  - **BR5 快贏**：`net2pcb_board(board_mm=...)` 直接畫 (0,0)-(W,H) 板框（回 `outline_source`）；`pour_planes` 加 `pad_connection="thermal"|"solid"`（消 starved_thermal）+ `POUR_PLANES_BAD_SPEC` 防呆；`compose_schematic` 全 skip → `COMPOSE_ALL_COMPONENTS_SKIPPED` fail-fast（消空圖假綠）。
+  - **BR2 部署漂移收斂**：`/tmp/engpatch` overlay 正式退場（實測從未在 server PYTHONPATH，純漂移源）；`scripts/sync_engine.sh` 改 assert-absent + 單一 bind-mount 副本驗證。
+  - **BR3 方法論**：`skills/bodesign/SKILL.md` Delivery contract 六硬規（capability triage / 2 輪停損 / 交付層 QA 先行 / 引擎單一持有權 / 快照+禁 git rollback / 交接物標準化）；c03-ee GUIDE done-criteria 補三閘。
+  - 驗證：62 tests OK（含新增 density 7 + 防熔合 3 + skip-contract 2 + pour-spec 6；TV1-TV10 byte-stable 全綠）。五筆 BR 均補 Resolution 段並移 `issues/closed/`。
+- **C04 placement approval gate(owner 指示)**:placement 圖列為 C04 第一階段交付物,owner 核可後才允許銅層 routing。
+  - 新模組 `packages/workflow-core/bodesign_workflow_core/c04_placement_gate.py`:
+    - `emit_c04_placement_review(board_pcb, out_dir, board_name)` — 從已擺件的 `.kicad_pcb` 產出 placement review 套件(top 3D PNG + 實體比例 SVG + `placement_manifest.json` + `PLACEMENT_REVIEW.md`);kicad-cli 缺失時 fail-fast(`kicad-cli-not-found`),無 fallback。
+    - `assess_c04_placement_approval(folder)` — 檢查 `PLACEMENT_APPROVED.json`(必含非 placeholder 的 `approved_by`/`date`/`board`/`scope_note`);AI 不得自行寫核可檔,僅 owner 授權後代錄(契約載於 docstring 與 PLACEMENT_REVIEW.md 模板)。
+  - `gate.py` 新 verbs:`c04_placement_review`、`c04_placement_gate`。
+  - `assess_c04_layout_readiness`:偵測到 routed 證據(`.ses`/routed pcb/gerbers)但 `PLACEMENT_APPROVED.json` 缺失時,warnings 加 `placement_not_approved_before_routing`(warn,不 hard-fail,向後相容既有板)。
+
 ## [未發布] — 2026-07-05
 
 ### 修復 — skill 語料去誤導化（`quality/bodesign-skill-disambiguation` pilot + 推廣）

@@ -50,6 +50,7 @@ the board is frozen, which is honest, not missing.
 
 | # | Required artifact | File | Bucket |
 |---|---|---|---|
+| 0 | **Placement review package + owner approval** | `renders/` (top 3D PNG + physical-scale SVG) + `placement_manifest.json` + `PLACEMENT_REVIEW.md` + `PLACEMENT_APPROVED.json` (owner-authorised) | `02_build/` — **gate: routing MUST NOT start before approval** |
 | 1 | Layout + placement constraints | `Layout_Constraints.json` + `Placement_Constraints.md` | stage root |
 | 2 | Stackup + routing rules | `Stackup.md` + `Routing_Rules.md` | stage root |
 | 3 | Routed board + DRC report | `<board>.kicad_pcb` + `<board>.drc.rpt` | stage root |
@@ -57,6 +58,15 @@ the board is frozen, which is honest, not missing.
 | 5 | Assembly package | CPL · IPC-2581 · assembly drawing | stage root |
 | 6 | Per-layer copper PNGs + fab view | `copper_layers/`, `renders/` | `02_build/` |
 | 7 | Length-match + SI reports | `<board>.lengthmatch.json`, `<board>.si.json` | stage root (high-speed only) |
+
+**Placement-first contract (row 0):** placement is a **first-stage deliverable**, not an
+internal step. After net2pcb (or any placement pass), emit the review package with
+`gate.py c04_placement_review` (`board_pcb`, `out_dir`, `board_name`), show it to the owner,
+and only after the owner authorises `PLACEMENT_APPROVED.json` may copper routing begin —
+check with `gate.py c04_placement_gate` (`folder`). The AI must NOT write
+`PLACEMENT_APPROVED.json` itself; it records the owner's explicit approval (with provenance)
+or waits. `c04_readiness` warns (`placement_not_approved_before_routing`) when routed
+artefacts exist without the approval marker.
 
 **Self-verify:** run the gate — the MCP tool `bodesign_layout_drc_gate` (`board_path`) + the
 landing verb `c04_readiness` (`gate.py c04_readiness --repo <abs-project>` — NOT an MCP tool) —

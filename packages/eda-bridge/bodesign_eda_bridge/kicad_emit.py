@@ -31,6 +31,15 @@ DEFAULT_PROJECT_TEMPLATE = os.environ.get("KICAD_PROJECT_TEMPLATE", "/usr/share/
 SCHEMATIC_VERSION = "20250114"
 PIN_RE = re.compile(r"\(pin\s+\S+\s+\S+\s*\(at\s+(-?[0-9.]+)\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)")
 NUMBER_RE = re.compile(r'\(number\s+"([^"]+)"')
+NAME_RE = re.compile(r'\(name\s+"([^"]+)"')
+# A pin's NAME text is drawn INSIDE the symbol body, starting one pin-name offset
+# in from the pin endpoint and running toward the body centre. A net label placed
+# at that same pin endpoint (justify left => text runs +x) collides with this
+# in-body name text — the dominant black-blob cause the label-vs-label stagger
+# never saw. We model each pin-name's rendered box so the label placer can avoid it.
+_PIN_NAME_OFFSET_MM = 0.508   # KiCad default pin_names offset from the pin endpoint
+_PIN_NAME_CH_MM = 1.27        # rendered pin-name text height
+_PIN_NAME_CW_MM = 1.05        # per-char advance (matches _LABEL_CW_MM)
 
 
 @dataclass(slots=True)
@@ -61,6 +70,13 @@ class SchematicEmitResult:
     unresolved_pins: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     no_connect_count: int = 0
+    # DD-11 (A3 control): nets the anti-fusion guard down-graded to label
+    # fallback because a deterministic jog could not clear a cross-net collinear
+    # collision. Visible (never silent) so route stats mirror reality.
+    fusion_label_fallbacks: list[dict] = field(default_factory=list)
+    # Nets whose wire geometry the guard deterministically jogged to avoid a
+    # cross-net collinear overlap / endpoint-on-wire (kept as drawn wire).
+    fusion_jogged_nets: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -267,6 +283,112 @@ def _pin_endpoints(block: str) -> dict[str, tuple[float, float]]:
     return endpoints
 
 
+def _pin_name_extents(block: str) -> list[tuple[str, float, float, float]]:
+    """Per-pin in-body NAME text geometry, in SYMBOL-LOCAL coords.
+
+    Returns [(name, endpoint_x, endpoint_y, rot), ...]. rot picks the direction the
+    pin STICKS OUT (0=+x/right side, 180=-x/left side, 90=up, 270=down); the NAME
+    text is drawn on the OPPOSITE side (into the body). No-name pins are skipped.
+    Used to reserve the pin-name box so net labels avoid the in-body text smear.
+    """
+    out: list[tuple[str, float, float, float]] = []
+    for pin_match in PIN_RE.finditer(block):
+        x = float(pin_match.group(1)); y = float(pin_match.group(2)); rot = float(pin_match.group(3))
+        window = block[pin_match.end():pin_match.end() + 400]
+        name_match = NAME_RE.search(window)
+        if name_match is None:
+            continue
+        nm = name_match.group(1)
+        if nm in ("~", ""):
+            continue
+        out.append((nm, x, y, rot))
+    return out
+
+
+def _pin_name_box_abs(name: str, ex: float, ey: float, rot: float,
+                      comp_x: float, comp_y: float) -> tuple[float, float, float, float]:
+    """Absolute rendered box of a pin's in-body NAME text.
+
+    Local pin endpoint (ex,ey) maps to sheet coords (comp_x+ex, comp_y-ey) exactly
+    like `_pin_abs`. The pin's SIDE is decided by the sign of its symbol-local x,
+    NOT by rot: a left-side pin (ex<0) has the body to its +x, so its in-body name
+    runs +x and occupies [px+off, px+off+w]; a right-side pin (ex>=0) has the body
+    to its -x and occupies [px-off-w, px-off]. (rot 0 vs 180 is orientation, not
+    side, in these generated variant symbols where both sides carry rot 0/180
+    inconsistently.) Pins on the vertical axis (ex==0) reserve a centred H span.
+    """
+    px = comp_x + ex
+    py = comp_y - ey
+    w = len(name) * _PIN_NAME_CW_MM
+    h = _PIN_NAME_CH_MM + _LABEL_VMARGIN_MM
+    off = _PIN_NAME_OFFSET_MM
+    if ex < -0.01:                         # left-side pin: body is +x, name runs +x
+        x0, x1 = px + off, px + off + w
+    elif ex > 0.01:                        # right-side pin: body is -x, name runs -x
+        x0, x1 = px - off - w, px - off
+    else:
+        x0, x1 = px - w / 2, px + w / 2
+    return (x0, x1, py - h / 2, py + h / 2)
+
+
+def _prop_text_box(text: str, x: float, y: float) -> tuple[float, float, float, float]:
+    """Rendered box of a symbol Reference/Value property text (justify left by
+    KiCad default => runs +x from its anchor). Same char/height model as pin
+    names so the QA and the emitter agree."""
+    w = len(text) * _PIN_NAME_CW_MM
+    h = _PIN_NAME_CH_MM + _LABEL_VMARGIN_MM
+    return (x, x + w, y - h / 2, y + h / 2)
+
+
+def _place_symbol_props(component: "EmitComponent",
+                        pin_boxes: list[tuple[float, float, float, float]],
+                        occupied: list[tuple[float, float, float, float]]
+                        ) -> tuple[float, float, float, float, tuple, tuple]:
+    """Pick clear anchor positions for a component's Reference and Value text.
+
+    The legacy fixed offset (x+2.54, y-/+1.27) drops both texts INTO the symbol
+    body, colliding with in-body pin-name text on multi-pin / connector parts
+    (the `2 X SW1`, `GND X 100nF`, `19 X Stamp Edge A/B` smears). We try a ladder
+    of candidate offsets (right of body, above, below, further out) and take the
+    first pair whose rendered boxes clear every pin-name box AND every already
+    placed prop box. Returns (rx, ry, vx, vy, ref_box, val_box)."""
+    ref, val = component.ref, component.value or ""
+    cx, cy = component.x, component.y
+    # candidate anchor ladder: (ref_dx, ref_dy, val_dx, val_dy). Reference above,
+    # Value below by default; escalate outward until both clear.
+    ladder = [
+        (2.54, -1.27, 2.54, 1.27),      # legacy (tried first: byte-stable when clear)
+        (2.54, -3.81, 2.54, -6.35),     # both above the body
+        (2.54, 3.81, 2.54, 6.35),       # both below the body
+        (-2.54, -3.81, -2.54, 3.81),    # left, split
+        (5.08, -5.08, 5.08, 5.08),      # far right, split
+        (2.54, -7.62, 2.54, 7.62),      # far above / far below
+        (-5.08, -7.62, -5.08, 7.62),    # far left, wide split
+    ]
+    for rdx, rdy, vdx, vdy in ladder:
+        rb = _prop_text_box(ref, cx + rdx, cy + rdy)
+        vb = _prop_text_box(val, cx + vdx, cy + vdy) if val else None
+        clash = any(_bbox_overlap(rb, pb) for pb in pin_boxes) or \
+                any(_bbox_overlap(rb, pb) for pb in occupied)
+        if vb is not None:
+            clash = clash or _bbox_overlap(rb, vb) or \
+                    any(_bbox_overlap(vb, pb) for pb in pin_boxes) or \
+                    any(_bbox_overlap(vb, pb) for pb in occupied)
+        if not clash:
+            occupied.append(rb)
+            if vb is not None:
+                occupied.append(vb)
+            return (cx + rdx, cy + rdy, cx + vdx, cy + vdy, rb, vb)
+    # exhausted: use the last (far) tier so at least they leave the body
+    rdx, rdy, vdx, vdy = ladder[-1]
+    rb = _prop_text_box(ref, cx + rdx, cy + rdy)
+    vb = _prop_text_box(val, cx + vdx, cy + vdy) if val else None
+    occupied.append(rb)
+    if vb is not None:
+        occupied.append(vb)
+    return (cx + rdx, cy + rdy, cx + vdx, cy + vdy, rb, vb)
+
+
 def emit_kicad_schematic(
     project_dir: str | Path,
     project_name: str,
@@ -277,6 +399,7 @@ def emit_kicad_schematic(
     paper: str = "A4",
     nc: list[str] | None = None,
     label_nets: set[str] | frozenset | None = None,
+    power_ports: bool = True,
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
 
@@ -331,11 +454,9 @@ def emit_kicad_schematic(
         component.y = _snap_grid(component.y)
 
     placements = {component.ref: component for component in components}
-    symbol_blocks = [
-        _symbol_instance_block(component, project_name, root_uuid)
-        for component in components
-        if component.lib_id in embedded_defs
-    ]
+    # symbol_blocks are generated AFTER pin_name_boxes so each part's Reference/
+    # Value text can be positioned clear of in-body pin-name text (see below).
+    symbol_blocks: list[str] = []
 
     def _pin_abs(ref: str, pin: str) -> tuple[float, float] | None:
         component = placements.get(ref)
@@ -368,6 +489,118 @@ def emit_kicad_schematic(
     wire_blocks: list[str] = []
     junction_blocks: list[str] = []
     unresolved: list[str] = []
+    # (net_name, x, y) endpoints routed to global-label fallback; emitted after
+    # the net loop with a per-column anti-overlap pass so dense same-side pin
+    # stacks (e.g. a large BGA drawn as a per-page subset) do not collide.
+    label_endpoints: list[tuple[str, float, float]] = []
+    # (net_name, kind, x, y) endpoints routed to a power-port symbol instead of a
+    # label (GND/supply nets on a dense side). Emitted after the net loop.
+    power_endpoints: list[tuple[str, str, float, float]] = []
+    # Occupied local-label anchor coords (drawn-wire mode). Two independent
+    # L-route/trunk labels can resolve to the SAME midpoint (e.g. HSPI_IO1 and
+    # HSPI_IO15, both U1<->U2 2-node nets, landing on one coord => overlapping
+    # local-label text). Track placed anchors and nudge a colliding label along
+    # the wire by one grid until its coord is free, so no two local labels stack.
+    # In-body pin-NAME text boxes for every placed component. A net label anchored
+    # at a pin endpoint runs +x (justify left) straight into these; seeding them as
+    # pre-occupied lets BOTH label placers (drawn-wire local labels and the global
+    # -label stagger) nudge clear of the pin-name smear — the black-blob root cause
+    # the label-vs-label test never saw.
+    pin_name_defs: dict[str, list[tuple[str, float, float, float]]] = {
+        lib_id: _pin_name_extents(definition) for lib_id, definition in embedded_defs.items()
+    }
+    pin_name_boxes: list[tuple[float, float, float, float]] = []
+    for component in components:
+        extents = pin_name_defs.get(component.lib_id)
+        if not extents:
+            continue
+        for nm, ex, ey, rot in extents:
+            pin_name_boxes.append(
+                _pin_name_box_abs(nm, ex, ey, rot, component.x, component.y)
+            )
+
+    # Now place each symbol, choosing Reference/Value anchors that clear both the
+    # pin-name boxes and every prior prop box (the `2 X SW1` / `GND X 100nF` /
+    # `19 X Stamp Edge A/B` self-overlaps). The resulting prop boxes join the
+    # pin-name occupancy so net labels also steer clear of the refdes/value text.
+    prop_boxes: list[tuple[float, float, float, float]] = []
+    for component in components:
+        if component.lib_id not in embedded_defs:
+            continue
+        rx, ry, vx, vy, rb, vb = _place_symbol_props(component, pin_name_boxes, prop_boxes)
+        symbol_blocks.append(
+            _symbol_instance_block(component, project_name, root_uuid, rx, ry, vx, vy)
+        )
+    # Reserved occupancy for the label/power placers: pin names + prop texts.
+    reserved_boxes: list[tuple[float, float, float, float]] = pin_name_boxes + prop_boxes
+
+    _local_label_boxes: list[tuple[float, float, float, float]] = list(reserved_boxes)
+
+    def _place_local_label(name: str, x: float, y: float, wp: list[tuple[float, float]]):
+        """Emit a local label at (x,y), nudged along the route so its RENDERED text
+        box clears every earlier local label. The old version only guarded the
+        anchor coord, so two short labels one grid apart (e.g. HSPI_IO4/HSPI_IO8 on
+        the memory page) still overlapped horizontally. We now test the full bbox
+        against all placed boxes and pick the first candidate coord that is clear."""
+        candidates: list[tuple[float, float]] = [(x, y)] + list(wp)
+        # also add intra-segment grid points for a finer nudge
+        for a, b in zip(wp, wp[1:]):
+            if abs(a[0] - b[0]) > abs(a[1] - b[1]):  # horizontal seg
+                step = 1.27 if b[0] >= a[0] else -1.27
+                cx = a[0]
+                while (step > 0 and cx <= b[0]) or (step < 0 and cx >= b[0]):
+                    candidates.append((round(cx, 2), a[1])); cx += step
+            else:  # vertical seg
+                step = 1.27 if b[1] >= a[1] else -1.27
+                cy = a[1]
+                while (step > 0 and cy <= b[1]) or (step < 0 and cy >= b[1]):
+                    candidates.append((a[0], round(cy, 2))); cy += step
+        for cx, cy in candidates:
+            box = _label_bbox(name, cx, cy, False)
+            if not any(_bbox_overlap(box, pb) for pb in _local_label_boxes):
+                _local_label_boxes.append(box)
+                label_blocks.append(_local_label_block(name, cx, cy))
+                return
+        # exhausted (degenerate): place at original and record (last resort)
+        _local_label_boxes.append(_label_bbox(name, x, y, False))
+        label_blocks.append(_local_label_block(name, x, y))
+
+    # DD-11 anti-fusion registry: net_name -> its list of registered wire segments
+    # ((x1,y1),(x2,y2)). A new net's segments are checked against EVERY OTHER
+    # net's registered segments; on a cross-net collinear overlap / endpoint-on-
+    # wire the whole net's geometry is deterministically jogged (net-hash offset),
+    # retried ≤ 3 times, else the net is down-graded to label fallback (visible).
+    fusion_registry: dict[str, list[tuple]] = {}
+    fusion_label_fallbacks: list[dict] = []
+    fusion_jogged_nets: list[str] = []
+
+    def _other_net_segments(this_net: str) -> list[tuple]:
+        segs: list[tuple] = []
+        for nm, ss in fusion_registry.items():
+            if nm != this_net:
+                segs.extend(ss)
+        return segs
+
+    def _segments_of(waypoints: list[tuple[float, float]]) -> list[tuple]:
+        return [(waypoints[i], waypoints[i + 1]) for i in range(len(waypoints) - 1)]
+
+    def _guard_route(net_name: str, base_waypoints: list[tuple[float, float]]):
+        """Return (waypoints, jogged: bool) whose segments clear every other net,
+        or (None, False) when ≤ 3 deterministic jogs still fuse (→ caller down-
+        grades to label). Guard only mutates geometry when a collision exists, so
+        collision-free input is byte-equivalent (R6)."""
+        others = _other_net_segments(net_name)
+        segs = _segments_of(base_waypoints)
+        if not any(_segment_fuses(s, others) for s in segs):
+            return base_waypoints, False        # clean → untouched (byte-stable)
+        for attempt in range(3):
+            offset = _net_jog_steps(net_name, attempt)
+            jogged = _jog_free_axis(base_waypoints, offset)
+            jsegs = _segments_of(jogged)
+            if not any(_segment_fuses(s, others) for s in jsegs):
+                return jogged, True
+        return None, False
+
     for net in nets:
         force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
@@ -383,23 +616,137 @@ def emit_kicad_schematic(
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
             waypoints = _orthogonal_route(endpoints[0], endpoints[1])
+            guarded, jogged = _guard_route(net.name, waypoints)
+            if guarded is None:
+                # DD-11 fallback: jog exhausted → down-grade this net to label
+                # (collinearity-free by construction). Recorded, never silent.
+                fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
+                kind = _power_net_kind(net.name) if power_ports else None
+                for abs_pt in endpoints:
+                    if kind is not None:
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1]))
+                    else:
+                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
+                continue
+            waypoints = guarded
+            if jogged:
+                fusion_jogged_nets.append(net.name)
+            fusion_registry[net.name] = _segments_of(waypoints)
             for a, b in zip(waypoints, waypoints[1:]):
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
             mid = waypoints[len(waypoints) // 2]
-            label_blocks.append(_local_label_block(net.name, mid[0], mid[1]))
+            _place_local_label(net.name, mid[0], mid[1], waypoints)
         elif drawn and not force_label and not net_unresolved and len(endpoints) >= 3:
             segments, junctions = _bus_route(endpoints)
+            # Register the multi-node net's segments and check cross-net fusion.
+            others = _other_net_segments(net.name)
+            fuses = any(_segment_fuses(s, others) for s in segments)
+            if fuses:
+                # Multi-node bus geometry has no single free axis to jog
+                # deterministically → down-grade to label fallback (visible).
+                fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
+                kind = _power_net_kind(net.name) if power_ports else None
+                for abs_pt in endpoints:
+                    if kind is not None:
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1]))
+                    else:
+                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
+                continue
+            fusion_registry[net.name] = list(segments)
             for (a, b) in segments:
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
             for (jx, jy) in junctions:
                 junction_blocks.append(_junction_block(jx, jy))
             # one local label on the trunk's left end to name the net
             trunk = segments[0]
-            label_blocks.append(_local_label_block(net.name, trunk[0][0], trunk[0][1]))
+            _place_local_label(net.name, trunk[0][0], trunk[0][1], [trunk[0], trunk[1]])
         else:
             # label fallback: power, single-pin, unresolved, or style=label
+            # power_ports=False (dense castellated-edge / connector pages, e.g. the
+            # stamp ICD sheet): power nets take the ordinary global-label path too,
+            # NOT a power-port glyph. On a Conn_01x36 edge connector many GND/supply
+            # pins share one x column; power-port stubs would run collinear and KiCad
+            # would fuse them into one net (the stamp-page short). Per-pin net labels
+            # are the industry convention for edge connectors and are collinearity-
+            # free by construction. Net membership is identical either way.
+            kind = _power_net_kind(net.name) if power_ports else None
             for abs_pt in endpoints:
-                label_blocks.append(_global_label_block(net.name, abs_pt[0], abs_pt[1]))
+                if kind is not None:
+                    power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1]))
+                else:
+                    label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
+
+    label_blocks.extend(_staggered_label_blocks(label_endpoints, reserved=reserved_boxes))
+
+    # Power ports: one KiCad power-port symbol per GND/supply endpoint, replacing
+    # the label stack. A stub wire joins the pin endpoint to the port so the port
+    # sits clear of the symbol body (gnd points down, supply up). Net membership
+    # is unchanged — a power port names its net exactly as a label would.
+    # Each distinct power net also gets ONE PWR_FLAG on its first port so ERC does
+    # not report `power_pin_not_driven` (the power ports themselves are power_in,
+    # matching KiCad's stock GND/VCC symbols; the flag is the single driver).
+    # Anti-overlap: dozens of power ports on one symbol side share an x column at
+    # ~2 mm pitch; their Value text (the net name) would stack into a blob just
+    # like raw labels did. Group by x column, sort by y, and when consecutive
+    # ports are crowded push every other one outward on a longer stub — the same
+    # staggering the label path uses, so the net-name text separates vertically.
+    flagged_nets: set[str] = set()
+    _pwr_columns: dict[float, list[tuple[str, str, float, float]]] = {}
+    for ep in power_endpoints:
+        _pwr_columns.setdefault(round(ep[2], 2), []).append(ep)
+    # Left/right facing cannot come from the sign of x (a per-page BGA subset sits
+    # entirely in +x space). Split columns at the MIDPOINT of the occupied x span:
+    # columns left of centre stagger further left (away from the body), right of
+    # centre stagger right. This keeps the net-name text clear of the symbol pins.
+    _all_col_x = sorted(_pwr_columns)
+    _x_mid = (_all_col_x[0] + _all_col_x[-1]) / 2 if _all_col_x else 0.0
+    for col_x in _all_col_x:
+        col_items = sorted(_pwr_columns[col_x], key=lambda t: t[3])
+        direction = -1.0 if col_x < _x_mid else 1.0
+        # Track the last y placed at EACH tier so we only advance tiers until the
+        # current port clears the nearest already-placed one — a tight column then
+        # fans across as many stagger lanes as its density needs.
+        tier_last_y: dict[int, float] = {}
+        n_tiers = 8
+        for net_name, kind, px, py in col_items:
+            tier = 0
+            for t in range(n_tiers):
+                last = tier_last_y.get(t)
+                cand_x = round(px + direction * t * _PWR_STUB_STEP_MM, 4)
+                # the port's net-name Value text renders centred at cand_x; model
+                # its box and reject any tier whose text lands on an IC pin-name.
+                vw = len(net_name) * _PIN_NAME_CW_MM
+                vbox = (cand_x - vw / 2, cand_x + vw / 2,
+                        py - (_PIN_NAME_CH_MM + _LABEL_VMARGIN_MM) / 2,
+                        py + (_PIN_NAME_CH_MM + _LABEL_VMARGIN_MM) / 2)
+                y_free = last is None or abs(py - last) >= _PWR_MIN_PITCH_MM
+                pin_free = not any(_bbox_overlap(vbox, pb) for pb in reserved_boxes)
+                if y_free and pin_free:
+                    tier = t
+                    break
+            else:
+                tier = n_tiers - 1
+            tier_last_y[tier] = py
+            port_x = round(px + direction * tier * _PWR_STUB_STEP_MM, 4)
+            lib_id = _power_symbol_lib_id(net_name, kind)
+            if lib_id not in embedded_defs:
+                embedded_defs[lib_id] = _power_symbol_def(lib_id, net_name, kind)
+            port_y = round(py + _STUB_MM, 4) if kind == "gnd" else round(py - _STUB_MM, 4)
+            if tier:
+                # horizontal jog out to the staggered column, then vertical stub.
+                wire_blocks.append(_wire_segment_block(px, py, port_x, py))
+            wire_blocks.append(_wire_segment_block(port_x, py, port_x, port_y))
+            symbol_blocks.append(_power_symbol_instance(lib_id, net_name, port_x, port_y, project_name, root_uuid))
+            if net_name not in flagged_nets:
+                flagged_nets.add(net_name)
+                if "PWR_FLAG" not in embedded_defs:
+                    embedded_defs["PWR_FLAG"] = _pwr_flag_def()
+                # The flag pin must land on a WIRE ENDPOINT to be seen as connected;
+                # extend the stub one grid past the port and drop the flag there so
+                # port pin + flag pin + stub end all coincide on the same net node.
+                flag_y = round(port_y + _STUB_MM, 4) if kind == "gnd" else round(port_y - _STUB_MM, 4)
+                wire_blocks.append(_wire_segment_block(port_x, port_y, port_x, flag_y))
+                symbol_blocks.append(_pwr_flag_instance(port_x, flag_y, project_name, root_uuid))
 
     schematic = _schematic_document(
         root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks,
@@ -421,20 +768,32 @@ def emit_kicad_schematic(
         unresolved_pins=unresolved,
         warnings=warnings,
         no_connect_count=len(nc_blocks),
+        fusion_label_fallbacks=fusion_label_fallbacks,
+        fusion_jogged_nets=fusion_jogged_nets,
     )
 
 
-def _symbol_instance_block(component: EmitComponent, project_name: str, root_uuid: str) -> str:
+def _symbol_instance_block(component: EmitComponent, project_name: str, root_uuid: str,
+                          rx: float | None = None, ry: float | None = None,
+                          vx: float | None = None, vy: float | None = None) -> str:
+    """Emit one placed-symbol s-expr. rx/ry/vx/vy override the Reference/Value text
+    anchors (chosen by `_place_symbol_props` to clear pin-name text); when omitted
+    they fall back to the legacy fixed offset so callers that don't need collision
+    avoidance stay byte-stable."""
     ref_uuid = _uid()
     pin_uuids = "\n".join(f'    (pin "{number}" (uuid "{_uid()}"))' for number in ("1", "2"))
+    rx = component.x + 2.54 if rx is None else rx
+    ry = component.y - 1.27 if ry is None else ry
+    vx = component.x + 2.54 if vx is None else vx
+    vy = component.y + 1.27 if vy is None else vy
     return f'''  (symbol
     (lib_id "{component.lib_id}")
     (at {component.x} {component.y} 0)
     (unit 1)
     (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
     (uuid "{ref_uuid}")
-    (property "Reference" "{component.ref}" (at {component.x + 2.54} {component.y - 1.27} 0) (effects (font (size 1.27 1.27))))
-    (property "Value" "{component.value}" (at {component.x + 2.54} {component.y + 1.27} 0) (effects (font (size 1.27 1.27))))
+    (property "Reference" "{component.ref}" (at {round(rx, 4)} {round(ry, 4)} 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "{component.value}" (at {round(vx, 4)} {round(vy, 4)} 0) (effects (font (size 1.27 1.27))))
     (property "Footprint" "{component.footprint}" (at {component.x} {component.y} 0) (effects (font (size 1.27 1.27)) (hide yes)))
 {pin_uuids}
     (instances (project "{project_name}" (path "/{root_uuid}" (reference "{component.ref}") (unit 1))))
@@ -446,6 +805,236 @@ def _global_label_block(name: str, x: float, y: float) -> str:
         f'  (global_label "{name}" (shape bidirectional) (at {x} {y} 0)\n'
         f'    (effects (font (size 1.27 1.27)) (justify left)) (uuid "{_uid()}"))'
     )
+
+
+# Minimum vertical gap (mm) two 1.27 mm-tall labels need so their text boxes do
+# not touch. Below this, same-column labels are staggered outward on a stub.
+_LABEL_MIN_PITCH_MM = 2.0
+_LABEL_STUB_STEP_MM = 5.08  # x offset added per stagger tier (2 grid units)
+_LABEL_CH_MM = 1.27         # rendered text height
+_LABEL_CW_MM = 1.05         # per-char advance (conservative)
+_LABEL_GLYPH_MM = 2.0       # global-label shape glyph width
+_LABEL_VMARGIN_MM = 0.3
+_LABEL_HMARGIN_MM = 0.4
+
+
+def _label_bbox(name: str, x: float, y: float, is_global: bool) -> tuple[float, float, float, float]:
+    """Rendered text box (justify left => extends +x from anchor). Returns
+    (x0, x1, y0, y1). Mirrors qa_bbox.py so the QA and the emitter agree."""
+    w = len(name) * _LABEL_CW_MM + (_LABEL_GLYPH_MM if is_global else 0.0) + _LABEL_HMARGIN_MM
+    h = _LABEL_CH_MM + _LABEL_VMARGIN_MM
+    return (x, x + w, y - h / 2, y + h / 2)
+
+
+def _bbox_overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    return not (a[1] <= b[0] or b[1] <= a[0] or a[3] <= b[2] or b[3] <= a[2])
+
+
+def _resolve_label_y(name: str, x: float, y: float, is_global: bool, placed: list[tuple[float, float, float, float]], direction: float) -> float:
+    """Nudge a label's y upward in _LABEL_MIN_PITCH steps until its rendered box
+    clears every already-placed box, then register it. Returns the final y.
+    Global overlap check (not per-column) so cross-column horizontal collisions
+    (short labels crowded around a dense IC) are resolved too."""
+    ly = y
+    for _ in range(400):
+        bx = _label_bbox(name, x + (direction * _LABEL_STUB_STEP_MM if abs(ly - y) > 1e-6 else 0.0), ly, is_global)
+        if not any(_bbox_overlap(bx, pb) for pb in placed):
+            placed.append(bx)
+            return ly
+        ly = round(ly + _LABEL_MIN_PITCH_MM, 4)
+    placed.append(_label_bbox(name, x, ly, is_global))
+    return ly
+
+# --- Power symbol emission (industry convention: GND glyph points down, supply
+# rail glyph points up). A dense symbol side (e.g. a per-page BGA subset) carries
+# dozens of single-pin GND/+1V8/+3V3/VDDA net endpoints; drawing a global label
+# on each stacks their text into an unreadable blob. Instead we drop a KiCad
+# power-port symbol on each such endpoint — the eeschema-native way — so the page
+# reads as a conventional schematic. This is a DRAWING-layer change only: a power
+# port names its net exactly like a label (same electrical meaning), so netlist
+# net membership is byte-for-byte unchanged.
+_GND_NET_RE = re.compile(r"^(gnd|gndd?|agnd|dgnd|pgnd|vss[a-z0-9_]*|vssa)$", re.IGNORECASE)
+_SUPPLY_NET_RE = re.compile(
+    r"^(\+?\d+v\d*|v\d+v\d+|vdd[a-z0-9_]*|vcc[a-z0-9_]*|vdda[a-z0-9_]*|"
+    r"vbat|vsys|vbus|vin|vout|vref[a-z0-9_]*|\+?\d+vd?)$",
+    re.IGNORECASE,
+)
+
+_STUB_MM = 2.54  # length of the wire stub from pin endpoint to the power port
+# A power port glyph + its net-name text occupies ~3.8 mm vertically, far more
+# than a bare label's 1.27 mm. Same-column ports closer than this must stagger.
+_PWR_MIN_PITCH_MM = 4.0
+_PWR_STUB_STEP_MM = 7.62  # x jog per stagger tier (6 grid units) to clear the text
+
+
+def _power_net_kind(name: str) -> str | None:
+    """Classify a net name as a power port target.
+
+    Returns "gnd" (glyph drawn pointing down), "supply" (glyph pointing up), or
+    None (not a power net → caller keeps the ordinary label path). Matching is
+    conservative and name-shape based; anything ambiguous falls through to None
+    so we never convert a signal net into a power port.
+    """
+    n = name.strip()
+    if _GND_NET_RE.match(n):
+        return "gnd"
+    if _SUPPLY_NET_RE.match(n):
+        return "supply"
+    return None
+
+
+def _power_symbol_lib_id(net_name: str, kind: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_+]", "_", net_name)
+    return f"power_{kind}_{slug}"
+
+
+def _power_symbol_def(lib_id: str, net_name: str, kind: str) -> str:
+    """Synthesize a self-contained power-port symbol definition for lib_symbols.
+
+    Geometry mirrors KiCad's stock power ports:
+      - supply: a short vertical stem up from the pin, a horizontal bar at the
+        top, and the net name above it (convention: rail points UP).
+      - gnd: a short vertical stem down from the pin and the three shrinking GND
+        bars below it (convention: ground points DOWN).
+    The single pin is at (0,0), type power_in, so ERC treats the port as the
+    net driver exactly like KiCad's own power symbols. The `power` + `pin_names
+    hide` flags match stock power-port metadata.
+    """
+    if kind == "gnd":
+        graphics = (
+            '    (pin power_in line (at 0 0 270) (length 0)\n'
+            f'      (name "{net_name}" (effects (font (size 0 0))))\n'
+            '      (number "1" (effects (font (size 0 0)))))\n'
+            '    (polyline (pts (xy 0 0) (xy 0 -1.27)) (stroke (width 0) (type default)))\n'
+            '    (polyline (pts (xy -1.27 -1.27) (xy 1.27 -1.27)) (stroke (width 0) (type default)))\n'
+            '    (polyline (pts (xy -0.762 -1.905) (xy 0.762 -1.905)) (stroke (width 0) (type default)))\n'
+            '    (polyline (pts (xy -0.254 -2.54) (xy 0.254 -2.54)) (stroke (width 0) (type default)))'
+        )
+        label_at = "(at 0 -3.81 0)"
+    else:
+        graphics = (
+            '    (pin power_in line (at 0 0 90) (length 0)\n'
+            f'      (name "{net_name}" (effects (font (size 0 0))))\n'
+            '      (number "1" (effects (font (size 0 0)))))\n'
+            '    (polyline (pts (xy 0 0) (xy 0 1.27)) (stroke (width 0) (type default)))\n'
+            '    (polyline (pts (xy -1.016 1.27) (xy 1.016 1.27)) (stroke (width 0) (type default)))'
+        )
+        label_at = "(at 0 2.032 0)"
+    return (
+        f'    (symbol "{lib_id}"\n'
+        '      (power) (pin_names (offset 0) hide) (in_bom no) (on_board yes) (exclude_from_sim no)\n'
+        f'      (property "Reference" "#PWR" {label_at} (effects (font (size 0 0)) hide))\n'
+        f'      (property "Value" "{net_name}" {label_at} (effects (font (size 1.27 1.27))))\n'
+        f'      (symbol "{lib_id}_0_1"\n{graphics}\n      )\n'
+        '    )'
+    )
+
+
+def _pwr_flag_def() -> str:
+    """KiCad's PWR_FLAG symbol: a hidden power_out pin that declares a power net
+    is externally driven, silencing ERC's ``power_pin_not_driven`` without adding
+    a real driver. One per power net is the eeschema-native convention."""
+    return (
+        '    (symbol "PWR_FLAG"\n'
+        '      (power) (pin_numbers hide) (pin_names (offset 0) hide) (in_bom no) (on_board yes) (exclude_from_sim yes)\n'
+        '      (property "Reference" "#FLG" (at 0 1.905 0) (effects (font (size 0 0)) hide))\n'
+        '      (property "Value" "PWR_FLAG" (at 0 3.81 0) (effects (font (size 1.27 1.27))))\n'
+        '      (symbol "PWR_FLAG_0_0"\n'
+        '        (pin power_out line (at 0 0 90) (length 0)\n'
+        '          (name "pwr" (effects (font (size 1.27 1.27))))\n'
+        '          (number "1" (effects (font (size 1.27 1.27)))))\n'
+        '      )\n'
+        '      (symbol "PWR_FLAG_0_1"\n'
+        '        (polyline (pts (xy 0 0) (xy 0 1.016) (xy -1.016 1.524) (xy 0 2.032) (xy 1.016 1.524) (xy 0 1.016))\n'
+        '          (stroke (width 0) (type default)) (fill (type none)))\n'
+        '      )\n'
+        '    )'
+    )
+
+
+_FLG_REF_COUNTER = [0]
+
+
+def _pwr_flag_instance(x: float, y: float, project_name: str, root_uuid: str) -> str:
+    _FLG_REF_COUNTER[0] += 1
+    ref = f"#FLG{_FLG_REF_COUNTER[0]:04d}"
+    return (
+        '  (symbol\n'
+        '    (lib_id "PWR_FLAG")\n'
+        f'    (at {round(x, 4)} {round(y, 4)} 0)\n'
+        '    (unit 1)\n'
+        '    (exclude_from_sim yes) (in_bom no) (on_board yes) (dnp no)\n'
+        f'    (uuid "{_uid()}")\n'
+        f'    (property "Reference" "{ref}" (at {round(x, 4)} {round(y - 3.81, 4)} 0) (effects (font (size 1.27 1.27)) hide))\n'
+        f'    (property "Value" "PWR_FLAG" (at {round(x, 4)} {round(y + 3.81, 4)} 0) (effects (font (size 1.27 1.27)) hide))\n'
+        '    (pin "1" (uuid "' + _uid() + '"))\n'
+        f'    (instances (project "{project_name}" (path "/{root_uuid}" (reference "{ref}") (unit 1))))\n'
+        '  )'
+    )
+
+
+_PWR_REF_COUNTER = [0]
+
+
+def _power_symbol_instance(lib_id: str, net_name: str, x: float, y: float, project_name: str, root_uuid: str) -> str:
+    _PWR_REF_COUNTER[0] += 1
+    ref = f"#PWR{_PWR_REF_COUNTER[0]:04d}"
+    return (
+        '  (symbol\n'
+        f'    (lib_id "{lib_id}")\n'
+        f'    (at {round(x, 4)} {round(y, 4)} 0)\n'
+        '    (unit 1)\n'
+        '    (exclude_from_sim no) (in_bom no) (on_board yes) (dnp no)\n'
+        f'    (uuid "{_uid()}")\n'
+        f'    (property "Reference" "{ref}" (at {round(x, 4)} {round(y - 3.81, 4)} 0) (effects (font (size 1.27 1.27)) hide))\n'
+        f'    (property "Value" "{net_name}" (at {round(x, 4)} {round(y - 5.08, 4)} 0) (effects (font (size 1.27 1.27))))\n'
+        '    (pin "1" (uuid "' + _uid() + '"))\n'
+        f'    (instances (project "{project_name}" (path "/{root_uuid}" (reference "{ref}") (unit 1))))\n'
+        '  )'
+    )
+
+
+def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
+                            reserved: list[tuple[float, float, float, float]] | None = None) -> list[str]:
+    """Emit global labels with per-column anti-overlap staggering.
+
+    Pins on one side of a dense symbol (a large BGA drawn as a per-page subset)
+    share an x coordinate and sit at ~2.0 mm pitch; a 1.27 mm-tall label on each
+    would collide into an unreadable blob. We group endpoints by their x column,
+    sort each column by y, and when consecutive labels are closer than
+    ``_LABEL_MIN_PITCH_MM`` we push every other one outward by a stub wire so the
+    text boxes separate. A single label (or a sparse column) is emitted verbatim,
+    so low-density pages are byte-unchanged.
+    """
+    blocks: list[str] = []
+    # Global bbox occupancy: two labels FAIL when their rendered text boxes overlap
+    # in BOTH axes. The prior per-column y-stagger left cross-column horizontal
+    # collisions unresolved (short labels crowded around a dense IC on adjacent x
+    # columns still overlapped). We now register every emitted label's box and, for
+    # each new label, nudge its y upward in _LABEL_MIN_PITCH steps until its box is
+    # clear of ALL placed boxes. Process column-by-column (left to right, bottom to
+    # top) for determinism; a label shifted off its pin row gets a stub jog so the
+    # electrical endpoint is unchanged. Sparse pages never trip the overlap test, so
+    # they stay byte-unchanged.
+    columns: dict[float, list[tuple[str, float, float]]] = {}
+    for name, x, y in endpoints:
+        columns.setdefault(round(x, 2), []).append((name, x, y))
+    # Seed the occupancy with the in-body pin-NAME boxes so a global label never
+    # gets placed on top of the IC's own pin-name text (the cross pin/label smear).
+    placed: list[tuple[float, float, float, float]] = list(reserved or [])
+    for col_x in sorted(columns):
+        items = sorted(columns[col_x], key=lambda t: t[2])
+        direction = 1.0 if col_x >= 0 else -1.0
+        for name, x, y in items:
+            ly = _resolve_label_y(name, x, y, True, placed, direction)
+            if abs(ly - y) > 1e-6:
+                lx = round(x + direction * _LABEL_STUB_STEP_MM, 4)
+                blocks.append(_wire_segment_block(x, y, lx, y))
+                blocks.append(_wire_segment_block(lx, y, lx, ly))
+                blocks.append(_global_label_block(name, lx, ly))
+            else:
+                blocks.append(_global_label_block(name, x, ly))
+    return blocks
 
 
 def _local_label_block(name: str, x: float, y: float) -> str:
@@ -478,6 +1067,127 @@ def _no_connect_block(x: float, y: float) -> str:
     """A no-connect cross on a pin endpoint declares the pin intentionally open,
     so ERC does not report `pin_not_connected` for it (T1)."""
     return f'  (no_connect (at {round(x, 4)} {round(y, 4)}) (uuid "{_uid()}"))'
+
+
+# ---------------------------------------------------------------------------
+# DD-11 (A3 control): wire anti-fusion guard. KiCad's wire connectivity is
+# GEOMETRIC — two collinear overlapping wire segments (or an endpoint landing on
+# another net's wire) are electrically FUSED into one net. The wire geometry
+# generators (_orthogonal_route / _bus_route / power stubs) only guarantee
+# correct endpoints, never that DIFFERENT nets' segments stay disjoint. On dense
+# connector columns this fuses nets into shorts (aiguard stamp page GND←141,
+# product board BAT_SENSE←177). This guard, run before segments hit the sheet,
+# registers every net's segments and rejects any new segment that collinearly
+# overlaps — or whose endpoints land on — a DIFFERENT net's registered segment.
+# ---------------------------------------------------------------------------
+_FUSION_EPS = 1e-4
+
+
+def _seg_axis(a: tuple[float, float], b: tuple[float, float]) -> str | None:
+    """'h' if horizontal, 'v' if vertical, None if degenerate/diagonal."""
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    if dx < _FUSION_EPS and dy < _FUSION_EPS:
+        return None            # zero-length
+    if dy < _FUSION_EPS:
+        return "h"
+    if dx < _FUSION_EPS:
+        return "v"
+    return None                # diagonal (routers never emit these)
+
+
+def _collinear_overlap(s1: tuple, s2: tuple) -> bool:
+    """True iff two axis-aligned segments are collinear (same axis + same line)
+    AND their intervals overlap with non-zero length (a shared touch-point at a
+    single coordinate is NOT a fusing overlap — that is a legal T/corner)."""
+    a1, b1 = s1
+    a2, b2 = s2
+    ax1 = _seg_axis(a1, b1)
+    ax2 = _seg_axis(a2, b2)
+    if ax1 is None or ax2 is None or ax1 != ax2:
+        return False
+    if ax1 == "h":
+        if abs(a1[1] - a2[1]) > _FUSION_EPS:
+            return False       # different horizontal lines
+        lo1, hi1 = sorted((a1[0], b1[0]))
+        lo2, hi2 = sorted((a2[0], b2[0]))
+    else:
+        if abs(a1[0] - a2[0]) > _FUSION_EPS:
+            return False       # different vertical lines
+        lo1, hi1 = sorted((a1[1], b1[1]))
+        lo2, hi2 = sorted((a2[1], b2[1]))
+    overlap = min(hi1, hi2) - max(lo1, lo2)
+    return overlap > _FUSION_EPS
+
+
+def _point_on_segment(pt: tuple[float, float], seg: tuple) -> bool:
+    """True iff pt lies ON seg (endpoints included). A shared endpoint between two
+    nets is itself a fusion (KiCad merges a wire END that touches another wire)."""
+    a, b = seg
+    ax = _seg_axis(a, b)
+    if ax is None:
+        return abs(pt[0] - a[0]) < _FUSION_EPS and abs(pt[1] - a[1]) < _FUSION_EPS
+    if ax == "h":
+        if abs(pt[1] - a[1]) > _FUSION_EPS:
+            return False
+        lo, hi = sorted((a[0], b[0]))
+        return lo - _FUSION_EPS <= pt[0] <= hi + _FUSION_EPS
+    if abs(pt[0] - a[0]) > _FUSION_EPS:
+        return False
+    lo, hi = sorted((a[1], b[1]))
+    return lo - _FUSION_EPS <= pt[1] <= hi + _FUSION_EPS
+
+
+def _segment_fuses(seg: tuple, other_net_segs: list[tuple]) -> bool:
+    """True iff `seg` would electrically fuse with any segment belonging to a
+    DIFFERENT net: collinear interval overlap, or either endpoint on the other
+    segment (and vice versa, to catch a foreign endpoint on THIS segment)."""
+    for o in other_net_segs:
+        if _collinear_overlap(seg, o):
+            return True
+        if _point_on_segment(seg[0], o) or _point_on_segment(seg[1], o):
+            return True
+        if _point_on_segment(o[0], seg) or _point_on_segment(o[1], seg):
+            return True
+    return False
+
+
+def _net_jog_steps(net_name: str, attempt: int) -> float:
+    """Deterministic jog offset (mm) for a net, by net-name hash. Returns 1..3
+    grid steps (1.27 mm multiples). `attempt` (0-based) rotates the magnitude so
+    successive retries try distinct offsets. Sign is folded into the hash so
+    different nets deterministically diverge instead of all jogging one way."""
+    import hashlib
+    h = int(hashlib.sha256(f"{net_name}#{attempt}".encode()).hexdigest(), 16)
+    steps = (h % 3) + 1                      # 1, 2, or 3 grid steps
+    sign = 1.0 if (h >> 2) & 1 else -1.0
+    return round(sign * steps * 1.27, 4)
+
+
+def _jog_free_axis(waypoints: list[tuple[float, float]], offset: float) -> list[tuple[float, float]]:
+    """Shift an L-route's elbow along its FREE axis by `offset`, keeping both pin
+    endpoints fixed. For a 2-waypoint straight run this inserts a jog so the
+    middle no longer lies on the original line. For a 3-waypoint L, it moves the
+    elbow's swing so the two legs shift off the colliding column/row.
+
+    A horizontal-first L [p1,(x2,y1),p2] has its VERTICAL leg on column x2; jog
+    it to (x2+offset). A collinear straight [p1,p2] (dx==0 or dy==0) is split
+    into a 3-segment jog so it detours off the shared line.
+    """
+    if len(waypoints) == 2:
+        (x1, y1), (x2, y2) = waypoints
+        if abs(x1 - x2) < _FUSION_EPS:       # vertical run → detour x
+            mx = round(x1 + offset, 4)
+            return [(x1, y1), (mx, y1), (mx, y2), (x2, y2)]
+        # horizontal run → detour y
+        my = round(y1 + offset, 4)
+        return [(x1, y1), (x1, my), (x2, my), (x2, y2)]
+    if len(waypoints) == 3:
+        (x1, y1), (ex, ey), (x2, y2) = waypoints
+        # horizontal-first elbow: vertical leg on column ex → move the column.
+        nex = round(ex + offset, 4)
+        return [(x1, y1), (nex, y1), (nex, y2), (x2, y2)]
+    return waypoints
 
 
 def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float]) -> list[tuple[float, float]]:

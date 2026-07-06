@@ -222,6 +222,10 @@ VERBS = {
                                 "Assemble the C04 layout constraint package from C01+C03 exports."),
     "c04_readiness": (_WC, "assess_c04_layout_readiness", ("folder",),
                       "Report C04 layout-constraint readiness."),
+    "c04_placement_review": (_WC, "emit_c04_placement_review", ("board_pcb", "out_dir", "board_name"),
+                             "Emit the placement review package (renders + manifest + PLACEMENT_REVIEW.md) for owner approval."),
+    "c04_placement_gate": (_WC, "assess_c04_placement_approval", ("folder",),
+                           "Check PLACEMENT_APPROVED.json (owner-authorised) before routing is allowed."),
     "c05_scaffold_fw_spec": (_WC, "scaffold_c05_fw_spec", ("out_dir",),
                              "Scaffold the C05 firmware SW-spec sub-package (spec only, no code)."),
     "c05_readiness": (_WC, "assess_c05_fw_readiness", ("folder",),
@@ -284,6 +288,10 @@ VERBS = {
                              "Cross-check generated nets vs a reference product's nets."),
     "impedance_solve": (_EB, "solve_impedance", ("stackup", "targets"),
                         "Pure-python C04 impedance estimate from stackup + targets."),
+    "qa_svg_text": (_EB, "qa_svg_text", ("svg_path",),
+                    "Render-layer text-overlap QA: scan every <text> bbox in a "
+                    "kicad-cli-exported SVG; >15% intersection = violation. "
+                    "violation=0 required for presentation-done claims."),
     # refs-first gate (EPIC refs-derived-design, 切面 1)
     "refs_ingest": (_WC, "ingest_refs", ("folder",),
                     "Scan a stage's 01_refs/ SSOT into a manifest (classify sources, "
@@ -308,7 +316,7 @@ VERBS = {
 # Path-like arg keys resolved against --repo when relative; folder/out_dir
 # default to the repo root itself when the verb requires them but the caller
 # did not pass them (the `gate.py <verb> --repo <abs>` short form).
-PATH_KEYS = ("folder", "out_dir", "corpus_dir", "source_image", "ai_export_path", "vault_root")
+PATH_KEYS = ("folder", "out_dir", "corpus_dir", "source_image", "ai_export_path", "vault_root", "svg_path")
 REPO_DEFAULT_KEYS = ("folder", "out_dir")
 
 
@@ -506,6 +514,18 @@ def _v_c04_readiness(a):
     ).to_dict()
 
 
+def _v_c04_placement_review(a):
+    from bodesign_workflow_core import emit_c04_placement_review
+    return emit_c04_placement_review(
+        a["board_pcb"], a["out_dir"], a["board_name"],
+    ).to_dict()
+
+
+def _v_c04_placement_gate(a):
+    from bodesign_workflow_core import assess_c04_placement_approval
+    return assess_c04_placement_approval(a["folder"]).to_dict()
+
+
 def _v_c05_scaffold_fw_spec(a):
     from bodesign_workflow_core import scaffold_c05_fw_spec
     return scaffold_c05_fw_spec(a["out_dir"], a.get("software"), a.get("pin_map")).to_dict()
@@ -682,6 +702,24 @@ def _v_reference_crosscheck(a):
 def _v_impedance_solve(a):
     from bodesign_eda_bridge import solve_impedance
     return solve_impedance(a["stackup"], a["targets"])
+
+
+def _v_qa_svg_text(a):
+    from bodesign_eda_bridge.render_qa import qa_svg_text
+    report = qa_svg_text(a["svg_path"])
+    if hasattr(report, "to_dict"):
+        return report.to_dict()
+    # TextQAReport has no to_dict — assemble the report envelope by hand.
+    return {
+        "path": report.path,
+        "texts": report.texts,
+        "violations": [
+            {"a": a_, "b": b_, "x": x_, "y": y_, "overlap_ratio": r_}
+            for (a_, b_, x_, y_, r_) in report.violations
+        ],
+        "violation_count": len(report.violations),
+        "ok": report.ok,
+    }
 
 
 HANDLERS = {}

@@ -50,6 +50,46 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "使用者明確指示 graduate。verified 完成：19 tests OK、opt-in style=draftsman、預設不破壞、architecture.md 同步、event 收尾。"
+    },
+    {
+      "from": "living",
+      "to": "designed",
+      "at": "2026-07-06T11:16:27.711Z",
+      "by": "pkcs12",
+      "mode": "extend",
+      "reason": "BR_20260706 batch extend: A7 密度預算 lint / A8 net partition 保真閘 / A9 渲染層文字 QA / A3 防熔合 guard——aiguard C03 實戰缺口收編（DD-8..DD-11）"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-06T11:17:22.710Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "extend 任務拆解完成（tasks §8，8.1-8.3 已落地、8.4-8.8 待實作）"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-06T11:17:22.845Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "開始實作 8.4 密度 lint / 8.5 防熔合 guard / 8.6 landing verb / 8.7 迴歸"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-06T11:29:06.160Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "extend §8 全數完成：8.1-8.3 收編（fidelity/render_qa/MCP 接線）、8.4 密度預算 lint（DENSITY_BUDGET_EXCEEDED fail-fast）、8.5 防熔合 guard（fusion_registry + net-hash jog + 降級可見）、8.6 gate.py qa_svg_text verb、8.7-8.8 迴歸+收尾。62 tests OK（TV1-TV10 byte-stable 全綠 + density 7 + 防熔合 3）"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-06T11:29:06.299Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "extend 驗證完成回歸 living：spec 已在 KB 區，BR_20260706 四筆已閉環（Resolution 段 + issues/closed/）"
     }
   ]
 }

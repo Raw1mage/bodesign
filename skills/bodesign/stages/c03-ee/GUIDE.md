@@ -408,6 +408,9 @@ C03 is genuinely complete when:
   A missing report means the gate **has not run**: say so explicitly; never presume PASS.
 - `Mechanical_Constraint_Export.json` is produced with `approval=false`.
 - If a full netlist is not recoverable, `Netlist_Status.md` documents the source-data limit.
+- **Schematic fidelity gate PASS** (when the schematic is engine-composed): `compose_schematic(..., fidelity=True)` returns `fidelity.ok` / diff 0/0 — the emitted net partition matches the spec. ERC passing is NOT sufficient; it is blind to collinear-wire net FUSION. A connector-dense sheet with no fidelity check is `draft`.
+- **Render-layer text QA violation = 0** on every schematic page: `render_qa.qa_svg_text(<page.svg>)` over the kicad-cli SVG export. Model-layer / anchor-only QA passing does NOT satisfy this — it has a structural blind spot for pin-name/refdes/value glyphs.
+- **One fresh-eyes visual QA pass** after the machine gates are 0: a review subagent reads the rendered PNGs and confirms no smears/black-blocks/broken nets. The machine gate gets you to the door; a human-equivalent look confirms it. (Learned 2026-07-06: 2 rounds shipped "QA passed" that fresh eyes then failed.)
 
 Still `draft` if any `high` finding is unexplained, datasheets are unsynced with claims made
 anyway, or a connectivity gap is silently back-filled. SPICE/EMC/thermal *verdicts* are **not**

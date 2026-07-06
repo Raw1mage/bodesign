@@ -26,6 +26,49 @@ SPEC = {
 }
 
 
+class ComposeSkipContractTests(unittest.TestCase):
+    """Silent-skip fail-fast contract (BR): pcbnew/kicad-free — pure spec parsing."""
+
+    def _work(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        d = Path(tempfile.mkdtemp(prefix="bodesign-skip-", dir=PRIVATE_BASE))
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        return d
+
+    def test_all_components_skipped_fails_fast(self):
+        # 13 declared components all lack a symbol -> empty schematic would be a
+        # false green (0 ERC violations). Must raise, not return ok.
+        spec = {"components": [{"ref": f"R{i}", "lib": "Device", "part": "R"}
+                               for i in range(13)],
+                "nets": []}
+        with self.assertRaises(ValueError) as ctx:
+            compose_schematic(self._work(), "all_skip_demo", spec, symbol_dirs=self._work())
+        msg = str(ctx.exception)
+        self.assertIn("COMPOSE_ALL_COMPONENTS_SKIPPED", msg)
+        # every skip reason is enumerated
+        self.assertIn("component #0", msg)
+        self.assertIn("component #12", msg)
+        self.assertIn("missing", msg)
+
+    @unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+    def test_partial_skip_warns_with_correct_shape_hint(self):
+        # one good + one malformed component: proceed, but warn with the correct
+        # symbol: "Lib:Part" shape hint (not a fail-fast).
+        spec = {
+            "components": [
+                {"ref": "R1", "symbol": "Device:R", "value": "10k"},
+                {"ref": "R2", "lib": "Device", "part": "R"},  # wrong shape -> skip
+            ],
+            "nets": [],
+        }
+        result = compose_schematic(self._work(), "partial_skip_demo", spec, symbol_dirs=SYMBOL_DIR)
+        skip_warnings = [w for w in result.warnings if "skipped" in w]
+        self.assertTrue(skip_warnings, f"expected a skip warning, got {result.warnings!r}")
+        self.assertTrue(any('symbol: "Lib:Part"' in w or 'Lib:Part' in w for w in skip_warnings),
+                        f"skip warning should hint the correct shape, got {skip_warnings!r}")
+        self.assertGreaterEqual(result.placed, 1)
+
+
 @unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
 class ComposerTests(unittest.TestCase):
     def setUp(self):
@@ -43,7 +86,12 @@ class ComposerTests(unittest.TestCase):
 
     def test_compose_auto_places_and_emits(self):
         result = compose_schematic(self.work, "divider_demo", SPEC, symbol_dirs=SYMBOL_DIR)
-        self.assertEqual(4, result.placed)
+        # result.placed == emit.component_count, which now counts ALL emitted symbol
+        # blocks (the 4 user parts PLUS any synthesized power-port / PWR_FLAG glyphs),
+        # so it is >= the user-component count. Assert that floor plus a clean emit
+        # rather than a brittle exact total that shifts whenever power-symbol emission
+        # adds glyphs.
+        self.assertGreaterEqual(result.placed, 4)
         self.assertEqual(3, result.nets)
         self.assertEqual([], result.emit.unresolved_pins)
         self.assertEqual([], result.warnings)

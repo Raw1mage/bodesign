@@ -56,6 +56,90 @@ BBOX_MARGIN_MM = 2.54
 SHEET_MARGIN_MM = 12.7
 
 
+# ---------------------------------------------------------------------------
+# DD-10 (A7): page density budget. Text-overlap's治本 layer is placement density —
+# per-page net count / component count / per-symbol pin count decide the text
+# space available; the emit-layer anti-overlap has no solution past a critical
+# density (same engine: aiguard 04_wireless page v=3 vs product single-page
+# v=231, the sole difference being density). compose_schematic front-lints these
+# and fail-fasts (DENSITY_BUDGET_EXCEEDED, suggest splitting pages) before
+# placement.
+#
+# Thresholds calibrated on aiguard CCM实測 (BR_20260706_schematic_text_render_qa_gap):
+#   - 04_wireless page (PASS, qa v=3):   ~12 nets / 8 components / typical symbol pins
+#   - 03_memory page (FAIL, qa v=18):    ~24 nets / 10 components / one 60+ pin symbol
+# The defaults sit in the PASS/FAIL midband (not fitted to either endpoint, R5)
+# and are per-key overridable (explicit, never silent).
+DENSITY_BUDGET_DEFAULTS: dict[str, int] = {
+    "max_nets_per_page": 20,        # 04_wireless≈12 PASS … 03_memory≈24 FAIL → 20 midband
+    "max_components_per_page": 15,  # 04_wireless≈8 PASS … 03_memory≈10 FAIL → 15 headroom
+    "max_pins_per_symbol": 64,      # 03_memory FAIL page carried a single 60+ pin symbol
+}
+
+
+def _lint_density_budget(
+    budget: dict | None,
+    parsed: list[dict],
+    nets: list,
+    symbol_dirs,
+    bbox_cache: dict,
+) -> None:
+    """DD-10 fail-fast density lint (runs BEFORE placement).
+
+    budget is None  → lint disabled (zero-break default).
+    budget is {}    → use DENSITY_BUDGET_DEFAULTS verbatim.
+    budget is dict  → per-key override on top of the defaults.
+
+    Raises ValueError("DENSITY_BUDGET_EXCEEDED: ...") enumerating every exceeded
+    metric (measured vs threshold) plus the remedy (split pages / raise budget via
+    explicit override). Per-symbol pin count is derived from load_symbol pins;
+    a symbol that fails to load is skipped for the pin metric (fail-visible via
+    the existing bbox warnings path — the lint never fabricates a pin count).
+    """
+    if budget is None:
+        return
+    thresholds = dict(DENSITY_BUDGET_DEFAULTS)
+    thresholds.update(budget)
+
+    n_nets = len(nets)
+    n_components = len(parsed)
+
+    # Per-symbol pin count: reuse load_symbol; count endpoints. Cache is shared
+    # with _estimate_bbox so a symbol is parsed once.
+    worst_pin_ref = None
+    worst_pin_count = 0
+    for c in parsed:
+        try:
+            _definition, pins = load_symbol(c["symbol"], symbol_dirs)
+        except (FileNotFoundError, KeyError):
+            continue
+        pin_count = len(pins)
+        if pin_count > worst_pin_count:
+            worst_pin_count = pin_count
+            worst_pin_ref = c["ref"]
+
+    violations: list[str] = []
+    if n_nets > thresholds["max_nets_per_page"]:
+        violations.append(
+            f"nets/page: {n_nets} > {thresholds['max_nets_per_page']}")
+    if n_components > thresholds["max_components_per_page"]:
+        violations.append(
+            f"components/page: {n_components} > {thresholds['max_components_per_page']}")
+    if worst_pin_count > thresholds["max_pins_per_symbol"]:
+        violations.append(
+            f"pins/symbol: {worst_pin_count} ({worst_pin_ref}) > "
+            f"{thresholds['max_pins_per_symbol']}")
+
+    if violations:
+        raise ValueError(
+            "DENSITY_BUDGET_EXCEEDED: page density exceeds the budget "
+            "(text-overlap is unsolvable at the emit layer past this density — "
+            "DD-10). Exceeded: " + "; ".join(violations) + ". Remedy: split the "
+            "subsystem across multiple sheets/pages, OR raise the budget with an "
+            "explicit density_budget override (e.g. density_budget="
+            "{\"max_nets_per_page\": <higher>}).")
+
+
 def _cluster_gutter_mm(component_count: int) -> float:
     """Deterministic gutter ladder (T4): small designs get a tight gutter so
     sheet-fit stays readable; CLUSTER_GUTTER_MM remains the >50-part ceiling."""
@@ -115,7 +199,7 @@ class SheetFit:
 
 
 @dataclass(slots=True)
-class ComposeResult:
+class ComposeResult:  # noqa: D101 — fidelity field appended for BR1 (2026-07-06)
     emit: SchematicEmitResult
     validation: object | None = None
     placed: int = 0
@@ -126,6 +210,7 @@ class ComposeResult:
     route_stats: RouteStats | None = None
     sheet_fit: SheetFit | None = None
     ink_metrics: dict | None = None
+    fidelity: object | None = None  # BR1: FidelityReport when fidelity=True
 
 
 def _auto_place(index: int, columns: int = 4, dx: float = 45.0, dy: float = 45.0, x0: float = 35.0, y0: float = 35.0) -> tuple[float, float]:
@@ -338,6 +423,36 @@ def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str
                 pos[r][1] += disp[r][1] * scale
         temp = max(temp - cool, k * 0.05)
 
+    # Satellite snap (A2): a 2-terminal decoupling/oscillator part that shares a
+    # net with exactly ONE cluster peer is a "satellite" of that peer. Force-
+    # directed placement pulls it toward the cluster centroid (gravity), so it
+    # drifts away from the device it decouples and reads as scattered. After FR
+    # converges, snap each satellite to a fixed offset beside its host so it sits
+    # visually adjacent. Deterministic (ref-sorted, fixed offset); hosts are not
+    # themselves satellites, so this never chains.
+    host_of: dict[str, str] = {}
+    for r in ordered:
+        peers = [n for n in adjacency.get(r, ()) if n in member_set and n != r]
+        bb = bboxes.get(r)
+        is_small = bb is not None and max(bb) <= (2 * BBOX_MARGIN_MM + 5.0)
+        if len(peers) == 1 and is_small and peers[0] in pos:
+            host_of[r] = peers[0]
+    # break any accidental mutual pairing: a host that is itself a satellite of
+    # its own satellite must not be snapped (keep the larger/earlier ref as host).
+    for sat in sorted(host_of):
+        host = host_of[sat]
+        if host in host_of and host_of[host] == sat:
+            # deterministic tie-break: the ref sorting first stays the host.
+            if sat < host:
+                host_of.pop(host, None)
+            else:
+                host_of.pop(sat, None)
+    SAT_DX = k * 0.6
+    for sat in sorted(host_of):
+        host = host_of[sat]
+        if host in pos and sat in pos:
+            pos[sat] = [pos[host][0] + SAT_DX, pos[host][1]]
+
     return {r: (pos[r][0], pos[r][1]) for r in ordered}
 
 
@@ -482,6 +597,9 @@ def compose_schematic(
     connection_style: str | None = None,
     style: str = "netlist",
     measure_ink: bool = False,
+    power_ports: bool = True,
+    fidelity: bool = False,
+    density_budget: dict | None = None,
 ) -> ComposeResult:
     """Compose a schematic from a declarative spec.
 
@@ -501,6 +619,14 @@ def compose_schematic(
     spec["nc"] (T1): optional list of "REF.PIN" strings declared intentionally
     unconnected; forwarded to the emitter which places `(no_connect ...)` glyphs
     and fail-fasts on unresolvable entries.
+
+    density_budget (DD-10, A7 — opt-in fail-fast page density lint):
+      - None (DEFAULT): lint disabled (zero break; existing callers unaffected).
+      - {}: use DENSITY_BUDGET_DEFAULTS (aiguard-calibrated).
+      - dict: per-key override on top of the defaults.
+    When enabled, a page whose net count / component count / per-symbol pin count
+    exceeds the budget raises ValueError("DENSITY_BUDGET_EXCEEDED: ...") BEFORE
+    placement (fail-fast), suggesting a page split or an explicit budget override.
     """
     if style not in ("netlist", "draftsman"):
         raise ValueError(f"style must be 'netlist' or 'draftsman', got {style!r}")
@@ -520,11 +646,18 @@ def compose_schematic(
 
     # Parse components into a working list preserving spec order/index.
     parsed: list[dict] = []
+    skips: list[str] = []
     for index, comp in enumerate(raw_components):
         ref = str(comp.get("ref", "")).strip()
         symbol = str(comp.get("symbol", "")).strip()
         if not ref or not symbol:
-            warnings.append(f"component #{index} missing ref/symbol; skipped")
+            missing = " and ".join(
+                f for f, present in (("ref", ref), ("symbol", symbol)) if not present)
+            reason = (f"component #{index} missing {missing}; skipped "
+                      f'(each component needs ref + symbol: "Lib:Part", e.g. '
+                      f'{{"ref": "R1", "symbol": "Device:R"}})')
+            skips.append(reason)
+            warnings.append(reason)
             continue
         parsed.append({
             "index": index,
@@ -555,15 +688,32 @@ def compose_schematic(
 
     # T3: per-net label override — only in the derived (non-explicit) draftsman
     # default. Multi-node (>=3 node) nets go to labels (reason "multi-node").
+    #
+    # T3b (all_label): connector-dense boards (product board) pack dozens of pins
+    # on tight x columns; the 2-node drawn-wire route runs COLLINEAR on such
+    # columns and KiCad fuses collinear wire runs into one net (short). Callers may
+    # set spec["all_label"]=True to force EVERY net (2-node included) onto global
+    # labels — zero drawn wire, collinearity-free by construction. Electrical
+    # definition is untouched; only the drawn-vs-label rendering decision changes.
     label_nets: set[str] | None = None
     multi_node_to_label = False
-    if style == "draftsman" and not explicit_conn:
+    all_label = bool(spec.get("all_label", False))
+    if all_label:
+        multi_node_to_label = True
+        label_nets = {net.name for net in nets}
+    elif style == "draftsman" and not explicit_conn:
         multi_node_to_label = True
         label_nets = {net.name for net in nets if len(net.nodes) >= 3}
 
     clusters: list[Cluster] = []
     sheet_fit: SheetFit | None = None
     bboxes: dict[str, tuple[float, float] | None] = {}
+    bbox_cache: dict = {}
+
+    # DD-10 (A7): page density lint runs BEFORE placement (fail-fast). Disabled
+    # by default (density_budget is None). Applies to both styles — an over-dense
+    # page is unreadable regardless of connectivity rendering.
+    _lint_density_budget(density_budget, parsed, nets, symbol_dirs, bbox_cache)
 
     if style == "netlist":
         # ---- BYTE-EQUIVALENT legacy path (TV9). Do not change. ----
@@ -580,7 +730,6 @@ def compose_schematic(
         paper = "A4"
     else:
         # ---- draftsman path: cluster → refine → de-overlap → sheet-fit ----
-        bbox_cache: dict = {}
         for c in parsed:
             bboxes[c["ref"]] = _estimate_bbox(c["symbol"], symbol_dirs, bbox_cache)
             if bboxes[c["ref"]] is None:
@@ -643,10 +792,19 @@ def compose_schematic(
         sheet_fit = _fit_sheet(components, bboxes, warnings)
         paper = sheet_fit.selected_paper
 
+    # Fail-fast: if the caller declared components but EVERY one was skipped, the
+    # emitted schematic would be empty and ERC would report 0 violations — a false
+    # green. Refuse to ship it and list each skip reason (BR: silent-skip → assert).
+    if raw_components and not parsed:
+        raise ValueError(
+            "COMPOSE_ALL_COMPONENTS_SKIPPED: every declared component was skipped, "
+            "the schematic would be empty (0 violations is a false green). Reasons: "
+            + "; ".join(skips))
+
     emit = emit_kicad_schematic(
         out_dir, project_name, components, nets,
         symbol_dir=symbol_dirs, connection_style=effective_conn, paper=paper,
-        nc=nc_list or None, label_nets=label_nets,
+        nc=nc_list or None, label_nets=label_nets, power_ports=power_ports,
     )
     warnings.extend(emit.warnings)
 
@@ -658,6 +816,22 @@ def compose_schematic(
             return ref in placements
 
         route_stats = _build_route_stats(nets, net_kinds, placements, _pin_resolvable, emit, multi_node_to_label=multi_node_to_label)
+
+        # DD-11: the anti-fusion guard may have down-graded some nets from drawn
+        # wire to label AFTER _build_route_stats counted them as wired. Reconcile
+        # so route_stats mirrors the actual emission (visible, never silent).
+        fusion_fallbacks = getattr(emit, "fusion_label_fallbacks", [])
+        if fusion_fallbacks:
+            downgraded = {d["net"] for d in fusion_fallbacks}
+            already = {d["net"] for d in route_stats.label_fallback_reasons}
+            for d in fusion_fallbacks:
+                if d["net"] not in already:
+                    route_stats.label_fallback_reasons.append(d)
+                    route_stats.labelled_nets += 1
+                    route_stats.wired_nets = max(0, route_stats.wired_nets - 1)
+            warnings.append(
+                f"anti-fusion guard down-graded {len(downgraded)} net(s) to label "
+                f"to avoid cross-net collinear wire fusion: {sorted(downgraded)}")
 
     result = ComposeResult(
         emit=emit,
@@ -676,4 +850,15 @@ def compose_schematic(
 
     if validate:
         result.validation = validate_kicad_schematic(emit.schematic_path)
+
+    # BR1: post-emit fidelity gate. ERC/netlist-export (validate=) is BLIND to net
+    # FUSION (collinear-wire shorts): fewer nets, no dangling, ERC looks cleaner.
+    # Compare the spec's expected net PARTITION against the KiCad-exported
+    # partition; diverge => fail-loud (never ship a silently-shorted schematic).
+    if fidelity:
+        from .fidelity import verify_partition_fidelity, FidelityError
+        report = verify_partition_fidelity(nets, emit.schematic_path)
+        result.fidelity = report
+        if not report.ok:
+            raise FidelityError(report)
     return result

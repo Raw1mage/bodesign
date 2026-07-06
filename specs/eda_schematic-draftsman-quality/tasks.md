@@ -54,3 +54,14 @@
 - [x] 7.2 plan-sync + 更新 tasks checkbox
 - [x] 7.3 architecture.md 同步（composer placement/style 邊界）— orchestrator 已更新 eda-bridge 行（draftsman 模式 + wire 引擎啟用 + ink_metrics + 預設 netlist 不破壞）
 - [x] 7.4 收尾 event_record（實作完成紀錄：Scope/Key Decisions/Verification/Remaining）
+
+## 8. Extend 2026-07-06（BR_20260706 batch：DD-8..DD-11，A7/A8/A9 + A3 guard）
+
+- [x] 8.1 A8 保真閘 `fidelity.py verify_partition_fidelity`（DD-8）— 已於交付 session 實戰驗證後收編，`compose_schematic(fidelity=True)` 接線 + `FidelityError` fail-loud + tests/test_fidelity_gate.py
+- [x] 8.2 A9 渲染層文字 QA `render_qa.qa_svg_text`（DD-9）— 已收編，含 aiguard CCM 5 頁回歸基線註記
+- [x] 8.3 MCP schema：`bodesign_compose_schematic` 加 `fidelity` 參數透傳 + 結果回 `engine_rev`/`fidelity`
+- [x] 8.4 A7 密度預算 lint（DD-10）：composer 前置檢查 net 數/元件數/單 symbol pin 數，超閾值 raise `DENSITY_BUDGET_EXCEEDED`（閾值以 aiguard 04_wireless PASS / 03_memory FAIL 實測標定，可參數化 override）
+- [x] 8.5 A3 防熔合 guard（DD-11）：emit 產生 wire segment 前對全局 wire 集合做跨 net 共線/共點檢查，確定性 jog 錯開或 fail；無衝突輸入 byte-equivalent（R6）
+- [x] 8.6 `qa_svg_text` 收進 `skills/bodesign/scripts/gate.py` landing verb（渲染層 QA 免容器）
+- [x] 8.7 回歸測試：density lint（超標 fail-fast + 合格通過）、防熔合（connector 密集 fixture compose 後保真閘 diff 0/0）、既有 TV1-TV10 維持全綠
+- [x] 8.8 收尾：tasks 勾選同步 + architecture.md 同步 + event_record

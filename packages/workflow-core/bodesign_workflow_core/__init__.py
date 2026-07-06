@@ -36,6 +36,12 @@ from .c04_layout_constraints import (
     assess_c04_layout_readiness,
     emit_c04_layout_package,
 )
+from .c04_placement_gate import (
+    PlacementApprovalResult,
+    PlacementReviewResult,
+    assess_c04_placement_approval,
+    emit_c04_placement_review,
+)
 from .c05_fw_spec import (
     C05FwReadiness,
     C05FwResult,
@@ -390,6 +396,10 @@ __all__ = [
     "return_blocker",
     "assess_c04_layout_readiness",
     "emit_c04_layout_package",
+    "PlacementApprovalResult",
+    "PlacementReviewResult",
+    "assess_c04_placement_approval",
+    "emit_c04_placement_review",
     "assess_c05_fw_readiness",
     "scaffold_c05_fw_spec",
     "assess_c06_readiness",

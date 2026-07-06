@@ -7,7 +7,10 @@
     { "id": "A3", "title": "Route Connectivity As Wires", "description": "2-pin L-route、3+ pin channel、power/bus 退回 label", "decomposition": null },
     { "id": "A4", "title": "Fit Sheet To Content", "description": "依內容 bbox 選最小可容納標準頁並置中", "decomposition": null },
     { "id": "A5", "title": "Emit Validated Schematic", "description": "組裝 .kicad_sch + grid-snap，kicad-cli validate", "decomposition": null },
-    { "id": "A6", "title": "Measure Ink Coverage", "description": "pdftoppm + PIL 量 ink% 與內容佔版面比；缺 toolchain 顯式 unavailable", "decomposition": null }
+    { "id": "A6", "title": "Measure Ink Coverage", "description": "pdftoppm + PIL 量 ink% 與內容佔版面比；缺 toolchain 顯式 unavailable", "decomposition": null },
+    { "id": "A7", "title": "Lint Page Density Budget", "description": "compose 前置 lint：頁面 net 數/元件數/單 symbol pin 數超實測標定閾值即拒單頁、強制分頁（fail-fast）", "decomposition": null },
+    { "id": "A8", "title": "Verify Net Partition Fidelity", "description": "post-emit 保真閘：spec 期望 net 劃分 vs kicad-cli 匯出 netlist 連通分量，節點集等價比對（無視 net 命名），diff!=0/0 即 FidelityError", "decomposition": null },
+    { "id": "A9", "title": "QA Rendered Text Overlap", "description": "掃渲染 SVG 全部 <text> bbox，交疊>15% 即 violation；渲染層才是交付判準，模型層 QA 不充分", "decomposition": null }
   ],
   "arrows": [
     { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "label": "Design Spec (components + nets)", "type": "input" },
@@ -22,6 +25,16 @@
     { "id": "AR10", "source": "EXTERNAL", "target": "A5:mechanism", "label": "kicad_emit + kicad-cli", "type": "mechanism" },
     { "id": "AR11", "source": "A5:output", "target": "A6:input", "label": "Validated .kicad_sch", "type": "output" },
     { "id": "AR12", "source": "EXTERNAL", "target": "A6:mechanism", "label": "pdftoppm + PIL", "type": "mechanism" },
-    { "id": "AR13", "source": "A6:output", "target": "EXTERNAL", "label": "Ink/BBox Metrics + Draftsman Schematic", "type": "output" }
+    { "id": "AR13", "source": "A6:output", "target": "EXTERNAL", "label": "Ink/BBox Metrics + Draftsman Schematic", "type": "output" },
+    { "id": "AR14", "source": "EXTERNAL", "target": "A7:input", "label": "Design Spec (per-page nets/components/pins)", "type": "input" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A7:control", "label": "Calibrated Density Thresholds (aiguard 04_wireless PASS / 03_memory FAIL)", "type": "control" },
+    { "id": "AR16", "source": "A7:output", "target": "A1:control", "label": "Density Verdict (pass / force-paginate fail)", "type": "control" },
+    { "id": "AR17", "source": "A5:output", "target": "A8:input", "label": "Emitted .kicad_sch", "type": "output" },
+    { "id": "AR18", "source": "EXTERNAL", "target": "A8:control", "label": "Spec Expected Net Partition (union-find)", "type": "control" },
+    { "id": "AR19", "source": "EXTERNAL", "target": "A8:mechanism", "label": "kicad-cli netlist export + connected-components", "type": "mechanism" },
+    { "id": "AR20", "source": "A8:output", "target": "A9:input", "label": "Fidelity-PASS Schematic", "type": "output" },
+    { "id": "AR21", "source": "EXTERNAL", "target": "A9:mechanism", "label": "kicad-cli SVG export + text-bbox scanner (render_qa.qa_svg_text)", "type": "mechanism" },
+    { "id": "AR22", "source": "A9:output", "target": "EXTERNAL", "label": "Text-Overlap Violations Report (0 = 呈現層可交付)", "type": "output" },
+    { "id": "AR23", "source": "EXTERNAL", "target": "A3:control", "label": "Cross-Net Collinear-Fusion Guard (異 net wire 共線/共點即 fail", "type": "control" }
   ]
 }

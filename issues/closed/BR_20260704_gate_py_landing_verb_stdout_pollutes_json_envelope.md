@@ -58,3 +58,7 @@ python3 gate.py c04_readiness --repo <ROOT> --arg folder=<ROOT>/03.aiguard 2>/de
 # 期望輸出:True(無需任何 grep 濾行)
 ```
 並確認 `2>&1` 檢視時 3 條 `landing_verb_*` 診斷行仍出現(只是改走 stderr)。
+
+## 復發記錄 2026-07-06
+
+aiguard C00→C04 refs-derived 重跑全程復發:每個 landing verb 呼叫 stdout 前綴 `landing_verb_start ...`(以及 error 時整段 traceback)污染 JSON envelope,consumer 全程需 `re.search(r'\{"ok".*\}')` 擷取 fenced JSON(見 c00_readiness 首跑 PARSE_FAIL 證據)。closed 後未修;復發頻率 = 100%(本節每次 gate.py 呼叫)。建議 reopen 或升級處置(stdout 診斷輸出改導 stderr 即治本)。
