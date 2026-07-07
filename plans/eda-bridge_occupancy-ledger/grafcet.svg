@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1211" height="1580" viewBox="2.00 -2.00 60.54 79.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="2.00" y="-2.00" width="60.54" height="79.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1S1I1" data-segment-ids="S0O1S1I1:1S" d="M 27.18 7.00 L 27.18 11.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1S2I1" data-segment-ids="S1O1S2I1:1S" d="M 27.18 14.00 L 27.18 18.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1G1I1" data-segment-ids="S2O1G1I1:1S" d="M 27.18 21.00 L 27.18 23.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1S3I1" data-segment-ids="G1O1S3I1:1S" d="M 27.18 23.00 L 27.18 27.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O2G6I1" data-segment-ids="G1O2G6I1:1E G1O2G6I1:2S G1O2G6I1:3W G1O2G6I1:4S" d="M 27.18 23.00 L 47.86 23.00 Q 48.36 23.00 48.36 23.50 L 48.36 42.50 Q 48.36 43.00 47.86 43.00 L 35.68 43.00 Q 35.18 43.00 35.18 43.50 L 35.18 49.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1G2I1" data-segment-ids="S3O1G2I1:1S" d="M 27.18 30.00 L 27.18 32.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1S4I1" data-segment-ids="G2O1S4I1:1S" d="M 27.18 32.00 L 27.18 36.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O2G6I2" data-segment-ids="G2O2G6I2:1E G2O2G6I2:2S G2O2G6I2:3W G2O2G6I2:4S" d="M 27.18 32.00 L 49.86 32.00 Q 50.36 32.00 50.36 32.50 L 50.36 44.50 Q 50.36 45.00 49.86 45.00 L 31.68 45.00 Q 31.18 45.00 31.18 45.50 L 31.18 49.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1G3I1" data-segment-ids="S4O1G3I1:1S" d="M 27.18 39.00 L 27.18 41.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S5I1" data-segment-ids="G3O1S5I1:1E G3O1S5I1:2S" d="M 27.18 41.00 L 43.86 41.00 Q 44.36 41.00 44.36 41.50 L 44.36 51.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O2G6I3" data-segment-ids="G3O2G6I3:1S" d="M 27.18 41.00 L 27.18 49.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1G4I1" data-segment-ids="S5O1G4I1:1S" d="M 44.36 54.00 L 44.36 58.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G4O1S6I1" data-segment-ids="G4O1S6I1:1S" d="M 10.00 58.00 L 10.00 62.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G4O2S8I1" data-segment-ids="G4O2S8I1:1S" d="M 27.18 58.00 L 27.18 62.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S6O1G5I1" data-segment-ids="S6O1G5I1:1S" d="M 10.00 65.00 L 10.00 71.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G5O1S0I1" data-segment-ids="G5O1S0I1:1S G5O1S0I1:2W G5O1S0I1:3N G5O1S0I1:4E G5O1S0I1:5S" d="M 27.18 71.00 L 27.18 72.50 Q 27.18 73.00 26.68 73.00 L 6.50 73.00 Q 6.00 73.00 6.00 72.50 L 6.00 2.50 Q 6.00 2.00 6.50 2.00 L 26.68 2.00 Q 27.18 2.00 27.18 2.50 L 27.18 4.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S7O1G5I2" data-segment-ids="S7O1G5I2:1S S7O1G5I2:2E S7O1G5I2:3S S7O1G5I2:4W S7O1G5I2:5S" d="M 27.18 54.00 L 27.18 55.50 Q 27.18 56.00 27.68 56.00 L 47.86 56.00 Q 48.36 56.00 48.36 56.50 L 48.36 66.50 Q 48.36 67.00 47.86 67.00 L 19.09 67.00 Q 18.59 67.00 18.59 67.50 L 18.59 71.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S8O1G5I3" data-segment-ids="S8O1G5I3:1S" d="M 27.18 65.00 L 27.18 71.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G6O1S7I1" data-segment-ids="G6O1S7I1:1S" d="M 27.18 49.00 L 27.18 51.00"/>
+<rect class="step" x="25.18" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="25.43" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="27.18" y="5.50">0</text>
+<rect class="step" x="25.18" y="11.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="27.18" y="12.50">1</text>
+<rect class="step" x="25.18" y="18.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="27.18" y="19.50">2</text>
+<rect class="step" x="25.18" y="27.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="27.18" y="28.50">3</text>
+<rect class="step" x="25.18" y="36.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="27.18" y="37.50">4</text>
+<rect class="step" x="42.36" y="51.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="44.36" y="52.50">5</text>
+<rect class="step" x="8.00" y="62.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="10.00" y="63.50">6</text>
+<rect class="step" x="25.18" y="51.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="27.18" y="52.50">7</text>
+<rect class="step" x="25.18" y="62.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="27.18" y="63.50">8</text>
+<line class="assoc" x1="29.18" y1="5.50" x2="30.18" y2="5.50"/>
+<rect class="action" x="30.18" y="4.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="5.09"><tspan x="35.77" dy="0">接收 compose 請求（netlist＋</tspan><tspan x="35.77" dy="0.82">符號庫＋頁面 slug）</tspan></text>
+<line class="assoc" x1="29.18" y1="12.50" x2="30.18" y2="12.50"/>
+<rect class="action" x="30.18" y="11.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="12.09"><tspan x="35.77" dy="0">清點內容：逐符號計算 pin-inclusive</tspan><tspan x="35.77" dy="0.82">bbox＋label 伸展量，彙總佔用需求</tspan></text>
+<line class="assoc" x1="29.18" y1="19.50" x2="30.18" y2="19.50"/>
+<rect class="action" x="30.18" y="18.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="18.68"><tspan x="35.77" dy="0">選框＋配額反解 scale/</tspan><tspan x="35.77" dy="0.82">pitch；pitch 候選以帳本</tspan><tspan x="35.77" dy="0.82">dry-run reserve 預檢可行性</tspan></text>
+<line class="assoc" x1="29.18" y1="28.50" x2="30.18" y2="28.50"/>
+<rect class="action" x="30.18" y="27.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="28.09"><tspan x="35.77" dy="0">placement：符號逐一 reserve→</tspan><tspan x="35.77" dy="0.82">落位（body＋pin 外伸）</tspan></text>
+<line class="assoc" x1="29.18" y1="37.50" x2="30.18" y2="37.50"/>
+<rect class="action" x="30.18" y="36.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="36.68"><tspan x="35.77" dy="0">emit：label/stub/電源符號</tspan><tspan x="35.77" dy="0.82">逐一 reserve→draw（與</tspan><tspan x="35.77" dy="0.82">placement 共用帳本實例）</tspan></text>
+<line class="assoc" x1="46.36" y1="52.50" x2="47.36" y2="52.50"/>
+<rect class="action" x="47.36" y="51.07" width="11.18" height="2.86"/>
+<text class="action-label" x="52.95" y="52.09"><tspan x="52.95" dy="0">事後斷言閘：pitch／圖框／利用</tspan><tspan x="52.95" dy="0.82">率≥40%／label 互疊=0／offpage=0</tspan></text>
+<line class="assoc" x1="12.00" y1="63.50" x2="13.00" y2="63.50"/>
+<rect class="action" x="13.00" y="62.07" width="11.18" height="2.86"/>
+<text class="action-label" x="18.59" y="63.09"><tspan x="18.59" dy="0">輸出 .kicad_sch＋PDF＋帳本佔</tspan><tspan x="18.59" dy="0.82">用報告，compose 成功結束</tspan></text>
+<line class="assoc" x1="29.18" y1="52.50" x2="30.18" y2="52.50"/>
+<rect class="action" x="30.18" y="51.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="51.68"><tspan x="35.77" dy="0">BUDGET_INFEASIBLE fail-loud：輸出</tspan><tspan x="35.77" dy="0.82">缺項清單（超載邊/欄、所需</tspan><tspan x="35.77" dy="0.82">vs 可用空間），不升框不重試</tspan></text>
+<line class="assoc" x1="29.18" y1="63.50" x2="30.18" y2="63.50"/>
+<rect class="action" x="30.18" y="62.07" width="11.18" height="2.86"/>
+<text class="action-label" x="35.77" y="62.68"><tspan x="35.77" dy="0">LEDGER_ASSERTION_FAILED fail-loud：斷</tspan><tspan x="35.77" dy="0.82">言失敗即帳本 bug，輸出違規實體</tspan><tspan x="35.77" dy="0.82">與帳本快照供 RCA，不調參不重試</tspan></text>
+<circle class="branch-junction" cx="27.18" cy="23.00" r="0.28"/>
+<circle class="branch-junction" cx="27.18" cy="32.00" r="0.28"/>
+<circle class="branch-junction" cx="27.18" cy="41.00" r="0.28"/>
+<line class="gate" x1="8.00" y1="58.00" x2="46.36" y2="58.00"/>
+<line class="gate" x1="8.00" y1="71.00" x2="29.18" y2="71.00"/>
+<line class="gate" x1="25.18" y1="49.00" x2="37.18" y2="49.00"/>
+<line class="gate" x1="26.18" y1="9.00" x2="28.18" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="28.58" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="28.58" dy="0">netlist 與符號庫載入完成</tspan></text>
+<line class="gate" x1="26.18" y1="16.00" x2="28.18" y2="16.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label" x="28.58" y="16.00" data-label-kind="condition-stub" data-edge-id="edge:S1O1S2I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="28.58" dy="0">內容清單完備（無缺幾何欄位）</tspan></text>
+<line class="gate" x1="26.18" y1="25.00" x2="28.18" y2="25.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label-left" x="25.78" y="25.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="25.78" dy="0">存在可行 frame×pitch（內容佔 60–75%）</tspan></text>
+<line class="gate" x1="34.18" y1="47.00" x2="36.18" y2="47.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2G6I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label" x="36.58" y="46.32" data-label-kind="condition-stub" data-edge-id="edge:G1O2G6I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="36.58" dy="0">掃描完所</tspan><tspan x="36.58" dy="0.68">有候選仍</tspan><tspan x="36.58" dy="0.68">無可行組合</tspan></text>
+<line class="gate" x1="26.18" y1="34.00" x2="28.18" y2="34.00" data-label-kind="condition-stub" data-edge-id="edge:G2O1S4I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label-left" x="25.78" y="34.00" data-label-kind="condition-stub" data-edge-id="edge:G2O1S4I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="25.78" dy="0">全部符號 reserve 成功</tspan></text>
+<line class="gate" x1="30.18" y1="47.00" x2="32.18" y2="47.00" data-label-kind="condition-stub" data-edge-id="edge:G2O2G6I2" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="32.58" y="45.64" data-label-kind="condition-stub" data-edge-id="edge:G2O2G6I2" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="32.58" dy="0">reserve 衝突（</tspan><tspan x="32.58" dy="0.68">帳本回報衝突</tspan><tspan x="32.58" dy="0.68">矩形清單）</tspan></text>
+<line class="gate" x1="43.36" y1="47.00" x2="45.36" y2="47.00" data-label-kind="condition-stub" data-edge-id="edge:G3O1S5I1" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"/>
+<text class="gate-label" x="45.76" y="47.00" data-label-kind="condition-stub" data-edge-id="edge:G3O1S5I1" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"><tspan x="45.76" dy="0">全部 emit 幾何 reserve 成功</tspan></text>
+<line class="gate" x1="26.18" y1="43.00" x2="28.18" y2="43.00" data-label-kind="condition-stub" data-edge-id="edge:G3O2G6I3" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"/>
+<text class="gate-label-left" x="25.78" y="43.00" data-label-kind="condition-stub" data-edge-id="edge:G3O2G6I3" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"><tspan x="25.78" dy="0">reserve 衝突（帳本回報衝突矩形清單）</tspan></text>
+<line class="gate" x1="9.00" y1="60.00" x2="11.00" y2="60.00" data-label-kind="condition-stub" data-edge-id="edge:G4O1S6I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"/>
+<text class="gate-label-left" x="8.60" y="59.32" data-label-kind="condition-stub" data-edge-id="edge:G4O1S6I1" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"><tspan x="8.60" dy="0">五組</tspan><tspan x="8.60" dy="0.68">斷言</tspan><tspan x="8.60" dy="0.68">全過</tspan></text>
+<line class="gate" x1="26.18" y1="60.00" x2="28.18" y2="60.00" data-label-kind="condition-stub" data-edge-id="edge:G4O2S8I1" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"/>
+<text class="gate-label" x="28.58" y="60.00" data-label-kind="condition-stub" data-edge-id="edge:G4O2S8I1" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"><tspan x="28.58" dy="0">任一斷言失敗（＝帳本實作 bug）</tspan></text>
+<line class="gate" x1="9.00" y1="67.00" x2="11.00" y2="67.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1G5I1" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"/>
+<text class="gate-label-left" x="5.80" y="66.66" data-label-kind="condition-stub" data-edge-id="edge:S6O1G5I1" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"><tspan x="5.80" dy="0">新 compose</tspan><tspan x="5.80" dy="0.68">請求到達</tspan></text>
+<line class="gate" x1="17.59" y1="69.00" x2="19.59" y2="69.00" data-label-kind="condition-stub" data-edge-id="edge:S7O1G5I2" data-arrow-id="condition_stub:T12" data-transition-id="T12" data-condition-stub-id="condition_stub:T12"/>
+<text class="gate-label" x="19.99" y="68.32" data-label-kind="condition-stub" data-edge-id="edge:S7O1G5I2" data-arrow-id="condition_stub:T12" data-transition-id="T12" data-condition-stub-id="condition_stub:T12"><tspan x="19.99" dy="0">使用者裁決</tspan><tspan x="19.99" dy="0.68">後重新提交</tspan><tspan x="19.99" dy="0.68">compose 請求</tspan></text>
+<line class="gate" x1="26.18" y1="69.00" x2="28.18" y2="69.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G5I3" data-arrow-id="condition_stub:T13" data-transition-id="T13" data-condition-stub-id="condition_stub:T13"/>
+<text class="gate-label" x="28.58" y="69.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G5I3" data-arrow-id="condition_stub:T13" data-transition-id="T13" data-condition-stub-id="condition_stub:T13"><tspan x="28.58" dy="0">帳本 bug 修復後重新提交 compose 請求</tspan></text>
+</svg>

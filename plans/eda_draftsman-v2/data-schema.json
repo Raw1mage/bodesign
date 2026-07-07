@@ -1,0 +1,45 @@
+{
+  "schemas": [
+    {
+      "name": "ResolvedSymbol",
+      "kind": "json",
+      "fields": [
+        { "name": "mpn", "type": "string", "notes": "真 MPN（保真天條，不得虛構）" },
+        { "name": "lib_id", "type": "string", "notes": "KiCad 官方庫 symbol id，如 MCU_ST_STM32N6:STM32N657X0HxQ" },
+        { "name": "lib_source", "type": "string", "notes": "official | vendor_cad — 來源出處，供 provenance" },
+        { "name": "pin_map", "type": "object", "notes": "pin number → net name（來自 refs netlist，fidelity 閘比對用）" }
+      ]
+    },
+    {
+      "name": "SymbolGap",
+      "kind": "json",
+      "fields": [
+        { "name": "mpn", "type": "string", "notes": "查無官方 symbol 的 MPN" },
+        { "name": "package", "type": "string", "notes": "封裝" },
+        { "name": "pin_count", "type": "number", "notes": "pin 數" },
+        { "name": "disposition", "type": "string", "notes": "pending | substitute | vendor_cad | manual — 使用者裁決結果" }
+      ]
+    },
+    {
+      "name": "PinoutBlock",
+      "kind": "json",
+      "fields": [
+        { "name": "block_id", "type": "string", "notes": "單圖積木 id（refdes 或群組名）" },
+        { "name": "sch_path", "type": "string", "notes": "獨立 .kicad_sch 檔路徑" },
+        { "name": "bbox_mm", "type": "object", "notes": "積木外框 {w,h}——Phase 2 排頁唯一可用的幾何介面" },
+        { "name": "ports", "type": "array", "notes": "對外 net label 清單（頁間連線用）" },
+        { "name": "validated", "type": "boolean", "notes": "雙閘全綠 + 人工抽查通過才 true；false 者不得進排頁" }
+      ]
+    },
+    {
+      "name": "SheetPlan",
+      "kind": "json",
+      "fields": [
+        { "name": "page", "type": "string", "notes": "頁名，如 01_power" },
+        { "name": "paper", "type": "string", "notes": "圖紙尺寸 A4/A3" },
+        { "name": "placements", "type": "array", "notes": "[{block_id, x_mm, y_mm, mirror}] — 只平移/鏡射，不改內部" },
+        { "name": "utilization", "type": "number", "notes": "ink_metrics 量測利用率，≥0.55 才 PASS" }
+      ]
+    }
+  ]
+}

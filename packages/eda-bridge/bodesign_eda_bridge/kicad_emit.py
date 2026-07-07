@@ -284,6 +284,30 @@ def _pin_endpoints(block: str) -> dict[str, tuple[float, float]]:
     return endpoints
 
 
+_RECT_RE = re.compile(
+    r"\(rectangle\s*\(start\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)\s*\(end\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)"
+)
+
+
+def _body_rect(block: str) -> tuple[float, float, float, float] | None:
+    """Union bbox of every `(rectangle ...)` in a symbol block, SYMBOL-LOCAL.
+
+    Returns (x0, y0, x1, y1) with x0<=x1, y0<=y1 (KiCad y grows upward here — the
+    caller flips to sheet coords). This is the TRUE body extent, independent of
+    per-symbol pin length; guard C uses it instead of reconstructing the body from
+    outer pin tips. None when the symbol draws no rectangle (rare; caller falls
+    back to the pin-tip extent)."""
+    xs: list[float] = []
+    ys: list[float] = []
+    for m in _RECT_RE.finditer(block):
+        sx, sy, ex, ey = (float(m.group(i)) for i in range(1, 5))
+        xs.extend((sx, ex))
+        ys.extend((sy, ey))
+    if not xs:
+        return None
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def _pin_name_extents(block: str) -> list[tuple[str, float, float, float]]:
     """Per-pin in-body NAME text geometry, in SYMBOL-LOCAL coords.
 
@@ -401,8 +425,19 @@ def emit_kicad_schematic(
     nc: list[str] | None = None,
     label_nets: set[str] | frozenset | None = None,
     power_ports: bool = True,
+    page_scale: float = 1.0,
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
+
+    page_scale (CCM sheet-coherence contract): the per-page symbols were drawn at
+    a large in-symbol pin pitch (pin_pitch / 2.54). At page_scale == 1.0 EVERY
+    path below is byte-identical to the legacy emitter (existing callers untouched).
+    At page_scale > 1.0 the label/stub geometry scales COHERENTLY with the symbol
+    so a huge symbol does not carry 1.27 mm text on固定 offsets:
+      - label / power-port stub lengths and stagger pitches grow ×page_scale;
+      - a global label anchors at the stub OUTER end (not the pin root / body edge);
+      - the collision y-nudge is suppressed — scaled pitch already separates
+        neighbours, so stubs run straight out (no top-⅓-up / bottom-⅓-down fan).
 
     connection_style taxonomy (the AI/tool split — Level 1):
       - "label" (default, unchanged): every pin of every net gets a global label.
@@ -433,6 +468,8 @@ def emit_kicad_schematic(
 
     embedded_defs: dict[str, str] = {}
     pin_maps: dict[str, dict[str, tuple[float, float]]] = {}
+    # lib_id -> (x0, y0, x1, y1) SYMBOL-LOCAL body rectangle (guard C true body box).
+    body_rects: dict[str, tuple[float, float, float, float] | None] = {}
     warnings: list[str] = []
     for component in components:
         if component.lib_id in embedded_defs:
@@ -444,6 +481,7 @@ def emit_kicad_schematic(
             continue
         embedded_defs[component.lib_id] = definition
         pin_maps[component.lib_id] = pins
+        body_rects[component.lib_id] = _body_rect(definition)
 
     # Snap every component onto KiCad's 1.27 mm connection grid. Library pin local
     # offsets are grid-multiples, so once the symbol origin is on-grid the absolute
@@ -468,19 +506,29 @@ def emit_kicad_schematic(
             return None
         return (round(component.x + endpoint[0], 4), round(component.y - endpoint[1], 4))
 
-    def _pin_side(ref: str, pin: str) -> float:
-        """Which side of its symbol body a pin sticks out of, from the sign of its
-        symbol-LOCAL x (same convention as `_pin_name_box_abs`): local ex<0 => left
-        side (body is to +x, so external stub must run -x, away from the body);
-        ex>0 => right side (stub runs +x). Pins on the vertical axis (ex==0) return
-        +1 (default outward = +x). Returns -1.0 (left) or +1.0 (right)."""
+    def _pin_edge(ref: str, pin: str) -> tuple[float, float]:
+        """Outward stub direction (in SHEET coords) for the edge a pin sticks out of.
+
+        From the pin's symbol-LOCAL endpoint (ex, ey), the dominant axis + its sign
+        pick the edge; the returned unit vector points AWAY from the body so a stub /
+        power port / label expands to the outside (BR: four-edge pin placement):
+          - left   (ex<0, |ex|>=|ey|) -> (-1,  0)   stub runs -x
+          - right  (ex>0, |ex|>=|ey|) -> (+1,  0)   stub runs +x
+          - top    (ey>0, |ey|> |ex|) -> ( 0, -1)   sheet y = cy-ey, so up = -y
+          - bottom (ey<0, |ey|> |ex|) -> ( 0, +1)   down = +y
+        A pin exactly on the origin (ex==ey==0) defaults to right (+x). NOTE: KiCad
+        schematic y grows DOWNWARD, so a symbol-local +y (top pin) maps to a SMALLER
+        sheet y; expanding the stub further up therefore uses sheet -y."""
         component = placements.get(ref)
         if component is None or component.lib_id not in pin_maps:
-            return 1.0
+            return (1.0, 0.0)
         endpoint = pin_maps[component.lib_id].get(pin)
         if endpoint is None:
-            return 1.0
-        return -1.0 if endpoint[0] < -0.01 else 1.0
+            return (1.0, 0.0)
+        ex, ey = endpoint[0], endpoint[1]
+        if abs(ex) >= abs(ey):
+            return (-1.0, 0.0) if ex < -0.01 else (1.0, 0.0)
+        return (0.0, -1.0) if ey > 0.01 else (0.0, 1.0)
 
     # T1: resolve declared no-connect pins BEFORE net emission; fail-fast on any
     # unresolvable entry (ref missing, symbol not embedded, or pin absent).
@@ -507,10 +555,13 @@ def emit_kicad_schematic(
     # (net_name, x, y) endpoints routed to global-label fallback; emitted after
     # the net loop with a per-column anti-overlap pass so dense same-side pin
     # stacks (e.g. a large BGA drawn as a per-page subset) do not collide.
-    label_endpoints: list[tuple[str, float, float]] = []
+    label_endpoints: list[tuple[str, float, float, tuple[float, float]]] = []
     # (net_name, kind, x, y) endpoints routed to a power-port symbol instead of a
     # label (GND/supply nets on a dense side). Emitted after the net loop.
-    power_endpoints: list[tuple[str, str, float, float]] = []
+    # (net, kind, x, y, edge, host_ref): host_ref is the component the pin belongs
+    # to, so guard C can skip "port inside its OWN body" (a legitimate interior /
+    # displaced power pin) and only flag a port intruding a DIFFERENT component.
+    power_endpoints: list[tuple] = []
     # Occupied local-label anchor coords (drawn-wire mode). Two independent
     # L-route/trunk labels can resolve to the SAME midpoint (e.g. HSPI_IO1 and
     # HSPI_IO15, both U1<->U2 2-node nets, landing on one coord => overlapping
@@ -619,10 +670,11 @@ def emit_kicad_schematic(
     for net in nets:
         force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
-        # side[i] = -1.0 (left-side pin) / +1.0 (right-side pin) for endpoints[i];
-        # power-port stubs use this to expand AWAY from the symbol body (BR: left
-        # pin stub orientation blind) instead of a column-midpoint heuristic.
-        endpoint_sides: list[float] = []
+        # side[i] = outward stub unit vector (dx, dy) in SHEET coords for endpoints[i]
+        # (BR: four-edge pin placement). Power-port stubs expand along this vector
+        # AWAY from the symbol body: left (-1,0)/right (+1,0)/top (0,-1)/bottom (0,+1).
+        endpoint_sides: list[tuple[float, float]] = []
+        endpoint_refs: list[str] = []  # host component of endpoints[i] (guard C skip-self)
         net_unresolved = False
         for ref, pin in net.nodes:
             abs_pt = _pin_abs(ref, pin)
@@ -631,7 +683,8 @@ def emit_kicad_schematic(
                 net_unresolved = True
                 continue
             endpoints.append(abs_pt)
-            endpoint_sides.append(_pin_side(ref, pin))
+            endpoint_sides.append(_pin_edge(ref, pin))
+            endpoint_refs.append(ref)
 
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
@@ -642,11 +695,11 @@ def emit_kicad_schematic(
                 # (collinearity-free by construction). Recorded, never silent.
                 fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
                 kind = _power_net_kind(net.name) if power_ports else None
-                for abs_pt, side in zip(endpoints, endpoint_sides):
+                for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                     if kind is not None:
-                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], side))
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
                     else:
-                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
+                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
             waypoints = guarded
             if jogged:
@@ -666,11 +719,11 @@ def emit_kicad_schematic(
                 # deterministically → down-grade to label fallback (visible).
                 fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
                 kind = _power_net_kind(net.name) if power_ports else None
-                for abs_pt, side in zip(endpoints, endpoint_sides):
+                for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                     if kind is not None:
-                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], side))
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
                     else:
-                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
+                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
             fusion_registry[net.name] = list(segments)
             for (a, b) in segments:
@@ -690,13 +743,16 @@ def emit_kicad_schematic(
             # are the industry convention for edge connectors and are collinearity-
             # free by construction. Net membership is identical either way.
             kind = _power_net_kind(net.name) if power_ports else None
-            for abs_pt, side in zip(endpoints, endpoint_sides):
+            for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                 if kind is not None:
-                    power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], side))
+                    power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
                 else:
-                    label_endpoints.append((net.name, abs_pt[0], abs_pt[1]))
+                    label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
 
-    label_blocks.extend(_staggered_label_blocks(label_endpoints, reserved=reserved_boxes))
+    label_blocks.extend(_staggered_label_blocks(label_endpoints, reserved=reserved_boxes,
+                                                page_scale=page_scale,
+                                                avail_y=_paper_avail_y(paper),
+                                                avail_x=_paper_avail_x(paper)))
 
     # Power ports: one KiCad power-port symbol per GND/supply endpoint, replacing
     # the label stack. A stub wire joins the pin endpoint to the port so the port
@@ -711,62 +767,112 @@ def emit_kicad_schematic(
     # ports are crowded push every other one outward on a longer stub — the same
     # staggering the label path uses, so the net-name text separates vertically.
     flagged_nets: set[str] = set()
-    # Group by (x column, pin SIDE). Facing comes from the pin's own side (BR: left
-    # pin stub orientation blind) — a left-side pin (side=-1) expands its port -x
-    # AWAY from the body, a right-side pin (+1) expands +x. This replaces the old
-    # column-midpoint heuristic, which mis-faced left pins of a per-page BGA subset
-    # that sits entirely in +x space (their stub ran INTO the symbol body).
-    _pwr_columns: dict[tuple[float, float], list[tuple[str, str, float, float, float]]] = {}
+    # Group by (edge line, outward vector). Facing comes from the pin's own edge
+    # (BR: four-edge pin placement) — the outward unit vector (nx, ny) expands the
+    # port AWAY from the body: left (-1,0)/right (+1,0)/top (0,-1)/bottom (0,+1).
+    # Ports that share the same EDGE LINE are anti-overlap staggered: left/right
+    # pins share an x column (line key = x, stagger jogs in x); top/bottom pins
+    # share a y row (line key = y, stagger jogs in y). The stagger tier pushes each
+    # crowded port further out along its outward vector so the net-name text splits.
+    def _edge_of(ep) -> tuple[float, float]:
+        v = ep[4] if len(ep) > 4 else (1.0, 0.0)
+        return v if isinstance(v, tuple) else (float(v), 0.0)  # back-compat scalar
+
+    # page_scale coherence: a scaled per-page symbol carries larger pins/text, so
+    # the port stub length, stagger step, min-pitch and the modelled net-name text
+    # box all grow ×page_scale. At page_scale == 1.0 these equal the legacy module
+    # constants (byte-identical).
+    _pwr_scale = page_scale if page_scale > 1.0 else 1.0
+    _pwr_stub_step = _PWR_STUB_STEP_MM * _pwr_scale
+    _pwr_stub = _STUB_MM * _pwr_scale
+    _pwr_min_pitch = _PWR_MIN_PITCH_MM * _pwr_scale
+    _pwr_name_ch = _PIN_NAME_CH_MM * _pwr_scale
+    _pwr_name_cw = _PIN_NAME_CW_MM * _pwr_scale
+    _pwr_columns: dict[tuple[float, float, float], list] = {}
     for ep in power_endpoints:
-        side = ep[4] if len(ep) > 4 else 1.0
-        _pwr_columns.setdefault((round(ep[2], 2), side), []).append(ep)
-    for (col_x, side) in sorted(_pwr_columns):
-        col_items = sorted(_pwr_columns[(col_x, side)], key=lambda t: t[3])
-        direction = side
-        # Track the last y placed at EACH tier so we only advance tiers until the
-        # current port clears the nearest already-placed one — a tight column then
-        # fans across as many stagger lanes as its density needs.
-        tier_last_y: dict[int, float] = {}
+        nx, ny = _edge_of(ep)
+        horizontal = abs(nx) >= abs(ny)  # left/right edge vs top/bottom edge
+        line = round(ep[2], 2) if horizontal else round(ep[3], 2)  # shared x (col) or y (row)
+        _pwr_columns.setdefault((line, nx, ny), []).append(ep)
+    for (line, nx, ny) in sorted(_pwr_columns):
+        horizontal = abs(nx) >= abs(ny)
+        # sort along the edge so crowding is detected between physical neighbours:
+        # a shared x column sorts by y; a shared y row sorts by x.
+        col_items = sorted(_pwr_columns[(line, nx, ny)], key=lambda t: (t[3] if horizontal else t[2]))
+        # Track the last edge-parallel coord placed at EACH tier so we only advance
+        # tiers until the current port clears the nearest already-placed one.
+        tier_last: dict[int, float] = {}
         n_tiers = 8
-        for net_name, kind, px, py, _side in col_items:
+        for net_name, kind, px, py, *_rest in col_items:
+            parallel = py if horizontal else px  # coord ALONG the edge
             tier = 0
             for t in range(n_tiers):
-                last = tier_last_y.get(t)
-                cand_x = round(px + direction * t * _PWR_STUB_STEP_MM, 4)
-                # the port's net-name Value text renders centred at cand_x; model
-                # its box and reject any tier whose text lands on an IC pin-name.
-                vw = len(net_name) * _PIN_NAME_CW_MM
+                last = tier_last.get(t)
+                # candidate port anchor pushed t tiers outward along (nx, ny).
+                cand_x = round(px + nx * t * _pwr_stub_step, 4)
+                cand_y = round(py + ny * t * _pwr_stub_step, 4)
+                cand_port_x = round(cand_x + nx * _pwr_stub, 4)
+                cand_port_y = round(cand_y + ny * _pwr_stub, 4)
+                # the port's net-name Value text renders centred at (cand_x, cand_y);
+                # model its box and reject any tier whose text lands on an IC pin-name.
+                vw = len(net_name) * _pwr_name_cw
                 vbox = (cand_x - vw / 2, cand_x + vw / 2,
-                        py - (_PIN_NAME_CH_MM + _LABEL_VMARGIN_MM) / 2,
-                        py + (_PIN_NAME_CH_MM + _LABEL_VMARGIN_MM) / 2)
-                y_free = last is None or abs(py - last) >= _PWR_MIN_PITCH_MM
+                        cand_y - (_pwr_name_ch + _LABEL_VMARGIN_MM) / 2,
+                        cand_y + (_pwr_name_ch + _LABEL_VMARGIN_MM) / 2)
+                free = last is None or abs(parallel - last) >= _pwr_min_pitch
                 pin_free = not any(_bbox_overlap(vbox, pb) for pb in reserved_boxes)
-                if y_free and pin_free:
+                # ANTI-FUSION (缺陷一): the stub wires this tier would emit — the
+                # jog leg (pin→anchor) plus the anchor→port stub — must not
+                # collinearly overlap or endpoint-touch a DIFFERENT power net's
+                # already-registered segments. Adjacent same-column supply/GND
+                # pins whose stubs run collinear are exactly the U1 left-edge
+                # short (F1/G1/G2/H1/H2 fused into one vertical line).
+                cand_segs = [((cand_x, cand_y), (cand_port_x, cand_port_y))]
+                if t:
+                    cand_segs.append(((px, py), (cand_x, cand_y)))
+                others = _other_net_segments(net_name)
+                fuse_free = not any(_segment_fuses(s, others) for s in cand_segs)
+                if free and pin_free and fuse_free:
                     tier = t
                     break
             else:
                 tier = n_tiers - 1
-            tier_last_y[tier] = py
-            port_x = round(px + direction * tier * _PWR_STUB_STEP_MM, 4)
+            tier_last[tier] = parallel
+            # anchor: pin endpoint jogged `tier` steps outward along (nx, ny).
+            anchor_x = round(px + nx * tier * _PWR_STUB_STEP_MM, 4)
+            anchor_y = round(py + ny * tier * _PWR_STUB_STEP_MM, 4)
             lib_id = _power_symbol_lib_id(net_name, kind)
             if lib_id not in embedded_defs:
                 embedded_defs[lib_id] = _power_symbol_def(lib_id, net_name, kind)
-            port_y = round(py + _STUB_MM, 4) if kind == "gnd" else round(py - _STUB_MM, 4)
+            # port sits one stub-length further out from the (possibly jogged) anchor,
+            # ALONG the outward vector, so it clears the body regardless of edge.
+            port_x = round(anchor_x + nx * _STUB_MM, 4)
+            port_y = round(anchor_y + ny * _STUB_MM, 4)
+            final_stub_segs = [((anchor_x, anchor_y), (port_x, port_y))]
             if tier:
-                # horizontal jog out to the staggered column, then vertical stub.
-                wire_blocks.append(_wire_segment_block(px, py, port_x, py))
-            wire_blocks.append(_wire_segment_block(port_x, py, port_x, port_y))
-            symbol_blocks.append(_power_symbol_instance(lib_id, net_name, port_x, port_y, project_name, root_uuid))
+                # jog out to the staggered lane (from the pin to the anchor), then
+                # the stub from the anchor to the port along the outward vector.
+                wire_blocks.append(_wire_segment_block(px, py, anchor_x, anchor_y))
+                final_stub_segs.append(((px, py), (anchor_x, anchor_y)))
+            wire_blocks.append(_wire_segment_block(anchor_x, anchor_y, port_x, port_y))
+            # ANTI-FUSION registry (缺陷一): record this port's stub segments so the
+            # NEXT same-column power net sees them and its tier search jogs clear —
+            # without this the guard was blind across power nets (the U1 F1/G1/G2/
+            # H1/H2 stubs all landed on one collinear column = short).
+            fusion_registry.setdefault(net_name, []).extend(final_stub_segs)
+            pwr_rot = _power_symbol_rotation(kind, (nx, ny))
+            symbol_blocks.append(_power_symbol_instance(lib_id, net_name, port_x, port_y, project_name, root_uuid, rotation=pwr_rot))
             if net_name not in flagged_nets:
                 flagged_nets.add(net_name)
                 if "PWR_FLAG" not in embedded_defs:
                     embedded_defs["PWR_FLAG"] = _pwr_flag_def()
                 # The flag pin must land on a WIRE ENDPOINT to be seen as connected;
-                # extend the stub one grid past the port and drop the flag there so
+                # extend the stub one grid further out and drop the flag there so
                 # port pin + flag pin + stub end all coincide on the same net node.
-                flag_y = round(port_y + _STUB_MM, 4) if kind == "gnd" else round(port_y - _STUB_MM, 4)
-                wire_blocks.append(_wire_segment_block(port_x, port_y, port_x, flag_y))
-                symbol_blocks.append(_pwr_flag_instance(port_x, flag_y, project_name, root_uuid))
+                flag_x = round(port_x + nx * _STUB_MM, 4)
+                flag_y = round(port_y + ny * _STUB_MM, 4)
+                wire_blocks.append(_wire_segment_block(port_x, port_y, flag_x, flag_y))
+                symbol_blocks.append(_pwr_flag_instance(flag_x, flag_y, project_name, root_uuid))
 
     # Post-emit bbox assert (BR: left-pin stub orientation blind, guard C). Every
     # power-port glyph must sit OUTSIDE every component's symbol-body bbox — a port
@@ -778,8 +884,23 @@ def emit_kicad_schematic(
         pmap = pin_maps.get(component.lib_id)
         if not pmap:
             continue
-        xs = [component.x + ex for (ex, _ey) in pmap.values()]
-        ys = [component.y - ey for (_ex, ey) in pmap.values()]
+        # The body extent is the symbol's own `(rectangle ...)` — the SINGLE source
+        # of truth for where the body actually ends. Do NOT reconstruct it from pin
+        # `at` tips: a pin's `at` is its OUTER endpoint, sitting one pin-graphic
+        # length OUTSIDE the body edge, and that length is per-symbol (engine
+        # variants use 5.08 mm, hand-drawn authentic libs use 2.54 mm), so any
+        # fixed tip-inset misjudges one of them. rect gives the true body box; the
+        # power-port endpoint (the pin `at`) legitimately hugs that edge, so a port
+        # exactly on/just outside the rect is NOT an intrusion.
+        rect = body_rects.get(component.lib_id)
+        if rect is not None:
+            rx0, ry0, rx1, ry1 = rect
+            xs = [component.x + rx0, component.x + rx1]
+            ys = [component.y - ry0, component.y - ry1]
+        else:
+            # no rectangle in the symbol (rare): fall back to pin-tip extent.
+            xs = [component.x + ex for (ex, _ey) in pmap.values()]
+            ys = [component.y - ey for (_ex, ey) in pmap.values()]
         if not xs:
             continue
         inset = _PWR_STUB_STEP_MM / 4.0  # tolerate a port hugging the body edge
@@ -788,7 +909,14 @@ def emit_kicad_schematic(
     _port_intrusions: list[str] = []
     for ep in power_endpoints:
         ex_pt, ey_pt = ep[2], ep[3]
+        host_ref = ep[5] if len(ep) > 5 else None
         for ref, (bx0, bx1, by0, by1) in _body_boxes:
+            # A power pin legitimately sits inside its OWN symbol body (interior
+            # BGA balls; a body shifted by macro-compact/page-fill after the pin's
+            # abs endpoint was frozen). Guard C targets the real defect: a port
+            # drawn into a DIFFERENT component. Skip the endpoint's own host.
+            if ref == host_ref:
+                continue
             if bx0 < ex_pt < bx1 and by0 < ey_pt < by1:
                 _port_intrusions.append(f"{ep[0]}@({ex_pt},{ey_pt}) inside {ref}")
                 break
@@ -852,10 +980,25 @@ def _symbol_instance_block(component: EmitComponent, project_name: str, root_uui
   )'''
 
 
-def _global_label_block(name: str, x: float, y: float) -> str:
+def _edge_label_angle(edge: tuple[float, float]) -> int:
+    """KiCad global-label (at x y ANGLE): the text runs AWAY from the anchor along
+    ANGLE (0=+x/right, 90=up, 180=-x/left, 270=down). Point it along the pin's
+    OUTWARD edge vector so a left-edge pin's label extends left (off the body),
+    never justify-left into the body — the EN_1V8-inside-U6 defect."""
+    nx, ny = edge
+    if abs(nx) >= abs(ny):
+        return 0 if nx >= 0 else 180
+    return 270 if ny >= 0 else 90  # sheet +y = screen down
+
+
+def _global_label_block(name: str, x: float, y: float, edge: tuple[float, float] = (1.0, 0.0), text_scale: float = 1.0) -> str:
+    angle = _edge_label_angle(edge)
+    # KiCad renders a global label with justify LEFT so its text starts at the
+    # anchor and runs along ANGLE; the angle alone steers the text off the body.
+    fs = round(1.27 * text_scale, 4)
     return (
-        f'  (global_label "{name}" (shape bidirectional) (at {x} {y} 0)\n'
-        f'    (effects (font (size 1.27 1.27)) (justify left)) (uuid "{_uid()}"))'
+        f'  (global_label "{name}" (shape bidirectional) (at {round(x, 4)} {round(y, 4)} {angle})\n'
+        f'    (effects (font (size {fs} {fs})) (justify left)) (uuid "{_uid()}"))'
     )
 
 
@@ -868,33 +1011,160 @@ _LABEL_CW_MM = 1.05         # per-char advance (conservative)
 _LABEL_GLYPH_MM = 2.0       # global-label shape glyph width
 _LABEL_VMARGIN_MM = 0.3
 _LABEL_HMARGIN_MM = 0.4
+# Vertical-label multi-column spillover (design-time capacity budget). A dense
+# castellated edge draws dozens of vertical (ang90/270) labels sharing ONE x
+# column; each label's text box extends ALONG the column axis (y) by up to
+# len(name)*CW*scale. When the label count exceeds what the usable y-span holds,
+# the greedy per-pin stagger pushes labels off-sheet (y=1008 mm). Instead we
+# compute the column CAPACITY up front and, when count > capacity, split the
+# column into ceil(count/capacity) sub-columns fanned outward along x. The
+# per-column usable y-span is unknown to the emitter (paper is chosen in the
+# composer AFTER this runs), so we budget it from the column's own pin y-extent
+# scaled by _LABEL_SPAN_BUDGET (allow modest outward growth, capped).
+_LABEL_SPAN_BUDGET = 1.6   # usable y-span = pin-row y-extent * this (>=1 grow cap)
+_LABEL_COL_GAP_MM = 2.54   # extra gap between adjacent vertical labels in a column
+
+# Frame-first slot budget (BR: sparse-page offpage / cap=1 degeneracy). The
+# composer picks the paper BEFORE emit runs (composer._fit_sheet -> emit paper=),
+# so the emitter CAN know the real usable-y corridor and MUST bind the vertical
+# slot ladder to it instead of estimating from the pin-row extent (which degrades
+# to cap=1 on a dense column and pushes labels to y=1008 mm off-sheet). These
+# mirror composer.STANDARD_PAPERS / SHEET_MARGIN_MM (kept emit-local to avoid an
+# import cycle; a mismatch would surface as a fail-loud utilization/overflow gate).
+_EMIT_PAPER_DIMS_MM: dict[str, tuple[float, float]] = {
+    "A4": (297.0, 210.0),
+    "A3": (420.0, 297.0),
+    "A2": (594.0, 420.0),
+    "A1": (841.0, 594.0),
+    "A0": (1189.0, 841.0),
+}
+_EMIT_SHEET_MARGIN_MM = 12.7
 
 
-def _label_bbox(name: str, x: float, y: float, is_global: bool) -> tuple[float, float, float, float]:
-    """Rendered text box (justify left => extends +x from anchor). Returns
-    (x0, x1, y0, y1). Mirrors qa_bbox.py so the QA and the emitter agree."""
-    w = len(name) * _LABEL_CW_MM + (_LABEL_GLYPH_MM if is_global else 0.0) + _LABEL_HMARGIN_MM
-    h = _LABEL_CH_MM + _LABEL_VMARGIN_MM
-    return (x, x + w, y - h / 2, y + h / 2)
+def _paper_avail_y(paper: str) -> tuple[float, float] | None:
+    """Usable y corridor (lo, hi) of the CHOSEN paper, in mm.
+
+    paper   : one of _EMIT_PAPER_DIMS_MM keys (the composer-selected sheet).
+    returns : (y_lo, y_hi) = (margin, height - margin) — the vertical band a
+              label anchor may occupy; None for an unknown paper (caller then
+              falls back to the legacy pin-extent budget, byte-stable).
+    NOT: an x corridor; NOT the full sheet height (margins are subtracted).
+    Done when: hi > lo, or None for unknown paper.
+    """
+    dims = _EMIT_PAPER_DIMS_MM.get(paper)
+    if dims is None:
+        return None
+    _pw, ph = dims
+    lo = _EMIT_SHEET_MARGIN_MM
+    hi = ph - _EMIT_SHEET_MARGIN_MM
+    if hi <= lo:
+        return None
+    return (lo, hi)
+
+
+def _paper_avail_x(paper: str) -> tuple[float, float] | None:
+    """Usable x corridor (lo, hi) of the CHOSEN paper, in mm.
+
+    paper   : one of _EMIT_PAPER_DIMS_MM keys (the composer-selected sheet).
+    returns : (x_lo, x_hi) = (margin, width - margin) — the horizontal band a
+              label's rendered text box must stay inside; None for an unknown
+              paper (caller then skips the x-corridor check, byte-stable).
+    NOT: a y corridor; NOT the full sheet width (margins are subtracted).
+    Done when: hi > lo, or None for unknown paper.
+    """
+    dims = _EMIT_PAPER_DIMS_MM.get(paper)
+    if dims is None:
+        return None
+    pw, _ph = dims
+    lo = _EMIT_SHEET_MARGIN_MM
+    hi = pw - _EMIT_SHEET_MARGIN_MM
+    if hi <= lo:
+        return None
+    return (lo, hi)
+
+
+def _vlabel_extent_mm(names: list[str], page_scale: float) -> float:
+    """Largest vertical-label y-occupancy (mm) over a set of net names.
+
+    name  : the net names sharing one column.
+    returns: max over names of the _label_bbox `w` term (text run + glyph +
+             hmargin) at this page_scale — i.e. how far a vertical label's box
+             extends along the column (y) axis.
+    NOT: the horizontal glyph-column width `h`; NOT a per-label value (it is the
+    MAX, the tier step the column must reserve per slot).
+    Done when: returns a positive float; empty list => 0.0.
+    """
+    if not names:
+        return 0.0
+    return max(
+        len(nm) * (_LABEL_CW_MM * page_scale) + (_LABEL_GLYPH_MM * page_scale) + _LABEL_HMARGIN_MM
+        for nm in names
+    )
+
+
+def _column_capacity(usable_span_mm: float, extent_mm: float, gap_mm: float) -> int:
+    """How many vertical labels fit in one column before it must spill columns.
+
+    usable_span_mm : available y length for this column's label boxes.
+    extent_mm      : per-label y occupancy (from _vlabel_extent_mm).
+    gap_mm         : minimum inter-label gap.
+    returns        : max(1, floor(usable_span / (extent + gap))) — always >=1 so
+                     a single over-long label never yields 0 columns.
+    NOT: a float ratio; NOT a utilisation percentage. It is an integer slot count.
+    Done when: returns an int >= 1.
+    """
+    denom = extent_mm + gap_mm
+    if denom <= 0:
+        return 1
+    import math
+    return max(1, int(math.floor(usable_span_mm / denom)))
+
+
+def _label_bbox(name: str, x: float, y: float, is_global: bool,
+                edge: tuple[float, float] = (1.0, 0.0),
+                text_scale: float = 1.0) -> tuple[float, float, float, float]:
+    """Rendered text box. The text runs from the anchor along the OUTWARD edge
+    vector (angle-steered), so the box extends toward (nx, ny) rather than always
+    +x. Returns (x0, x1, y0, y1). Mirrors qa_bbox.py so QA and emitter agree.
+
+    text_scale (CCM sheet-coherence): 1.0 == legacy byte-identical box. At >1.0
+    the rendered label text height/width AND the global-label glyph scale ×
+    text_scale so the overlap check models the ACTUAL scaled ink (the box the
+    collision resolver and frame-fit must both see)."""
+    w = len(name) * (_LABEL_CW_MM * text_scale) + (_LABEL_GLYPH_MM * text_scale if is_global else 0.0) + _LABEL_HMARGIN_MM
+    h = _LABEL_CH_MM * text_scale + _LABEL_VMARGIN_MM
+    nx, ny = edge
+    if abs(nx) >= abs(ny):
+        # horizontal text run
+        if nx >= 0:
+            return (x, x + w, y - h / 2, y + h / 2)
+        return (x - w, x, y - h / 2, y + h / 2)
+    # vertical text run (top/bottom edge): the glyph column is `h` wide, `w` tall
+    if ny >= 0:  # screen down
+        return (x - h / 2, x + h / 2, y, y + w)
+    return (x - h / 2, x + h / 2, y - w, y)
 
 
 def _bbox_overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
     return not (a[1] <= b[0] or b[1] <= a[0] or a[3] <= b[2] or b[3] <= a[2])
 
 
-def _resolve_label_y(name: str, x: float, y: float, is_global: bool, placed: list[tuple[float, float, float, float]], direction: float) -> float:
+def _resolve_label_y(name: str, x: float, y: float, is_global: bool, placed: list[tuple[float, float, float, float]], direction: float,
+                     edge: tuple[float, float] = (1.0, 0.0)) -> float:
     """Nudge a label's y upward in _LABEL_MIN_PITCH steps until its rendered box
     clears every already-placed box, then register it. Returns the final y.
     Global overlap check (not per-column) so cross-column horizontal collisions
-    (short labels crowded around a dense IC) are resolved too."""
+    (short labels crowded around a dense IC) are resolved too. The bbox extends
+    along the label's OUTWARD edge vector (缺陷三b: collision must model the real
+    text direction, or a left-facing label's box is checked on the wrong side)."""
     ly = y
     for _ in range(400):
-        bx = _label_bbox(name, x + (direction * _LABEL_STUB_STEP_MM if abs(ly - y) > 1e-6 else 0.0), ly, is_global)
+        bx = _label_bbox(name, x + (direction * _LABEL_STUB_STEP_MM if abs(ly - y) > 1e-6 else 0.0), ly, is_global, edge)
         if not any(_bbox_overlap(bx, pb) for pb in placed):
             placed.append(bx)
             return ly
         ly = round(ly + _LABEL_MIN_PITCH_MM, 4)
-    placed.append(_label_bbox(name, x, ly, is_global))
+    placed.append(_label_bbox(name, x, ly, is_global, edge))
     return ly
 
 # --- Power symbol emission (industry convention: GND glyph points down, supply
@@ -1028,18 +1298,50 @@ def _pwr_flag_instance(x: float, y: float, project_name: str, root_uuid: str) ->
 _PWR_REF_COUNTER = [0]
 
 
-def _power_symbol_instance(lib_id: str, net_name: str, x: float, y: float, project_name: str, root_uuid: str) -> str:
+def _power_symbol_rotation(kind: str, edge: tuple[float, float]) -> int:
+    """Rotation (deg, KiCad CCW) so the glyph faces AWAY from the body along the
+    pin's outward edge vector, and the stem runs from the port back toward the pin
+    — eliminating the "wire crosses the symbol body" cross when a bottom-edge pin's
+    net runs DOWN into a supply rail, or a top-edge pin's runs UP into GND.
+
+    Pin-local +y maps to sheet -y (screen up). The stock defs draw: supply glyph
+    toward local +y (screen up, rot 0), gnd glyph toward local -y (screen down,
+    rot 0). Outward edge vector (nx, ny) is in SHEET coords (ny>0 = screen down).
+    """
+    nx, ny = edge
+    horizontal = abs(nx) >= abs(ny)
+    if horizontal:
+        outward_right = nx >= 0
+        if kind == "gnd":
+            return 90 if outward_right else 270
+        return 270 if outward_right else 90
+    outward_down = ny >= 0  # sheet +y is screen down
+    if kind == "gnd":
+        return 0 if outward_down else 180
+    return 180 if outward_down else 0
+
+
+def _power_symbol_instance(lib_id: str, net_name: str, x: float, y: float, project_name: str, root_uuid: str,
+                           rotation: int = 0) -> str:
     _PWR_REF_COUNTER[0] += 1
     ref = f"#PWR{_PWR_REF_COUNTER[0]:04d}"
+    # The Value (net-name) text offset must follow the glyph so it stays on the
+    # OUTWARD side of the port rather than diving back over the body. rot 0 keeps
+    # the legacy -y (above) offset; each 90° turn rotates the offset vector CCW.
+    off = (0.0, -5.08)
+    for _ in range((rotation // 90) % 4):
+        off = (-off[1], off[0])  # CCW 90°: (ox,oy)->(-oy,ox)
+    vx = round(x + off[0], 4)
+    vy = round(y + off[1], 4)
     return (
         '  (symbol\n'
         f'    (lib_id "{lib_id}")\n'
-        f'    (at {round(x, 4)} {round(y, 4)} 0)\n'
+        f'    (at {round(x, 4)} {round(y, 4)} {rotation})\n'
         '    (unit 1)\n'
         '    (exclude_from_sim no) (in_bom no) (on_board yes) (dnp no)\n'
         f'    (uuid "{_uid()}")\n'
         f'    (property "Reference" "{ref}" (at {round(x, 4)} {round(y - 3.81, 4)} 0) (effects (font (size 1.27 1.27)) hide))\n'
-        f'    (property "Value" "{net_name}" (at {round(x, 4)} {round(y - 5.08, 4)} 0) (effects (font (size 1.27 1.27))))\n'
+        f'    (property "Value" "{net_name}" (at {vx} {vy} 0) (effects (font (size 1.27 1.27))))\n'
         '    (pin "1" (uuid "' + _uid() + '"))\n'
         f'    (instances (project "{project_name}" (path "/{root_uuid}" (reference "{ref}") (unit 1))))\n'
         '  )'
@@ -1047,8 +1349,18 @@ def _power_symbol_instance(lib_id: str, net_name: str, x: float, y: float, proje
 
 
 def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
-                            reserved: list[tuple[float, float, float, float]] | None = None) -> list[str]:
+                            reserved: list[tuple[float, float, float, float]] | None = None,
+                            page_scale: float = 1.0,
+                            avail_y: tuple[float, float] | None = None,
+                            avail_x: tuple[float, float] | None = None) -> list[str]:
     """Emit global labels with per-column anti-overlap staggering.
+
+    avail_y (frame-first slot budget): the (y_lo, y_hi) usable-y corridor of the
+    ALREADY-CHOSEN paper (composer picks the sheet BEFORE this runs and threads it
+    here). When given, the vertical slot ladder is budgeted from the REAL corridor
+    instead of the pin-row extent (which degrades to cap=1 on a dense column and
+    pushes labels off-sheet), and every slot / collision candidate is rejected if
+    it leaves the corridor. None => legacy pin-extent budget (byte-stable).
 
     Pins on one side of a dense symbol (a large BGA drawn as a per-page subset)
     share an x coordinate and sit at ~2.0 mm pitch; a 1.27 mm-tall label on each
@@ -1057,7 +1369,16 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
     ``_LABEL_MIN_PITCH_MM`` we push every other one outward by a stub wire so the
     text boxes separate. A single label (or a sparse column) is emitted verbatim,
     so low-density pages are byte-unchanged.
+
+    page_scale (CCM sheet-coherence): 1.0 == legacy (byte-identical). At >1.0 the
+    per-page symbol was drawn on a large pin pitch (>= 4x), so adjacent label rows
+    are already far apart; we therefore (C) DROP the vertical collision-nudge so
+    every stub runs STRAIGHT OUT (no top-⅓-up / bottom-⅓-down fan), and (B) anchor
+    the label at the stub OUTER end on a scaled-length stub so the label text sits
+    off the body instead of over the pin name.
     """
+    scaled = page_scale > 1.0
+    stub_len = _LABEL_STUB_STEP_MM * (page_scale if scaled else 1.0)
     blocks: list[str] = []
     # Global bbox occupancy: two labels FAIL when their rendered text boxes overlap
     # in BOTH axes. The prior per-column y-stagger left cross-column horizontal
@@ -1068,24 +1389,303 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
     # top) for determinism; a label shifted off its pin row gets a stub jog so the
     # electrical endpoint is unchanged. Sparse pages never trip the overlap test, so
     # they stay byte-unchanged.
-    columns: dict[float, list[tuple[str, float, float]]] = {}
-    for name, x, y in endpoints:
-        columns.setdefault(round(x, 2), []).append((name, x, y))
+    columns: dict[float, list[tuple[str, float, float, tuple[float, float]]]] = {}
+    for name, x, y, *rest in endpoints:
+        edge = rest[0] if rest else (1.0, 0.0)
+        columns.setdefault(round(x, 2), []).append((name, x, y, edge))
     # Seed the occupancy with the in-body pin-NAME boxes so a global label never
     # gets placed on top of the IC's own pin-name text (the cross pin/label smear).
     placed: list[tuple[float, float, float, float]] = list(reserved or [])
     for col_x in sorted(columns):
         items = sorted(columns[col_x], key=lambda t: t[2])
-        direction = 1.0 if col_x >= 0 else -1.0
-        for name, x, y in items:
-            ly = _resolve_label_y(name, x, y, True, placed, direction)
+        # ---- design-time per-column capacity reservation (vertical labels) ----
+        # Before placing ANY label in this column, decide whether the column can
+        # hold all its VERTICAL (ang90/270) labels within a usable y-span. If the
+        # count exceeds capacity, pre-assign each label a sub-column so the greedy
+        # per-pin stagger never pushes labels off-sheet. Horizontal-text labels and
+        # legacy (page_scale==1.0) columns are unaffected (subcol stays 0 for all).
+        # value-keyed (net_name, y-rounded) -> sub-column index. NOT id()-keyed:
+        # the placement loop re-destructures each item into a FRESH tuple, so an
+        # id()-based map would never hit (the exact "measure never took effect"
+        # trap). y is unique within a pin column, so (name, round(y,4)) is stable.
+        subcol_of: dict[tuple[str, float], int] = {}
+        # (name, y-rounded) -> (slot_index_within_subcol, slot_pitch, subcol_y0):
+        # DESIGN-TIME y placement. Once a label is assigned to a sub-column, its y
+        # is the k-th evenly-spaced slot in the usable span — NOT the pin y pushed
+        # by a greedy nudge (which left 6 labels crammed at the original pin rows,
+        # the 18-pair same-x residue). slot_y = subcol_y0 + k * slot_pitch.
+        slot_of: dict[tuple[str, float], tuple[int, float, float]] = {}
+        col_step = 0.0
+        if scaled:
+            vitems = [it for it in items if abs(it[3][0]) < abs(it[3][1])]
+            if len(vitems) > 1:
+                vnames = [it[0] for it in vitems]
+                # usable y-span: frame-first — bind to the CHOSEN paper's real
+                # usable-y corridor (avail_y) when the composer threaded it, so a
+                # dense column's capacity reflects the actual sheet, not the pin-row
+                # extent (which degrades to cap=1 and pushes labels off-sheet). The
+                # slot ladder is then anchored at the corridor and can never emit an
+                # off-sheet y. avail_y is None => legacy pin-extent budget (byte-stable).
+                ys = [it[2] for it in vitems]
+                pin_extent = max(ys) - min(ys)
+                extent = _vlabel_extent_mm(vnames, page_scale)
+                gap = _LABEL_MIN_PITCH_MM * page_scale
+                if avail_y is not None:
+                    y_lo, y_hi = avail_y
+                    usable_span = max(y_hi - y_lo, extent + gap)
+                else:
+                    y_lo = min(ys)
+                    usable_span = max(pin_extent * _LABEL_SPAN_BUDGET, extent + gap)
+                cap = _column_capacity(usable_span, extent, gap)
+                if len(vitems) > cap:
+                    import math as _math
+                    cols = _math.ceil(len(vitems) / cap)
+                    # sub-column step = the vertical label's own x footprint. A
+                    # vertical (ang90/270) label's box is `h` wide in x (the glyph
+                    # column) — see _label_bbox: (x-h/2, x+h/2, y, y+w). Two sub-
+                    # columns must be at least h + gap apart or their glyph columns
+                    # touch. (Earlier bug: used the 1-line text height ~6 mm which is
+                    # coincidentally h, but the real driver is the x footprint h.)
+                    h = _LABEL_CH_MM * page_scale + _LABEL_VMARGIN_MM
+                    col_step = h + _LABEL_COL_GAP_MM * page_scale
+                    # BLOCK assignment (idx // cap), NOT interleave (idx % cols):
+                    # each sub-column takes a CONTIGUOUS y-run of <=cap labels, so a
+                    # sub-column's labels are far apart in y and never collide with
+                    # its own siblings. Interleave put y-adjacent labels in adjacent
+                    # sub-columns (same y, x one step apart) => horizontal text-band
+                    # overlap (the 25-pair regression).
+                    # slot geometry: distribute cap labels across usable_span,
+                    # anchored at the corridor low edge (y_lo already = avail_y low
+                    # when threaded, else the pin-row min) so slots are evenly spread
+                    # within the real sheet and never run past y_hi.
+                    slot_pitch = usable_span / cap
+                    for idx, it in enumerate(vitems):
+                        sc = idx // cap
+                        k = idx % cap                       # slot index within sub-col
+                        subcol_of[(it[0], round(it[2], 4))] = sc
+                        # each sub-column reuses the SAME usable-span slot ladder;
+                        # they are separated in x by col_step, so identical y is fine.
+                        slot_of[(it[0], round(it[2], 4))] = (k, slot_pitch, y_lo)
+        for name, x, y, edge in items:
+            # jog direction follows the pin's OUTWARD edge vector (left edge => -x),
+            # so a staggered label steps AWAY from the body, not toward it.
+            nx, ny = edge
+            direction = 1.0 if nx >= 0 else -1.0
+            if scaled:
+                # Fix B: anchor at the stub OUTER end so the label text sits off the
+                # body (not over the pin name). Fix C: the stub runs STRAIGHT OUT
+                # first (no systematic top-⅓-up/bottom-⅓-down fan). Overlap fix:
+                # scaled label boxes on a dense column still collide, so — ONLY when
+                # a box actually overlaps a placed box — displace the label along the
+                # column axis in _LABEL_MIN_PITCH×scale steps until clear, adding an
+                # L-jog wire so the electrical endpoint (pin) is unchanged. An
+                # uncrowded label stays perfectly straight (byte-stable intent).
+                horiz = abs(nx) >= abs(ny)
+                pitch = _LABEL_MIN_PITCH_MM * page_scale
+                subcol = subcol_of.get((name, round(y, 4)), 0)
+                if horiz:
+                    # MIXED-AXIS convergence. A horizontal-text label (a0/a180)
+                    # extends its box ALONG x (~len*CW*scale, up to ~40 mm). When it
+                    # collides with a VERTICAL label's text band (a90/a270) that hangs
+                    # across the plane, a pure-y nudge can never escape: the vertical
+                    # band spans a wide y range at a fixed x, so stepping y keeps the
+                    # horizontal box inside the band's y-extent. The 37-pair residue is
+                    # exactly this (all xy-overlap, horizontal×vertical crossing). So:
+                    # (1) try the legacy y-ladder first (cheap, byte-stable for the
+                    #     common horizontal×horizontal crowding);
+                    # (2) if the y-ladder exhausts, FAIL OVER to an x-ladder that
+                    #     lengthens the stub so the text-band START moves clear of the
+                    #     vertical band's x column;
+                    # each candidate is checked against the WHOLE placed ledger.
+                    base_lx = round(x + direction * stub_len, 4)
+                    base_y = y
+                    lx = base_lx
+                    ly2 = base_y
+                    resolved = False
+                    # X-CORRIDOR guard (mirror of the vertical branch's avail_y): a
+                    # horizontal label's box extends ALONG x toward the outward edge
+                    # (_label_bbox: nx>=0 => [x, x+w]; nx<0 => [x-w, x]). The x-ladder
+                    # fans the anchor OUTWARD, so an ang180 (nx<0) label's box marches
+                    # LEFT and its x0 = lx - w runs off the left sheet edge (x<0) with
+                    # no bound check — the 05-page 25 offpage. Bind every candidate's
+                    # x-box to the chosen paper's usable-x corridor (avail_x); a
+                    # candidate whose box leaves [x_lo, x_hi] is rejected, never
+                    # emitted. avail_x is None => legacy unbounded (byte-stable).
+                    def _hbox_in_corridor(cand_lx: float) -> bool:
+                        if avail_x is None:
+                            return True
+                        bx0 = _label_bbox(name, cand_lx, base_y, True, edge, text_scale=page_scale)
+                        return bx0[0] >= avail_x[0] - 1e-6 and bx0[1] <= avail_x[1] + 1e-6
+                    # x-tier 0 == legacy stub; escalate x outward per tier. If the
+                    # outward tier leaves the corridor, the ladder is exhausted for
+                    # this direction — the label physically cannot fan further out
+                    # without going off-sheet, so we stop escalating x (a further tier
+                    # would only worsen the excursion) and rely on the y-ladder / the
+                    # fail-loud below rather than emit an off-sheet candidate.
+                    for xt in range(24):
+                        lx = round(base_lx + direction * xt * stub_len, 4)
+                        if not _hbox_in_corridor(lx):
+                            break
+                        disp = 0.0
+                        for _ in range(400):
+                            cand = round(base_y + disp, 4)
+                            bx = _label_bbox(name, lx, cand, True, edge, text_scale=page_scale)
+                            if not any(_bbox_overlap(bx, pb) for pb in placed):
+                                ly2 = cand
+                                resolved = True
+                                break
+                            disp += pitch
+                        if resolved:
+                            break
+                    if not resolved:
+                        raise ValueError(
+                            f"LABEL_DENSITY_UNRESOLVED: horizontal label {name!r} at "
+                            f"pin ({x},{y}) could not clear placed boxes within the "
+                            f"usable-x corridor after 24 x-tiers x 400 y-steps "
+                            f"(page_scale={page_scale}, avail_x={avail_x})")
+                    if abs(lx - base_lx) > 1e-6 and abs(ly2 - y) > 1e-6:
+                        # L-jog with extended stub: pin -> out to lx (at pin y) -> up to ly2
+                        blocks.append(_wire_segment_block(x, y, lx, y))
+                        blocks.append(_wire_segment_block(lx, y, lx, ly2))
+                    elif abs(ly2 - y) > 1e-6:
+                        # L-jog: pin -> outward -> up to the cleared row -> label
+                        blocks.append(_wire_segment_block(x, y, lx, y))
+                        blocks.append(_wire_segment_block(lx, y, lx, ly2))
+                    else:
+                        blocks.append(_wire_segment_block(x, y, lx, ly2))
+                else:
+                    # Vertical text run (top/bottom edge): the label box extends
+                    # ALONG the column axis (y), so two crowded vertical labels
+                    # separate by pushing their ANCHORS apart along y — NOT along x
+                    # (an x nudge only shifts the ~6 mm-wide glyph column and leaves
+                    # the tall y text band overlapping). Displace ly2 outward along
+                    # the pin's vdir in pitch steps until the box clears all placed.
+                    vdir = 1.0 if ny >= 0 else -1.0
+                    # Design-time multi-column spillover: a label pre-assigned to
+                    # sub-column N is fanned outward along x by N*col_step so a
+                    # single over-packed pin column becomes several parallel label
+                    # columns instead of one that runs off-sheet. subcol==0 (the
+                    # common / sparse case) keeps lx==x, byte-stable. The stub then
+                    # jogs pin -> sub-column x -> outward y, and the y collision
+                    # nudge only has to separate the ~capacity labels now sharing
+                    # this sub-column (never the whole overloaded stack).
+                    xdir = direction if abs(direction) > 1e-9 else 1.0
+                    base_lx = round(x + subcol * col_step * xdir, 4)
+                    slot = slot_of.get((name, round(y, 4)))
+                    if slot is not None:
+                        # DESIGN-TIME y: the label sits at its evenly-spaced slot in
+                        # the usable span (k-th of cap), so a sub-column's labels are
+                        # spread across the whole span instead of crammed at the pin
+                        # rows. This is what makes same-x siblings NOT overlap (the
+                        # 18-pair residue). We STILL run the collision loop from the
+                        # slot as a safety net, but the slot base already clears.
+                        k, slot_pitch, y0 = slot
+                        base_ly2 = round(y0 + k * slot_pitch, 4)
+                    else:
+                        base_ly2 = round(y + vdir * stub_len, 4)
+                    # MIXED-AXIS convergence (mirror of the horizontal branch). A pure
+                    # y-nudge cannot escape a horizontal label's text band that crosses
+                    # this column (the cross-type residue). So escalate an x-ladder:
+                    # for each x-tier fan the sub-column further outward, then run the
+                    # y-collision loop; a vertical-label anchor y is REJECTED if it (or
+                    # its box) leaves the paper's usable-y corridor (avail_y), so the
+                    # ladder can never re-introduce an off-sheet label. First clear tier
+                    # wins; exhausting all tiers is fail-loud, never a silent overlap.
+                    def _vbox_in_corridor(cy: float) -> bool:
+                        if avail_y is None:
+                            return True
+                        bx0 = _label_bbox(name, 0.0, cy, True, edge, text_scale=page_scale)
+                        return bx0[2] >= avail_y[0] - 1e-6 and bx0[3] <= avail_y[1] + 1e-6
+                    # Clamp the anchor so the label BOX sits fully inside the corridor
+                    # before searching. A base near a boundary (e.g. NRST whose box
+                    # low edge = 2.8 mm < margin 12.7) would otherwise fail every step
+                    # because the pure-vdir search only pushes it FURTHER out. The box
+                    # y-span is [cy - w, cy] (ny<0) or [cy, cy + w] (ny>=0); pick the
+                    # cy that puts the whole span inside [lo, hi].
+                    def _clamp_anchor(cy: float) -> float:
+                        if avail_y is None:
+                            return cy
+                        lo, hi = avail_y
+                        bx0 = _label_bbox(name, 0.0, cy, True, edge, text_scale=page_scale)
+                        blo, bhi = bx0[2], bx0[3]
+                        if blo < lo:
+                            cy += (lo - blo)
+                        elif bhi > hi:
+                            cy -= (bhi - hi)
+                        return round(cy, 4)
+                    base_ly2 = _clamp_anchor(base_ly2)
+                    # x-ladder step: reuse col_step when multi-column spillover set
+                    # it, else derive the label's own x footprint (h + gap) so the
+                    # ladder still fans on a SPARSE column (col_step==0 there) — a
+                    # zero step would collapse every tier onto the same x and make the
+                    # x-ladder a no-op (the 01_power NRST fail-loud).
+                    x_step = col_step if col_step > 1e-6 else (
+                        _LABEL_CH_MM * page_scale + _LABEL_VMARGIN_MM
+                        + _LABEL_COL_GAP_MM * page_scale)
+                    # X-CORRIDOR guard for the vertical branch's glyph column: a
+                    # vertical (ang90/270) label's box is `h` wide in x centred on lx
+                    # (_label_bbox: [lx-h/2, lx+h/2]); the x-ladder fans lx outward per
+                    # tier, so a column near the left/right sheet edge can push its
+                    # glyph column off-sheet in x. Reject any tier whose x-box leaves
+                    # the usable-x corridor (symmetric to the horizontal branch's
+                    # _hbox_in_corridor). avail_x is None => legacy unbounded.
+                    def _vbox_in_x_corridor(cand_lx: float) -> bool:
+                        if avail_x is None:
+                            return True
+                        bx0 = _label_bbox(name, cand_lx, base_ly2, True, edge, text_scale=page_scale)
+                        return bx0[0] >= avail_x[0] - 1e-6 and bx0[1] <= avail_x[1] + 1e-6
+                    lx = base_lx
+                    ly2 = base_ly2
+                    resolved = False
+                    for xt in range(24):
+                        lx = round(base_lx + xdir * xt * x_step, 4)
+                        if not _vbox_in_x_corridor(lx):
+                            break
+                        # BIDIRECTIONAL y-search within the corridor: try the clamped
+                        # base, then alternate outward/inward (vdir and -vdir) so a
+                        # label near a boundary can move AWAY from the wall instead of
+                        # only pushing into it. Candidates outside the corridor are
+                        # skipped, never accepted. First clear candidate wins.
+                        found = False
+                        for step in range(400):
+                            for sign in ((vdir,) if step == 0 else (vdir, -vdir)):
+                                cand = round(base_ly2 + sign * step * pitch, 4)
+                                if not _vbox_in_corridor(cand):
+                                    continue
+                                bx = _label_bbox(name, lx, cand, True, edge, text_scale=page_scale)
+                                if not any(_bbox_overlap(bx, pb) for pb in placed):
+                                    ly2 = cand
+                                    found = True
+                                    break
+                            if found:
+                                break
+                        if found:
+                            resolved = True
+                            break
+                    if not resolved:
+                        raise ValueError(
+                            f"LABEL_DENSITY_UNRESOLVED: vertical label {name!r} at "
+                            f"pin ({x},{y}) could not clear placed boxes within the "
+                            f"usable-y corridor after 24 x-tiers x 400 y-steps "
+                            f"(page_scale={page_scale}, avail_y={avail_y})")
+                    if abs(lx - x) > 1e-6 or abs(ly2 - y) > 1e-6:
+                        # L-jog: pin -> out to sub-column x (at pin y) -> up to slot y
+                        blocks.append(_wire_segment_block(x, y, lx, y))
+                        blocks.append(_wire_segment_block(lx, y, lx, ly2))
+                    else:
+                        blocks.append(_wire_segment_block(x, y, lx, ly2))
+                _label_bbox_reg = _label_bbox(name, lx, ly2, True, edge, text_scale=page_scale)
+                placed.append(_label_bbox_reg)
+                blocks.append(_global_label_block(name, lx, ly2, edge, text_scale=page_scale))
+                continue
+            ly = _resolve_label_y(name, x, y, True, placed, direction, edge)
             if abs(ly - y) > 1e-6:
                 lx = round(x + direction * _LABEL_STUB_STEP_MM, 4)
                 blocks.append(_wire_segment_block(x, y, lx, y))
                 blocks.append(_wire_segment_block(lx, y, lx, ly))
-                blocks.append(_global_label_block(name, lx, ly))
+                blocks.append(_global_label_block(name, lx, ly, edge))
             else:
-                blocks.append(_global_label_block(name, x, ly))
+                blocks.append(_global_label_block(name, x, ly, edge))
     return blocks
 
 

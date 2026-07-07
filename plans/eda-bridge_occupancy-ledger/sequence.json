@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Budget-first compose with shared occupancy ledger",
+    "participants": ["Caller", "Composer", "KicadSymbol", "OccupancyLedger", "KicadEmit", "AssertGate"],
+    "messages": [
+      { "from": "Caller", "to": "Composer", "label": "compose_schematic(netlist, symbols, slug)" },
+      { "from": "Composer", "to": "KicadSymbol", "label": "A1: pin-inclusive extent + label_reach（逐符號）" },
+      { "from": "KicadSymbol", "to": "Composer", "label": "內容清單（真實幾何）" },
+      { "from": "Composer", "to": "OccupancyLedger", "label": "A2: dry-run reserve（frame×pitch 候選預檢）" },
+      { "from": "OccupancyLedger", "to": "Composer", "label": "可行候選 / BUDGET_INFEASIBLE（缺項清單）" },
+      { "from": "Composer", "to": "OccupancyLedger", "label": "A3: reserve(body+pin extent) 逐符號" },
+      { "from": "OccupancyLedger", "to": "Composer", "label": "落位確認 / LedgerConflict（衝突矩形）" },
+      { "from": "Composer", "to": "KicadEmit", "label": "placements + 同一 ledger 實例" },
+      { "from": "KicadEmit", "to": "OccupancyLedger", "label": "A4: reserve(label/stub/power) → draw" },
+      { "from": "OccupancyLedger", "to": "KicadEmit", "label": "reserve 確認 / LedgerConflict → 顯式位移（帶上限）" },
+      { "from": "KicadEmit", "to": "AssertGate", "label": ".kicad_sch 草稿 + 帳本快照" },
+      { "from": "AssertGate", "to": "Caller", "label": "A5: 五組斷言全過 → 輸出 / LEDGER_ASSERTION_FAILED" }
+    ]
+  }
+]

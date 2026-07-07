@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "state": "planned",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-07T00:34:44.709Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-07T03:29:55.619Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "proposal/design/spec/idef0/grafcet/sequence/data-schema 完成，drawmiat 驗證通過（IDEF0 5A/13AR；GRAFCET 9S/19E）"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-07T03:31:24.119Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md M0-M5 分階段計畫＋handoff/test-vectors/errors/observability 完成"
+    }
+  ]
+}

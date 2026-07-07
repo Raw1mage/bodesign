@@ -8,6 +8,192 @@ SYMBOL_LIB_VERSION = "20241209"
 DEFAULT_SYMBOL_NAME = "GENERIC_IC"
 DEFAULT_FOOTPRINT_FILTER = "*"
 
+# Symbol geometry constants (BR: four-edge physical-pinout mirror placement).
+_PIN_LENGTH = 5.08        # pin graphic length; the pin `at` is its OUTER endpoint,
+                          # so the body edge sits _PIN_LENGTH inward from `at`.
+_PIN_PITCH = 1.27         # spacing between adjacent pins on one edge.
+_EDGE_MARGIN = 2.54       # clear span each corner keeps free of pins.
+_FOUR_EDGE_MIN = 25       # numeric parts with >24 pins get the QFP perimeter walk.
+_BGA_RE = re.compile(r"^([A-Z]{1,2})([0-9]+)$")
+_NUM_RE = re.compile(r"^[0-9]+$")
+
+
+@dataclass(slots=True)
+class _SymbolGeometry:
+    """Resolved four-edge symbol geometry.
+
+    - `half_w` / `half_h`: half-width / half-height of the body rectangle (the
+      rectangle spans [-half_w, half_w] x [-half_h, half_h]).
+    - `pin_placements`: [(pin, at_x, at_y, rotation), ...]. `at_x`/`at_y` is the
+      pin's OUTER endpoint (body edge is _PIN_LENGTH inward). rotation: left=0
+      (points +x into body), right=180, bottom=90 (points +y up into body),
+      top=270. NOT to be read as functional grouping — it is a faithful mirror of
+      the physical package pinout.
+    """
+    half_w: float
+    half_h: float
+    pin_placements: list[tuple["KiCadSymbolPin", float, float, int]]
+
+
+def _assign_pin_sides(pins: list["KiCadSymbolPin"]) -> dict[str, list["KiCadSymbolPin"]]:
+    """Partition pins onto four edges by their PHYSICAL package coordinate.
+
+    Returns {"left": [...], "right": [...], "top": [...], "bottom": [...]} where
+    each list is ordered faithfully to the physical package: left/right top->bottom
+    by row, top/bottom left->right by column. This is a physical-pinout mirror, NOT
+    a functional (power-up / gnd-down) grouping.
+
+    Number-shape classes (repo law: no silent fallback):
+      - BGA  `^[A-Z]{1,2}[0-9]+$` (A1, K16, AA3): (row letter, col number) ->
+        perimeter projection to the nearest package edge.
+      - numeric `^[0-9]+$`:
+          * <= 24 pins  -> DIP/SOIC two-side mirror (left 1..N/2 top->bottom,
+            right N/2+1..N BOTTOM->top).
+          * >  24 pins  -> QFP counter-clockwise perimeter walk.
+      - anything else / mixed -> ValueError (fail-fast, lists the offenders).
+    """
+    numbers = [p.number.strip().upper() for p in pins]
+    bga = [_BGA_RE.match(n) for n in numbers]
+    numeric = [bool(_NUM_RE.match(n)) for n in numbers]
+
+    if all(m is not None for m in bga):
+        return _assign_bga(pins, bga)  # type: ignore[arg-type]
+    if all(numeric):
+        return _assign_numeric(pins, [int(n) for n in numbers])
+
+    offenders = [p.number for p, m, num in zip(pins, bga, numeric) if m is None and not num]
+    if offenders:
+        raise ValueError(
+            "cannot assign four-edge pin sides: pin numbers are neither uniform "
+            "BGA (^[A-Z]{1,2}[0-9]+$) nor uniform numeric; unparseable/mixed pin "
+            f"numbers: {', '.join(offenders[:20])}"
+            + (f" (+{len(offenders) - 20} more)" if len(offenders) > 20 else "")
+        )
+    # uniform-shape requirement not met (e.g. some BGA + some numeric) -> fail-fast.
+    raise ValueError(
+        "cannot assign four-edge pin sides: pin numbering mixes BGA and numeric "
+        "styles; a symbol must have one uniform pin-number scheme"
+    )
+
+
+def _assign_bga(pins: list["KiCadSymbolPin"],
+                matches: list[re.Match]) -> dict[str, list["KiCadSymbolPin"]]:
+    # row letter -> y index (order of appearance sorted), col number -> x index.
+    row_letters = sorted({m.group(1) for m in matches})
+    row_index = {letter: i for i, letter in enumerate(row_letters)}
+    col_numbers = sorted({int(m.group(2)) for m in matches})
+    col_index = {num: i for i, num in enumerate(col_numbers)}
+    n_rows = len(row_letters)
+    n_cols = len(col_numbers)
+
+    sides: dict[str, list[tuple[float, "KiCadSymbolPin"]]] = {"left": [], "right": [], "top": [], "bottom": []}
+    for pin, m in zip(pins, matches):
+        ri = row_index[m.group(1)]           # 0 = top row (A)
+        ci = col_index[int(m.group(2))]      # 0 = left col
+        # normalized distance (0..1) to each of the four edges.
+        d_left = ci / max(n_cols - 1, 1)
+        d_right = 1.0 - d_left
+        d_top = ri / max(n_rows - 1, 1)
+        d_bottom = 1.0 - d_top
+        # nearest edge; tie -> prefer left/right (per BR).
+        best = min(
+            (("left", d_left), ("right", d_right), ("top", d_top), ("bottom", d_bottom)),
+            key=lambda kv: (kv[1], {"left": 0, "right": 1, "top": 2, "bottom": 3}[kv[0]]),
+        )[0]
+        # edge-local order key: left/right by row (top->bottom); top/bottom by col.
+        order = ri if best in ("left", "right") else ci
+        sides[best].append((order, pin))
+
+    return {edge: [p for _o, p in sorted(items, key=lambda t: t[0])] for edge, items in sides.items()}
+
+
+def _assign_numeric(pins: list["KiCadSymbolPin"],
+                    values: list[int]) -> dict[str, list["KiCadSymbolPin"]]:
+    # order pins by ascending pin number (physical sequence around the package).
+    order = sorted(range(len(pins)), key=lambda i: values[i])
+    seq = [pins[i] for i in order]
+    n = len(seq)
+    result: dict[str, list["KiCadSymbolPin"]] = {"left": [], "right": [], "top": [], "bottom": []}
+
+    if n <= 24:
+        # DIP/SOIC two-side mirror: left 1..ceil(N/2) top->bottom, right rest BOTTOM->top.
+        half = (n + 1) // 2
+        result["left"] = seq[:half]
+        result["right"] = list(reversed(seq[half:]))
+        return result
+
+    # QFP counter-clockwise perimeter walk. Distribute as evenly as possible,
+    # remainder favours left then bottom (per BR).
+    base, rem = divmod(n, 4)
+    counts = [base, base, base, base]  # [left, bottom, right, top]
+    for i in range(rem):
+        counts[i] += 1  # order left, bottom, right, top -> left/bottom get extras
+    left_n, bottom_n, right_n, top_n = counts
+    idx = 0
+    result["left"] = seq[idx:idx + left_n]; idx += left_n              # top->bottom
+    result["bottom"] = seq[idx:idx + bottom_n]; idx += bottom_n        # left->right
+    result["right"] = list(reversed(seq[idx:idx + right_n])); idx += right_n  # bottom->top
+    result["top"] = list(reversed(seq[idx:idx + top_n]))               # right->left
+    return result
+
+
+def _symbol_geometry(pins: list["KiCadSymbolPin"], min_half_h: float = 20.0,
+                     pin_pitch: float = _PIN_PITCH,
+                     pin_length: float = _PIN_LENGTH) -> _SymbolGeometry:
+    """Compute the four-edge body rectangle + per-pin placements.
+
+    Left/right pin counts set the body HEIGHT; top/bottom counts set the WIDTH.
+    Each edge keeps `_EDGE_MARGIN` clear at both corners so a pin never sits on a
+    corner. Pins are laid on a `pin_pitch` grid, centred on each edge.
+
+    `pin_pitch` defaults to `_PIN_PITCH` (1.27 mm) so existing callers are
+    unchanged. A caller drawing a dense subset on ONE symbol (e.g. a per-page
+    50–74-ball MCU subset) can pass a larger pitch so adjacent pin NAME text
+    (1.27 mm tall) does not overlap into a vertical smear.
+    """
+    sides = _assign_pin_sides(pins)
+    left, right, top, bottom = sides["left"], sides["right"], sides["top"], sides["bottom"]
+
+    vert_max = max(len(left), len(right))
+    horiz_max = max(len(top), len(bottom))
+    # body span each edge needs: (count-1) pitch for the pins + a margin each end.
+    need_h = (vert_max - 1) * pin_pitch + 2 * _EDGE_MARGIN if vert_max else 0.0
+    need_w = (horiz_max - 1) * pin_pitch + 2 * _EDGE_MARGIN if horiz_max else 0.0
+    half_h = round(max(min_half_h, need_h / 2 + 2.54), 2)
+    half_w = round(max(15.24, need_w / 2 + 2.54), 2)
+
+    placements: list[tuple["KiCadSymbolPin", float, float, int]] = []
+
+    def _lay(edge_pins: list["KiCadSymbolPin"], axis_span: float) -> list[float]:
+        # centred coordinates along an edge of half-span `axis_span`, top/left first.
+        c = len(edge_pins)
+        if c == 0:
+            return []
+        total = (c - 1) * pin_pitch
+        start = total / 2  # first pin sits at +start (top for vertical, left for horiz)
+        return [round(start - i * pin_pitch, 2) for i in range(c)]
+
+    # left edge: x = outer endpoint (body edge -half_w, pin extends further -x),
+    # y descends from top. rot=0 (points +x into body).
+    for pin, y in zip(left, _lay(left, half_h)):
+        placements.append((pin, round(-half_w - pin_length, 2), y, 0))
+    # right edge: rot=180, y descends top->bottom.
+    for pin, y in zip(right, _lay(right, half_h)):
+        placements.append((pin, round(half_w + pin_length, 2), y, 180))
+    # bottom edge: y = -half_h - pin_length (outer, below body), rot=90 (points +y up).
+    # _lay gives left->right when we negate (start is +, but x should go left->right).
+    bx = _lay(bottom, half_w)
+    for pin, x in zip(bottom, bx):
+        placements.append((pin, round(-x, 2), round(-half_h - pin_length, 2), 90))
+    # top edge: y = +half_h + pin_length (above body), rot=270. left->right visually
+    # but `top` list is already right->left (QFP walk) / left->right (assign) — we lay
+    # by the same negated-x mapping so index0 -> +x (right) matching list order.
+    tx = _lay(top, half_w)
+    for pin, x in zip(top, tx):
+        placements.append((pin, round(x, 2), round(half_h + pin_length, 2), 270))
+
+    return _SymbolGeometry(half_w=half_w, half_h=half_h, pin_placements=placements)
+
 
 @dataclass(slots=True)
 class KiCadSymbolPin:
@@ -96,19 +282,11 @@ def emit_kicad_symbol(
 
 def _generic_symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], footprint_filter: str,
                             datasheet: str, evidence: str, description: str) -> str:
-    ordered = sorted(pins, key=_pin_sort_key)
-    height = max(40.0, len(ordered) * 1.27 / 2 + 20.0)
-    top = round(height / 2, 2)
-    bottom = -top
-    middle = len(ordered) // 2
-    pin_blocks = []
-    for index, pin in enumerate(ordered):
-        left = index < middle
-        side_index = index if left else index - middle
-        x = -38.1 if left else 38.1
-        y = round(top - 10.16 - side_index * 1.27, 2)
-        rotation = 0 if left else 180
-        pin_blocks.append(_pin_block(pin, x, y, rotation))
+    geom = _symbol_geometry(pins)
+    left = round(-geom.half_w - _PIN_LENGTH, 2)
+    right = round(geom.half_w + _PIN_LENGTH, 2)
+    top = geom.half_h
+    bottom = -geom.half_h
     return (
         "(kicad_symbol_lib\n"
         f"\t(version {SYMBOL_LIB_VERSION})\n"
@@ -116,20 +294,20 @@ def _generic_symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], footpr
         "\t(generator_version \"1.0\")\n"
         f"\t(symbol \"{_escape(symbol_name)}\"\n"
         "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
-        f"{_property('Reference', 'U', -30.48, top + 3.81, visible=True)}\n"
-        f"{_property('Value', symbol_name, 7.62, top + 3.81, visible=True)}\n"
-        f"{_property('Footprint', '', -30.48, bottom - 3.81, visible=False)}\n"
+        f"{_property('Reference', 'U', left, top + 3.81, visible=True)}\n"
+        f"{_property('Value', symbol_name, right - 15.24, top + 3.81, visible=True)}\n"
+        f"{_property('Footprint', '', left, bottom - 3.81, visible=False)}\n"
         f"{_property('Datasheet', datasheet, 0, 0, visible=False)}\n"
         f"{_property('Description', description, 0, 0, visible=False)}\n"
         f"{_property('BodesignEvidence', evidence, 0, 0, visible=False)}\n"
         f"{_property('ki_fp_filters', footprint_filter, 0, 0, visible=False)}\n"
         f"\t\t(symbol \"{_escape(symbol_name)}_0_1\"\n"
         "\t\t\t(rectangle\n"
-        f"\t\t\t\t(start -33.02 {bottom})\n\t\t\t\t(end 33.02 {top})\n"
+        f"\t\t\t\t(start {-geom.half_w} {bottom})\n\t\t\t\t(end {geom.half_w} {top})\n"
         "\t\t\t\t(stroke (width 0.254) (type default))\n\t\t\t\t(fill (type background))\n"
         "\t\t\t)\n\t\t)\n"
         f"\t\t(symbol \"{_escape(symbol_name)}_1_1\"\n"
-        + "\n".join(pin_blocks)
+        + "\n".join(_pin_block(pin, x, y, rot) for pin, x, y, rot in geom.pin_placements)
         + "\n\t\t)\n\t)\n)\n"
     )
 
@@ -165,19 +343,11 @@ def _kicad_pin_kind(name: str, source_kind: str) -> str:
 
 
 def _symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], pin_table: dict[str, object]) -> str:
-    ordered = sorted(pins, key=_pin_sort_key)
-    height = max(80.0, len(ordered) * 1.27 / 2 + 20.0)
-    top = round(height / 2, 2)
-    bottom = -top
-    middle = len(ordered) // 2
-    pin_blocks = []
-    for index, pin in enumerate(ordered):
-        left = index < middle
-        side_index = index if left else index - middle
-        x = -38.1 if left else 38.1
-        y = round(top - 10.16 - side_index * 1.27, 2)
-        rotation = 0 if left else 180
-        pin_blocks.append(_pin_block(pin, x, y, rotation))
+    geom = _symbol_geometry(pins, min_half_h=40.0)
+    left = round(-geom.half_w - _PIN_LENGTH, 2)
+    right = round(geom.half_w + _PIN_LENGTH, 2)
+    top = geom.half_h
+    bottom = -geom.half_h
 
     evidence = _evidence_property(pin_table)
     description = "Project-local symbol generated from a verified pin table."
@@ -190,9 +360,9 @@ def _symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], pin_table: dic
         "\t\t(exclude_from_sim no)\n"
         "\t\t(in_bom yes)\n"
         "\t\t(on_board yes)\n"
-        f"{_property('Reference', 'U', -30.48, top + 3.81, visible=True)}\n"
-        f"{_property('Value', symbol_name, 7.62, top + 3.81, visible=True)}\n"
-        f"{_property('Footprint', '', -30.48, bottom - 3.81, visible=False)}\n"
+        f"{_property('Reference', 'U', left, top + 3.81, visible=True)}\n"
+        f"{_property('Value', symbol_name, right - 15.24, top + 3.81, visible=True)}\n"
+        f"{_property('Footprint', '', left, bottom - 3.81, visible=False)}\n"
         f"{_property('Datasheet', '', 0, 0, visible=False)}\n"
         f"{_property('Description', description, 0, 0, visible=False)}\n"
         f"{_property('BodesignEvidence', evidence, 0, 0, visible=False)}\n"
@@ -200,50 +370,56 @@ def _symbol_library(symbol_name: str, pins: list[KiCadSymbolPin], pin_table: dic
         f"{_property('ki_fp_filters', DEFAULT_FOOTPRINT_FILTER, 0, 0, visible=False)}\n"
         f"\t\t(symbol \"{_escape(symbol_name)}_0_1\"\n"
         "\t\t\t(rectangle\n"
-        f"\t\t\t\t(start -33.02 {bottom})\n"
-        f"\t\t\t\t(end 33.02 {top})\n"
+        f"\t\t\t\t(start {-geom.half_w} {bottom})\n"
+        f"\t\t\t\t(end {geom.half_w} {top})\n"
         "\t\t\t\t(stroke (width 0.254) (type default))\n"
         "\t\t\t\t(fill (type background))\n"
         "\t\t\t)\n"
         "\t\t)\n"
         f"\t\t(symbol \"{_escape(symbol_name)}_1_1\"\n"
-        + "\n".join(pin_blocks)
+        + "\n".join(_pin_block(pin, x, y, rot) for pin, x, y, rot in geom.pin_placements)
         + "\n\t\t)\n"
         "\t)\n"
         ")\n"
     )
 
 
-def _pin_sort_key(pin: KiCadSymbolPin) -> tuple[int, str, str]:
-    name = pin.name.upper()
-    if pin.kind == "power_in":
-        group = 0
-    elif name in {"NRST", "BOOT0", "PDR_ON", "PWR_ON", "OSC32_IN", "OSC32_OUT"}:
-        group = 1
-    elif pin.kind == "no_connect":
-        group = 9
-    else:
-        group = 5
-    return (group, name, pin.number)
+def _fmt(v: float) -> str:
+    """Render a mm float the way the legacy literals were written: no trailing\n    zeros, integers as bare ints. `_fmt(5.08)=='5.08'`, `_fmt(1.27)=='1.27'` so a\n    scale==1.0 caller is byte-identical to the old hard-coded `5.08`/`1.27`."""
+    r = round(float(v), 4)
+    if r == int(r):
+        return str(int(r))
+    return repr(r)
 
 
-def _pin_block(pin: KiCadSymbolPin, x: float, y: float, rotation: int) -> str:
+def _pin_block(pin: KiCadSymbolPin, x: float, y: float, rotation: int,
+               pin_length: float = _PIN_LENGTH, text_scale: float = 1.0) -> str:
+    # text_scale==1.0 & pin_length==_PIN_LENGTH => byte-identical to the legacy
+    # literals (5.08 / 1.27). A scaled per-page symbol (large pin_pitch) passes a
+    # matching pin_length and text_scale so the pin graphic AND its name/number
+    # text grow with the pitch instead of staying a 1.27 mm smear on a huge body.
+    ln = _fmt(pin_length)
+    ch = _fmt(round(1.27 * text_scale, 4))
     return (
         f"\t\t\t(pin {pin.kind} line\n"
         f"\t\t\t\t(at {x} {y} {rotation})\n"
-        "\t\t\t\t(length 5.08)\n"
-        f"\t\t\t\t(name \"{_escape(pin.name)}\" (effects (font (size 1.27 1.27))))\n"
-        f"\t\t\t\t(number \"{_escape(pin.number)}\" (effects (font (size 1.27 1.27))))\n"
+        f"\t\t\t\t(length {ln})\n"
+        f"\t\t\t\t(name \"{_escape(pin.name)}\" (effects (font (size {ch} {ch}))))\n"
+        f"\t\t\t\t(number \"{_escape(pin.number)}\" (effects (font (size {ch} {ch}))))\n"
         "\t\t\t)"
     )
 
 
-def _property(name: str, value: str, x: float, y: float, visible: bool) -> str:
+def _property(name: str, value: str, x: float, y: float, visible: bool,
+              text_scale: float = 1.0) -> str:
+    # text_scale==1.0 => byte-identical 1.27 literal (legacy). Scaled per-page
+    # symbols grow the Reference/Value text with the pin pitch.
     hide = "" if visible else " (hide yes)"
+    ch = _fmt(round(1.27 * text_scale, 4))
     return (
         f"\t\t(property \"{_escape(name)}\" \"{_escape(value)}\"\n"
         f"\t\t\t(at {x} {y} 0)\n"
-        f"\t\t\t(effects (font (size 1.27 1.27)){hide})\n"
+        f"\t\t\t(effects (font (size {ch} {ch})){hide})\n"
         "\t\t)"
     )
 

@@ -1,0 +1,27 @@
+[
+  {
+    "title": "Phase 1: single pinout block generation & validation",
+    "participants": ["Orchestrator", "SymbolResolver", "BlockDrafter", "kicad-cli", "QAGates", "User"],
+    "messages": [
+      { "from": "Orchestrator", "to": "SymbolResolver", "label": "resolve(BOM MPN list)" },
+      { "from": "SymbolResolver", "to": "Orchestrator", "label": "resolved symbols + symbol_gaps 缺口清單" },
+      { "from": "Orchestrator", "to": "User", "label": "缺口清單裁決（換料/原廠CAD/手工補繪）" },
+      { "from": "Orchestrator", "to": "BlockDrafter", "label": "draw_block(symbol, nets) — kiutils 物件層" },
+      { "from": "BlockDrafter", "to": "kicad-cli", "label": "render(.kicad_sch → SVG/PNG)" },
+      { "from": "kicad-cli", "to": "QAGates", "label": "SVG + .kicad_sch" },
+      { "from": "QAGates", "to": "Orchestrator", "label": "render_qa 疊字閘 + fidelity 連通閘 verdict" },
+      { "from": "Orchestrator", "to": "User", "label": "雙閘全綠 → 人工抽查（Phase 1 gate）" }
+    ]
+  },
+  {
+    "title": "Phase 2: sheet composition from validated blocks",
+    "participants": ["Orchestrator", "SheetComposer", "kicad-cli", "QAGates", "User"],
+    "messages": [
+      { "from": "Orchestrator", "to": "SheetComposer", "label": "compose(validated blocks, page plan) — 積木不可變" },
+      { "from": "SheetComposer", "to": "kicad-cli", "label": "render(整頁 .kicad_sch)" },
+      { "from": "kicad-cli", "to": "QAGates", "label": "SVG + .kicad_sch" },
+      { "from": "QAGates", "to": "Orchestrator", "label": "雙閘 + ink_metrics 利用率 verdict" },
+      { "from": "Orchestrator", "to": "User", "label": "機檢全綠 → C03 人工審閱 gate" }
+    ]
+  }
+]

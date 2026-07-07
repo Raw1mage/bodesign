@@ -8,7 +8,7 @@ from pathlib import Path as _Path
 def _compute_engine_rev() -> str:
     h = _hashlib.sha256()
     here = _Path(__file__).parent
-    for fn in ("composer.py", "kicad_emit.py", "fidelity.py", "render_qa.py"):
+    for fn in ("composer.py", "kicad_emit.py", "fidelity.py", "render_qa.py", "block_drafter.py"):
         fp = here / fn
         if fp.exists():
             h.update(fp.read_bytes())
@@ -31,6 +31,8 @@ from .kicad_emit import (
 )
 from .fidelity import FidelityError, FidelityReport, verify_partition_fidelity
 from .render_qa import TextQAReport, qa_svg_text
+from .block_drafter import PinoutBlock, draw_block
+from .block_qa import BlockQAVerdict, qa_block, qa_loop
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .bom_export import BomResult, export_bom, export_netlist
 from .component_fetch import fetch_component, search_components
@@ -134,4 +136,9 @@ __all__ = [
     "verify_partition_fidelity",
     "TextQAReport",
     "qa_svg_text",
+    "PinoutBlock",
+    "draw_block",
+    "BlockQAVerdict",
+    "qa_block",
+    "qa_loop",
 ]

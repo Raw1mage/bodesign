@@ -1,0 +1,62 @@
+{
+  "schemas": [
+    {
+      "name": "LedgerRect",
+      "kind": "json",
+      "fields": [
+        { "name": "x0", "type": "float", "notes": "左緣 mm（頁座標）" },
+        { "name": "y0", "type": "float", "notes": "上緣 mm" },
+        { "name": "x1", "type": "float", "notes": "右緣 mm，x1>x0" },
+        { "name": "y1", "type": "float", "notes": "下緣 mm，y1>y0" },
+        { "name": "owner", "type": "str", "notes": "實體識別（ref / net label / power symbol id）" },
+        { "name": "kind", "type": "str", "notes": "enum: body|pin_extent|stub|label|power|flag|frame_margin" }
+      ]
+    },
+    {
+      "name": "ReserveResult",
+      "kind": "json",
+      "fields": [
+        { "name": "ok", "type": "bool", "notes": "reserve 是否成功" },
+        { "name": "conflicts", "type": "list[LedgerRect]", "notes": "失敗時的衝突矩形清單（fail-loud 證據）" }
+      ]
+    },
+    {
+      "name": "ContentInventory",
+      "kind": "json",
+      "fields": [
+        { "name": "ref", "type": "str", "notes": "符號 reference" },
+        { "name": "body_extent", "type": "tuple[float,float]", "notes": "pin-inclusive 半寬/半高 mm（DD-4 單點真相）" },
+        { "name": "label_reach", "type": "dict[edge,float]", "notes": "四邊 label 伸展量 mm" },
+        { "name": "label_count", "type": "dict[edge,int]", "notes": "四邊 label 欄位數（欄容量預檢用）" }
+      ]
+    },
+    {
+      "name": "BudgetSolution",
+      "kind": "json",
+      "fields": [
+        { "name": "paper", "type": "str", "notes": "選定圖框（A0/A1/…），一步定案不升框" },
+        { "name": "pitch", "type": "float", "notes": "本頁 pin pitch mm（每頁獨立）" },
+        { "name": "scale", "type": "float", "notes": "文字/stub/偏移全由 pitch 派生（scale coherence）" },
+        { "name": "fill_ratio", "type": "float", "notes": "內容佔紙面比，目標 0.60–0.75" }
+      ]
+    },
+    {
+      "name": "BudgetInfeasibleReport",
+      "kind": "message",
+      "fields": [
+        { "name": "reason", "type": "str", "notes": "BUDGET_INFEASIBLE" },
+        { "name": "overloaded_edges", "type": "list[dict]", "notes": "超載邊/欄：所需 vs 可用 mm" },
+        { "name": "candidates_tried", "type": "list[dict]", "notes": "掃描過的 frame×pitch 候選與否決原因" }
+      ]
+    },
+    {
+      "name": "LedgerSnapshot",
+      "kind": "json",
+      "fields": [
+        { "name": "rects", "type": "list[LedgerRect]", "notes": "全帳本傾印（斷言失敗 RCA 用）" },
+        { "name": "paper", "type": "str", "notes": "圖框" },
+        { "name": "violations", "type": "list[dict]", "notes": "LEDGER_ASSERTION_FAILED 時的違規實體清單" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "diagram_title": "Budget-first schematic composition with occupancy ledger",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Inventory content geometry",
+      "description": "清點頁面內容：對每個符號計算 pin-inclusive 真實 bbox（含四邊 pin 外伸與 label 伸展量），彙總為內容清單與總佔用需求",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Solve frame and budget",
+      "description": "一步選框＋配額反解：以內容佔紙面 60–75% 為目標選定圖框，反解 scale/pitch；pitch-scan 候選在掃描期即以帳本可行性淘汰，無可行候選則 BUDGET_INFEASIBLE fail-loud",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Reserve-place components",
+      "description": "placement：符號 body＋pin 外伸逐一向 occupancy ledger 申請 reserve，成功才落位；衝突即報，不做事後 resolve-overlap",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Reserve-draw emit geometry",
+      "description": "emit：label/stub/電源符號/圖框邊界逐一 reserve→draw，與 A3 共用同一帳本實例；不再有位置凍結後塞不下的死結",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Assert acceptance gates",
+      "description": "事後斷言閘：每頁 pitch／圖框／利用率≥40%／label 互疊=0／offpage=0 全部降為斷言；斷言失敗＝帳本實作 bug，不是調參訊號",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "type": "input",
+      "label": "netlist + 符號庫（SSOT）"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "type": "control",
+      "label": "使用者裁決（pinout 鏡像/stub 直出/label-only/每頁獨立 pitch）"
+    },
+    {
+      "id": "AR3",
+      "source": "A1:output",
+      "target": "A2:input",
+      "type": "output",
+      "label": "內容清單（pin-inclusive bbox＋label 伸展量）"
+    },
+    {
+      "id": "AR4",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "填充率目標 60–75% + no-silent-fallback 天條"
+    },
+    {
+      "id": "AR5",
+      "source": "A2:output",
+      "target": "A3:input",
+      "type": "output",
+      "label": "選定 frame×scale×pitch + 空帳本"
+    },
+    {
+      "id": "AR6",
+      "source": "A2:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "BUDGET_INFEASIBLE 報告（缺項清單）"
+    },
+    {
+      "id": "AR7",
+      "source": "A3:output",
+      "target": "A4:input",
+      "type": "output",
+      "label": "落位符號＋已佔用帳本"
+    },
+    {
+      "id": "AR8",
+      "source": "A4:output",
+      "target": "A5:input",
+      "type": "output",
+      "label": ".kicad_sch 草稿＋完整帳本"
+    },
+    {
+      "id": "AR9",
+      "source": "A5:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "驗收過的 .kicad_sch + PDF"
+    },
+    {
+      "id": "AR10",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "occupancy ledger（2D reserve/query API）"
+    },
+    {
+      "id": "AR11",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "type": "mechanism",
+      "label": "occupancy ledger（同一實例）"
+    },
+    {
+      "id": "AR12",
+      "source": "EXTERNAL",
+      "target": "A5:mechanism",
+      "type": "mechanism",
+      "label": "kicad-cli ERC + 機械斷言腳本"
+    },
+    {
+      "id": "AR13",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "帳本可行性預檢（dry-run reserve）"
+    }
+  ]
+}

@@ -94,7 +94,28 @@ def _overlap_area(a, b) -> float:
     return ix * iy
 
 
-def qa_svg_text(path: str) -> TextQAReport:
+def qa_svg_text(path: str,
+                peripheral_texts: set[str] | None = None) -> TextQAReport:
+    """Text-overlap gate over a kicad-cli SVG.
+
+    peripheral_texts (DD-8, eda_draftsman-v2 task 1.5) scopes the gate's
+    jurisdiction to the artifacts the DRAFTER draws (net labels / power ports),
+    NOT vendor symbol-body internal pin-name<->pin-name overlaps:
+      - None (default): CURRENT whole-page behaviour — every text<->text pair
+        counts (preserves the documented CCM per-page baselines).
+      - a set of strings: a violation counts ONLY IF at least one of the two
+        overlapping texts' rendered `content` is in the set (i.e. at least one
+        side is a drafter-drawn net label). A pure symbol-text<->symbol-text
+        overlap (neither side in the set) is EXCLUDED — the drafter has no
+        authority over the vendor symbol's internal pin-name grid (DD-1).
+
+    Edge case: a net-label string could coincidentally equal a pin-name string;
+    a symbol-internal overlap between two such texts would then be counted. The
+    set-membership test is on rendered `content`, so this residual risk is
+    accepted per the DD-8 baseline. Future hardening: distinguish drafter labels
+    from pin names by SVG attributes (KiCad renders them with different
+    stroke/class), which parse_texts does not currently capture.
+    """
     with open(path) as f:
         svg = f.read()
     texts = parse_texts(svg)
@@ -114,6 +135,11 @@ def qa_svg_text(path: str) -> TextQAReport:
                 if pair in checked:
                     continue
                 checked.add(pair)
+                if peripheral_texts is not None and not (
+                        a["c"] in peripheral_texts or b["c"] in peripheral_texts):
+                    # scoped gate: neither side is a drafter-drawn label -> a
+                    # vendor symbol-internal overlap, outside jurisdiction (DD-8)
+                    continue
                 ov = _overlap_area(a, b)
                 if ov > THRESH * min(a["area"], b["area"]):
                     violations.append((a["c"], b["c"],

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "TV-1",
+    "description": "reserve 成功：空帳本上 reserve 一個矩形回 ok=true 且帳本含該 rect",
+    "input": { "ledger": [], "reserve": { "x0": 10, "y0": 10, "x1": 30, "y1": 20, "owner": "U1", "kind": "body" } },
+    "expected": { "ok": true, "conflicts": [] }
+  },
+  {
+    "id": "TV-2",
+    "description": "reserve 衝突 fail-loud：相交矩形回 ok=false 並列出衝突矩形（不靜默改位）",
+    "input": { "ledger": [{ "x0": 10, "y0": 10, "x1": 30, "y1": 20, "owner": "U1", "kind": "body" }], "reserve": { "x0": 25, "y0": 15, "x1": 45, "y1": 25, "owner": "LBL_SDIO0", "kind": "label" } },
+    "expected": { "ok": false, "conflicts_owners": ["U1"], "raises": "LedgerConflict" }
+  },
+  {
+    "id": "TV-3",
+    "description": "邊緣相接不算衝突：x1==x0 相鄰矩形可共存（半開區間語義）",
+    "input": { "ledger": [{ "x0": 10, "y0": 10, "x1": 30, "y1": 20, "owner": "U1", "kind": "body" }], "reserve": { "x0": 30, "y0": 10, "x1": 50, "y1": 20, "owner": "U2", "kind": "body" } },
+    "expected": { "ok": true, "conflicts": [] }
+  },
+  {
+    "id": "TV-4",
+    "description": "dry-run 不落帳：預檢後正式帳本不含 dry-run 矩形",
+    "input": { "ledger": [], "dry_run_reserve": { "x0": 0, "y0": 0, "x1": 100, "y1": 100, "owner": "probe", "kind": "body" } },
+    "expected": { "dry_run_ok": true, "ledger_rect_count_after": 0 }
+  },
+  {
+    "id": "TV-5",
+    "description": "BUDGET_INFEASIBLE：構造超載內容（label 需求 > 最大圖框可用邊），pitch-scan 掃畢拋錯附缺項清單",
+    "input": { "content": "synthetic page: 單邊 200 labels、min pitch、max frame A0" },
+    "expected": { "raises": "BUDGET_INFEASIBLE", "report_has": ["overloaded_edges", "candidates_tried"] }
+  },
+  {
+    "id": "TV-6",
+    "description": "斷言閘偵測帳本 bug：人工注入未 reserve 的重疊 label 後，A5 拋 LEDGER_ASSERTION_FAILED 附違規實體",
+    "input": { "sch": "emit 產出後手工注入重疊 label", "gate": "assert_only" },
+    "expected": { "raises": "LEDGER_ASSERTION_FAILED", "snapshot_has": ["violations"] }
+  },
+  {
+    "id": "TV-7",
+    "description": "golden baseline 不回歸：CCM 5 頁重產，五組數字全過且各頁不劣化於 M0-2 基準",
+    "input": { "pages": ["01_power", "02_mcu_core", "03_memory", "04_wireless", "05_stamp_icd"], "netlist": "fullboard（容器 /work/aiguard/C03-EE/）" },
+    "expected": { "per_page": { "pitch": ">0", "frame": "<=A0", "fill_ratio": ">=0.40", "label_overlaps": 0, "offpage": 0 } }
+  },
+  {
+    "id": "TV-8",
+    "description": "幾何單一真相：placement reserve 的符號矩形 == emit 實寫幾何（DD-4 對帳）",
+    "input": { "page": "05_stamp_icd", "check": "ledger body rects vs emitted symbol extents" },
+    "expected": { "mismatch_count": 0 }
+  }
+]

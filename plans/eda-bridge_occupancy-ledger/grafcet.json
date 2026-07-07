@@ -1,0 +1,110 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "接收 compose 請求（netlist＋符號庫＋頁面 slug）",
+    "LinkInputType": ["convergence_or"],
+    "LinkInputNumber": [6, 7, 8],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["netlist 與符號庫載入完成"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "清點內容：逐符號計算 pin-inclusive bbox＋label 伸展量，彙總佔用需求",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["內容清單完備（無缺幾何欄位）"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "選框＋配額反解 scale/pitch；pitch 候選以帳本 dry-run reserve 預檢可行性",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3, 7],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["存在可行 frame×pitch（內容佔 60–75%）", "掃描完所有候選仍無可行組合"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "placement：符號逐一 reserve→落位（body＋pin 外伸）",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4, 7],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["全部符號 reserve 成功", "reserve 衝突（帳本回報衝突矩形清單）"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "emit：label/stub/電源符號逐一 reserve→draw（與 placement 共用帳本實例）",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5, 7],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["全部 emit 幾何 reserve 成功", "reserve 衝突（帳本回報衝突矩形清單）"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "事後斷言閘：pitch／圖框／利用率≥40%／label 互疊=0／offpage=0",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [6, 8],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["五組斷言全過", "任一斷言失敗（＝帳本實作 bug）"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "輸出 .kicad_sch＋PDF＋帳本佔用報告，compose 成功結束",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [5],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["新 compose 請求到達"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "BUDGET_INFEASIBLE fail-loud：輸出缺項清單（超載邊/欄、所需 vs 可用空間），不升框不重試",
+    "LinkInputType": ["convergence_or"],
+    "LinkInputNumber": [2, 3, 4],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["使用者裁決後重新提交 compose 請求"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 8,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "LEDGER_ASSERTION_FAILED fail-loud：斷言失敗即帳本 bug，輸出違規實體與帳本快照供 RCA，不調參不重試",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [5],
+    "LinkOutputNumber": [0],
+    "LinkOutputType": "track",
+    "Condition": ["帳本 bug 修復後重新提交 compose 請求"],
+    "SubGrafcet": []
+  }
+]

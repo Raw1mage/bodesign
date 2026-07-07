@@ -1,0 +1,326 @@
+[
+  {
+    "mpn": "STM32N657L0Q3",
+    "package": "Processor (MCU+NPU)",
+    "pin_count": 0,
+    "disposition": "vendor_cad",
+    "cause": "low_confidence",
+    "refs": [
+      "U1"
+    ],
+    "note": "task 1.2a DD-7 已解：LCSC C42457345 STM32N657L0H3Q 經 easyeda2kicad 取真 KiCad symbol，入 vendor_symbols/，ballout 222/222 交叉驗證 0 mismatch；resolver 接 vendor_cad 來源"
+  },
+  {
+    "mpn": "APS512 class (TBC)",
+    "package": "Memory (high-speed DDR — stays on core stamp)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U2"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "MX25UM family (TBC)",
+    "package": "Memory (high-speed DDR — stays on core stamp)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U3"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "external SMPS (TBC)",
+    "package": "Power (external SMPS — deck S6)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U5"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "MIC5365 (TBC)",
+    "package": "Power",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U7"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "TCR2LE33 (TBC)",
+    "package": "Power",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U8"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "castellated half-hole (low-speed sig/pwr only)",
+    "package": "Interconnect (pad count UNDECIDED — deck S6)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "J_X1",
+      "J_X2"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "USB-C 2.0 waterproof (TBC)",
+    "package": "USB",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "J1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "LM66200 (TBC)",
+    "package": "Power (USB-C/battery)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U10"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "LM66100 (TBC)",
+    "package": "Power",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U11"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "18650 holder",
+    "package": "Power (battery)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "BT1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "EMIF02-4CMX8 (TBC)",
+    "package": "USB",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U12"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "microSD push-push (TBC)",
+    "package": "Storage",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "J_SD"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "UNDECIDED (deck S8 open item)",
+    "package": "Wireless (SDIO+UART HCI)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U4"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "PCB/chip/IPEX (TBC)",
+    "package": "Wireless",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "ANT1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "OLED+CTP (TBC)",
+    "package": "Display (I2C — shared bus w/ BQ25890)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "DS1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "FFC 22P 0.5mm same-side",
+    "package": "Camera interface",
+    "pin_count": 0,
+    "disposition": "pending-defer",
+    "cause": "no_official_symbol",
+    "refs": [
+      "J_CAM"
+    ],
+    "note": "官方 symbol 庫查無此料號家族",
+    "gate_note": "真缺 official symbol，待 Phase 2 前以 vendor_cad/manual/substitute 解；不擋 Phase 1 引擎（1.5 代表元件用已解 symbol）"
+  },
+  {
+    "mpn": "PDM mic (TBC)",
+    "package": "Audio",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "MIC1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "LSM6DSM class (TBC)",
+    "package": "Motion sensor (I2C)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "U_IMU"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "RGB LED (TBC)",
+    "package": "Status UI",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "D1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "tact + gasket (TBC)",
+    "package": "Status UI",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "SW1"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "various",
+    "package": "Passives",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "C*/R*"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "2.54mm headers/test points",
+    "package": "Debug/dev (all core pins pulled out)",
+    "pin_count": 0,
+    "disposition": "defer",
+    "cause": "unresolved_mpn",
+    "refs": [
+      "J_BRK"
+    ],
+    "note": "BOM MPN 為未定案/佔位料號，無可解析對象",
+    "gate_note": "BOM 未定案(TBC/佔位)，屬 BOM 成熟度問題非 symbol 問題；交 C03 定料工作並行處理"
+  },
+  {
+    "mpn": "2.54mm",
+    "package": "Debug",
+    "pin_count": 0,
+    "disposition": "pending-defer",
+    "cause": "no_official_symbol",
+    "refs": [
+      "J3"
+    ],
+    "note": "官方 symbol 庫查無此料號家族",
+    "gate_note": "真缺 official symbol，待 Phase 2 前以 vendor_cad/manual/substitute 解；不擋 Phase 1 引擎（1.5 代表元件用已解 symbol）"
+  },
+  {
+    "mpn": "IMX335",
+    "package": "Camera (5Mpx RGB CMOS)",
+    "pin_count": 0,
+    "disposition": "pending-defer",
+    "cause": "no_official_symbol",
+    "refs": [
+      "U_S"
+    ],
+    "note": "官方 symbol 庫查無此料號家族",
+    "gate_note": "真缺 official symbol，待 Phase 2 前以 vendor_cad/manual/substitute 解；不擋 Phase 1 引擎（1.5 代表元件用已解 symbol）"
+  },
+  {
+    "mpn": "M12 2.8mm F2.0",
+    "package": "Camera optics",
+    "pin_count": 0,
+    "disposition": "pending-defer",
+    "cause": "no_official_symbol",
+    "refs": [
+      "LENS"
+    ],
+    "note": "官方 symbol 庫查無此料號家族",
+    "gate_note": "真缺 official symbol，待 Phase 2 前以 vendor_cad/manual/substitute 解；不擋 Phase 1 引擎（1.5 代表元件用已解 symbol）"
+  },
+  {
+    "mpn": "I2C EEPROM",
+    "package": "Camera module",
+    "pin_count": 0,
+    "disposition": "pending-defer",
+    "cause": "no_official_symbol",
+    "refs": [
+      "U_EE"
+    ],
+    "note": "官方 symbol 庫查無此料號家族",
+    "gate_note": "真缺 official symbol，待 Phase 2 前以 vendor_cad/manual/substitute 解；不擋 Phase 1 引擎（1.5 代表元件用已解 symbol）"
+  }
+]

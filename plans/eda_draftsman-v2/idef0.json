@@ -1,0 +1,54 @@
+{
+  "diagram_title": "eda_draftsman-v2: two-phase schematic generation (single pinout block first, then sheet composition)",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Resolve official symbol",
+      "description": "以 BOM 真 MPN 對應 KiCad 官方/原廠 symbol（四邊 pin 幾何由庫提供）；查無者輸出誠實缺口清單，不生成替代幾何",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Draw single pinout block",
+      "description": "Phase 1：以官方 symbol 為中心，擺放周邊接線件（電源符號/net label/NC/去耦），kiutils 物件層寫入，零疊字約束",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Validate pinout block",
+      "description": "單圖機檢：kicad-cli render → render_qa text-bbox 疊字閘 + fidelity 連通分量閘；全綠才呈人工抽查",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Compose sheet from blocks",
+      "description": "Phase 2：把已驗收不可變單圖積木排進圖紙（sheet-fill 面積規劃 + 頁間 hierarchical label），ink_metrics 利用率機檢",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Validate sheet & deliver",
+      "description": "整頁機檢（雙閘 + 利用率 ≥ 門檻）→ 人工審閱 gate → C03 正式交付頁",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "BOM (真 MPN) + netlist (refs 保真資料)" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "no-fallback 天條（缺 symbol 標缺口）" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "KiCad 官方 symbol 庫 + kiutils" },
+    { "id": "AR4", "source": "A1:output", "target": "A2:input", "type": "output", "label": "resolved symbols（四邊 pin）" },
+    { "id": "AR5", "source": "A1:output", "target": "EXTERNAL", "type": "output", "label": "symbol 缺口清單（交使用者裁決）" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "零疊字規格（可機檢合約）" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A2:mechanism", "type": "mechanism", "label": "kiutils dataclass emit（禁手搓 sexp）" },
+    { "id": "AR8", "source": "A2:output", "target": "A3:input", "type": "output", "label": "單一 pinout 圖 .kicad_sch" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "render_qa 疊字閘 + fidelity 保真閘（TDD 紅線）" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "kicad-cli render + 人工抽查" },
+    { "id": "AR11", "source": "A3:output", "target": "A4:input", "type": "output", "label": "已驗收單圖積木（不可變）" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "分期硬閘（Phase1 全過才准）+ 積木不可變規則" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "sheet-fill placement 引擎 + ink_metrics" },
+    { "id": "AR14", "source": "A4:output", "target": "A5:input", "type": "output", "label": "整頁 .kicad_sch" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A5:control", "type": "control", "label": "利用率門檻 + 人工審閱 gate" },
+    { "id": "AR16", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "C03 正式交付 schematic 頁" }
+  ]
+}

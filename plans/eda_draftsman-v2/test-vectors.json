@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TV-1",
+    "description": "resolver 命中官方 symbol：真 MPN 回 ResolvedSymbol，pin_map 與 refs netlist 一致",
+    "input": { "bom": [{ "mpn": "STM32N657X0H3Q" }] },
+    "expected": { "resolved": [{ "lib_id": "MCU_ST_STM32N6:STM32N657X0HxQ", "lib_source": "official" }], "gaps": [] }
+  },
+  {
+    "id": "TV-2",
+    "description": "resolver 缺口 no-fallback：虛構 MPN 回 SymbolGap，不生成替代幾何",
+    "input": { "bom": [{ "mpn": "NOSUCHPART-999" }] },
+    "expected": { "resolved": [], "gaps": [{ "mpn": "NOSUCHPART-999", "disposition": "pending" }], "generated_geometry": 0 }
+  },
+  {
+    "id": "TV-3",
+    "description": "單圖零疊字：高 pin 數 symbol（≥100 pin）單圖 render 後 text-bbox 相交數為 0",
+    "input": { "block": "MCU 單圖（官方 symbol + 電源符號/label/NC/去耦）" },
+    "expected": { "TEXT_BBOX_OVERLAP": 0 }
+  },
+  {
+    "id": "TV-4",
+    "description": "單圖保真 roundtrip：fidelity 連通分量與 refs netlist 完全一致且 kicad-cli 渲染 exit 0",
+    "input": { "block_sch": "emit 後單圖 .kicad_sch", "refs": "netlist 片段" },
+    "expected": { "CONNECTIVITY_DIVERGE": 0, "roundtrip_exit": 0 }
+  },
+  {
+    "id": "TV-5",
+    "description": "積木不可變：compose 後積木內部 sexp byte-identical（僅整體平移）",
+    "input": { "blocks": ["validated block A", "validated block B"] },
+    "expected": { "internal_diff": "byte-identical", "violation": "IMMUTABLE_BLOCK_TOUCHED if not" }
+  },
+  {
+    "id": "TV-6",
+    "description": "排頁利用率門檻：A4 圖紙 compose 後 ink_metrics ≥ 0.55，否則 UTILIZATION_LOW 且不產交付物",
+    "input": { "paper": "A4", "blocks": "足量 validated 積木" },
+    "expected": { "utilization_gte": 0.55, "fail_code": "UTILIZATION_LOW" }
+  }
+]
