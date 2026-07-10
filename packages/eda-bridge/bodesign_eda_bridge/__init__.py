@@ -48,12 +48,26 @@ from .pcb_verify import PcbVerifyResult, analyze_emc, analyze_thermal
 from .skill_paths import analyzer_engine_status, resolve_skill
 from .footprint_map import FootprintCandidate, PackageQuery, build_footprint_map, match_footprints
 from .placement_rules import RULES as PLACEMENT_RULES, get_rule as get_placement_rule
-from .preplace import PartGeom, PreplaceResult, preplace
+from .preplace import (
+    PartGeom,
+    PreplaceResult,
+    compute_utilization,
+    count_overlap_pairs,
+    overlap_pair_details,
+    preplace,
+)
 from .routing import (
+    apply_pad_intrinsic_overrides,
     autoroute,
+    autoroute_preflight,
+    build_dsn_with_netclasses,
+    classify_autoroute_readiness,
+    classify_clearance_violation,
+    clean_micro_stubs,
     drc_gate,
     length_match_bus,
     net2pcb_board,
+    placement_preflight,
     pour_planes,
     resolve_connector_pads,
     si_check,
@@ -68,6 +82,12 @@ __all__ = [
     "fetch_component",
     "search_components",
     "autoroute",
+    "autoroute_preflight",
+    "build_dsn_with_netclasses",
+    "apply_pad_intrinsic_overrides",
+    "classify_autoroute_readiness",
+    "classify_clearance_violation",
+    "clean_micro_stubs",
     "drc_gate",
     "length_match_bus",
     "net2pcb_board",
@@ -75,7 +95,11 @@ __all__ = [
     "get_placement_rule",
     "PartGeom",
     "PreplaceResult",
+    "compute_utilization",
+    "count_overlap_pairs",
+    "overlap_pair_details",
     "preplace",
+    "placement_preflight",
     "pour_planes",
     "resolve_connector_pads",
     "si_check",

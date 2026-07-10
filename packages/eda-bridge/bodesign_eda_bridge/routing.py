@@ -198,8 +198,15 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             fp = fps[ref]
             fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(float(x)), pcbnew.FromMM(float(y))))
             fp.SetOrientationDegrees(float(rot))
+        # BR_20260708 placement quality: report courtyard utilization + the
+        # concrete overlapping pairs so a route-time preflight (and the owner
+        # review) can see the floorplan quality, not just a bare board file.
+        from .preplace import compute_utilization, overlap_pair_details
+        util = compute_utilization(res.placement, parts, board_mm)
+        overlaps = overlap_pair_details(res.placement, parts)
         preplace_out = {"placement_violations": res.violations, "anchor": res.anchor,
                         "hpwl_mm": res.hpwl_mm, "overlap_pairs": res.overlap_pairs,
+                        "overlap_details": overlaps, "utilization": util,
                         "effective": res.effective}
     # H1: per-connector effective pin map — explicit caller map, else built-in USB-C
     # table for any USB-C footprint (detected by FPID on ANY refdes). Tracked + reported.
@@ -263,6 +270,79 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
            "outline_source": outline_source}
     out.update(preplace_out)
     return out
+
+
+# --------------------------------------------------------------- placement preflight (pre-route gate)
+def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
+                        board_mm: tuple[float, float] | list | None = None,
+                        courtyard_margin_mm: float = 0.0) -> dict:
+    """Read a placed .kicad_pcb and gate its floorplan BEFORE routing (BR_20260708).
+
+    Two fail-fast conditions, both from real footprint courtyards (no guessing):
+      1. courtyard overlap  — any two footprints whose bounding boxes intersect
+         (optionally grown by ``courtyard_margin_mm``) are an overlap; route would
+         inherit a wall of clearance DRC. ``overlaps`` lists the offending pairs.
+      2. sheet under-fill    — total courtyard area / usable board area below
+         ``min_utilization`` means everything is crammed in a strip (the 20%%
+         center-strip symptom). ``utilization`` reports the ratio.
+
+    ``passed`` is True only when there are zero overlaps AND utilization meets the
+    floor. This never mutates the board and never routes; it is a gate the caller
+    checks and, on failure, re-places (strategy="deterministic") rather than
+    routing into a doomed floorplan. Board size is read from Edge.Cuts unless an
+    explicit ``board_mm`` overrides it.
+    """
+    _need_pcbnew()
+    b = pcbnew.LoadBoard(board_path)
+    # Real courtyard bbox per footprint (mm), rotation already baked into the board.
+    boxes: dict[str, tuple[float, float, float, float]] = {}
+    for fp in b.GetFootprints():
+        ref = fp.GetReference()
+        try:
+            bb = fp.GetCourtyardBoundingBox()
+            if bb.GetWidth() <= 0 or bb.GetHeight() <= 0:
+                bb = fp.GetBoundingBox()
+        except Exception:
+            bb = fp.GetBoundingBox()
+        x1 = pcbnew.ToMM(bb.GetLeft()); y1 = pcbnew.ToMM(bb.GetTop())
+        x2 = pcbnew.ToMM(bb.GetRight()); y2 = pcbnew.ToMM(bb.GetBottom())
+        boxes[ref] = (x1, y1, x2, y2)
+    m = float(courtyard_margin_mm)
+    refs = sorted(boxes)
+    overlaps: list[dict] = []
+    for i, a in enumerate(refs):
+        ax1, ay1, ax2, ay2 = boxes[a]
+        for c in refs[i + 1:]:
+            cx1, cy1, cx2, cy2 = boxes[c]
+            ox = min(ax2 + m, cx2 + m) - max(ax1 - m, cx1 - m)
+            oy = min(ay2 + m, cy2 + m) - max(ay1 - m, cy1 - m)
+            if ox > 1e-6 and oy > 1e-6:
+                overlaps.append({"refs": [a, c], "overlap_mm2": round(ox * oy, 4)})
+    overlaps.sort(key=lambda d: (-d["overlap_mm2"], d["refs"]))
+    # Board area from Edge.Cuts (or explicit override).
+    if board_mm:
+        bw, bh = float(board_mm[0]), float(board_mm[1])
+    else:
+        eb = b.GetBoardEdgesBoundingBox()
+        bw = pcbnew.ToMM(eb.GetWidth()); bh = pcbnew.ToMM(eb.GetHeight())
+    parts_area = sum((x2 - x1) * (y2 - y1) for (x1, y1, x2, y2) in boxes.values())
+    board_area = bw * bh
+    utilization = round(parts_area / board_area, 4) if board_area > 0 else None
+    under_filled = utilization is not None and utilization < float(min_utilization)
+    passed = not overlaps and utilization is not None and not under_filled
+    reasons: list[str] = []
+    if overlaps:
+        reasons.append(f"courtyard_overlap: {len(overlaps)} pair(s) intersect "
+                       f"(worst {overlaps[0]['refs']} {overlaps[0]['overlap_mm2']}mm²)")
+    if under_filled:
+        reasons.append(f"sheet_under_filled: utilization {utilization} < "
+                       f"{min_utilization} floor (parts {round(parts_area,1)}mm² / "
+                       f"board {round(board_area,1)}mm²)")
+    return {"passed": passed, "board": board_path, "components": len(boxes),
+            "overlaps": overlaps, "overlap_pairs": len(overlaps),
+            "utilization": utilization, "min_utilization": float(min_utilization),
+            "parts_area_mm2": round(parts_area, 3), "board_area_mm2": round(board_area, 3),
+            "board_mm": [round(bw, 3), round(bh, 3)], "reasons": reasons}
 
 
 # --------------------------------------------------------------------------- via-in-pad BGA fanout
@@ -442,8 +522,15 @@ def _widening_is_clear(board: Any, track: Any, target_iu: int, clearance_iu: int
 
 
 def widen_bus_tracks(in_path: str, out_path: str, nets: list[str], target_mm: float,
-                     *, clearance_mm: float = 0.13) -> dict:
-    """Widen routed bus segments to `target_mm` only when nearby foreign copper/pads keep clearance."""
+                     *, clearance_mm: float = 0.13, post_widen_drc: bool = False) -> dict:
+    """Widen routed bus segments to `target_mm` only when nearby foreign copper/pads keep clearance.
+
+    ``post_widen_drc`` (BR_20260708 Ask #3): after the geometric-clearance widen pass, run a
+    real DRC and REVERT any track whose widening introduced a NEW copper violation. The
+    fast ``_widening_is_clear`` geometric predictor misses cases only kicad-cli DRC catches
+    (e.g. widening near a teardropped/tented via — the CHG_STAT vs USB_CC2 symptom), which is
+    why finish needs a post-widen DRC loop, not just the pre-check. Reverted tracks are
+    reported under ``reverted`` so nothing silently stays over-wide or silently fails the gate."""
     if not in_path or not out_path:
         raise ValueError("in_path and out_path are required")
     if not isinstance(nets, list) or not nets or not all(isinstance(n, str) and n for n in nets):
@@ -456,18 +543,99 @@ def widen_bus_tracks(in_path: str, out_path: str, nets: list[str], target_mm: fl
     board = pcbnew.LoadBoard(in_path)
     target_iu = pcbnew.FromMM(float(target_mm)); clearance_iu = pcbnew.FromMM(float(clearance_mm))
     netset = set(nets); widened = kept = 0
+    widened_tracks = []  # (track, original_width_iu) for post-widen DRC revert
     for track in board.GetTracks():
         if track.GetClass() != 'PCB_TRACK' or track.GetNetname() not in netset:
             continue
         if track.GetWidth() >= target_iu:
             kept += 1; continue
         if _widening_is_clear(board, track, target_iu, clearance_iu):
+            orig = track.GetWidth()
             track.SetWidth(target_iu); widened += 1
+            widened_tracks.append((track, orig))
         else:
             kept += 1
+    reverted = 0
+    if post_widen_drc and widened_tracks:
+        _ensure_parent_dir(out_path)
+        pcbnew.SaveBoard(out_path, board)
+        base_copper = drc_gate(out_path).get("copper", 0)
+        # revert widenings until the copper count is no worse than before this widen pass;
+        # a widening that adds a copper violation the pre-check missed is undone width-only.
+        while base_copper > 0 and widened_tracks:
+            track, orig = widened_tracks.pop()
+            track.SetWidth(orig); reverted += 1; widened -= 1; kept += 1
+            pcbnew.SaveBoard(out_path, board)
+            base_copper = drc_gate(out_path).get("copper", 0)
+        result_copper = base_copper
+    else:
+        _ensure_parent_dir(out_path)
+        pcbnew.SaveBoard(out_path, board)
+        result_copper = None
+    out = {"board": out_path, "widened": widened, "kept": kept, "target_mm": target_mm}
+    if post_widen_drc:
+        out["reverted"] = reverted
+        out["copper_after"] = result_copper
+    return out
+
+
+# ----------------------------------------------------- pad-intrinsic clearance override (finish)
+def apply_pad_intrinsic_overrides(in_path: str, out_path: str, *, override_mm: float = 0.09,
+                                  sidecar_path: str | None = None) -> dict:
+    """Auto-resolve package-intrinsic pad-gap DRC violations with pad-level clearance overrides
+    (BR_20260708 Ask #1).
+
+    A ``clearance`` violation whose two items are pads OF THE SAME footprint is the land
+    pattern's own geometry (USB-C 0.10mm pad gaps, LGA 0.10mm) — not a routing error and
+    unfixable by routing. The honest resolution is a pad-level ``SetLocalClearance`` override
+    on exactly the offending pads, recorded to a sidecar for audit. This runs the DRC gate,
+    classifies each violation with ``classify_clearance_violation``, and for every
+    ``package_intrinsic`` pair sets ``override_mm`` (default 0.09mm, below the 0.10mm land
+    gap) on the named footprint's pads.
+
+    Only same-footprint pad pairs are touched; true copper violations are left untouched so
+    they still fail the gate. The sidecar lists every override (ref + pads + old/new clearance)
+    so nothing is silently changed. Returns the applied count + the audit records."""
+    _need_pcbnew()
+    board = pcbnew.LoadBoard(in_path)
+    report = drc_gate(in_path, classify_intrinsic=True)
+    override_iu = pcbnew.FromMM(float(override_mm))
+    fps = {fp.GetReference(): fp for fp in board.GetFootprints()}
+    applied = []
+    for item in report.get("package_intrinsic_items", []):
+        refs = item.get("refs") or []
+        # classify_clearance_violation only tags package_intrinsic when both refs match
+        ref = refs[0] if refs else None
+        fp = fps.get(ref)
+        if fp is None:
+            continue
+        touched_pads = []
+        for pad in fp.Pads():
+            old_iu = pad.GetLocalClearance() if hasattr(pad, "GetLocalClearance") else 0
+            # GetLocalClearance may return an optional wrapper; normalize to int IU
+            try:
+                old_val = int(old_iu)
+            except (TypeError, ValueError):
+                old_val = 0
+            if old_val == 0 or old_val > override_iu:
+                pad.SetLocalClearance(override_iu)
+                touched_pads.append(pad.GetPadName() or pad.GetNumber())
+        if touched_pads:
+            applied.append({"ref": ref, "pads": touched_pads,
+                            "old_clearance_mm": None,
+                            "new_clearance_mm": round(override_mm, 4),
+                            "violation": item.get("type")})
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
-    return {"board": out_path, "widened": widened, "kept": kept, "target_mm": target_mm}
+    result = {"board": out_path, "applied": len(applied), "override_mm": override_mm,
+              "overrides": applied,
+              "package_intrinsic_seen": len(report.get("package_intrinsic_items", []))}
+    if sidecar_path:
+        _ensure_parent_dir(sidecar_path)
+        with open(sidecar_path, "w") as sc:
+            json.dump(result, sc, indent=2)
+        result["sidecar"] = sidecar_path
+    return result
 
 
 # ------------------------------------------------------------------- clearance-aware length match
@@ -623,8 +791,55 @@ def length_match_bus(in_path: str, out_path: str, nets: list[str], budget_ps: fl
 
 
 # ------------------------------------------------------------------------------ drc gate (honest)
-def drc_gate(board_path: str) -> dict:
-    """Run DRC and split copper/unconnected (hard) from silk (cosmetic)."""
+def _violation_item_refs(v: dict) -> list[str]:
+    """Best-effort refdes extraction from a kicad-cli DRC violation's item descriptions.
+    Each item usually reads like 'Pad 2 of R1 ...' — we pull the refdes tokens."""
+    refs: list[str] = []
+    for it in v.get("items", []) or []:
+        desc = it.get("description") or ""
+        m = re.search(r"\bof\s+([A-Za-z][A-Za-z0-9_]*)", desc)
+        if m:
+            refs.append(m.group(1))
+    return refs
+
+
+def classify_clearance_violation(v: dict, *, pad_adjacency: dict | None = None,
+                                 intrinsic_tol_mm: float = 0.02) -> str:
+    """Pure: label one DRC violation as 'package_intrinsic' | 'copper' | 'other' (BR_20260708).
+
+    A ``clearance`` violation whose two items are pads OF THE SAME footprint that are a
+    known package-intrinsic distance apart is NOT a routing error — it is the land pattern's
+    own geometry (USB-C 0.10mm pad gaps, LGA 0.10mm) and cannot be 'fixed' by routing; the
+    honest resolution is a pad-level clearance override, not a gate fail. ``pad_adjacency``
+    optionally maps 'REF' -> True for footprints known to have intrinsic sub-rule pad gaps;
+    when absent, same-footprint pad-to-pad clearance violations are still flagged intrinsic
+    (that pairing is definitionally the package, not a track). Non-clearance or cross-part
+    violations are 'copper'. Pure; no pcbnew."""
+    vtype = (v.get("type") or "").lower()
+    if "silk" in vtype:
+        return "other"
+    if "clearance" not in vtype:
+        return "copper"
+    refs = _violation_item_refs(v)
+    # two items, same footprint, both pads -> package-intrinsic land pattern geometry
+    if len(refs) == 2 and refs[0] == refs[1]:
+        if pad_adjacency is None or pad_adjacency.get(refs[0], True):
+            return "package_intrinsic"
+    return "copper"
+
+
+def drc_gate(board_path: str, *, classify_intrinsic: bool = False,
+             pad_adjacency: dict | None = None) -> dict:
+    """Run DRC and split copper/unconnected (hard) from silk (cosmetic).
+
+    ``classify_intrinsic`` (BR_20260708): further split copper clearance violations into
+    ``package_intrinsic`` (same-footprint adjacent pads at the land pattern's own spacing —
+    a pad-level override matter, NOT a routing error) vs true ``copper``. When on, the
+    returned ``copper`` count EXCLUDES package-intrinsic ones and ``package_intrinsic`` +
+    an evidence list are reported; ``clean`` still requires zero TRUE copper + unconnected,
+    so intrinsic pad gaps do not silently pass as clean but also don't masquerade as routing
+    errors. Gate values are never relaxed to pass — intrinsic items are reclassified with
+    evidence, not waved through."""
     _need_pcbnew()
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
         rep = f.name
@@ -635,8 +850,45 @@ def drc_gate(board_path: str) -> dict:
     silk = sum(1 for x in v if "silk" in (x.get("type") or ""))
     unc = len(d.get("unconnected_items", []))
     copper = len(v) - silk
-    return {"copper": copper, "unconnected": unc, "silk": silk,
-            "clean": copper == 0 and unc == 0}
+    out = {"copper": copper, "unconnected": unc, "silk": silk,
+           "clean": copper == 0 and unc == 0}
+    if classify_intrinsic:
+        intrinsic = []
+        for x in v:
+            if classify_clearance_violation(x, pad_adjacency=pad_adjacency) == "package_intrinsic":
+                intrinsic.append({"type": x.get("type"),
+                                  "refs": _violation_item_refs(x),
+                                  "description": (x.get("description") or "")[:160]})
+        true_copper = copper - len(intrinsic)
+        out.update({"copper": true_copper, "package_intrinsic": len(intrinsic),
+                    "package_intrinsic_items": intrinsic,
+                    "clean": true_copper == 0 and unc == 0})
+    return out
+
+
+# ------------------------------------------------------------------------ micro-stub cleanup (finish)
+def clean_micro_stubs(in_path: str, out_path: str, *, min_len_mm: float = 0.02) -> dict:
+    """Remove track segments shorter than ``min_len_mm`` left by SES import (BR_20260708).
+
+    Freerouting SES import can leave <0.01mm track fragments that read as false unconnected /
+    false clearance (the MIC1 GND 0.0001mm-track symptom). This strips only true micro-stubs
+    (length below the threshold) and reports how many + their nets, so the removal is auditable
+    and never silently drops real routing. Vias and zones are untouched."""
+    _need_pcbnew()
+    b = pcbnew.LoadBoard(in_path)
+    thr_iu = pcbnew.FromMM(float(min_len_mm))
+    removed = []
+    for t in list(b.GetTracks()):
+        if t.GetClass() != "PCB_TRACK":
+            continue
+        length = math.hypot(t.GetEnd().x - t.GetStart().x, t.GetEnd().y - t.GetStart().y)
+        if length < thr_iu:
+            removed.append({"net": t.GetNetname(), "len_mm": round(length / 1e6, 5)})
+            b.Remove(t)
+    _ensure_parent_dir(out_path)
+    pcbnew.SaveBoard(out_path, b)
+    return {"board": out_path, "removed": len(removed), "min_len_mm": min_len_mm,
+            "removed_stubs": removed}
 
 
 # --------------------------------------------------------------------------------- ngspice SI gate
@@ -700,9 +952,225 @@ def si_check(board_path: str, nets: list[str], *, z0: float = 50.0, rs: float = 
                           "overshoot_warn_pct": overshoot_warn_pct}}
 
 
+# --------------------------------------------------------------- Specctra DSN net-class rules (pure)
+def _balanced_end(text: str, start: int) -> int:
+    """Given text[start] == '(', return the index just past the matching ')'."""
+    depth = 0
+    n = len(text)
+    j = start
+    while j < n:
+        c = text[j]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return j + 1
+        j += 1
+    return n
+
+
+def _dsn_unit_per_mm(dsn_text: str) -> tuple[str, float]:
+    """Read the DSN (resolution UNIT PREC) and return (unit, units_per_mm). Fail fast on
+    a missing/again-unsupported unit rather than guessing a scale (no silent fallback)."""
+    m = re.search(r"\(resolution\s+(\w+)\s+(\d+)\)", dsn_text)
+    if not m:
+        raise ValueError("DSN_NO_RESOLUTION: no (resolution UNIT PREC) block — refusing to "
+                         "guess DSN units for net-class rule widths")
+    unit = m.group(1)
+    per_mm = {"um": 1000.0, "mm": 1.0, "inch": 1.0 / 25.4, "mil": 1000.0 / 25.4}.get(unit)
+    if per_mm is None:
+        raise ValueError(f"DSN_UNSUPPORTED_UNIT: {unit!r} (expected um|mm|inch|mil)")
+    return unit, per_mm
+
+
+def _fmt_dsn_class(name: str, nets: list[str], w: int, c: int, via: str | None) -> str:
+    lines = [f"    (class {name}"]
+    if nets:
+        lines.append("      " + " ".join(nets))
+    if via:
+        lines.append(f"      (circuit\n        (use_via {via})\n      )")
+    lines.append(f"      (rule\n        (width {w})\n        (clearance {c})\n      )")
+    lines.append("    )")
+    return "\n".join(lines)
+
+
+def build_dsn_with_netclasses(dsn_text: str, classes: list[dict], *,
+                              default_width_mm: float = 0.2,
+                              default_clearance_mm: float = 0.2,
+                              default_class_name: str = "kicad_default") -> dict:
+    """Rewrite a KiCad-exported Specctra DSN's single global net class into per-class rules
+    so freerouting honours a tight BGA-escape width/clearance for escape nets while keeping
+    signal/power nets at their own widths (BR_20260708).
+
+    ``classes`` is an ORDERED list of {name, width_mm, clearance_mm, nets?:[exact],
+    match?:[substrings], via?}. A net joins the FIRST class that claims it (explicit ``nets``
+    membership OR any ``match`` substring occurring in the net name); unclaimed nets fall into
+    a synthesized default class at default_width_mm/default_clearance_mm. Pure text surgery
+    (no pcbnew) so it is bare-host testable. Returns {dsn, unit, classes:[...], default_class,
+    missing_explicit_nets, total_nets}. Empty classes are dropped (reported in warnings) since
+    freerouting rejects a class with no nets."""
+    unit, per_mm = _dsn_unit_per_mm(dsn_text)
+    ns = dsn_text.find("(network")
+    if ns < 0:
+        raise ValueError("DSN_NO_NETWORK: no (network ...) section — not a routable DSN")
+    ne = _balanced_end(dsn_text, ns)
+    net_section = dsn_text[ns:ne]
+
+    # net declarations: (net NAME (pins ...)) — anchor on (pins to skip class net-token lists
+    nets = re.findall(r"\(net\s+\"?([^\"\s()]+)\"?\s+\(pins", net_section)
+
+    # locate existing (class ...) blocks; harvest the via token to preserve fanout
+    blocks: list[tuple[int, int]] = []
+    i = 0
+    while True:
+        k = net_section.find("(class ", i)
+        if k < 0:
+            break
+        e = _balanced_end(net_section, k)
+        blocks.append((k, e))
+        i = e
+    orig = net_section[blocks[0][0]:blocks[-1][1]] if blocks else ""
+    vm = re.search(r"\(use_via\s+([^\s)]+)", orig)
+    via = vm.group(1) if vm else None
+
+    used: set[str] = set()
+    report_classes: list[dict] = []
+    warnings: list[str] = []
+    class_texts: list[str] = []
+    for c in classes:
+        name = c["name"]
+        exact = set(c.get("nets", []))
+        match = list(c.get("match", []))
+        sel = [n for n in nets if n not in used
+               and (n in exact or any(s in n for s in match))]
+        for n in sel:
+            used.add(n)
+        w = int(round(float(c["width_mm"]) * per_mm))
+        cl = int(round(float(c["clearance_mm"]) * per_mm))
+        if not sel:
+            warnings.append(f"class {name!r} matched no nets — dropped")
+            report_classes.append({"name": name, "width_mm": c["width_mm"],
+                                   "clearance_mm": c["clearance_mm"], "nets": [], "count": 0})
+            continue
+        class_texts.append(_fmt_dsn_class(name, sel, w, cl, c.get("via", via)))
+        report_classes.append({"name": name, "width_mm": c["width_mm"],
+                               "clearance_mm": c["clearance_mm"], "width_dsn": w,
+                               "clearance_dsn": cl, "nets": sel, "count": len(sel)})
+
+    default_nets = [n for n in nets if n not in used]
+    dw = int(round(float(default_width_mm) * per_mm))
+    dc = int(round(float(default_clearance_mm) * per_mm))
+    default_report = {"name": default_class_name, "width_mm": default_width_mm,
+                      "clearance_mm": default_clearance_mm, "width_dsn": dw,
+                      "clearance_dsn": dc, "nets": default_nets, "count": len(default_nets)}
+    if default_nets:
+        class_texts.append(_fmt_dsn_class(default_class_name, default_nets, dw, dc, via))
+
+    missing = sorted({n for c in classes for n in c.get("nets", []) if n not in nets})
+
+    new_classes = "\n".join(class_texts)
+    if blocks:
+        kept_head = net_section[:blocks[0][0]]
+        kept_tail = net_section[blocks[-1][1]:]
+        new_net_section = kept_head + new_classes + "\n" + kept_tail.lstrip("\n")
+    else:
+        insert_at = net_section.rfind(")")
+        new_net_section = net_section[:insert_at] + new_classes + "\n  " + net_section[insert_at:]
+    new_dsn = dsn_text[:ns] + new_net_section + dsn_text[ne:]
+    return {"dsn": new_dsn, "unit": unit, "classes": report_classes,
+            "default_class": default_report, "missing_explicit_nets": missing,
+            "total_nets": len(nets), "warnings": warnings}
+
+
+# ------------------------------------------------------------------ autoroute preflight (diagnostic)
+def classify_autoroute_readiness(probe: dict) -> dict:
+    """Pure classifier: given an environment probe, say whether freerouting can run and,
+    if not, EXACTLY what is missing + how to fix it (BR_20260708 Ask #2).
+
+    ``probe`` keys (all bool unless noted): ``jar_present`` (freerouting.jar on disk),
+    ``java_present`` (java on PATH), ``xvfb_present`` (xvfb-run on PATH),
+    ``awt_headful`` (a full JRE with libawt_xawt.so — freerouting v1.9.0 CLI still calls
+    Toolkit.getScreenSize(), so a *-headless JRE throws HeadlessException). Returns
+    {ready, missing:[...], reason, remedy}. Pure — bare-host testable; no subprocess.
+
+    Readiness rule: ready IFF jar_present AND java_present AND awt_headful AND
+    (xvfb_present OR a real DISPLAY). A headless-only JRE is NOT ready even with xvfb,
+    because the missing libawt_xawt.so is the crash, not the display."""
+    missing: list[str] = []
+    if not probe.get("jar_present"):
+        missing.append("freerouting.jar")
+    if not probe.get("java_present"):
+        missing.append("java")
+    if probe.get("java_present") and not probe.get("awt_headful"):
+        missing.append("full-JRE-libawt_xawt.so")
+    if not (probe.get("xvfb_present") or probe.get("display")):
+        missing.append("xvfb-run-or-DISPLAY")
+    ready = not missing
+    remedy_map = {
+        "freerouting.jar": "install freerouting.jar (FREEROUTING_JAR env or /opt/freerouting.jar); "
+                           "rebuild the ee worker image (Dockerfile.ee bundles v1.9.0)",
+        "java": "install a JRE and put java on PATH (JAVA_BIN env)",
+        "full-JRE-libawt_xawt.so": "freerouting v1.9.0 CLI needs a HEADFUL JRE — a *-headless "
+                                   "JRE lacks libawt_xawt.so and throws HeadlessException; install a "
+                                   "full JRE (e.g. Temurin) not openjdk-*-jre-headless",
+        "xvfb-run-or-DISPLAY": "run under `xvfb-run -a` (virtual display) or a real X DISPLAY",
+    }
+    reason = ("freerouting autoroute ready" if ready else
+              "freerouting autoroute NOT runnable — missing: " + ", ".join(missing))
+    return {"ready": ready, "missing": missing, "reason": reason,
+            "remedy": [remedy_map[m] for m in missing]}
+
+
+def _probe_autoroute_env() -> dict:
+    """Probe the live worker for freerouting prerequisites (subprocess/fs; not pure)."""
+    jar = os.environ.get("FREEROUTING_JAR", "/opt/freerouting/freerouting.jar")
+    java = os.environ.get("JAVA_BIN", "java")
+    java_present = subprocess.run(["which", java], capture_output=True).returncode == 0
+    xvfb_present = subprocess.run(["which", "xvfb-run"], capture_output=True).returncode == 0
+    # A headful JRE ships libawt_xawt.so; probe the JRE's lib dir for it.
+    awt_headful = False
+    if java_present:
+        try:
+            import glob as _glob
+            jhome = subprocess.run([java, "-XshowSettings:properties", "-version"],
+                                   capture_output=True, text=True)
+            txt = (jhome.stderr or "") + (jhome.stdout or "")
+            m = re.search(r"java\.home\s*=\s*(\S+)", txt)
+            roots = [m.group(1)] if m else ["/usr/lib/jvm/*"]
+            for root in roots:
+                if _glob.glob(f"{root}/lib/libawt_xawt.so") or _glob.glob(f"{root}/lib/*/libawt_xawt.so"):
+                    awt_headful = True
+                    break
+        except Exception:
+            awt_headful = False
+    return {"jar_present": os.path.exists(jar), "java_present": java_present,
+            "xvfb_present": xvfb_present, "awt_headful": awt_headful,
+            "display": bool(os.environ.get("DISPLAY")),
+            "jar_path": jar, "java_bin": java}
+
+
+def autoroute_preflight() -> dict:
+    """Diagnostic gate for the C04 route step: probe the worker + classify readiness so a
+    caller sees EXACTLY what is missing (jar / java / headful-JRE / xvfb) instead of a raw
+    Java HeadlessException stack. Returns the probe merged with the readiness verdict."""
+    probe = _probe_autoroute_env()
+    verdict = classify_autoroute_readiness(probe)
+    return {**verdict, "probe": probe}
+
+
 # -------------------------------------------------------------------------------- autoroute (opt)
-def autoroute(board_path: str, out_path: str, *, passes: int = 40) -> dict:
-    """Freerouting autoroute if available (java + freerouting.jar + xvfb); else no-op passthrough."""
+def autoroute(board_path: str, out_path: str, *, passes: int = 40,
+              netclasses: list[dict] | None = None,
+              default_width_mm: float = 0.2, default_clearance_mm: float = 0.2) -> dict:
+    """Freerouting autoroute if available (java + freerouting.jar + xvfb); else no-op passthrough.
+
+    ``netclasses`` (BR_20260708): an ordered list of per-class rules injected into the exported
+    Specctra DSN before routing, so a fine-pitch BGA escape region can use 0.1/0.1mm while
+    signal/power nets keep their own widths — instead of a single global 0.2mm rule that makes
+    0.5mm-pitch BGA escape impossible. Each entry: {name, width_mm, clearance_mm, nets?:[exact],
+    match?:[substrings]}. Run BGA fanout (via_in_pad) BEFORE this so escape stubs exist. When
+    omitted, the DSN keeps KiCad's default single rule (backward-compatible)."""
     _need_pcbnew()
     jar = os.environ.get("FREEROUTING_JAR", "/opt/freerouting/freerouting.jar")
     java = os.environ.get("JAVA_BIN", "java")
@@ -718,6 +1186,18 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40) -> dict:
         raise RuntimeError(
             "ExportSpecctraDSN failed (no DSN written) — footprints with missing/unannotated "
             f"references: {bad or 'none detected; inspect the board in pcbnew'}")
+    netclass_report = None
+    if netclasses:
+        with open(dsn) as fh:
+            dsn_text = fh.read()
+        built = build_dsn_with_netclasses(dsn_text, netclasses,
+                                          default_width_mm=default_width_mm,
+                                          default_clearance_mm=default_clearance_mm)
+        with open(dsn, "w") as fh:
+            fh.write(built["dsn"])
+        netclass_report = {k: built[k] for k in
+                           ("unit", "classes", "default_class", "missing_explicit_nets",
+                            "total_nets", "warnings")}
     xvfb = ["xvfb-run", "-a"] if subprocess.run(["which", "xvfb-run"], capture_output=True).returncode == 0 else []
     proc = subprocess.run(xvfb + [java, "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes)],
                           capture_output=True, text=True)
@@ -730,6 +1210,21 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40) -> dict:
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, b2)
     t = b2.GetTracks()
-    return {"routed": True, "board": out_path,
-            "segments": sum(1 for x in t if x.GetClass() == 'PCB_TRACK'),
-            "vias": sum(1 for x in t if x.GetClass() == 'PCB_VIA')}
+    # BR_20260708: structured completion — report unconnected so a router that converged
+    # short ("can't improve") is visible here, not only at downstream DRC.
+    unconnected = None
+    try:
+        b2.BuildConnectivity()
+        try:
+            unconnected = int(b2.GetConnectivity().GetUnconnectedCount(True))
+        except TypeError:
+            unconnected = int(b2.GetConnectivity().GetUnconnectedCount())
+    except Exception:
+        unconnected = None
+    out = {"routed": True, "board": out_path,
+           "segments": sum(1 for x in t if x.GetClass() == 'PCB_TRACK'),
+           "vias": sum(1 for x in t if x.GetClass() == 'PCB_VIA'),
+           "unconnected": unconnected, "complete": (unconnected == 0) if unconnected is not None else None}
+    if netclass_report is not None:
+        out["netclasses"] = netclass_report
+    return out

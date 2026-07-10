@@ -63,8 +63,57 @@ INSTRUCTIONS = (
     "BODESIGN_KICAD_SKILL / BODESIGN_SPICE_SKILL / BODESIGN_EMC_SKILL. The container image "
     "self-bundles these analyzer engines (under /opt/bodesign-engines) and sets those env vars, so "
     "C06 simulate/EMC/thermal run out of the box.\n\n"
-    "No send-to-fab output without deterministic validation + explicit approval."
+    "No send-to-fab output without deterministic validation + explicit approval.\n\n"
+    "USAGE GUIDE: this service self-ships its full usage doctrine — call bodesign_init "
+    "(or prompts/get bodesign_init) for the two-plane routing model (landing verbs via "
+    "gate.py vs bodesign_ compute tools), the honesty/no-fallback contract, pre-call "
+    "disciplines (refs_ingest step 0, DoD self-verify), organ coordination (bodesign "
+    "skill + container + UDS/TCP transport + cache 3-tier + webdav), and counter-intuitive "
+    "gotchas before first use."
 )
+
+
+# ── R15 (self-describing organism) — canonical usage-doctrine one-source ─
+#
+# plans/mcp_r15-self-describing-guide DD-1..DD-3 / DD-7: bodesign ships its full
+# usage doctrine on the portable MCP surface (the `bodesign_init` tool AND the
+# `bodesign_init` prompts/get entry), so an agent receives it in-band at the
+# action boundary as DELIVERED context, not remembered host-side prose.
+#
+# Both faces project this SINGLE source file (R15.5 no-drift). It is the portable
+# condensate of skills/bodesign/SKILL.md (DD-2a): SKILL.md is 32 KB and the raw
+# skills/ tree is deliberately NOT copied into the image (Dockerfile ships only
+# scrubbed engine tarballs) — so the guide serves skills/bodesign/doctrine.md,
+# the four-category (cross-tool tradeoffs / pre-call disciplines / organ
+# coordination / gotchas) condensate, which the Dockerfile COPYs explicitly.
+#
+# DD-3: loaded once at import; a missing OR empty source FAILS FAST (天條 11 — an
+# empty-doctrine guide is byte-identical to no contract, so we refuse to serve
+# rather than silently return nothing).
+_DOCTRINE_PATH = Path(__file__).resolve().parents[2] / "skills" / "bodesign" / "doctrine.md"
+
+
+def _load_doctrine() -> str:
+    """Read the canonical usage doctrine, fail-fast on missing/empty source."""
+    try:
+        text = _DOCTRINE_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"DOCTRINE_SOURCE_MISSING: R15 usage doctrine not found at "
+            f"{_DOCTRINE_PATH}. The bodesign_init surface cannot serve an empty "
+            f"contract (天條 11). Ensure the image COPYs skills/bodesign/doctrine.md "
+            f"(Dockerfile) and the file exists."
+        ) from exc
+    if not text.strip():
+        raise RuntimeError(
+            f"DOCTRINE_SOURCE_EMPTY: R15 usage doctrine at {_DOCTRINE_PATH} is "
+            f"empty/whitespace. An empty-doctrine guide == no contract (天條 11); "
+            f"refusing to serve."
+        )
+    return text
+
+
+BODESIGN_GUIDE_DOCTRINE = _load_doctrine()
 
 
 def _jsonable(value: Any) -> Any:
@@ -404,6 +453,13 @@ def _h_prd_bom_crosscheck(a: dict) -> Any:
     return asdict(prd_bom_crosscheck(a["manifest_path"], a["netlist_path"], out_dir=a.get("out_dir")))
 
 
+def _h_check_c03(a: dict) -> Any:
+    from bodesign_workflow_core import check_c03
+    return asdict(check_c03(a["bom_csv"], pin_allocation_csv=a.get("pin_allocation_csv"),
+                            frozen_pad_counts=a.get("frozen_pad_counts"),
+                            out_dir=a.get("out_dir")))
+
+
 def _h_stage_dir(a: dict) -> Any:
     from token_store import default_store
     return default_store().stage_files(a["files"])
@@ -455,7 +511,20 @@ def _h_length_match_bus(a: dict) -> Any:
 
 def _h_layout_drc_gate(a: dict) -> Any:
     from bodesign_eda_bridge import drc_gate
-    return drc_gate(a["board_path"])
+    return drc_gate(a["board_path"], classify_intrinsic=a.get("classify_intrinsic", False),
+                    pad_adjacency=a.get("pad_adjacency"))
+
+
+def _h_clean_micro_stubs(a: dict) -> Any:
+    from bodesign_eda_bridge import clean_micro_stubs
+    return clean_micro_stubs(a["in_path"], a["out_path"], min_len_mm=a.get("min_len_mm", 0.02))
+
+
+def _h_apply_pad_intrinsic_overrides(a: dict) -> Any:
+    from bodesign_eda_bridge import apply_pad_intrinsic_overrides
+    return apply_pad_intrinsic_overrides(a["in_path"], a["out_path"],
+                                         override_mm=a.get("override_mm", 0.09),
+                                         sidecar_path=a.get("sidecar_path"))
 
 
 def _h_si_check(a: dict) -> Any:
@@ -469,7 +538,23 @@ def _h_si_check(a: dict) -> Any:
 
 def _h_autoroute(a: dict) -> Any:
     from bodesign_eda_bridge import autoroute
-    return autoroute(a["board_path"], a["out_path"], passes=a.get("passes", 40))
+    return autoroute(a["board_path"], a["out_path"], passes=a.get("passes", 40),
+                     netclasses=a.get("netclasses"),
+                     default_width_mm=a.get("default_width_mm", 0.2),
+                     default_clearance_mm=a.get("default_clearance_mm", 0.2))
+
+
+def _h_placement_preflight(a: dict) -> Any:
+    from bodesign_eda_bridge import placement_preflight
+    return placement_preflight(a["board_path"],
+                              min_utilization=a.get("min_utilization", 0.40),
+                              board_mm=a.get("board_mm"),
+                              courtyard_margin_mm=a.get("courtyard_margin_mm", 0.0))
+
+
+def _h_autoroute_preflight(a: dict) -> Any:
+    from bodesign_eda_bridge import autoroute_preflight
+    return autoroute_preflight()
 
 
 def _h_component_search(a: dict) -> Any:
@@ -478,8 +563,18 @@ def _h_component_search(a: dict) -> Any:
 
 
 def _h_component_fetch(a: dict) -> Any:
-    from bodesign_eda_bridge import fetch_component
-    return fetch_component(a["lcsc_id"], a["output_lib"], overwrite=a.get("overwrite", True))
+    ids = a.get("lcsc_ids")
+    one = a.get("lcsc_id")
+    has_many = ids is not None
+    has_one = one is not None
+    if has_many == has_one:
+        return {"ok": False,
+                "reason": "must provide exactly one of lcsc_id (single) or lcsc_ids (batch)"}
+    from bodesign_eda_bridge import fetch_component, fetch_components
+    overwrite = a.get("overwrite", True)
+    if has_many:
+        return fetch_components(ids, a["output_lib"], overwrite=overwrite)
+    return fetch_component(one, a["output_lib"], overwrite=overwrite)
 
 
 def _h_render_gerber_preview(a: dict) -> Any:
@@ -688,6 +783,14 @@ def _h_cache_close(a: dict) -> Any:
 
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
+    # R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-1/DD-5):
+    # served IN-PROCESS by run_tool (no registry handler); handler=None is a
+    # marker. annotations mark it read-only / closed-world. Listed first so it is
+    # the first thing an agent discovers.
+    {"name": "bodesign_init", "handler": None,
+     "description": "bodesign's full usage doctrine (R15 self-describing organism): the two-plane routing model (landing verbs via gate.py vs bodesign_ compute tools), the honesty/no-fallback contract, pre-call disciplines (refs_ingest step 0, DoD self-verify), organ coordination (skill + container + UDS/TCP transport + cache 3-tier + webdav), and counter-intuitive gotchas. Same content as the bodesign_init prompts/get entry. Call it before first use. No arguments.",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "schema": {"type": "object", "properties": {"section": {"type": "string", "description": "optional hint; the doctrine is served whole regardless (no silent truncation of the contract)"}}}},
     {"name": "bodesign_route_net2pcb", "handler": _h_route_net2pcb,
      "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist — load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Board outline semantics: pass board_mm=[W,H] to draw the Edge.Cuts rectangle at exactly (0,0)-(W,H) on ANY strategy (this is the single source of truth and matches the deterministic preplace R_edge boundary); when board_mm is omitted the outline auto-frames from pad extents + 3mm margin. The result reports outline_source='board_mm'|'pad_extent'. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part). Placement strategy: 'grid' (default, naive 8mm baseline) or 'deterministic' — electrically-aware pure-python pre-placement (main-IC anchoring, decap/crystal pin-affinity clustering, largest-first greedy per R4, fixed-seed SA) plus R1/R8 post-place checks; returns source-anchored placement_violations, hpwl_mm, anchor and echoed effective params. deterministic REQUIRES board_mm and FAILS FAST on missing footprint geometry — it never falls back to grid.",
      "schema": {"type": "object", "properties": {"netlist_path": _STR, "out_path": _STR, "layers": {"type": "integer"}, "plane_layers": {"type": "array", "items": _STR}, "track_mm": {"type": "number"}, "placement": {"type": "object"}, "fpdir": _STR, "clearance_mm": {"type": "number"}, "connectors": {"type": "object", "description": "{refdes: {net_name: [pad ids]}} explicit connector pin expansion; omit to use the built-in USB-C table for USB-C footprints"}, "strategy": {"type": "string", "enum": ["grid", "deterministic"], "description": "placement strategy; default grid (baseline). deterministic = electrically-aware anchoring/clustering/greedy/SA + R1/R8 anchored checks"}, "seed": {"type": "integer", "description": "SA seed for strategy=deterministic (default 42); echoed in result.effective"}, "board_mm": {"type": "array", "items": {"type": "number"}, "description": "[width, height] mm board outline — required for strategy=deterministic"}}, "required": ["netlist_path", "out_path"]}},
@@ -698,26 +801,38 @@ TOOLS: list[dict] = [
      "description": "Pour filled copper plane zones + optional stitching vias, giving high-speed nets a solid impedance reference plane. Each plane spec is a \"LAYER:NET\" string (e.g. 'B.Cu:GND', 'In1.Cu:GND', 'In4.Cu:V3V3') \u2014 layer first, net second; a malformed spec (wrong colon count, swapped fields, non-pcbnew layer) fails fast with POUR_PLANES_BAD_SPEC rather than a misleading pcbnew AttributeError. Stitch net + grid/via geometry are caller-overridable (stitch_net/stitch_pitch_mm/stitch_drill_mm/stitch_pad_mm); defaults (GND, 14mm, 0.3/0.6mm) are a JLCPCB-class process reference, not a hidden assumption. pad_connection='thermal' (default) keeps thermal-relief spokes; 'solid' bonds zone-net pads FULLY (ZONE_CONNECTION_FULL) to avoid starved_thermal DRC errors on isolated PTH/plane-net pads.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "planes": {"type": "array", "items": _STR, "description": "list of \"LAYER:NET\" specs, e.g. ['B.Cu:GND','In4.Cu:V3V3']"}, "stitch": {"type": "boolean"}, "stitch_net": _STR, "stitch_pitch_mm": {"type": "number"}, "stitch_drill_mm": {"type": "number"}, "stitch_pad_mm": {"type": "number"}, "pad_connection": {"type": "string", "enum": ["thermal", "solid"], "description": "zone-net pad bonding; 'thermal' (default) keeps relief spokes, 'solid' = ZONE_CONNECTION_FULL to avoid starved_thermal on isolated pads"}}, "required": ["in_path", "out_path", "planes"]}},
     {"name": "bodesign_widen_bus_tracks", "handler": _h_widen_bus_tracks,
-     "description": "Clearance-safe C04 bus finishing: widen selected routed bus tracks to target_mm only where foreign copper/pads keep clearance_mm; writes a new .kicad_pcb and returns widened/kept counts.",
-     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "target_mm": {"type": "number"}, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "target_mm"]}},
+     "description": "Clearance-safe C04 bus finishing: widen selected routed bus tracks to target_mm only where foreign copper/pads keep clearance_mm; writes a new .kicad_pcb and returns widened/kept counts. post_widen_drc (BR_20260708 Ask #3): after the geometric-clearance widen pass, run a real kicad-cli DRC and REVERT any widening that introduced a NEW copper violation the fast geometric pre-check missed (e.g. near a teardropped/tented via — the CHG_STAT vs USB_CC2 symptom). Reverted count + copper_after are reported so nothing silently stays over-wide or silently fails the gate.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "target_mm": {"type": "number"}, "clearance_mm": {"type": "number"}, "post_widen_drc": {"type": "boolean", "description": "run post-widen DRC and revert widths that introduce new copper violations the pre-check missed"}}, "required": ["in_path", "out_path", "nets", "target_mm"]}},
+    {"name": "bodesign_apply_pad_intrinsic_overrides", "handler": _h_apply_pad_intrinsic_overrides,
+     "description": "C04 finish (BR_20260708 Ask #1): auto-resolve package-intrinsic pad-gap DRC violations with pad-level SetLocalClearance overrides. A clearance violation whose two items are pads OF THE SAME footprint is the land pattern's own geometry (USB-C 0.10mm pad gaps, LGA 0.10mm) — not a routing error and unfixable by routing; the honest resolution is a pad-level override (default 0.09mm, below the 0.10mm gap) on exactly those pads, recorded to a sidecar for audit. Only same-footprint pad pairs are touched; TRUE copper violations are left untouched so they still fail the gate. Returns applied count + per-override audit (ref/pads/new clearance); nothing is silently changed.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "override_mm": {"type": "number"}, "sidecar_path": _STR}, "required": ["in_path", "out_path"]}},
     {"name": "bodesign_length_match_bus", "handler": _h_length_match_bus,
      "description": "Clearance-aware C04 bus length matching: add safe serpentine detours to short routed nets when possible; writes a new .kicad_pcb and returns per-net lengths, skew, budget status, tuned count, and explicit untuned statuses.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "budget_ps": {"type": "number"}, "ps_per_mm": {"type": "number"}, "report_path": _STR, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "budget_ps", "ps_per_mm"]}},
     {"name": "bodesign_layout_drc_gate", "handler": _h_layout_drc_gate,
-     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool.",
-     "schema": {"type": "object", "properties": {"board_path": _STR}, "required": ["board_path"]}},
+     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool. classify_intrinsic (BR_20260708): further split copper clearance violations into package_intrinsic (same-footprint adjacent pads at the land-pattern's own spacing — USB-C/LGA pad gaps that a pad-level clearance override resolves, NOT a routing error) vs true copper. When on, `copper` EXCLUDES intrinsic ones, and package_intrinsic + package_intrinsic_items (evidence: refs + description) are reported; clean still requires zero TRUE copper + unconnected, so intrinsic gaps neither silently pass nor masquerade as routing errors. Gate values are never relaxed to pass — reclassified with evidence, not waved through.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "classify_intrinsic": {"type": "boolean", "description": "split package-intrinsic pad-gap clearance from true copper errors"}, "pad_adjacency": {"type": "object", "description": "optional {REF: true} for footprints known to have intrinsic sub-rule pad gaps"}}, "required": ["board_path"]}},
+    {"name": "bodesign_clean_micro_stubs", "handler": _h_clean_micro_stubs,
+     "description": "C04 finish (BR_20260708): remove track segments shorter than min_len_mm (default 0.02mm) left by freerouting SES import — the <0.01mm fragments that read as false unconnected / false clearance (the MIC1 GND 0.0001mm-track symptom). Strips ONLY true micro-stubs below the threshold; vias/zones untouched. Returns removed count + each removed stub's net+length so the cleanup is auditable and never silently drops real routing.",
+     "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "min_len_mm": {"type": "number"}}, "required": ["in_path", "out_path"]}},
     {"name": "bodesign_si_check", "handler": _h_si_check,
      "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup. Driver/load/edge/thresholds (rdrv/cload/edge_ns/overshoot_pass_pct/overshoot_warn_pct) are caller-overridable — defaults are a documented STM32-class CMOS reference, not a hidden assumption; the result echoes the effective values under `effective`.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "nets": {"type": "array", "items": _STR}, "z0": {"type": "number"}, "rs": {"type": "number"}, "vdd": {"type": "number"}, "rdrv": {"type": "number"}, "cload": {"type": "number"}, "edge_ns": {"type": "number"}, "overshoot_pass_pct": {"type": "number"}, "overshoot_warn_pct": {"type": "number"}}, "required": ["board_path", "nets"]}},
     {"name": "bodesign_autoroute", "handler": _h_autoroute,
-     "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing.",
-     "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}}, "required": ["board_path", "out_path"]}},
+     "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing. NET-CLASS RULES (BR_20260708): pass `netclasses`=[{name,width_mm,clearance_mm,nets?:[exact],match?:[substrings]}] (ORDERED; a net joins the FIRST class that claims it) to inject per-class width/clearance into the exported Specctra DSN — so a 0.5mm-pitch BGA escape region can route at 0.1/0.1mm while signal/power nets keep their own widths, instead of KiCad's single global 0.2mm rule that makes BGA escape impossible. Unclaimed nets fall into a synthesized default class (default_width_mm/default_clearance_mm). Run bodesign_via_in_pad (BGA fanout) BEFORE autoroute so escape stubs exist. Result adds `netclasses` (per-class net counts + DSN-unit widths + dropped-empty warnings) and structured completion (`unconnected`/`complete`) so a router that converged short is visible here, not only at downstream DRC.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}, "netclasses": {"type": "array", "items": {"type": "object", "properties": {"name": _STR, "width_mm": {"type": "number"}, "clearance_mm": {"type": "number"}, "nets": {"type": "array", "items": _STR}, "match": {"type": "array", "items": _STR}}, "required": ["name", "width_mm", "clearance_mm"]}, "description": "ordered per-class DSN rules; a net joins the first class claiming it (exact `nets` or `match` substring)"}, "default_width_mm": {"type": "number"}, "default_clearance_mm": {"type": "number"}}, "required": ["board_path", "out_path"]}},
+    {"name": "bodesign_autoroute_preflight", "handler": _h_autoroute_preflight,
+     "description": "C04 route-step diagnostic gate (BR_20260708): probe the ee worker for freerouting prerequisites and say EXACTLY what is missing instead of leaving the route step to die on a raw Java HeadlessException. Checks four things: freerouting.jar on disk, java on PATH, a HEADFUL JRE (freerouting v1.9.0 CLI still calls Toolkit.getScreenSize(), so a *-headless JRE lacking libawt_xawt.so throws HeadlessException even under xvfb), and xvfb-run/DISPLAY. Returns {ready, missing:[...], reason, remedy:[...], probe:{...}} — ready=true ONLY when jar+java+headful-JRE+xvfb/DISPLAY are all present. Call this before bodesign_autoroute on a fresh worker; on ready=false do NOT claim a routed board, fix the named gap (or route interactively in KiCad). No arguments.",
+     "schema": {"type": "object", "properties": {}}},
+    {"name": "bodesign_placement_preflight", "handler": _h_placement_preflight,
+     "description": "C04 pre-route placement gate (BR_20260708): read a placed .kicad_pcb and fail fast on a doomed floorplan BEFORE routing, from REAL footprint courtyards (no guessing). Two conditions: (1) courtyard_overlap — any two footprint courtyards that intersect (optionally grown by courtyard_margin_mm) are listed in `overlaps` with the measured mm² (route would inherit a wall of clearance DRC — the 65-violation symptom); (2) sheet_under_filled — total courtyard area / usable board area below min_utilization (default 0.40) means everything is crammed into a strip (the 20%% center-strip symptom). Returns passed=true ONLY when zero overlaps AND utilization meets the floor, plus utilization, overlap_pairs, parts/board areas, board_mm (read from Edge.Cuts unless overridden) and human-readable `reasons`. Never mutates the board and never routes: the caller checks passed and, on failure, re-places (strategy='deterministic') rather than routing into overlap.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "min_utilization": {"type": "number", "description": "floor for parts-courtyard-area / usable-board-area (default 0.40); below it = sheet_under_filled fail"}, "board_mm": {"type": "array", "items": {"type": "number"}, "description": "[width, height] mm override; omit to read board size from Edge.Cuts"}, "courtyard_margin_mm": {"type": "number", "description": "grow each courtyard by this margin before the overlap test (default 0)"}}, "required": ["board_path"]}},
     {"name": "bodesign_component_search", "handler": _h_component_search,
      "description": "Search the LCSC/EasyEDA vendor component library by MPN or keyword; returns real candidate parts [{mpn, lcsc_id, package, manufacturer, stock, rohs, price1}] for the 100%-fidelity source gate. No fabrication: an empty vendor result is reported found=0, never padded with guesses. Pair with bodesign_component_fetch to pull the chosen lcsc_id's authoritative symbol/footprint/3D.",
      "schema": {"type": "object", "properties": {"keyword": _STR, "limit": {"type": "integer"}}, "required": ["keyword"]}},
     {"name": "bodesign_component_fetch", "handler": _h_component_fetch,
-     "description": "Fetch a real component's AUTHORITATIVE KiCad symbol + footprint + 3D STEP model from the LCSC/EasyEDA vendor library by LCSC id (e.g. C2869036), via the pinned easyeda2kicad CLI. Returns on-disk paths {kicad_sym, footprint, step_model, wrl_model, has_3d, lib_nickname}. This is the 100%-fidelity source-data path: use it INSTEAD of scaling a generic package as a stand-in body. No-fallback/honest: has_3d=false when the vendor carries no STEP (a real source-data gap to surface, not a substituted model); ok=false with 'rebuild image' when the CLI is absent.",
-     "schema": {"type": "object", "properties": {"lcsc_id": _STR, "output_lib": _STR, "overwrite": {"type": "boolean"}}, "required": ["lcsc_id", "output_lib"]}},
+     "description": "Fetch a real component's AUTHORITATIVE KiCad symbol + footprint + 3D STEP model from the LCSC/EasyEDA vendor library by LCSC id (e.g. C2869036), via the pinned easyeda2kicad CLI. Returns on-disk paths {kicad_sym, footprint, step_model, wrl_model, has_3d, lib_nickname}. BATCH: pass lcsc_ids (array) INSTEAD of lcsc_id to pull many parts into one shared output_lib in a single call \u2014 fetched sequentially (they share the CLI + library; never parallelised), continue-on-error, returning {fetched, failed, results:[per-part ok/paths|reason]} so all source-data gaps surface at once. Provide EXACTLY ONE of lcsc_id / lcsc_ids. This is the 100%-fidelity source-data path: use it INSTEAD of scaling a generic package as a stand-in body. No-fallback/honest: has_3d=false when the vendor carries no STEP (a real source-data gap to surface, not a substituted model); ok=false with 'rebuild image' when the CLI is absent.",
+     "schema": {"type": "object", "properties": {"lcsc_id": _STR, "lcsc_ids": {"type": "array", "items": _STR}, "output_lib": _STR, "overwrite": {"type": "boolean"}}, "required": ["output_lib"]}},
     {"name": "bodesign_render_gerber_preview", "handler": _h_render_gerber_preview,
      "description": "C04 Gerber preview evidence: render a real Gerber layer through the gerber-core pygerber raster path. Unsupported composite modes return render-unavailable instead of drawing a decorative fallback.",
       "schema": {"type": "object", "properties": {"gerber_dir": _STR, "out_path": _STR, "mode": _STR, "drill_dir": _STR, "layer_glob": _STR}, "required": ["gerber_dir", "out_path", "mode"]}},
@@ -773,8 +888,11 @@ TOOLS: list[dict] = [
      "description": "Export a netlist from a schematic via kicad-cli.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "format": _STR}, "required": ["schematic_path", "out_dir"]}},
     {"name": "bodesign_prd_bom_crosscheck", "handler": _h_prd_bom_crosscheck,
-     "description": "C00\u2192C03 fulfilment gate (quality/prd-bom-crosscheck L1): deterministically crosscheck the human-audited main_components_structured.json role manifest against the C03 KiCad netlist (.net). Per-role verdicts present/substituted/missing with matched_refs audit trail; missing roles and out-of-envelope substitutions without a recorded user approval are BLOCKING (gate=FAIL \u2014 refuse C04 entry). Fail-fast on absent/invalid manifest or netlist (MANIFEST_MISSING/MANIFEST_INVALID/NETLIST_MISSING/NETLIST_PARSE_ERROR); never silently passes. Pure python, runs in core.",
+     "description": "C00→C03 fulfilment gate (quality/prd-bom-crosscheck L1): deterministically crosscheck the human-audited main_components_structured.json role manifest against the C03 KiCad netlist (.net). Per-role verdicts present/substituted/missing with matched_refs audit trail; missing roles and out-of-envelope substitutions without a recorded user approval are BLOCKING (gate=FAIL — refuse C04 entry). Fail-fast on absent/invalid manifest or netlist (MANIFEST_MISSING/MANIFEST_INVALID/NETLIST_MISSING/NETLIST_PARSE_ERROR); never silently passes. Pure python, runs in core.",
      "schema": {"type": "object", "properties": {"manifest_path": _STR, "netlist_path": _STR, "out_dir": _STR}, "required": ["manifest_path", "netlist_path"]}},
+    {"name": "bodesign_check_c03", "handler": _h_check_c03,
+     "description": "C03→C04 STAGE-ENTRY gate (BR_20260707): deterministic machine check that C03 (EE) delivery is complete BEFORE C04 layout may start — the entry counterpart to check_c04's output gate. Reads the BOM csv (+ optional Pin_Allocation.csv SSOT + frozen_pad_counts) and HARD-FAILS (gate=FAIL, refuse C04 entry) on: R1 BOM schema lint (column-count/quoting breakage, bad status enum, duplicate (board,ref)); R2 readiness (any draft/blocked row; a finalized row whose mpn carries TBC/TBD/UNDECIDED); R3 drawability (every row needs a symbol-source marker: official|vendor+LCSC|manual|N-A); R4 SSOT crosscheck (active parts U/J/Y/SW must appear in Pin_Allocation.csv — catches the U4 wireless-scheme conflict class; J_* pad counts must match frozen_pad_counts when provided). stock=0 is a non-blocking warn. Fail-fast on absent/empty inputs (BOM_MISSING/BOM_EMPTY/PIN_ALLOC_MISSING). Gate values NEVER relaxed to pass (check_c04 floating-PSRAM false-pass lesson). Pure python, runs in core.",
+     "schema": {"type": "object", "properties": {"bom_csv": _STR, "pin_allocation_csv": _STR, "frozen_pad_counts": {"type": "object", "description": "{ref: expected_pad_count} for J_* freeze crosscheck"}, "out_dir": _STR}, "required": ["bom_csv"]}},
     {"name": "bodesign_render_companion", "handler": _h_companion,
      "description": "Render a readable companion (pdf/png) for a non-readable engineering file (.kicad_sch/.kicad_pcb/gerber).",
      "schema": {"type": "object", "properties": {"path": _STR, "out_dir": _STR}, "required": ["path", "out_dir"]}},
@@ -931,6 +1049,7 @@ _EE_GROUP_TOOLS = {
     "bodesign_via_in_pad",
     "bodesign_pour_planes",
     "bodesign_widen_bus_tracks",
+    "bodesign_apply_pad_intrinsic_overrides",
     "bodesign_length_match_bus",
     "bodesign_layout_drc_gate",
     "bodesign_si_check",
@@ -1093,6 +1212,16 @@ def run_tool(name: str, arguments: dict) -> dict:
                            "project-folder verb that runs on the HOST via the bodesign skill's "
                            "gate.py (zero token round-trip), not an MCP tool",
                 "landing_command": _landing_command(verb)}
+    # R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-1/DD-5):
+    # bodesign_init is served IN-PROCESS, not via a registry handler or a worker.
+    # Return the single-source doctrine loaded at import (BODESIGN_GUIDE_DOCTRINE);
+    # the prompts/get bodesign_init entry projects the SAME constant, so both faces
+    # are byte-identical (R15.5 no-drift). Optional `section` is accepted but the
+    # doctrine is served whole (no silent truncation of the contract).
+    if name == "bodesign_init":
+        _tools_log.info("bodesign_init_hit")
+        return {"ok": True, "doctrine": BODESIGN_GUIDE_DOCTRINE,
+                "source": "skills/bodesign/doctrine.md"}
     # Worker routing: forward a non-local tool to its worker, or report it
     # unavailable when no worker is configured (the build123d gate, generalized).
     decision, target = _route_tool(name)
@@ -1468,12 +1597,55 @@ def build_server():
 
     @server.list_tools()
     async def list_tools() -> list:
-        return [Tool(name=t["name"], description=t["description"], inputSchema=t["schema"]) for t in TOOLS]
+        from mcp.types import ToolAnnotations
+        out = []
+        for t in TOOLS:
+            ann = t.get("annotations")
+            out.append(Tool(
+                name=t["name"], description=t["description"], inputSchema=t["schema"],
+                annotations=ToolAnnotations(**ann) if ann else None,
+            ))
+        return out
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list:
         result = await asyncio.to_thread(run_tool, name, arguments)
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+
+    # R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-1/DD-6):
+    # bodesign had NO prompts handler; this is the new prompts/list + prompts/get
+    # surface. The single R15 `bodesign_init` entry projects the SAME source
+    # constant as the bodesign_init TOOL (BODESIGN_GUIDE_DOCTRINE), so both faces
+    # are byte-identical (R15.5 no-drift). Reachable by bare MCP clients that only
+    # speak prompts/*. No arguments.
+    from mcp.types import GetPromptResult, Prompt, PromptMessage
+
+    @server.list_prompts()
+    async def list_prompts() -> list:
+        return [Prompt(
+            name="bodesign_init",
+            description=(
+                "bodesign's full usage doctrine (R15 self-describing organism): "
+                "two-plane routing (landing verbs vs compute tools), the "
+                "honesty/no-fallback contract, pre-call disciplines, organ "
+                "coordination, and gotchas. Same content as the bodesign_init "
+                "tool; this prompts/get face is reachable by bare MCP clients. "
+                "No arguments."
+            ),
+            arguments=[],
+        )]
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
+        if name != "bodesign_init":
+            raise KeyError(f"unknown prompt: {name!r}")
+        return GetPromptResult(
+            description="bodesign R15 usage doctrine (single-source, byte-identical to the bodesign_init tool).",
+            messages=[PromptMessage(
+                role="user",
+                content=TextContent(type="text", text=BODESIGN_GUIDE_DOCTRINE),
+            )],
+        )
 
     return server
 
