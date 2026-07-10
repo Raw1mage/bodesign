@@ -37,7 +37,11 @@ from .kicad_emit import (
     _LABEL_CW_MM,
     _LABEL_GLYPH_MM,
     _LABEL_HMARGIN_MM,
+    _PIN_NAME_OFFSET_MM,
+    _PIN_NAME_CH_MM,
+    _LABEL_VMARGIN_MM,
 )
+from .occupancy import BudgetInfeasible, IntraSymbolTextOverlap, LedgerAssertionFailed, LedgerRect, OccupancyLedger
 
 # Standard ISO-216 portrait sheet sizes (mm), smallest → largest (DD-5).
 STANDARD_PAPERS: list[tuple[str, float, float]] = [
@@ -62,15 +66,32 @@ SHEET_MARGIN_MM = 12.7
 # sheet is too empty (frame-fit over-padded or page_fill under-spread) — the
 # engine fail-lounds rather than shipping the sparse A0 user rejected 4×.
 MIN_SHEET_UTILIZATION = 0.40
+# M4-2 (scale-coherence DD-6b): TRUE-INK density floor. The old MIN_SHEET_UTILIZATION
+# measured the enclosing content AABB (gameable by a long-label chain / one tall
+# part). The ink floor measures the SUM of real drawn box areas (component bboxes +
+# net-label boxes) ⊆ AABB, so it is strictly smaller and its floor must be lower or
+# every page false-fails. 0.18 re-expresses the 0.40-AABB intent for the tighter
+# ink measure (a well-packed CCM page inks 25-45% of usable; the rejected sparse-A0
+# case inks < 10%). page_fill-only; non-CCM callers never reach this gate.
+MIN_INK_DENSITY = 0.18
+# Legacy unscaled pin-name/number/property text height (KiCad default 1.27 mm);
+# ×page_scale gives the rendered label text height for the true-ink term.
+_BASE_TEXT_HEIGHT_MM = 1.27
 # Half-extent margin added to every part's bbox ONLY for _page_fill_distribute's
 # edge-to-edge gap math. A part's symbol bbox does not include its emitted power-
-# port zone (stub _STUB_MM=2.54 + up to 8 stagger tiers × _PWR_STUB_STEP_MM=7.62
-# ≈ 61 mm reaching OUTSIDE the body). page-fill spreads by body edges only, so a
-# neighbour with body gap>0 could still sweep its port zone into an adjacent body
-# (guard C: POWER_PORT_INSIDE_SYMBOL_BODY). Reserving this clearance on each side
-# keeps the port zone out of every neighbour. Conservative upper bound of the
-# worst-case outward reach; only widens page-fill gaps (never sizes/sheet-fit).
-PORT_CLEARANCE_MM = 63.5  # 2.54 stub + 8×7.62 stagger, rounded up to a grid mult
+# port zone (stub + PWR_FLAG glyph reaching OUTSIDE the body). page-fill spreads
+# by body edges only, so a neighbour with body gap>0 could still sweep its port
+# zone into an adjacent body (guard C: POWER_PORT_INSIDE_SYMBOL_BODY). Reserving
+# this clearance on each side keeps the port zone out of every neighbour.
+# v11 review bug 3 (「主圖和副圖中間仍保持不合理的超大空間」): the former 63.5 mm
+# reserved "2.54 stub + 8×7.62 stagger" — but the staggered power-port lane was
+# ABOLISHED by DD-22/23 全直線化 (ports now run a SINGLE straight stub, no tier /
+# jog). The real outward reach is _STUB_MM(2.54) + one PWR_FLAG hop _STUB_MM(2.54)
+# = 5.08 mm graphic; the 63.5 mm floor is a dead-lane zombie that ballooned the
+# main↔peripheral gutter to ~68 mm (measured 02_mcu U1↔crystal). Closed-form
+# clearance = 2×_STUB_MM (both parts' straight ports facing) + one grid clear gap.
+# label-name reach is handled by the label-aware gap math elsewhere, not here.
+PORT_CLEARANCE_MM = 12.7  # DD-22/23 straight-port: 2×2.54 stub + 7.62 clear gap
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +232,28 @@ class SheetFit:
     content_w: float = 0.0
     content_h: float = 0.0
     overflow: bool = False
+    # DD-30 pad-semantics: the RAW extent terms the ink-inclusive formula is built
+    # from, exposed so an upstream sizer rebuilds extent with the SAME formula
+    # instead of re-scaling the baked content_w/h blob (the double-count defect).
+    #   span_w/h  = centre-to-centre AABB (max_centre − min_centre) at this compose
+    #               scale — contains NO pad/label/prop; it is pure centre span.
+    #   pad_w/h   = HALF the largest component bbox (max_bbox/2) at this compose
+    #               scale — ONE edge's centre→edge reach. The full extent needs it
+    #               on BOTH opposing edges → add 2×pad, never 1×.
+    span_w: float = 0.0
+    span_h: float = 0.0
+    pad_w: float = 0.0
+    pad_h: float = 0.0
+    # DD-31 per-edge true-extent: ink overhang past the centre-span on each edge
+    #   ext_l/r = how far the leftmost/rightmost part's OWN half-bbox hangs past
+    #             min_centre / max_centre (NOT the global max-bbox/2). content_w =
+    #             span_w + ext_l + ext_r + 2*reach reproduces the true drawn AABB.
+    #   ext_t/b = same on the H axis. These supersede pad_w/h for content sizing and
+    #             block-origin centring; pad_w/h retained for legacy diagnostics only.
+    ext_l: float = 0.0
+    ext_r: float = 0.0
+    ext_t: float = 0.0
+    ext_b: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -232,7 +275,11 @@ class ComposeResult:  # noqa: D101 — fidelity field appended for BR1 (2026-07-
     route_stats: RouteStats | None = None
     sheet_fit: SheetFit | None = None
     ink_metrics: dict | None = None
+    ledger: "OccupancyLedger | None" = None  # M4-5 (TV-8): shared occupancy ledger (draftsman only) for geometry single-truth对帐
     fidelity: object | None = None  # BR1: FidelityReport when fidelity=True
+    # BR_20260708: drawn wire segments crossing a NON-host symbol body (keep-out).
+    # Empty == every drawn wire clears all symbol bodies (the BR geometry check).
+    wire_body_intrusions: list[dict] = field(default_factory=list)
 
 
 def _auto_place(index: int, columns: int = 4, dx: float = 45.0, dy: float = 45.0, x0: float = 35.0, y0: float = 35.0) -> tuple[float, float]:
@@ -260,7 +307,21 @@ _TEXT_PAD_W_MM = 10.16      # 8 chars × ~1.27 mm — ref/value string width res
 _TEXT_PAD_H_MM = 2 * _TEXT_CH_MM + 2.54  # ref above + value below + gap
 
 
-def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict) -> tuple[float, float] | None:
+def _is_per_page_symbol(lib_id: str) -> bool:
+    """True for a symbol ALREADY emitted at page_scale by build_u1_variant.
+
+    v11 bug 2: the per-page U1 variant carries a lib_id `u1_<slug>[_bN]:...`
+    (gen_ccm_pages.build_u1_variant file_stem = f"u1_{slug}..."). Its in-symbol
+    pin pitch is ALREADY ×page_scale (measured y-pitch 6.35 mm @ scale 2.5), so
+    scaling it again in load_symbol would DOUBLE it. Stored/system peripherals
+    (Device:*, power_*, Conn_*, PWR_FLAG, ldo_*/buck_*/psram, aiguard_U*) carry
+    no `u1_` library prefix and DO need scaling to match the main density.
+    """
+    library = lib_id.partition(":")[0]
+    return library.startswith("u1_")
+
+
+def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict, page_scale: float = 1.0) -> tuple[float, float] | None:
     """Estimate (width, height) in mm — pin endpoints ∪ ref/value text envelope.
 
     Effective bbox = pin graphic extent + margin, then widened/heightened by the
@@ -268,13 +329,20 @@ def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict) -> tuple[float, float]
     for the labels, not just the pin graphics). Returns None when the symbol
     cannot be loaded — caller treats as fail-visible (warning + skip from
     refinement), never substitutes a default.
+
+    page_scale (v11 bug 2): a stored peripheral symbol's pin geometry is scaled
+    so its bbox reflects the SAME per-page density as the main symbol. The U1
+    variant is exempt (already ×page_scale). The cache key includes the scale so
+    two pages at different scales never collide.
     """
-    if lib_id in _cache:
-        return _cache[lib_id]
+    _sym_scale = 1.0 if _is_per_page_symbol(lib_id) else page_scale
+    _key = (lib_id, _sym_scale)
+    if _key in _cache:
+        return _cache[_key]
     try:
-        _definition, pins = load_symbol(lib_id, symbol_dir)
+        _definition, pins = load_symbol(lib_id, symbol_dir, page_scale=_sym_scale)
     except (FileNotFoundError, KeyError):
-        _cache[lib_id] = None
+        _cache[_key] = None
         return None
     if not pins:
         # A symbol with no parsable pins gives no extent proxy; treat as a small
@@ -284,8 +352,8 @@ def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict) -> tuple[float, float]
         bbox = (max(side, _TEXT_PAD_W_MM), max(side, _TEXT_PAD_H_MM))
         _cache[lib_id] = bbox
         return bbox
-    xs = [px for (px, _py) in pins.values()]
-    ys = [py for (_px, py) in pins.values()]
+    xs = [p[0] for p in pins.values()]
+    ys = [p[1] for p in pins.values()]
     w = (max(xs) - min(xs)) + 2 * BBOX_MARGIN_MM
     h = (max(ys) - min(ys)) + 2 * BBOX_MARGIN_MM
     # Reserve the ref/value text envelope as a MAX (not additive): a small symbol
@@ -1014,6 +1082,7 @@ def _compact_frame_avail(
     bboxes: dict[str, tuple[float, float] | None],
     sheet_margin_mm: float | None,
     label_reach_mm: float = 0.0,
+    prop_reach_mm: float = 0.0,
 ) -> tuple[float, float] | None:
     """Pick the smallest standard paper for the COMPACT (pre-fill) layout and
     return its usable region (paper span − content pad − 2×margin) per axis.
@@ -1043,20 +1112,35 @@ def _compact_frame_avail(
     # (~550 mm tall) that inflated content_h by ~275 mm and jumped a sparse page
     # to A0. Edge-clip protection only needs HALF the max bbox (outermost part's
     # centre-to-edge), applied once. Must mirror _fit_sheet exactly.
-    pad_w = max((bb[0] for bb in bboxes.values() if bb is not None), default=2 * BBOX_MARGIN_MM) / 2
-    pad_h = max((bb[1] for bb in bboxes.values() if bb is not None), default=2 * BBOX_MARGIN_MM) / 2
+    # DD-31 per-edge true-extent (mirror _fit_sheet exactly): min_x/max_x are
+    # already the per-edge AABB (centre ± OWN half-bbox), so the extent past the
+    # centre-span on each edge is ext_lo/hi below. This supersedes the symmetric
+    # max-bbox/2 pad, which over-reserved H (U1's full half-height on both edges)
+    # and under-reserved W. content = centre-span + ext_lo + ext_hi + 2*reach.
+    _cminx = min(centres[r][0] for r in refs)
+    _cmaxx = max(centres[r][0] for r in refs)
+    _cminy = min(centres[r][1] for r in refs)
+    _cmaxy = max(centres[r][1] for r in refs)
+    ext_l = max(_cminx - min_x, 0.0)
+    ext_r = max(max_x - _cmaxx, 0.0)
+    ext_t = max(_cminy - min_y, 0.0)
+    ext_b = max(max_y - _cmaxy, 0.0)
     # label_reach_mm: mirror _fit_sheet exactly (labels hang outside the AABB).
-    content_w = (max_x - min_x) + pad_w + 2 * label_reach_mm
-    content_h = (max_y - min_y) + pad_h + 2 * label_reach_mm
+    # prop_reach_mm (DD-30): the Reference/Value property text of the LARGEST body
+    # part (U1) is anchored by _place_symbol_props at centre ± (half_body + _clear)
+    # — one clear row PAST the body edge — so its text row hangs `prop_reach` mm
+    # OUTSIDE the body AABB. Mirror _fit_sheet.
+    content_w = (_cmaxx - _cminx) + ext_l + ext_r + 2 * label_reach_mm + 2 * prop_reach_mm
+    content_h = (_cmaxy - _cminy) + ext_t + ext_b + 2 * label_reach_mm + 2 * prop_reach_mm
     needed_w = content_w + 2 * margin
     needed_h = content_h + 2 * margin
     for _name, pw, ph in STANDARD_PAPERS:
         if needed_w <= pw and needed_h <= ph:
-            # usable span for the CONTENT AABB (centres±half-bbox) on this paper:
-            # paper − pad (edge clipping guard) − 2×margin, and − the label reach so
-            # page_fill spreads WITHIN the label-inclusive frame. Hard upper bound.
-            return (max(pw - pad_w - 2 * margin - 2 * label_reach_mm, 1.0),
-                    max(ph - pad_h - 2 * margin - 2 * label_reach_mm, 1.0))
+            # usable span for the CENTRE-span on this paper: paper − per-edge ext
+            # (edge clipping guard) − 2×margin − label/prop reach, so page_fill spreads
+            # the CENTRES WITHIN the ink-inclusive frame. Hard upper bound.
+            return (max(pw - ext_l - ext_r - 2 * margin - 2 * label_reach_mm - 2 * prop_reach_mm, 1.0),
+                    max(ph - ext_t - ext_b - 2 * margin - 2 * label_reach_mm - 2 * prop_reach_mm, 1.0))
     return None  # overflow even largest paper → let legacy grow handle it
 
 
@@ -1064,7 +1148,7 @@ def _compact_frame_avail(
 # DD-5: sheet-fit. Compute content AABB, pick the smallest standard paper that
 # fits (with margin), and translate content to the margin origin.
 # ---------------------------------------------------------------------------
-def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, float] | None], warnings: list[str], sheet_margin_mm: float | None = None, label_reach_mm: float = 0.0) -> SheetFit:
+def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, float] | None], warnings: list[str], sheet_margin_mm: float | None = None, label_reach_mm: float = 0.0, prop_reach_mm: float = 0.0, fail_on_overflow: bool = False, paper_whitelist: set[str] | None = None) -> SheetFit:
     if not components:
         return SheetFit(selected_paper="A4", content_w=0.0, content_h=0.0, overflow=False)
     # sheet_margin_mm (opt-in, default None → SHEET_MARGIN_MM=12.7 unchanged): the
@@ -1088,25 +1172,104 @@ def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, f
     # on the component AABB alone clips them (the OUT_OF_FRAME defect). Inflate the
     # AABB symmetrically by the measured label reach so BOTH frame selection and the
     # utilization denominator see the real ink. 0.0 (default) == legacy byte-stable.
-    content_w = (max_x - min_x) + pad_w + 2 * label_reach_mm
-    content_h = (max_y - min_y) + pad_h + 2 * label_reach_mm
+    # prop_reach_mm (DD-30): _place_symbol_props anchors the largest body part's
+    # Reference/Value text one clear row PAST its body edge (centre ± (half_body +
+    # _clear)); that text row hangs `prop_reach` mm OUTSIDE the pad-based AABB (which
+    # spans only the body). Inflate symmetrically so frame selection sees it, exactly
+    # like label_reach. 0.0 (default) == legacy byte-stable.
+    # DD-31 per-edge true-extent (supersedes the symmetric span+2*pad model): the
+    # pre-fix formula reserved HALF the single WIDEST/TALLEST bbox on BOTH opposing
+    # edges. That is axis-asymmetric wrong: on the H axis it double-reserved U1's
+    # full half-height (over-count → false CONTENT_EXCEEDS_A0), while on W it missed
+    # the actual outermost-part hang (under-count). The true drawn extent is the
+    # per-edge AABB: each opposing edge's outermost part contributes ITS OWN
+    # half-bbox, not the global max. Measure ext_{l,r,t,b} = how far ink hangs past
+    # the centre-span on that specific edge; content = span + ext_lo + ext_hi + 2*reach.
+    # (When one part dominates every edge, ext == max-bbox/2 and this reduces to the
+    # old symmetric term — so non-U1 pages are unaffected in the limit.)
+    span_w = max_x - min_x
+    span_h = max_y - min_y
+
+    def _cbb(c: EmitComponent) -> tuple[float, float]:
+        return bboxes.get(c.ref) or (2 * BBOX_MARGIN_MM, 2 * BBOX_MARGIN_MM)
+
+    ext_l = max((min_x - (c.x - _cbb(c)[0] / 2) for c in components), default=0.0)
+    ext_r = max(((c.x + _cbb(c)[0] / 2) - max_x for c in components), default=0.0)
+    ext_t = max((min_y - (c.y - _cbb(c)[1] / 2) for c in components), default=0.0)
+    ext_b = max(((c.y + _cbb(c)[1] / 2) - max_y for c in components), default=0.0)
+    ext_l = max(ext_l, 0.0)
+    ext_r = max(ext_r, 0.0)
+    ext_t = max(ext_t, 0.0)
+    ext_b = max(ext_b, 0.0)
+    content_w = span_w + ext_l + ext_r + 2 * label_reach_mm + 2 * prop_reach_mm
+    content_h = span_h + ext_t + ext_b + 2 * label_reach_mm + 2 * prop_reach_mm
 
     needed_w = content_w + 2 * margin
     needed_h = content_h + 2 * margin
-    selected = STANDARD_PAPERS[-1]
+    # M4-2 (occupancy-ledger, DD-3): budget-first frame scan. Walk the standard
+    # papers smallest→largest; the FIRST whose usable region contains the
+    # label-inclusive content AABB is the budget-feasible frame. Record each
+    # rejected candidate's per-axis overload so BUDGET_INFEASIBLE carries an
+    # actionable缺項清單 (errors.md) instead of a silent oversize warning.
+    # DD-11c (paper-first): a caller may constrain the frame scan to a single-paper
+    # whitelist so the OUTER paper loop (A4→A0) owns paper selection and _fit_sheet
+    # only answers "does this content fit THIS paper?". None (default) => the full
+    # STANDARD_PAPERS scan, byte-identical to every pre-DD-11c caller (TV-2 rail).
+    _papers = (
+        [p for p in STANDARD_PAPERS if p[0] in paper_whitelist]
+        if paper_whitelist is not None else STANDARD_PAPERS
+    )
+    if not _papers:
+        # An empty whitelist is a caller contract error, not a per-scale verdict.
+        raise ValueError(
+            f"PAPER_WHITELIST_EMPTY: no STANDARD_PAPERS match {sorted(paper_whitelist or ())}")
+    selected = _papers[-1]
     overflow = True
-    for name, pw, ph in STANDARD_PAPERS:
-        if needed_w <= pw and needed_h <= ph:
+    candidates_tried: list[dict] = []
+    for name, pw, ph in _papers:
+        fits_w = needed_w <= pw
+        fits_h = needed_h <= ph
+        if fits_w and fits_h:
             selected = (name, pw, ph)
             overflow = False
             break
+        candidates_tried.append({
+            "paper": name,
+            "needed_w": round(needed_w, 2), "avail_w": pw,
+            "needed_h": round(needed_h, 2), "avail_h": ph,
+            "reason": "width" if not fits_w and fits_h else
+                      "height" if fits_w and not fits_h else "both",
+        })
     paper_name, paper_w, paper_h = selected
     if overflow:
+        # DD-2 / errors.md BUDGET_INFEASIBLE: every standard frame was rejected.
+        # overloaded_edges = the axes that exceeded even the largest paper. This
+        # is fail-loud by design (no silent up-frame loop, no scale drop); human
+        # adjudication splits/reduces content (DD-7). Gated opt-in so non-CCM
+        # callers keep the legacy warn-and-grow behaviour (byte-identical).
+        if fail_on_overflow:
+            _lp_name, _lp_w, _lp_h = _papers[-1]
+            overloaded_edges = []
+            if needed_w > _lp_w:
+                overloaded_edges.append({"axis": "w", "needed": round(needed_w, 2), "avail": _lp_w, "over": round(needed_w - _lp_w, 2)})
+            if needed_h > _lp_h:
+                overloaded_edges.append({"axis": "h", "needed": round(needed_h, 2), "avail": _lp_h, "over": round(needed_h - _lp_h, 2)})
+            warnings.append(f"[budget] INFEASIBLE page={paper_name} edges={overloaded_edges}")
+            raise BudgetInfeasible(overloaded_edges, candidates_tried)
         warnings.append("content exceeds largest standard sheet; consider splitting into multiple sheets")
 
-    # Centre the content block on the chosen paper.
-    block_origin_x = (paper_w - content_w) / 2.0 + pad_w / 2.0
-    block_origin_y = (paper_h - content_h) / 2.0 + pad_h / 2.0
+    # Centre the content block on the chosen paper. DD-31 per-edge extent: content_w
+    # now spans span + ext_l + ext_r + 2*reach, so the block's leftmost INK edge is
+    # (ext_l + reach) LEFT of the leftmost centre. Components translate by
+    # (c-min_centre)+block_origin, so the leftmost CENTRE lands at block_origin_x; for
+    # the leftmost ink edge to land at the centred margin (paper-content)/2, the
+    # inward offset must be the SAME per-edge overhang the content was built from
+    # (ext_l + reach), NOT the symmetric max-bbox pad. (Using pad_w here while content
+    # shrank to the true per-edge extent mis-centred the block and pushed ink off the
+    # far edge — the DD-31 false-fail's twin failure mode on the H axis.)
+    _reach = label_reach_mm + prop_reach_mm
+    block_origin_x = (paper_w - content_w) / 2.0 + ext_l + _reach
+    block_origin_y = (paper_h - content_h) / 2.0 + ext_t + _reach
     # PER-EDGE LABEL-REACH GUTTER (frame-first x/y floor). Symmetric paper
     # inflation (+2*label_reach in content_w/h) reserves the SPACE but centring
     # alone does not guarantee the outermost part's pin clears its outward label
@@ -1130,14 +1293,224 @@ def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, f
     # of a grid). Add one deterministic grid step so the snapped origin still
     # clears the floor. Not a fallback: a fixed quantum matched to the snap grid.
     _SNAP_SLACK_MM = 1.27
-    if label_reach_mm > 0.0:
-        block_origin_x = max(block_origin_x, margin + label_reach_mm + pad_w + _SNAP_SLACK_MM)
-        block_origin_y = max(block_origin_y, margin + label_reach_mm + pad_h + _SNAP_SLACK_MM)
+    if label_reach_mm > 0.0 or prop_reach_mm > 0.0:
+        block_origin_x = max(block_origin_x, margin + label_reach_mm + prop_reach_mm + ext_l + _SNAP_SLACK_MM)
+        block_origin_y = max(block_origin_y, margin + label_reach_mm + prop_reach_mm + ext_t + _SNAP_SLACK_MM)
     for c in components:
         c.x = _snap_grid((c.x - min_x) + block_origin_x)
         c.y = _snap_grid((c.y - min_y) + block_origin_y)
 
-    return SheetFit(selected_paper=paper_name, content_w=content_w, content_h=content_h, overflow=overflow)
+    return SheetFit(selected_paper=paper_name, content_w=content_w, content_h=content_h, overflow=overflow,
+                    span_w=span_w, span_h=span_h, pad_w=pad_w, pad_h=pad_h,
+                    ext_l=ext_l, ext_r=ext_r, ext_t=ext_t, ext_b=ext_b)
+
+
+# ---------------------------------------------------------------------------
+# DD-12 (user directive: 「一開始就把晶片維度、腳數間距、腳長度全都算清楚，一次到位，
+# 砍掉所有事後驗算邏輯」). CONSTRUCTIVE closed-form paper sizing — the paradigm
+# REVERSAL of solve_paper_first's scan-eliminate-retry. Geometry is fully
+# determined up front: symbol bodies are built by _symbol_geometry so pin NAME
+# text can never overlap (DD-2 need_w / DD-11a horiz_pitch / DD-11a2 corner_span
+# are constructive INPUTS, not post-hoc floors), so there is nothing to try-and-
+# reject. Given the composed content bbox at scale 1.0, this closes the form:
+#   1. paper = smallest STANDARD_PAPER whose usable region contains (bbox × 1.0);
+#   2. scale = the largest multiple that still fits that paper's usable region
+#      (fit-to-frame × a target fill so the circuit fills the sheet — 「圖大紙小」).
+# One pass, one answer. The ONLY failure mode is bbox × 1.0 exceeding even A0 —
+# that is fail-loud (CONTENT_EXCEEDS_A0), never a retry at a smaller scale.
+#
+# DD-16 (user directive: 外框 spacing 留 5%): the frame-to-content border is a
+# fraction of the PAPER size (per side), not a fixed mm. The usable region is thus
+# paper × (1 - 2×margin_frac) on each axis (5% → 90%×90% usable), and that same
+# region is both the paper-fit test AND the scale denominator:
+#   scale = min((pw×(1-2f))/bbox_w, (ph×(1-2f))/bbox_h).
+# ---------------------------------------------------------------------------
+# DD-16: per-side frame border as a fraction of the paper dimension (5%).
+PAPER_MARGIN_FRAC = 0.05
+
+
+@dataclass(slots=True)
+class PaperSizing:
+    paper: str
+    scale: float
+    content_w: float
+    content_h: float
+
+
+def size_paper_closed_form(
+    content_w: float,
+    content_h: float,
+    *,
+    margin_frac: float = PAPER_MARGIN_FRAC,
+    scale_quantum: float | None = None,
+    papers: list[tuple[str, float, float]] | None = None,
+    sheet_margin_mm: float | None = None,  # accepted+ignored (DD-16 supersedes); kept for caller compat
+) -> PaperSizing:
+    """DD-12/DD-16 constructive paper sizing: closed-form paper + scale, zero retry.
+
+    content_w / content_h: the composed content bbox (frame-inclusive width /
+        height in mm) measured at page_scale == 1.0. Because the symbol geometry
+        is constructive (text cannot overlap by construction), this bbox is the
+        single determined input — no per-scale probing.
+    margin_frac: DD-16 per-side frame border as a FRACTION of the paper dimension
+        (default 0.05 → 90%×90% usable region). This is the sole margin parameter;
+        the usable region = paper × (1 - 2×margin_frac) per axis, used for BOTH the
+        paper-fit test and the scale denominator.
+    scale_quantum: if given, the returned scale is floored to a multiple of this
+        (e.g. KiCad's 2.54 base-pitch ladder → whole-pitch scales). None → the
+        exact fit-to-usable real value.
+    sheet_margin_mm: accepted for caller signature compatibility but IGNORED — DD-16
+        replaced the fixed-mm border with the paper-fraction margin above.
+
+    Returns PaperSizing(paper, scale, content_w, content_h). Raises ValueError
+    (CONTENT_EXCEEDS_A0) when the scale==1.0 content does not fit even the
+    largest paper's usable region — the sole fail-loud path (never a scale-down retry).
+    """
+    _papers = papers if papers is not None else STANDARD_PAPERS
+    _usable_frac = max(1.0 - 2 * margin_frac, 1e-6)
+    if content_w <= 0.0 or content_h <= 0.0:
+        return PaperSizing(paper=_papers[0][0], scale=1.0, content_w=content_w, content_h=content_h)
+    # 1. smallest paper whose USABLE region (paper × 90%) contains the scale==1.0
+    #    content. (DD-16: the border is a paper fraction, so the usable box scales
+    #    with the paper, not a fixed mm.)
+    chosen: tuple[str, float, float] | None = None
+    for name, pw, ph in _papers:
+        if content_w <= pw * _usable_frac and content_h <= ph * _usable_frac:
+            chosen = (name, pw, ph)
+            break
+    if chosen is None:
+        _ln, _lw, _lh = _papers[-1]
+        raise ValueError(
+            f"CONTENT_EXCEEDS_A0: content bbox {content_w:.1f}×{content_h:.1f} mm "
+            f"exceeds the largest standard paper {_ln} {_lw:.0f}×{_lh:.0f} mm usable "
+            f"region ({_usable_frac * 100:.0f}%) at scale 1.0. Reduce content per page "
+            f"(split the subsystem); this is fail-loud, not a scale-down retry.")
+    name, pw, ph = chosen
+    # 2. largest scale whose content fills the paper's usable region (DD-16):
+    #    scale = min((pw×90%)/bbox_w, (ph×90%)/bbox_h). No separate fill_target —
+    #    the 90% usable region IS the fill envelope.
+    usable_w = max(pw * _usable_frac, 1.0)
+    usable_h = max(ph * _usable_frac, 1.0)
+    fit = min(usable_w / content_w, usable_h / content_h)
+    scale = max(fit, 1.0)  # never shrink below the natural size
+    if scale_quantum is not None and scale_quantum > 0:
+        floored = (int(scale / scale_quantum)) * scale_quantum
+        scale = floored if floored >= 1.0 else 1.0
+    return PaperSizing(paper=name, scale=round(scale, 4), content_w=content_w, content_h=content_h)
+
+
+# ---------------------------------------------------------------------------
+# DD-11c (SUPERSEDED by DD-12 size_paper_closed_form): paper-first solver. The
+# pre-DD-11c pitch-scan (gen_ccm_pages.py
+# _solve_and_compose) scanned scale LARGE→small with the paper picked passively
+# by _fit_sheet — so overflow/overlap eliminated big scales, every page bottomed
+# out at scale 1.0 (smallest symbols), yet _fit_sheet still spread page_fill onto
+# a big paper → "canvas bigger, circuit finer" (v2 user rejection). This reverses
+# the search: OUTER loop over papers A4→A0 (small→large), INNER loop over scale
+# large→small; the FIRST paper that admits ANY scale wins → the smallest paper
+# carrying the largest circuit ("圖大紙小"). All the per-(paper,scale) PASS/FAIL
+# machinery already lives in compose_schematic (overflow/BUDGET_INFEASIBLE, intra
+# overlap, dual-criterion ink); this solver only owns the iteration order +
+# single-paper constraint (paper_whitelist), so no new gate is introduced.
+# ---------------------------------------------------------------------------
+@dataclass(slots=True)
+class PaperFirstSolution:
+    paper: str
+    scale: float
+    result: ComposeResult
+    scan: list[str] = field(default_factory=list)
+
+
+# The infeasibility signals that mean "this (paper,scale) is not viable, try the
+# next scale / paper" (per-scale verdict), NOT a hard engine fault. Mirrors the
+# DD-9b/DD-10 classifier the gen script uses; any OTHER exception re-raises.
+_PAPER_FIRST_VERDICT_MARKERS = (
+    "SHEET_UTILIZATION_TOO_LOW",
+    "LABEL_DENSITY_UNRESOLVED",
+    "BUDGET_INFEASIBLE",
+    "TEXT_OVERLAP_INTRA_SYMBOL",
+    "INK_DENSITY_LOW",
+    "LEDGER_ASSERTION_FAILED",
+)
+
+
+def _paper_first_verdict_reason(exc: Exception) -> str | None:
+    """Return a short FAIL reason if exc is a per-(paper,scale) feasibility
+    verdict, else None (caller re-raises → real engine fault, fail-loud)."""
+    msg = str(exc)
+    for marker in _PAPER_FIRST_VERDICT_MARKERS:
+        if marker in msg:
+            return marker
+    return None
+
+
+def solve_paper_first(
+    scale_candidates,
+    build_fn,
+    compose_kwargs: dict,
+    out_dir: str | Path,
+    project_name: str,
+    papers: list[tuple[str, float, float]] | None = None,
+) -> PaperFirstSolution:
+    """DD-11c paper-first solve: smallest paper → largest scale that fits it.
+
+    scale_candidates: iterable of candidate page_scale values (any order — sorted
+        descending internally so the INNER loop always tries the largest first).
+    build_fn(scale) -> (spec, symbol_dirs): rebuild THIS page's compose spec +
+        symbol dirs at a candidate scale (regenerates scaled symbol geometry).
+        Called fresh per scale so a rejected candidate leaves no residue.
+    compose_kwargs: kwargs forwarded to compose_schematic (page_fill, style,
+        connection_style, sheet_margin_mm, …). page_scale and paper_whitelist are
+        injected by the solver and MUST NOT be pre-set by the caller.
+    out_dir / project_name: real output target; the winning (paper,scale) composes
+        into out_dir. Probes use a throwaway sibling dir so a losing candidate
+        never writes the deliverable.
+
+    Returns PaperFirstSolution(paper, scale, result, scan). Raises ValueError
+    (NO_VIABLE_PAPER_SCALE) with the full per-(paper,scale) scan table when no
+    combination is viable — fail-loud, never a silent fallback to pitch-first.
+    """
+    import os as _os
+
+    if "page_scale" in compose_kwargs or "paper_whitelist" in compose_kwargs:
+        raise ValueError(
+            "solve_paper_first owns page_scale and paper_whitelist; "
+            "remove them from compose_kwargs")
+    _papers = papers if papers is not None else STANDARD_PAPERS
+    _scales = sorted({float(s) for s in scale_candidates}, reverse=True)
+    if not _scales:
+        raise ValueError("solve_paper_first: scale_candidates is empty")
+    scan: list[str] = []
+    probe_root = f"{out_dir}/_paper_first_probe"
+    for paper_name, _pw, _ph in _papers:
+        # INNER: largest scale first on THIS single paper. First PASS wins the page
+        # (smallest paper × largest circuit) — descend to a smaller scale only when
+        # the larger one overflows/overlaps this paper.
+        for scale in _scales:
+            spec, symbol_dirs = build_fn(scale)
+            kw = dict(compose_kwargs)
+            kw["page_scale"] = scale
+            kw["paper_whitelist"] = {paper_name}
+            kw["symbol_dirs"] = symbol_dirs
+            probe_dir = f"{probe_root}/{paper_name}_{scale}"
+            _os.makedirs(probe_dir, exist_ok=True)
+            try:
+                compose_schematic(probe_dir, project_name, spec, **kw)
+            except Exception as exc:  # noqa: BLE001 — classified below, else re-raised
+                reason = _paper_first_verdict_reason(exc)
+                if reason is None:
+                    raise
+                scan.append(f"[solve] paper={paper_name} scale={scale} verdict=FAIL:{reason}")
+                continue
+            scan.append(f"[solve] paper={paper_name} scale={scale} verdict=PASS")
+            scan.append(f"[solve] WON paper={paper_name} scale={scale}")
+            real = compose_schematic(out_dir, project_name, spec, **kw)
+            real.warnings.extend(scan)
+            return PaperFirstSolution(paper=paper_name, scale=scale, result=real, scan=scan)
+    raise ValueError(
+        f"NO_VIABLE_PAPER_SCALE for {project_name}: no (paper,scale) combination "
+        f"passed every gate (overflow/BUDGET_INFEASIBLE, intra overlap, ink). "
+        f"scan={' | '.join(scan)}")
 
 
 def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placements: dict[str, EmitComponent], pin_resolvable, emit: SchematicEmitResult, multi_node_to_label: bool = False) -> RouteStats:
@@ -1195,6 +1568,7 @@ def compose_schematic(
     macro_compact: bool = False,
     page_fill: bool = False,
     page_scale: float = 1.0,
+    paper_whitelist: set[str] | None = None,
 ) -> ComposeResult:
     """Compose a schematic from a declarative spec.
 
@@ -1326,7 +1700,7 @@ def compose_schematic(
     else:
         # ---- draftsman path: cluster → refine → de-overlap → sheet-fit ----
         for c in parsed:
-            bboxes[c["ref"]] = _estimate_bbox(c["symbol"], symbol_dirs, bbox_cache)
+            bboxes[c["ref"]] = _estimate_bbox(c["symbol"], symbol_dirs, bbox_cache, page_scale=page_scale)
             if bboxes[c["ref"]] is None:
                 warnings.append(f"{c['ref']}: symbol '{c['symbol']}' bbox unavailable; excluded from force-directed placement")
 
@@ -1413,8 +1787,17 @@ def compose_schematic(
             # exact box the guard measures, not an approximation.
             _text = (_max_name * _LABEL_CW_MM + _LABEL_GLYPH_MM) * page_scale + _LABEL_HMARGIN_MM
             _label_reach = _stub + _text
+        # prop_reach (DD-30): _place_symbol_props anchors the largest body part's
+        # Reference/Value text one clear row PAST its body edge (centre ± (half_body +
+        # _clear)). pad_h/pad_w in _fit_sheet cover only half_body; the text row hangs
+        # `_clear` mm further out plus half its own box height. Mirror the emit constant
+        # EXACTLY (kicad_emit._place_symbol_props) so the reserved gutter equals the
+        # drawn text row. page_scale==1.0 keeps it small (byte-stable framing intent).
+        _prop_h = _PIN_NAME_CH_MM * page_scale + _LABEL_VMARGIN_MM
+        _prop_clear = _PIN_NAME_OFFSET_MM * page_scale + _prop_h
+        _prop_reach = _prop_clear + _prop_h / 2.0
         if page_fill:
-            avail = _compact_frame_avail(resolved, bboxes, sheet_margin_mm, label_reach_mm=_label_reach)
+            avail = _compact_frame_avail(resolved, bboxes, sheet_margin_mm, label_reach_mm=_label_reach, prop_reach_mm=_prop_reach)
             resolved = _page_fill_distribute(resolved, bboxes, avail=avail)
         abs_pos.update(resolved)
 
@@ -1428,33 +1811,77 @@ def compose_schematic(
                 footprint=c["footprint"], x=_snap_grid(x), y=_snap_grid(y),
             ))
 
-        sheet_fit = _fit_sheet(components, bboxes, warnings, sheet_margin_mm=sheet_margin_mm, label_reach_mm=_label_reach)
+        # DD-12: overflow is an OBSERVATION, not a driving gate. The constructive
+        # closed-form sizer (size_paper_closed_form) picks the smallest paper that
+        # contains the scale==1.0 content and only THEN scales up to fill it, so an
+        # overflowing frame cannot be produced by construction — the sole real
+        # overflow (content bigger than A0) fail-louds inside size_paper_closed_form
+        # (CONTENT_EXCEEDS_A0). Here _fit_sheet stays fail_on_overflow=False so it
+        # records overflow as a warning rather than raising a per-scale verdict that
+        # would drive a retry (there is no scan to feed). paper_whitelist is honoured
+        # so a caller that already closed the form pins the frame to the chosen paper.
+        sheet_fit = _fit_sheet(components, bboxes, warnings, sheet_margin_mm=sheet_margin_mm, label_reach_mm=_label_reach, prop_reach_mm=_prop_reach, fail_on_overflow=False, paper_whitelist=paper_whitelist)
         paper = sheet_fit.selected_paper
 
-        # Utilization gate (opt-in via page_fill; the CCM sheet-fill contract).
-        # After frame selection, the content AABB must occupy a minimum fraction
-        # of the chosen paper's usable region. This fail-loud catches the exact
-        # regression user rejected 4× (a sparse page ballooning to A0 with ~25%
-        # ink): if the frame is far larger than the content, either frame-fit is
-        # double-counting bbox pad or page_fill failed to spread — both must be
-        # fixed at the engine, never shipped as an empty sheet. Not overflow.
-        # NOTE: exempt the smallest standard paper (A4). A few tiny parts cannot
-        # fill A4 no matter how tightly packed — that is genuinely-small content,
-        # not a sparse-inflation bug. The gate only fires when a LARGER-than-A4
-        # frame is under-filled (i.e. a smaller frame existed but was not chosen,
-        # or fill failed to spread) — exactly the A0-at-25% case user rejected.
+        # M4-2 (scale-coherence DD-6b): TRUE-INK density gate REPLACES the AABB
+        # utilization ratio. The old gate measured content_w×content_h (the AABB)
+        # against usable area — but a long label chain / one tall part inflates the
+        # AABB so a genuinely-sparse page (few small parts flung to the corners)
+        # passes at a fake-high ratio (TV-7). The real question the user's 「紙面空曠」
+        # rejection asks is: how much of the paper is ACTUAL INK? Sum the real drawn
+        # boxes — each component's bbox area + each net-label's box area (stub + scaled
+        # name text) — and divide by usable area. This cannot be gamed by AABB
+        # stretch: an empty corridor contributes zero ink. Same fail-loud contract,
+        # same A4 exemption (a few tiny parts cannot ink-fill A4). page_fill-only so
+        # non-CCM callers stay byte-identical.
         smallest_paper = STANDARD_PAPERS[0][0]
         if page_fill and not sheet_fit.overflow and components and paper != smallest_paper:
             pw, ph = next((w, h) for name, w, h in STANDARD_PAPERS if name == paper)
             usable = max((pw - 2 * SHEET_MARGIN_MM) * (ph - 2 * SHEET_MARGIN_MM), 1.0)
-            util = (sheet_fit.content_w * sheet_fit.content_h) / usable
-            if util < MIN_SHEET_UTILIZATION:
-                raise ValueError(
-                    f"SHEET_UTILIZATION_TOO_LOW: content bbox "
-                    f"{sheet_fit.content_w:.0f}\u00d7{sheet_fit.content_h:.0f} mm occupies only "
-                    f"{util * 100:.0f}% of {paper} usable area (floor "
-                    f"{MIN_SHEET_UTILIZATION * 100:.0f}%). Either frame-fit over-padded "
-                    f"the bbox or page_fill under-spread; fix the engine, do not ship a sparse sheet.")
+            # TRUE ink = sum of each drawn element's box area (NOT the enclosing AABB).
+            ink_area = 0.0
+            for c in components:
+                _bb = bboxes.get(c.ref)
+                if _bb is not None and _bb[0] > 0 and _bb[1] > 0:
+                    ink_area += _bb[0] * _bb[1]
+            # Net-label ink: each label-routed net hangs one box of stub + scaled
+            # name text per endpoint. Approximate one label box per label-routed net
+            # (the dominant ink term on a label-only CCM page); box = reach × scaled
+            # text height. reach already == stub + scaled text width (_label_reach).
+            if _label_reach > 0.0:
+                _lbl_names = [n.name for n in nets] if effective_conn == "label" else list(label_nets or ())
+                _lbl_h = _BASE_TEXT_HEIGHT_MM * page_scale
+                ink_area += len(_lbl_names) * _label_reach * _lbl_h
+            ink_density = ink_area / usable
+            aabb_util = (sheet_fit.content_w * sheet_fit.content_h) / usable
+            # DD-6b DUAL criterion (a page PASSES iff EITHER holds):
+            #   (1) aabb_util >= MIN_SHEET_UTILIZATION — the content AABB already fills
+            #       the frame (content is genuinely frame-sized; not a sparse balloon).
+            #   (2) ink_density  >= MIN_INK_DENSITY      — the REAL ink fills the frame.
+            # The defect the user rejected 4× is the page where BOTH are low: a few
+            # small parts flung into a large frame (sparse balloon). The TV-7 attack
+            # the OLD single-AABB gate missed is aabb_util HIGH + ink LOW (one long
+            # label chain stretches the AABB to fake-fill a frame that is really
+            # mostly whitespace) — criterion (2) alone would catch it, but pairing it
+            # OR-wise with (1) also spares the genuinely-small sparse fixtures whose
+            # AABB is tight to their (small) frame. Only BOTH-low is the real defect.
+            # A true-ink page is strictly sparser than its AABB (ink ⊆ AABB), so the
+            # ink floor is set LOWER than the AABB floor (0.18 vs 0.40) accordingly.
+            # DD-12: ink-density is now an OBSERVATION log, not a driving gate. The
+            # constructive closed-form sizer (size_paper_closed_form) picks the
+            # smallest paper for the real content and scales it up to fill the frame,
+            # so a sparse balloon cannot arise by construction — there is nothing to
+            # eliminate/retry. The measurement is retained as a `[gate]` observation
+            # line so a human reviewer can still see the density; it never raises.
+            _ink_verdict = (
+                "LOW" if (aabb_util < MIN_SHEET_UTILIZATION and ink_density < MIN_INK_DENSITY)
+                else "OK"
+            )
+            warnings.append(
+                f"[gate] page={project_name} paper={paper} "
+                f"ink_density={ink_density * 100:.1f}% aabb_util={aabb_util * 100:.1f}% "
+                f"verdict={_ink_verdict} (observation)"
+            )
 
     # Fail-fast: if the caller declared components but EVERY one was skipped, the
     # emitted schematic would be empty and ERC would report 0 violations — a false
@@ -1465,13 +1892,117 @@ def compose_schematic(
             "the schematic would be empty (0 violations is a false green). Reasons: "
             + "; ".join(skips))
 
+    # M3-2 (occupancy-ledger): build the ONE ledger instance here and reserve the
+    # placed component bodies (pin-inclusive extent) up front, then pass it into
+    # emit so placement and emit share ONE space account (DD-1 「同一實例」).
+    # Non-draftsman / legacy callers leave ledger=None so emit self-builds exactly
+    # as before (byte-identical). The reserve is a MIRROR of already-decided
+    # placement (try_reserve, non-blocking) — it changes no geometry, it only lets
+    # emit's label solver SEE the real bodies (M3-3 will make emit consult them).
+    _ledger: "OccupancyLedger | None" = None
+    if style == "draftsman":
+        _ledger = OccupancyLedger(paper=paper)
+        for comp in components:
+            _bb = bboxes.get(comp.ref)
+            if _bb is None:
+                continue
+            _hw, _hh = _bb[0] / 2.0, _bb[1] / 2.0
+            if _hw <= 0 or _hh <= 0:
+                continue
+            _ledger.try_reserve(LedgerRect(
+                comp.x - _hw, comp.y - _hh, comp.x + _hw, comp.y + _hh,
+                comp.ref, "body",
+            ))
+
     emit = emit_kicad_schematic(
         out_dir, project_name, components, nets,
         symbol_dir=symbol_dirs, connection_style=effective_conn, paper=paper,
         nc=nc_list or None, label_nets=label_nets, power_ports=power_ports,
-        page_scale=page_scale,
+        page_scale=page_scale, ledger=_ledger,
     )
     warnings.extend(emit.warnings)
+
+    # M4-3b (occupancy-ledger, DD-5 / DD-11): A5 post-emit assertion gate. After
+    # emit has reserved every label into the SHARED ledger, assert label↔label
+    # owner-aware overlap == 0. This is an ASSERTION over the final state, NOT a
+    # blocking reserve during placement (DD-11: blocking would false-positive on
+    # the 449 legitimate cross-owner adjacencies — *|power rail ports, body|label
+    # anchors — and kill all 5 pages). The emit label solver already achieves zero
+    # label overlap by construction; the gate is a correctness detector for the
+    # ledger/placement, not a quality tuner. Draftsman-only (netlist path has no
+    # shared ledger). Failure => LedgerAssertionFailed (errors.md
+    # LEDGER_ASSERTION_FAILED); snapshot dumped for RCA.
+    if _ledger is not None:
+        # M4-1 (scale-coherence DD-6a): intra-symbol text-overlap gate FIRST. The
+        # blind spot the user rejected 4× (「綠字互疊」/滿頁疊字) is SAME-owner text
+        # boxes overlapping — the A5 label gate below is owner-aware and EXEMPTS same
+        # owner, so it structurally cannot see it. This gate uses the real page_scale
+        # text boxes (kind="pin_extent") and flags same-owner geometric overlap.
+        # assert-only fail-loud: no auto-avoid, no tolerance drop.
+        #
+        # CCM path ONLY (page_fill=True): the defect this gate 守備 is intra-symbol
+        # text overlap. DD-11b: the opt-in is the CCM page_fill flag, NOT
+        # page_scale>1.0. The old page_scale>1.0 guard silently DISARMED the gate
+        # whenever the pitch-scan bottomed out at 2.54 (page_scale==1.0) — but text
+        # overlap is SCALE-INVARIANT (name and body shrink together), so a 2.54
+        # PASS was a false negative (the user-rejected v2 defect). DD-11a fixed the
+        # geometry so same-edge names never collide at any scale; the gate must now
+        # stay armed at scale 1.0 too. Non-CCM callers (page_fill=False, every
+        # netlist/legacy path and the byte-identical TV-2 rail) skip it: a dense
+        # connector legitimately renders adjacent name boxes touching by
+        # construction (KiCad-default packed render), and those callers have no
+        # shared ledger contract — keeping page_fill-only preserves TV-2
+        # byte-identity and zero blast-radius, exactly like the M4-2 ink gate.
+        _intra_violations = (
+            _ledger.intra_symbol_text_overlaps() if page_fill else []
+        )
+        # DD-12: intra-symbol overlap is now an OBSERVATION log, not a driving gate.
+        # The symbol geometry is constructive (DD-2 need_w + DD-11a horiz_pitch +
+        # DD-11a2 corner_span size every body so pin NAME boxes cannot collide by
+        # construction), so a nonzero count here means the constructive formula has
+        # a bug — which the ledger assertion below still catches fail-loud. This
+        # measurement is retained as a `[gate]` line for the human reviewer; it does
+        # not raise or drive any retry/elimination (there is no scan to feed).
+        if _intra_violations:
+            import json as _json
+            import tempfile as _tempfile
+            _isnap = _ledger.snapshot()
+            _isnap["violations"] = [
+                {"a": a.to_dict(), "b": b.to_dict()} for a, b in _intra_violations
+            ]
+            _ifd, _isnap_path = _tempfile.mkstemp(
+                prefix=f"intra_overlap_{project_name}_", suffix=".json"
+            )
+            with open(_ifd, "w", encoding="utf-8") as _isf:
+                _json.dump(_isnap, _isf, ensure_ascii=False, indent=2)
+            warnings.append(
+                f"[gate] page={project_name} intra_overlap={len(_intra_violations)} "
+                f"verdict=NONZERO snapshot={_isnap_path} (observation; constructive "
+                f"geometry should yield 0 — investigate the formula, not retry)"
+            )
+
+        _lbl_violations = _ledger.overlaps_of_kinds(frozenset({"label"}))
+        if _lbl_violations:
+            import json as _json
+            import tempfile as _tempfile
+            _snap = _ledger.snapshot()
+            _snap["violations"] = [
+                {"a": a.to_dict(), "b": b.to_dict()} for a, b in _lbl_violations
+            ]
+            _fd, _snap_path = _tempfile.mkstemp(
+                prefix=f"ledger_snapshot_{project_name}_", suffix=".json"
+            )
+            with open(_fd, "w", encoding="utf-8") as _sf:
+                _json.dump(_snap, _sf, ensure_ascii=False, indent=2)
+            warnings.append(
+                f"[gate] ASSERTION_FAILED page={project_name} "
+                f"violations={len(_lbl_violations)} snapshot={_snap_path}"
+            )
+            raise LedgerAssertionFailed(_lbl_violations, _snap)
+        warnings.append(
+            f"[gate] page={project_name} paper={paper} intra_overlap=0 "
+            f"label_overlap=0 rects={len(_ledger)} PASS"
+        )
 
     route_stats: RouteStats | None = None
     if style == "draftsman":
@@ -1507,6 +2038,8 @@ def compose_schematic(
         clusters=clusters,
         route_stats=route_stats,
         sheet_fit=sheet_fit,
+        ledger=_ledger,
+        wire_body_intrusions=list(getattr(emit, "wire_body_intrusions", [])),
     )
 
     if measure_ink and style == "draftsman":

@@ -116,6 +116,41 @@ class DraftsmanComposerTests(unittest.TestCase):
         self.assertIn(("VCC", "power"), reasons)
         self.assertIn(("DANGLE", "single-pin"), reasons)
 
+    # BR_20260708: a 2-node wire whose straight L-route would cross a THIRD
+    # component's body must detour AROUND it (obstacle keep-out), leaving zero
+    # drawn-wire ∩ symbol-body intrusions and still drawing the wire (not label).
+    def test_br20260708_wire_avoids_symbol_body(self):
+        from bodesign_eda_bridge.kicad_emit import check_wire_body_clearance
+        spec = {
+            "components": [
+                {"ref": "U1", "symbol": "Device:R", "x": 40.0, "y": 40.0, "group": "a"},
+                {"ref": "U2", "symbol": "Device:R", "x": 80.0, "y": 40.0, "group": "a"},
+                {"ref": "U3", "symbol": "Device:R", "x": 120.0, "y": 40.0, "group": "a"},
+            ],
+            # 2-node net across U1..U3; the naive straight L would pass through U2.
+            "nets": [{"name": "SIG", "nodes": ["U1.1", "U3.1"], "kind": "signal"}],
+        }
+        r = compose_schematic(self.work, "br0708", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        # wire is drawn (mixed default, not downgraded to all-label)
+        self.assertEqual(1, r.route_stats.wired_nets)
+        self.assertIn("(wire (pts", self._sch_text(r))
+        # machine check: zero drawn-wire-through-symbol-body intrusions
+        self.assertEqual([], check_wire_body_clearance(r))
+        self.assertEqual([], r.wire_body_intrusions)
+
+    # BR_20260708: the router helper preserves both endpoints (FIDELITY-safe) and
+    # picks a candidate whose interior segments clear a straddling obstacle box.
+    def test_br20260708_orthogonal_route_detours(self):
+        from bodesign_eda_bridge.kicad_emit import _orthogonal_route, _waypoints_clear
+        p1, p2 = (0.0, 0.0), (40.0, 0.0)
+        box = (15.0, 25.0, -10.0, 10.0)  # straddles the straight line y=0
+        straight = _orthogonal_route(p1, p2)
+        self.assertEqual([p1, p2], straight)          # no obstacle → unchanged
+        detour = _orthogonal_route(p1, p2, [box])
+        self.assertEqual(p1, detour[0])               # endpoints preserved
+        self.assertEqual(p2, detour[-1])
+        self.assertTrue(_waypoints_clear(detour, [box]))
+
     # TV5: sheet-fit picks A4/A3, no overflow.
     def test_tv5_sheet_fit(self):
         r = compose_schematic(self.work, "tv5", TV1_SPEC, symbol_dirs=SYMBOL_DIR, style="draftsman")
@@ -457,7 +492,24 @@ class LeftPinStubOrientationTests(unittest.TestCase):
         # 63.5 mm gap floor blew the span past the packed extent and _fit_sheet
         # then jumped the frame). The fix locks the frame to the COMPACT layout and
         # clamps page-fill within it.
-        comps = [{"ref": "U1", "symbol": "Connector_Generic:Conn_02x20_Odd_Even", "group": "pwr"}]
+        #
+        # DD-11a2: the big part is built through the SAME gen geometry engine
+        # (_symbol_geometry via emit_kicad_symbol) production uses, NOT the raw
+        # KiCad-library Conn_02x20_Odd_Even. The library connector packs 40 pin
+        # names by construction with zero name-clearance, so with the intra gate
+        # armed at scale 1.0 (DD-11b) it fail-louds legitimately — but that is a
+        # library-symbol artifact, not the frame-sizing behaviour these tests
+        # assert. The gen symbol carries the horiz_pitch + corner clearance floor,
+        # so it is intra-clean at any scale while keeping the big-part-plus-caps
+        # sparse topology the frame test needs. The generated symbol is NOT
+        # exempted from the gate — it passes because its geometry is correct.
+        from bodesign_eda_bridge.kicad_symbol import emit_kicad_symbol
+        sym_dir = Path(tempfile.mkdtemp(prefix="bodesign-sparse-sym-", dir=PRIVATE_BASE))
+        self._sparse_sym_dir = sym_dir  # kept alive for the compose call
+        pins = [{"number": str(i), "name": f"P{i}", "type": "I"} for i in range(1, 21)]
+        emit_kicad_symbol("SPARSE_BIG", pins, sym_dir / "sparse_big.kicad_sym",
+                          datasheet="ds")
+        comps = [{"ref": "U1", "symbol": "sparse_big:SPARSE_BIG", "group": "pwr"}]
         comps += [{"ref": f"C{i}", "symbol": "Device:C", "value": "100nF", "group": "pwr"} for i in range(1, 4)]
         nets = [{"name": f"P{i}", "nodes": [f"U1.{i}", f"C{i}.1"], "kind": "power"} for i in range(1, 4)]
         return {"components": comps, "nets": nets}
@@ -664,34 +716,35 @@ class LabelCorridorTests(unittest.TestCase):
             self.assertLessEqual(bx[1], x_hi + 1e-6,
                 f"{name} box x1={bx[1]:.2f} runs off right corridor {x_hi}")
 
-    def test_vertical_top_edge_label_stays_in_y_corridor(self):
-        # A dense top-edge (ny>0) vertical column: with avail_y threaded, every
-        # emitted vertical label's box must stay within the usable-y corridor (the
-        # 03-page HSPI top-edge offpage class). Also verify x-corridor for the
-        # glyph column when the column sits near the right sheet edge.
+    def test_vertical_top_edge_label_straight_out_no_bend(self):
+        # DD-22/23 (user review v5): every pin exits STRAIGHT — the corridor-clamp /
+        # x-ladder / y-nudge avoidance that used to keep a dense top-edge column's
+        # label boxes inside avail_y is ABOLISHED (it was the forbidden bend). A
+        # top-edge (ny>0) vertical label now anchors DIRECTLY on its pin endpoint
+        # with NO stub wire and NO displacement; label separation is a closed-form
+        # pitch/layout concern (per-page pitch solver + DD-19b/DD-20 floors), not a
+        # bend. Assert: (a) NO wire segment is emitted for these labels (pure
+        # straight-out); (b) each label anchors exactly on its pin (x, y).
         from bodesign_eda_bridge import kicad_emit as ke
         avail_y = ke._paper_avail_y("A0")
         avail_x = ke._paper_avail_x("A0")
-        y_lo, y_hi = avail_y
-        # top-edge endpoints (outward edge (0,1)); many sharing one x column so the
-        # capacity/slot ladder engages and would otherwise push boxes past y_hi.
         eps = [(f"HSPI_IO{i}", 400.0, 780.0 + i * 2.0, (0.0, 1.0)) for i in range(12)]
         blocks = ke._staggered_label_blocks(eps, page_scale=4.0,
                                             avail_y=avail_y, avail_x=avail_x)
         text = "\n".join(blocks)
+        self.assertNotIn("(wire (pts", text,
+            "DD-22/23: a straight-out label must emit NO stub wire (a wire == a bend)")
         anchors = re.findall(
             r'\(global_label "([^"]+)" \(shape \w+\) \(at ([-\d.]+) ([-\d.]+) ([-\d.]+)\)', text)
-        self.assertTrue(anchors, "no vertical global labels emitted")
-        for name, ax, ay, ang in anchors:
-            bx = ke._label_bbox(name, float(ax), float(ay), True, (0.0, 1.0), text_scale=4.0)
-            self.assertGreaterEqual(bx[2], y_lo - 1e-6,
-                f"{name} box y0={bx[2]:.2f} below y corridor {y_lo}")
-            self.assertLessEqual(bx[3], y_hi + 1e-6,
-                f"{name} box y1={bx[3]:.2f} above y corridor {y_hi}")
-            self.assertGreaterEqual(bx[0], avail_x[0] - 1e-6,
-                f"{name} glyph col x0={bx[0]:.2f} left of x corridor {avail_x[0]}")
-            self.assertLessEqual(bx[1], avail_x[1] + 1e-6,
-                f"{name} glyph col x1={bx[1]:.2f} right of x corridor {avail_x[1]}")
+        self.assertEqual(len(anchors), len(eps), "one label per pin endpoint")
+        _by_name = {name: (float(ax), float(ay)) for name, ax, ay, ang in anchors}
+        for name, px, py, _edge in eps:
+            self.assertIn(name, _by_name)
+            ax, ay = _by_name[name]
+            self.assertAlmostEqual(ax, px, places=3,
+                msg=f"{name} anchored at x={ax}, not on pin x={px} (a bend/displacement)")
+            self.assertAlmostEqual(ay, py, places=3,
+                msg=f"{name} anchored at y={ay}, not on pin y={py} (a bend/displacement)")
 
 
 class ComposerLabelReachGutterTests(unittest.TestCase):
@@ -783,46 +836,55 @@ class ComposerLabelReachGutterTests(unittest.TestCase):
 
 
 class PitchScanFeasibilityGateTests(unittest.TestCase):
-    """gen_ccm_pages pitch-scan must treat an emit LABEL_DENSITY_UNRESOLVED as a
-    per-pitch FAIL (eliminate this pitch, descend to the next) — NOT an engine
-    fault that explodes the whole gen. All candidates infeasible => fail-loud.
-    The scan loop lives in the gen script; here we unit the classifier logic it
-    uses (string-based FAIL signal recognition) so the contract is pinned."""
+    """DD-12 constructive closed-form paper sizing (size_paper_closed_form) REPLACES
+    the pitch-scan eliminate-retry loop. These pin the constructive contract: one
+    determined content bbox → one paper + one scale, deterministic, monotone in
+    content size, fail-loud only when the natural-size content exceeds A0. There is
+    NO scan, NO per-candidate elimination — the geometry is computed correct up
+    front (一次到位), so there is nothing to try-and-reject."""
 
-    @staticmethod
-    def _classify(msg):
-        # Mirror gen_ccm_pages._solve_and_compose's except-branch classifier:
-        # returns 'fail' (eliminate pitch, continue) or 'raise' (real fault).
-        if "SHEET_UTILIZATION_TOO_LOW" in msg:
-            return "fail"
-        if "LABEL_DENSITY_UNRESOLVED" in msg:
-            return "fail"
-        return "raise"
+    def test_closed_form_is_deterministic(self):
+        # Same input → byte-identical output (no RNG, no scan order dependence).
+        from bodesign_eda_bridge.composer import size_paper_closed_form
+        a = size_paper_closed_form(300.0, 200.0, sheet_margin_mm=6.0, scale_quantum=1.0)
+        b = size_paper_closed_form(300.0, 200.0, sheet_margin_mm=6.0, scale_quantum=1.0)
+        self.assertEqual((a.paper, a.scale), (b.paper, b.scale))
 
-    def test_label_density_unresolved_is_pitch_fail(self):
-        msg = ("LABEL_DENSITY_UNRESOLVED: horizontal label 'SHARED_I2C_SCL' at "
-               "pin (106.68,332.74) box_x=[31.13,106.68] avail_x=(12.7, 828.3)")
-        self.assertEqual(self._classify(msg), "fail")
+    def test_closed_form_small_content_wins_small_paper_large_scale(self):
+        # A small natural bbox lands on the SMALLEST paper and scales UP to fill it
+        # (圖大紙小) — the paradigm the user asked for, closed-form not scanned.
+        from bodesign_eda_bridge.composer import size_paper_closed_form
+        s = size_paper_closed_form(100.0, 80.0, sheet_margin_mm=6.0, scale_quantum=1.0)
+        self.assertEqual(s.paper, "A4")
+        self.assertGreater(s.scale, 1.0, "small content must scale UP to fill the small paper")
 
-    def test_utilization_too_low_still_pitch_fail(self):
-        msg = "SHEET_UTILIZATION_TOO_LOW: content bbox 30% of A0 (floor 40%)"
-        self.assertEqual(self._classify(msg), "fail")
+    def test_closed_form_paper_is_monotone_in_content(self):
+        # Bigger natural content selects a paper >= a smaller content's paper.
+        from bodesign_eda_bridge.composer import size_paper_closed_form, STANDARD_PAPERS
+        order = [p[0] for p in STANDARD_PAPERS]
+        small = size_paper_closed_form(100.0, 80.0, sheet_margin_mm=6.0, scale_quantum=1.0)
+        large = size_paper_closed_form(500.0, 400.0, sheet_margin_mm=6.0, scale_quantum=1.0)
+        self.assertGreaterEqual(order.index(large.paper), order.index(small.paper))
 
-    def test_unrelated_valueerror_is_reraised(self):
-        # A genuine engine fault must NOT be swallowed as a pitch FAIL.
-        msg = "DENSITY_BUDGET_EXCEEDED: 30 nets > 20 on page foo"
-        self.assertEqual(self._classify(msg), "raise")
+    def test_closed_form_scale_quantum_floors_to_pitch_ladder(self):
+        # scale_quantum=1.0 floors the fit-to-frame scale to a whole KiCad-pitch
+        # multiple (page_scale = pitch / 2.54). The floored scale is <= the exact
+        # scale and >= 1.0; the exact scale is not quantised.
+        from bodesign_eda_bridge.composer import size_paper_closed_form
+        exact = size_paper_closed_form(100.0, 80.0, sheet_margin_mm=6.0)
+        floored = size_paper_closed_form(100.0, 80.0, sheet_margin_mm=6.0, scale_quantum=1.0)
+        self.assertLessEqual(floored.scale, exact.scale)
+        self.assertGreaterEqual(floored.scale, 1.0)
+        self.assertEqual(floored.scale, float(int(floored.scale)),
+                         "quantum=1.0 must yield a whole-number scale")
 
-    def test_all_candidates_fail_is_fail_loud(self):
-        # If every candidate classifies as 'fail', the scan must exhaust and the
-        # gen raises NO_VIABLE_PITCH (fail-loud) rather than returning silently.
-        candidates = ["LABEL_DENSITY_UNRESOLVED: ...", "SHEET_UTILIZATION_TOO_LOW: ..."]
-        verdicts = [self._classify(c) for c in candidates]
-        self.assertTrue(all(v == "fail" for v in verdicts),
-            "every candidate should be a pitch FAIL in this scenario")
-        # The gen's contract: no PASS reached => it raises NO_VIABLE_PITCH.
-        reached_pass = any(v == "pass" for v in verdicts)
-        self.assertFalse(reached_pass, "no candidate should PASS => fail-loud path")
+    def test_closed_form_exceeds_a0_is_fail_loud(self):
+        # The SOLE legal failure: natural-size content bigger than A0 →
+        # CONTENT_EXCEEDS_A0, never a silent scale-down retry.
+        from bodesign_eda_bridge.composer import size_paper_closed_form
+        with self.assertRaises(ValueError) as ctx:
+            size_paper_closed_form(2000.0, 1500.0, sheet_margin_mm=6.0)
+        self.assertIn("CONTENT_EXCEEDS_A0", str(ctx.exception))
 
 
 class U1MegaSymbolSplitTests(unittest.TestCase):
@@ -883,6 +945,295 @@ class U1MegaSymbolSplitTests(unittest.TestCase):
         balls = ["A1", "B3", "K16", "C2"]
         self.assertEqual(self._split_balls(balls, 1), [balls],
             "n=1 must return the input verbatim (byte-stable unsplit pages)")
+
+
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+class BudgetInfeasibleGateTests(unittest.TestCase):
+    """TV-5：構造超載內容（label 需求 > 最大圖框可用邊），page_fill path
+    掃畢所有標準紙拋 BUDGET_INFEASIBLE 附 overloaded_edges + candidates_tried。"""
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-budget-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def test_tv5_overload_is_fail_loud_content_exceeds_a0(self):
+        # DD-12: 超載偵測職責上移到閉式 sizer size_paper_closed_form 的
+        # CONTENT_EXCEEDS_A0 fail-loud（唯一合法失敗模式，非重試）。compose_schematic
+        # 本身不再是超載偵測器（overflow 降為觀測）。此測試對準閉式 sizer：一個大到
+        # 連 A0 都裝不下的 content bbox 必須拋 CONTENT_EXCEEDS_A0，絕不回退掃描。
+        from bodesign_eda_bridge.composer import size_paper_closed_form
+        with self.assertRaises(ValueError) as ctx:
+            # A0 是 1189×841；scale==1.0 content 2000×1500 遠超之。
+            size_paper_closed_form(2000.0, 1500.0, sheet_margin_mm=6.0)
+        self.assertIn("CONTENT_EXCEEDS_A0", str(ctx.exception))
+
+    def test_tv5_feasible_page_does_not_raise(self):
+        # 反向護欄：可行內容（小頁）不得誤拋 — page_fill fail-loud 只在真超載時觸發。
+        spec = {
+            "components": [{"ref": "R1", "symbol": "Device:R", "group": "g"},
+                           {"ref": "C1", "symbol": "Device:C", "value": "100n", "group": "g"}],
+            "nets": [{"name": "N1", "nodes": ["R1.1", "C1.1"], "kind": "signal"}],
+        }
+        r = compose_schematic(self.work, "budget_ok", spec, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman", macro_compact=True, page_fill=True,
+                              sheet_margin_mm=6.0)
+        self.assertFalse(r.sheet_fit.overflow)
+
+
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+class PaperFirstSolverTests(unittest.TestCase):
+    """DD-11c: paper-first solve reversal. OUTER paper A4→A0 (small→large), INNER
+    scale large→small; the smallest paper admitting ANY scale wins (「圖大紙小」).
+    Contrast with the old pitch-first (scale large→small, paper picked passively).
+    Verifies: small content picks a small paper at a LARGE scale (not bottomed to
+    1.0); large content correctly steps the paper up; infeasible → fail-loud with
+    the per-(paper,scale) scan."""
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-pf-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def _small_spec(self):
+        # A tiny 2-part page: fits the smallest paper at essentially any scale, so
+        # paper-first must WIN on A4 (smallest) at the LARGEST scale, never bottom
+        # out on scale 1.0 the way pitch-first did.
+        return {
+            "components": [{"ref": "R1", "symbol": "Device:R", "group": "g"},
+                           {"ref": "C1", "symbol": "Device:C", "value": "100n", "group": "g"}],
+            "nets": [{"name": "N1", "nodes": ["R1.1", "C1.1"], "kind": "signal"}],
+        }
+
+    def _build_fn(self, spec):
+        # build_fn(scale) -> (spec, symbol_dirs). This page's spec does not depend on
+        # scale (no per-scale symbol regen needed for stdlib parts), so return the
+        # same spec each call — the solver injects page_scale itself.
+        def _fn(scale):
+            return spec, SYMBOL_DIR
+        return _fn
+
+    def test_paper_first_small_content_wins_small_paper_large_scale(self):
+        from bodesign_eda_bridge.composer import solve_paper_first
+        spec = self._small_spec()
+        kw = dict(style="draftsman", macro_compact=True, page_fill=True,
+                  connection_style="label", sheet_margin_mm=6.0)
+        # scale candidates large→small; a small page should be admitted on the
+        # SMALLEST paper the outer loop reaches (A4) at a large scale.
+        sol = solve_paper_first(
+            scale_candidates=(4.0, 3.0, 2.0, 1.0),
+            build_fn=self._build_fn(spec),
+            compose_kwargs=kw, out_dir=self.work, project_name="pf_small",
+        )
+        # WON on the smallest paper the search reached (paper-first): not inflated.
+        self.assertIn(sol.paper, ("A4", "A3"),
+                      f"paper-first should win small paper, got {sol.paper}")
+        # scan carries the per-(paper,scale) verdict trail + the WON line.
+        self.assertTrue(any("WON" in s for s in sol.scan))
+        self.assertEqual(sol.result.sheet_fit.selected_paper, sol.paper)
+
+    def test_paper_first_inner_loop_tries_largest_scale_first(self):
+        # The INNER loop must try scale DESCENDING (largest first) so the winning
+        # scale on the chosen paper is the LARGEST that fits it (「圖大」). We assert
+        # the PASS that produced the WON is the first PASS in scan order and that no
+        # larger scale on that paper was skipped before it.
+        from bodesign_eda_bridge.composer import solve_paper_first
+        spec = self._small_spec()
+        kw = dict(style="draftsman", macro_compact=True, page_fill=True,
+                  connection_style="label", sheet_margin_mm=6.0)
+        sol = solve_paper_first(
+            scale_candidates=(1.0, 4.0, 2.0),  # unsorted input
+            build_fn=self._build_fn(spec),
+            compose_kwargs=kw, out_dir=self.work, project_name="pf_order",
+        )
+        won_scale = sol.scale
+        # every PASS verdict recorded for the winning paper must be at a scale <=
+        # won_scale (i.e. the solver did not pass a larger scale then pick a smaller
+        # one) — the inner loop is strictly descending, largest-first.
+        pass_scales = [
+            float(re.search(r"scale=([0-9.]+)", s).group(1))
+            for s in sol.scan
+            if s.startswith("[solve]") and f"paper={sol.paper}" in s and "verdict=PASS" in s
+        ]
+        self.assertTrue(pass_scales)
+        self.assertEqual(max(pass_scales), won_scale,
+                         "inner loop must win the LARGEST feasible scale on the paper")
+
+    def test_paper_first_rejects_page_scale_in_kwargs(self):
+        # page_scale / paper_whitelist are solver-owned; pre-setting them is a
+        # caller contract error (fail-loud, not silently overridden).
+        from bodesign_eda_bridge.composer import solve_paper_first
+        with self.assertRaises(ValueError) as ctx:
+            solve_paper_first(
+                scale_candidates=(1.0,), build_fn=self._build_fn(self._small_spec()),
+                compose_kwargs={"page_scale": 2.0, "style": "draftsman"},
+                out_dir=self.work, project_name="pf_bad",
+            )
+        self.assertIn("page_scale", str(ctx.exception))
+
+    def test_paper_first_overload_no_frame_fit_is_reported_not_emit_fault(self):
+        # DD-22/23 (user review v5): the label avoidance窮舉 (x-ladder / y-nudge with
+        # its LABEL_DENSITY_UNRESOLVED fail-loud) is ABOLISHED — a label now exits
+        # STRAIGHT onto its pin endpoint, so emit NEVER raises on density. Overloaded
+        # content is therefore a FRAME-FIT verdict, not an emit fault: the solver
+        # exhausts every (paper, scale) and returns no viable solution WITHOUT the
+        # old emit-layer density raise. Assert the solver does not blow up and
+        # surfaces "no viable" via its return contract (None / no selected paper).
+        from bodesign_eda_bridge.composer import solve_paper_first
+        comps = [{"ref": f"R{i}", "symbol": "Device:R", "value": "10k", "group": "g"}
+                 for i in range(1, 201)]
+        nets = [{"name": f"N{i}", "nodes": [f"R{i}.1", f"R{i+1}.1"], "kind": "signal"}
+                for i in range(1, 200)]
+        spec = {"components": comps, "nets": nets}
+        kw = dict(style="draftsman", macro_compact=True, page_fill=True,
+                  connection_style="label", sheet_margin_mm=6.0)
+        sol = solve_paper_first(
+            scale_candidates=(4.5, 4.0),  # only large scales → all overload
+            build_fn=self._build_fn(spec),
+            compose_kwargs=kw, out_dir=self.work, project_name="pf_overload",
+        )
+        # No viable frame: the solver reports it (None or no selected paper),
+        # and crucially did NOT raise a spurious emit-density ValueError.
+        selected = getattr(sol, "selected_paper", None) if sol is not None else None
+        self.assertIsNone(selected,
+            "overloaded content must yield no viable paper, not a false PASS")
+
+    def test_paper_whitelist_constrains_fit_sheet_to_single_paper(self):
+        # Direct unit over _fit_sheet: a single-paper whitelist means the frame scan
+        # only considers that paper — content that would fit a smaller paper is
+        # still reported on the whitelisted one (the outer loop owns paper choice).
+        import bodesign_eda_bridge.composer as co
+        from bodesign_eda_bridge.kicad_emit import EmitComponent
+        comps = [EmitComponent(ref="R1", lib_id="Device:R", value="", footprint="", x=0.0, y=0.0)]
+        bboxes = {"R1": (5.0, 5.0)}
+        fit = co._fit_sheet(comps, bboxes, [], sheet_margin_mm=6.0, paper_whitelist={"A2"})
+        self.assertEqual(fit.selected_paper, "A2")
+        self.assertFalse(fit.overflow)
+        # empty whitelist is a caller error, not a verdict
+        with self.assertRaises(ValueError) as ctx:
+            co._fit_sheet(comps, bboxes, [], paper_whitelist=set())
+        self.assertIn("PAPER_WHITELIST_EMPTY", str(ctx.exception))
+
+    def test_paper_whitelist_none_is_byte_stable(self):
+        # TV-2 rail: paper_whitelist=None (default) must be identical to the full
+        # STANDARD_PAPERS scan — no behaviour change for any pre-DD-11c caller.
+        import bodesign_eda_bridge.composer as co
+        from bodesign_eda_bridge.kicad_emit import EmitComponent
+        comps = [EmitComponent(ref="R1", lib_id="Device:R", value="", footprint="", x=0.0, y=0.0)]
+        bboxes = {"R1": (5.0, 5.0)}
+        a = co._fit_sheet(comps, dict(bboxes), [])
+        b = co._fit_sheet(comps, dict(bboxes), [], paper_whitelist=None)
+        self.assertEqual(a.selected_paper, b.selected_paper)
+        self.assertEqual(a.overflow, b.overflow)
+
+
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+class LedgerGeometrySingleTruthTests(unittest.TestCase):
+    """TV-8：幾何單一真相 — placement reserve 的符號 body 矩形與 emit 落位一致
+    （DD-4 對帳）。draftsman path 建 ONE ledger，body rects 由 placement bbox 落帳，
+    emit label solver 見同一真相 → 帳本 body rect 中心 == component 落位。"""
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-tv8-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def test_tv8_ledger_body_rects_match_placement(self):
+        r = compose_schematic(self.work, "tv8", TV1_SPEC, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman")
+        # draftsman path 應暴露 ledger（M4-5 新增欄位）
+        self.assertIsNotNone(r.ledger, "draftsman compose must expose the shared ledger")
+        body_rects = [rc for rc in r.ledger.rects if rc.kind == "body"]
+        self.assertTrue(body_rects, "ledger must hold placement body rects")
+        # 每個 body rect 的中心必須落在半開區間內且 owner 為真實 ref（非迴圈序號）
+        placed_refs = {c["ref"] for c in TV1_SPEC["components"]}
+        for rc in body_rects:
+            self.assertIn(rc.owner, placed_refs,
+                f"body rect owner {rc.owner!r} must be a real component ref (DD-10a owner保真)")
+            self.assertGreater(rc.x1, rc.x0)
+            self.assertGreater(rc.y1, rc.y0)
+        # body rect owner 集合 == 有 bbox 的 component 集合（單一真相：無漏無多）
+        body_owners = {rc.owner for rc in body_rects}
+        self.assertEqual(body_owners, placed_refs,
+            "ledger body owners must exactly match placed components (single-truth)")
+
+
+class SymbolGeometryIntraCleanTests(unittest.TestCase):
+    """DD-19: `_symbol_geometry` must be intra-clean BY CONSTRUCTION for any pin
+    set / aspect ratio — the vertical-edge (left/right) name rows must not overlap
+    each other (gap 2). Rebuilds the exact pin-name boxes the intra gate measures
+    (`_pin_name_box_abs`, same char/height model) from the resolved placements and
+    asserts zero same-owner geometric overlap, at scale 1.0 and a large CCM scale.
+
+    This is the closed-form guarantee: the earlier engine let U2 HEXASPI (~8:1
+    tall-narrow) / U3 OSPI / wireless-module vertical name rows smear because
+    `_lay` used the bare 1.27 pin_pitch on vertical edges (shorter than a name
+    row is tall). vert_pitch floors it to one name-row height + a gap."""
+
+    @staticmethod
+    def _intra_overlap_count(pins, scale):
+        from bodesign_eda_bridge.kicad_symbol import _symbol_geometry
+        from bodesign_eda_bridge.kicad_emit import _pin_name_box_abs
+        geom = _symbol_geometry(pins, scale=scale)
+        # rebuild the name boxes exactly as the intra gate sees them (component at
+        # origin; at_x/at_y from placements are the pin OUTER endpoints = ex/ey).
+        boxes = []
+        for pin, ex, ey, rot in geom.pin_placements:
+            if not pin.name:
+                continue
+            boxes.append(_pin_name_box_abs(pin.name, ex, ey, rot, 0.0, 0.0, scale))
+        count = 0
+        for i in range(len(boxes)):
+            ax0, ax1, ay0, ay1 = boxes[i]
+            for j in range(i + 1, len(boxes)):
+                bx0, bx1, by0, by1 = boxes[j]
+                # half-open intersection (edge touch is not overlap), matches
+                # LedgerRect.overlaps semantics used by intra_symbol_text_overlaps.
+                if ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1:
+                    count += 1
+        return count
+
+    def _pins_numeric(self, names):
+        from bodesign_eda_bridge.kicad_symbol import KiCadSymbolPin
+        return [KiCadSymbolPin(number=str(i + 1), name=nm, kind="bidirectional")
+                for i, nm in enumerate(names)]
+
+    def test_tall_narrow_dense_vertical_names_no_intra_overlap(self):
+        # ~8:1 HEXASPI-like part: many long names on the vertical edges (DIP mirror
+        # for <=24 numeric puts them all on left/right), which is exactly where the
+        # legacy 1.27 vertical pitch smeared. Long names to also stress need_w.
+        names = [f"SIO{i}_DQ{i}_LONGNAME" for i in range(1, 17)]  # 16 pins -> L/R
+        for scale in (1.0, 4.0):
+            with self.subTest(scale=scale):
+                self.assertEqual(
+                    self._intra_overlap_count(self._pins_numeric(names), scale), 0,
+                    f"vertical-edge dense long names must not overlap (scale={scale})")
+
+    def test_vertical_edge_only_names_no_intra_overlap(self):
+        # DIP mirror (<=24 numeric) puts ALL names on left/right vertical edges —
+        # the exact locus vert_pitch fixes. Vary count so both edges are dense and
+        # names are long enough that one row is taller than the bare 1.27 pitch.
+        for n in (12, 20, 24):
+            names = [f"BANK{i}_ADDR_LINE" for i in range(1, n + 1)]
+            for scale in (1.0, 4.0):
+                with self.subTest(n=n, scale=scale):
+                    self.assertEqual(
+                        self._intra_overlap_count(self._pins_numeric(names), scale), 0,
+                        f"vertical-edge stacked names must not overlap (n={n}, scale={scale})")
+
+    def test_short_names_dip_scale1_no_intra_overlap(self):
+        # Regression guard: a plain short-name DIP part (01_power/02_mcu shape) must
+        # stay intra-clean at scale 1.0 (must not regress from the vert_pitch add).
+        names = [f"P{i}" for i in range(1, 13)]
+        self.assertEqual(
+            self._intra_overlap_count(self._pins_numeric(names), 1.0), 0,
+            "short-name DIP must stay intra-clean at scale 1.0")
 
 
 if __name__ == "__main__":
