@@ -85,6 +85,14 @@ class SchematicEmitResult:
     # symbol bodies (the BR acceptance geometry check). Each entry:
     #   {"seg": [[x1,y1],[x2,y2]], "through": ref}. Queryable; never silent.
     wire_body_intrusions: list[dict] = field(default_factory=list)
+    # BR_20260710: power-port endpoints that fell inside a NON-host symbol body
+    # (guard C, POWER_PORT_INSIDE_SYMBOL_BODY). By default this defect is fail-loud
+    # (raises in emit). When the caller opts into `power_port_gate="warn"` — the
+    # ERC-only / netlist-only path that must not be held hostage by a purely-visual
+    # layout defect — the intrusions are recorded here (observation, same pattern as
+    # wire_body_intrusions) and a warning is appended instead of raising. Empty on
+    # the default fail-loud path (it raised) OR when there were no intrusions.
+    power_port_intrusions: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -572,6 +580,7 @@ def emit_kicad_schematic(
     power_ports: bool = True,
     page_scale: float = 1.0,
     ledger: "OccupancyLedger | None" = None,
+    power_port_gate: str = "error",
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
 
@@ -1172,12 +1181,23 @@ def emit_kicad_schematic(
                 _port_intrusions.append(f"{ep[0]}@({ex_pt},{ey_pt}) inside {ref}")
                 break
     if _port_intrusions:
-        raise ValueError(
+        _pp_msg = (
             "POWER_PORT_INSIDE_SYMBOL_BODY: power-port endpoints fell inside a "
             "component symbol body (stub orientation defect — BR left-pin stub "
             f"blind): {'; '.join(_port_intrusions[:12])}"
             + (f" (+{len(_port_intrusions) - 12} more)" if len(_port_intrusions) > 12 else "")
         )
+        # BR_20260710: this is a purely-VISUAL layout defect (a power-port glyph
+        # drawn over a symbol body) — it does NOT affect net connectivity, so it
+        # must not hold the netlist/ERC export hostage. Default `power_port_gate`
+        # == "error" keeps the historic fail-loud raise (existing callers are
+        # byte-identical). An ERC-only / netlist-only caller passes "warn" to
+        # downgrade it to an observation (recorded on the result, same pattern as
+        # wire_body_intrusions) so a clean electrical spec can still emit.
+        if power_port_gate == "warn":
+            warnings.append(_pp_msg)
+        else:
+            raise ValueError(_pp_msg)
 
     # BR_20260708 machine check (WIRE_THROUGH_SYMBOL_BODY): every drawn wire
     # segment ∩ any component body AABB (keep-out-inflated) must be ∅, except the

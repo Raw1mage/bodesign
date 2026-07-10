@@ -1569,6 +1569,7 @@ def compose_schematic(
     page_fill: bool = False,
     page_scale: float = 1.0,
     paper_whitelist: set[str] | None = None,
+    power_port_gate: str = "error",
 ) -> ComposeResult:
     """Compose a schematic from a declarative spec.
 
@@ -1918,7 +1919,7 @@ def compose_schematic(
         out_dir, project_name, components, nets,
         symbol_dir=symbol_dirs, connection_style=effective_conn, paper=paper,
         nc=nc_list or None, label_nets=label_nets, power_ports=power_ports,
-        page_scale=page_scale, ledger=_ledger,
+        page_scale=page_scale, ledger=_ledger, power_port_gate=power_port_gate,
     )
     warnings.extend(emit.warnings)
 
