@@ -31,7 +31,21 @@ C01_OUTPUTS = {
     "handoff": Path("C01-ID") / "Handoff_to_ID_Designer.md",
 }
 
-C01_ANSWER_STATE_REL_PATH = Path("C01-ID") / "answer_state.json"
+C01_ANSWER_STATE_REL_PATH = Path("C01-ID") / "03_output" / "answer_state.json"
+C01_ANSWER_STATE_REL_PATH_LEGACY = Path("C01-ID") / "answer_state.json"
+
+
+def _c01_answer_state_path(root: Path) -> Path:
+    """Resolve the C01 answer_state with explicit new-then-legacy order (owner
+    ruling 2026-07-17: AI JSON lives under 03_output/, root kept for back-compat).
+    Returns the canonical new-position path when neither exists (write-side)."""
+    new_pos = root / C01_ANSWER_STATE_REL_PATH
+    if new_pos.exists():
+        return new_pos
+    legacy = root / C01_ANSWER_STATE_REL_PATH_LEGACY
+    if legacy.exists():
+        return legacy
+    return new_pos
 C01_ANSWER_STATES = {"missing", "answered", "drafted", "no-preference", "external-needed", "blocked", "accepted-risk"}
 
 # A2: optional concept/moodboard/UI prompt artifacts for ID handoff.
@@ -463,7 +477,7 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
         present += 1
     file_readiness_pct = round(100 * present / len(C01_OUTPUTS))
     pending = [a for a in artifacts if a.status != "present"]
-    answer_state_path = root / C01_ANSWER_STATE_REL_PATH
+    answer_state_path = _c01_answer_state_path(root)
     field_gaps: list[dict[str, str]] = []
     field_readiness_pct: int | None = None
     field_next_step = ""
@@ -552,7 +566,7 @@ def _c01_answer_claim_gaps(root: Path, components: list[Any]) -> list[dict[str, 
                    "or attribute the item to an 01_refs/ source, then re-emit",
         }
 
-    if not (root / C01_ANSWER_STATE_REL_PATH).exists():
+    if not _c01_answer_state_path(root).exists():
         return [_gap(str(c.get("name", "?")), "no answer_state.json backs this kind=answer claim")
                 for c in claimed]
     try:
@@ -579,7 +593,7 @@ def _c01_answer_claim_gaps(root: Path, components: list[Any]) -> list[dict[str, 
 
 def c01_next_question(folder: str | Path) -> C01NextQuestionResult:
     root = Path(folder)
-    state_path = root / C01_ANSWER_STATE_REL_PATH
+    state_path = _c01_answer_state_path(root)
     answer_state_exists = state_path.exists()
     state = _read_c01_answer_state(root) if answer_state_exists else _new_c01_answer_state(None)
     field = _first_open_c01_field(state)
@@ -594,7 +608,7 @@ def c01_update_answers(
     c00: dict[str, Any] | str | None = None,
 ) -> C01AnswerUpdateResult:
     root = Path(folder)
-    state = _read_c01_answer_state(root) if (root / C01_ANSWER_STATE_REL_PATH).exists() else _new_c01_answer_state(c00)
+    state = _read_c01_answer_state(root) if _c01_answer_state_path(root).exists() else _new_c01_answer_state(c00)
     if not isinstance(answers, dict) or not answers:
         raise ValueError("answers must be a non-empty object for C01 update")
     updated: list[str] = []
@@ -684,7 +698,7 @@ def _new_c01_answer_state(c00: dict[str, Any] | str | None) -> dict[str, Any]:
 
 
 def _read_c01_answer_state(root: Path) -> dict[str, Any]:
-    path = root / C01_ANSWER_STATE_REL_PATH
+    path = _c01_answer_state_path(root)
     if not path.exists():
         raise FileNotFoundError(f"C01 answer state not found: {path}")
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -704,7 +718,7 @@ def _read_c01_answer_state(root: Path) -> dict[str, Any]:
 
 def _write_c01_answer_state(root: Path, state: dict[str, Any]) -> None:
     path = root / C01_ANSWER_STATE_REL_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)  # writes to 03_output/ (new position)
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -1291,7 +1305,7 @@ def _read_bucket_inputs(folder: str | Path) -> dict[str, Any]:
                 fields["exposed_components"] = names
 
     # Supplement: answer_state.json fields that are actually answered.
-    state_path = root / C01_ANSWER_STATE_REL_PATH
+    state_path = _c01_answer_state_path(root)
     if state_path.exists():
         try:
             state = _read_c01_answer_state(root)

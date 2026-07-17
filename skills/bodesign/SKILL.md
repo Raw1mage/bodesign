@@ -78,15 +78,18 @@ required file, then report. The default failure mode this rule exists to kill: d
 artifacts, narrating what *could* be produced, and stopping until the user asks again. Don't. If the
 user named the stage (or the work is clearly in it), produce the whole set.
 
-Required deliverables are filed under the canonical stage layout — every deliverable goes flat at the
-**stage root with NO deliverable subfolders**: **document deliverables as `.docx` in 繁體中文** (their editable
-`.md` source — any working language — is an intermediate in `02_build/`; translate to Traditional
-Chinese when assembling the `.docx`), the `.json` bridges, the engineering files, and a viewable PNG;
-`01_refs/` holds external inputs; `02_build/` holds garbage-collectable intermediates (incl. the `.md`
-document sources); the stage **root holds only `README.md`/`CHANGELOG.md`** (meta, not deliverables,
-not translated) plus the deliverables. No deliverable subfolders. See `references/stage-structure.md`. The **deliverables at the stage root** *are* the Definition of Done; the readiness tools score
-it. Each shared artifact (mechanical constraints, pin map, PRD targets) has one owning stage and is
-consumed by reference downstream, never re-copied.
+Required deliverables are filed under the canonical stage layout — split by **AUDIENCE** (owner rule,
+2026-07-17): **human-facing deliverables flat at the stage root** — document deliverables as `.docx` in
+繁體中文 (their editable `.md` source — any working language — is an intermediate in `02_build/`;
+translate to Traditional Chinese when assembling the `.docx`), the engineering files a human opens, and
+a viewable PNG; **AI/machine-facing deliverables in `03_output/`** — generated `.md` reports and `.json`
+bridges that downstream tools/agents consume (humans don't read raw md/json); `01_refs/` holds external
+inputs; `02_build/` holds garbage-collectable intermediates (incl. the `.md` document sources); the
+stage root otherwise holds only `README.md`/`CHANGELOG.md` (meta, not deliverables, not translated). No
+ad-hoc subfolders. See `references/stage-structure.md`. The **deliverables in their sanctioned
+locations** *are* the Definition of Done; the readiness tools score it. Each shared artifact (mechanical
+constraints, pin map, PRD targets) has one owning stage and is consumed by reference downstream (its
+bridge lives in the owner's `03_output/`), never re-copied.
 
 A stage is **NOT done** — and you must not say it is done, advance to the next stage, or hand off —
 until **every required deliverable either exists on disk or carries an explicit `blocked`/`not-run`
@@ -395,6 +398,32 @@ subagents into an engine-R&D marathon that shipped nothing. The post-mortem
    and the QA baseline numbers (e.g. per-page `qa_svg_text` violations). The next
    relay's FIRST action is verifying that stamp (`scripts/sync_engine.sh`) — no
    re-archaeology of "which copy is live / what did the last relay change".
+7. **WebDAV / two-container transfer discipline (doc-render relays).** A
+   docx/pdf-producing dispatch crosses TWO separate container namespaces —
+   getting them confused is the most-reflexed-wrong area (§4). Every dispatch
+   prompt for a doc deliverable MUST state, verbatim:
+   - **The two namespaces are distinct and non-interchangeable.** bodesign
+     compute tools take a **`token`** arg (tree under `/var/cache/bodesign/sessions/<tok>`);
+     docxmcp `assemble` / `add_front_matter` take a **`doc_dir`** arg (ABSOLUTE
+     container path `/var/cache/docxmcp/sessions/<tok>/…`). A bodesign `token` is
+     NOT a docxmcp `doc_dir`, and vice-versa — never feed one tool the other's
+     handle. The docxmcp facade reads `doc_dir` ONLY; a bare `tok_…` or a relative
+     path resolves to `/app` and fails (`DOCUMENT_DOC_DIR_NOT_FOUND` / bare
+     `--doc-dir` usage error). Pass the **absolute** container `doc_dir`.
+   - **Transfer axis, not location axis, decides bytes-crossing** (§4): default
+     pass-by-value (`stage_dir` inline OR a WebDAV mount) works on every deployment;
+     a file sitting on gdrive/`/tmp` has ZERO bearing on whether WebDAV works. Do
+     not "fix" a transfer question by moving the file's location.
+   - **Scratch-to-tmp for intermediates.** Preview renders / OOXML dumps / figure
+     PNGs staged only to be read back go to `/tmp/<task-slug>/`, never the network
+     mount; only the final `C0N_*.docx` lands at the stage root. No `sync; sleep`
+     consistency patches — route to `/tmp` instead.
+   - **Handle handoff is explicit, never re-derived.** A relay hands the LIVE
+     `token` + `doc_dir` (+ cache token / `/dav/{token}/` URL if a working cache is
+     mounted) to the next relay verbatim; the next relay does NOT re-provision or
+     re-tar to "rediscover" which workspace is live. A cache workspace is closed
+     via `bodesign_cache_close` only after `cache_export` to a host target
+     (dirty-gated) — an un-exported close loses the work.
 
 Deploy discipline for the engine: there is exactly ONE legitimate in-container
 copy — `/app/packages` (a read-only bind mount of the host working tree in dev

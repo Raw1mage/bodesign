@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .readiness_common import boundary_next_step, root_guard
+from .readiness_common import boundary_next_step, resolve_stage_json, root_guard
 from .guide_dod import assess_guide_dod, is_placeholder_value
 
 
@@ -181,9 +181,10 @@ def scaffold_c00_prd_package(
         written.append(str(Path("C00-PRD") / filename))
 
     answer_state = _build_answer_state(project_name, documents, include_rf)
-    answer_path = c00_dir / "answer_state.json"
+    answer_path = c00_dir / "03_output" / "answer_state.json"
+    answer_path.parent.mkdir(parents=True, exist_ok=True)
     answer_path.write_text(json.dumps(answer_state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    written.append(str(Path("C00-PRD") / "answer_state.json"))
+    written.append(str(Path("C00-PRD") / "03_output" / "answer_state.json"))
 
     return C00ScaffoldResult(
         folder=str(root),
@@ -236,7 +237,7 @@ def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
             document_gates=[], downstream_handoff_gates=[],
             root_visible=False, warnings=[warning] if warning else [],
         )
-    state = _read_answer_state(root / "C00-PRD" / "answer_state.json")
+    state = _read_answer_state(resolve_stage_json(root / "C00-PRD", "answer_state.json"))
     rubric = load_c00_prd_rubric().data
     scoring = rubric["scoring_policy"]
     complete_states = set(scoring["complete_states"])
@@ -301,7 +302,7 @@ def assess_c00_prd_readiness(folder: str | Path) -> C00ReadinessResult:
 def emit_c00_prd_markdown(folder: str | Path) -> C00EmitResult:
     root = Path(folder)
     c00_dir = root / "C00-PRD"
-    state = _read_answer_state(c00_dir / "answer_state.json")
+    state = _read_answer_state(resolve_stage_json(c00_dir, "answer_state.json"))
     readiness = assess_c00_prd_readiness(root)
     c00_dir.mkdir(parents=True, exist_ok=True)
 
@@ -371,7 +372,9 @@ def _normalize_c00_answer(raw: Any, allowed: set[str]) -> tuple[Any, str]:
 
 
 def _write_answer_state(root: Path, state: dict[str, Any]) -> None:
-    (root / "C00-PRD" / "answer_state.json").write_text(
+    answer_path = root / "C00-PRD" / "03_output" / "answer_state.json"
+    answer_path.parent.mkdir(parents=True, exist_ok=True)
+    answer_path.write_text(
         json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -390,7 +393,7 @@ def c00_update_answers(
     (not guessed). Unknown keys are reported in `not_found`. Fails fast if C00 has
     not been scaffolded. Never marks human approval."""
     root = Path(folder)
-    state = _read_answer_state(root / "C00-PRD" / "answer_state.json")  # fail-fast if absent
+    state = _read_answer_state(resolve_stage_json(root / "C00-PRD", "answer_state.json"))  # fail-fast if absent
     if not isinstance(answers, dict) or not answers:
         raise C00TemplateError("answers must be a non-empty object for C00 update")
     allowed = set(state.get("allowed_states") or
@@ -432,7 +435,7 @@ def c00_update_answers(
     emitted: list[str] = []
     if regenerate:
         emitted = emit_c00_prd_markdown(root).files
-    return C00UpdateResult(str(root), str(Path("C00-PRD") / "answer_state.json"),
+    return C00UpdateResult(str(root), str(Path("C00-PRD") / "03_output" / "answer_state.json"),
                            updated, not_found, ambiguous, readiness, emitted)
 
 
@@ -594,7 +597,7 @@ def _render_generated_document(source_filename: str, document: dict[str, Any], s
         f"C00 readiness: {readiness.readiness_pct}% ({readiness.status})",
         "Human approved: false",
         "",
-        "This Markdown is generated from `C00-PRD/answer_state.json`. Missing, drafted, external-needed, blocked, and accepted-risk fields remain visible; no hidden defaults are applied.",
+        "This Markdown is generated from `C00-PRD/03_output/answer_state.json`. Missing, drafted, external-needed, blocked, and accepted-risk fields remain visible; no hidden defaults are applied.",
         "",
     ]
     sections = document.get("sections") if isinstance(document, dict) else None

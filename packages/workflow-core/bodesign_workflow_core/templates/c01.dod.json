@@ -12,6 +12,7 @@
       "title": "Design direction",
       "guide_row": 1,
       "any_of": [
+        "C01-ID/03_output/Design_Direction.md",
         "C01-ID/Design_Direction.md",
         "C01-ID/Ai file/Design_Direction.md"
       ],
@@ -22,6 +23,7 @@
       "title": "CMF direction",
       "guide_row": 2,
       "any_of": [
+        "C01-ID/03_output/CMF_Direction.md",
         "C01-ID/CMF_Direction.md",
         "C01-ID/CMF/CMF_Direction.md"
       ],
@@ -32,6 +34,7 @@
       "title": "Display UI/UX requirements",
       "guide_row": 3,
       "any_of": [
+        "C01-ID/03_output/UIUX_Requirements.md",
         "C01-ID/UIUX_Requirements.md",
         "C01-ID/Display UIUX/UIUX_Requirements.md",
         "C01-ID/Display UI_UX/UIUX_Requirements.md"
@@ -43,6 +46,7 @@
       "title": "Interface constraints",
       "guide_row": 4,
       "any_of": [
+        "C01-ID/03_output/Interface_Constraints.json",
         "C01-ID/Interface_Constraints.json"
       ],
       "required": true
@@ -52,6 +56,7 @@
       "title": "ID-designer handoff",
       "guide_row": 5,
       "any_of": [
+        "C01-ID/03_output/Handoff_to_ID_Designer.md",
         "C01-ID/Handoff_to_ID_Designer.md"
       ],
       "required": true

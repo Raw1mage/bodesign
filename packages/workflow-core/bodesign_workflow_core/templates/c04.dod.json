@@ -17,7 +17,8 @@
         "C04-Layout/Layout_Constraints.json",
         "C04-Layout/Placement_Constraints.md"
       ],
-      "required": true
+      "required": true,
+      "any_of": []
     },
     {
       "id": "stackup_routing",
@@ -27,7 +28,8 @@
         "C04-Layout/Stackup.md",
         "C04-Layout/Routing_Rules.md"
       ],
-      "required": true
+      "required": true,
+      "any_of": []
     },
     {
       "id": "routed_board",
@@ -41,7 +43,8 @@
       "honest_states": [
         "pending",
         "not-run"
-      ]
+      ],
+      "any_of": []
     },
     {
       "id": "gerbers_drill",
@@ -55,7 +58,8 @@
       "honest_states": [
         "pending",
         "not-run"
-      ]
+      ],
+      "any_of": []
     },
     {
       "id": "assembly_package",
@@ -91,7 +95,9 @@
       "title": "Length-match + SI reports",
       "guide_row": 7,
       "any_of": [
+        "C04-Layout/03_output/*.lengthmatch.json",
         "C04-Layout/*.lengthmatch.json",
+        "C04-Layout/03_output/*.si.json",
         "C04-Layout/*.si.json"
       ],
       "required": false,

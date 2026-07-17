@@ -40,3 +40,27 @@ def root_guard(folder: str | Path) -> tuple[Path, bool, str | None]:
 def boundary_next_step(path: str | Path) -> str:
     """The next_step instruction to surface when the root is not visible."""
     return BOUNDARY_NEXT_STEP.format(path=path)
+
+
+def resolve_stage_json(stage_dir: str | Path, filename: str) -> Path:
+    """Resolve an AI-facing stage JSON with an explicit new-then-legacy order.
+
+    Owner ruling (2026-07-17): the stage root holds only human-facing deliverables;
+    AI/machine JSON lives under ``03_output/``. Read order is an explicit contract
+    (new location first, legacy root second) — NOT a silent fallback:
+
+      1. ``<stage_dir>/03_output/<filename>`` (canonical new position)
+      2. ``<stage_dir>/<filename>`` (legacy root, back-compat)
+
+    When neither exists, returns the canonical new-position path so write-side
+    scaffolding lands in the right place. Read-side callers still hit their existing
+    fail-fast on a genuinely-absent file.
+    """
+    base = Path(stage_dir)
+    new_pos = base / "03_output" / filename
+    if new_pos.exists():
+        return new_pos
+    legacy = base / filename
+    if legacy.exists():
+        return legacy
+    return new_pos

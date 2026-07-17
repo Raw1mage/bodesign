@@ -13,6 +13,7 @@
       "title": "Manufacturing-transfer record",
       "guide_row": 1,
       "any_of": [
+        "C07-MFG/03_output/Manufacturing_Transfer.md",
         "C07-MFG/Manufacturing_Transfer.md"
       ],
       "required": true
@@ -50,7 +51,9 @@
       "title": "Cost / qty / cert targets + DFM checklist",
       "guide_row": 4,
       "any_of": [
+        "C07-MFG/03_output/Manufacturing_Transfer.md",
         "C07-MFG/Manufacturing_Transfer.md",
+        "C07-MFG/03_output/DFM_Checklist.md",
         "C07-MFG/DFM_Checklist.md"
       ],
       "required": true

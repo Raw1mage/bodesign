@@ -12,6 +12,7 @@
       "title": "Verification summary (machine-readable)",
       "guide_row": 1,
       "any_of": [
+        "C06-Verification/03_output/Verification_Summary.json",
         "C06-Verification/Verification_Summary.json"
       ],
       "required": true
@@ -21,6 +22,7 @@
       "title": "Test plan",
       "guide_row": 2,
       "any_of": [
+        "C06-Verification/03_output/Test_Plan.md",
         "C06-Verification/Test_Plan.md"
       ],
       "required": true
@@ -30,6 +32,7 @@
       "title": "Bring-up checklist",
       "guide_row": 3,
       "any_of": [
+        "C06-Verification/03_output/Bring_Up_Checklist.md",
         "C06-Verification/Bring_Up_Checklist.md"
       ],
       "required": true
@@ -39,6 +42,7 @@
       "title": "Reference cross-check run",
       "guide_row": 4,
       "any_of": [
+        "C06-Verification/03_output/cross_verify.json",
         "C06-Verification/analysis/**/cross_verify.json",
         "C06-Verification/02_build/analysis/**/cross_verify.json"
       ],
@@ -53,6 +57,7 @@
       "title": "EVT bring-up findings",
       "guide_row": 5,
       "any_of": [
+        "C06-Verification/03_output/EVT_Bringup_Findings.md",
         "C06-Verification/EVT_Bringup_Findings.md"
       ],
       "required": true,

@@ -45,10 +45,13 @@ status with a reason + owner — silent absence is not allowed.
 
 | # | Required artifact | File | Notes |
 |---|---|---|---|
-| 1 | Answer state | `C00-PRD/answer_state.json` | every gating field `answered` or honestly `accepted-risk`/`external-needed` |
-| 2 | Project requirements (PRD) | `C00-PRD/Project_Requirements.md` (`.generated.md`) | the twelve sections; `.docx` optional |
-| 3 | RF requirements | `C00-PRD/RF_Requirements.md` (`.generated.md`) | **only if the product has RF**; else mark N/A with reason |
-| 4 | Handoff report | `C00-PRD/C00_Handoff_Report.md` | downstream gates (C01/C02/C03/C05/C06) ready/blocked |
+| 1 | Answer state | `C00-PRD/03_output/answer_state.json` | every gating field `answered` or honestly `accepted-risk`/`external-needed`; lives in `03_output/` (AI-facing output — tool resolver prefers `03_output/`, root kept as legacy fallback) |
+| 2 | Project requirements (PRD) | `C00-PRD/03_output/Project_Requirements.md` (`.generated.md`) | the twelve sections; the human-facing `C00_*.docx` renders from it at the root |
+| 3 | RF requirements | `C00-PRD/03_output/RF_Requirements.md` (`.generated.md`) | **only if the product has RF**; else mark N/A with reason |
+| 4 | Handoff report | `C00-PRD/03_output/C00_Handoff_Report.md` | downstream gates (C01/C02 · C03 · C05 · C06 · **C07 targets**) ready/blocked |
+| 5 | Module breakout 板級切割圖 + 系統方塊圖 | `C00-PRD/C00_模組Breakout.pptx` (+ root PNG) | **human-audit mandatory** — slide1 = board/module partition (channel layer drawn as LINES, not cards); slide2 = MCU-centric functional block diagram from answer_state subsystems (`c03_emit_host_block_diagram` model — absorbs the retired standalone `C00_系統方塊圖.png`, owner ruling 2026-07-17: same-source duplication). Visual mother-source of s04's partition AND C03's functional blocks; MUST be regenerated whenever s04/s05 partition rulings change (a stale breakout is a DoD defect, not cosmetics) |
+| 7 | Capability/gap table | `C00-PRD/03_output/Capability_Gap_Table.md` | baseline capability vs net-new, with provenance + downstream owner |
+| 8 | Rich-media adjudication ledger | `C00-PRD/01_refs/Adjudication_Ledger.md` | every concept image explicitly adjudicated (§0c); unadjudicated media must not be consumed downstream |
 
 **Self-verify:** run the landing verb `c00_readiness` (`python3 <skill>/scripts/gate.py
 c00_readiness --repo <abs-project>` — NOT an MCP tool; see SKILL.md § "Landing / compute routing
@@ -107,9 +110,65 @@ empty folder. Two reasons this is step 0, not paperwork:
   REFS_SSOT_MISSING`). Preparing the refs tree now is what keeps the pipeline from failing at
   emit time instead of at intake.
 
+### 0b. Decompose document-class refs into `.src` packages (paragraph-level anchors)
+
+`refs_ingest` classifies and ranks, but it does NOT read content — a pptx/pdf authority source
+stays an opaque blob to every downstream `source` citation. For each **document-class authority
+source** (pptx / pdf / docx ranked in the baseline's authority order), run docxmcp
+`document action=decompose` and land the package as a sibling `<stem>.src/` next to the original
+inside `01_refs/`, with a short `PROVENANCE.md` (source sha256, decompose date, anchor format):
+
+- pptx → `.src/content_list.json` gives slide-level text anchors (`content_list.json#<index>`).
+- pdf → `.src/body.md` carries `<!-- page: N -->` markers (`body.md#page-N`).
+- The `.src` is **read-only recon**; the original file stays authoritative. Never rebuild the
+  source from its `.src`.
+
+Why: answer-state `source` fields (step 2) can then cite **paragraph/page-level anchors** instead
+of a bare filename — that is what makes a later fidelity audit (or a downstream stage's claim
+check) mechanically resolvable. Proven in aiguard 0R: the deck-v3 pptx decomposed to 250
+addressable slide-text entries; the X01 pdf to page-anchored body text.
+
+### 0c. Adjudicate every rich-media source explicitly (the ledger gate)
+
+`refs_ingest` flags rich media (pdf/pptx/docx/xlsx/image/cad) as `unadjudicated` — but the flag
+alone has no teeth: nothing stops a downstream stage from silently citing (or silently IGNORING)
+an unadjudicated image. The aiguard C00→C01 shape-break was exactly this failure: the ONE owner
+concept image showing the intended product form sat `unadjudicated` for weeks while C01 invented
+a different enclosure from nothing.
+
+So: maintain `01_refs/Adjudication_Ledger.md`. One row per rich-media file:
+
+- **nature** — what the artifact IS (appearance vision / board-level sketch / architecture
+  diagram / spec document / vendor datasheet / photo reference);
+- **verdict** — `adopted` (with a scoped role: what it IS authority for, and what it is NOT) /
+  `rejected` / `superseded`;
+- **basis** — the owner ruling date or DD number. No basis ⇒ may not be marked `adopted`.
+
+Rule with teeth: **an unadjudicated rich-media source may not be cited as a fact source by
+answer-state or any downstream stage** — and conversely, a source adjudicated `adopted` for a
+role (e.g. "appearance direction authority") MUST be consumed by the stage owning that role.
+Appearance/mechanical-intent images deserve special attention: they are exactly the sources the
+text-biased interview flow tends to skip.
+
+### 0d. Two-track stage-root layout (deliverables vs machine outputs)
+
+Keep the stage root flat but classify every artifact into two tracks:
+
+- **deliverables (for humans)**: `.docx` / `.pptx` / `.png` / `.xlsx` / `.pdf` — what an owner
+  or vendor opens.
+- **outputs (for AI/machines)**: `03_output/answer_state.json`, the `.generated.md` PRD projections,
+  the handoff report, refs manifest, adjudication ledger, capability/gap table — what the next stage
+  (or the next session) resolves claims against. **No AI-facing JSON/md stays at the stage root**;
+  the root is reserved for human deliverables.
+
+`01_refs/` holds external inputs (+ their `.src` packages), `02_build/` holds GC-able
+intermediates (incl. docx `body.md` sources), `.history/` holds version backups and retired assets
+(project convention, aligned with specbase's `.history/` snapshot rule) — retirement is never
+deletion. The stage README states which track each root file belongs to.
+
 ### 1. Scaffold the answer-state
 
-Copy `assets/answer_state.template.json` to `<project>/C00-PRD/answer_state.json`. It defines the
+Copy `assets/answer_state.template.json` to `<project>/C00-PRD/03_output/answer_state.json`. It defines the
 twelve PRD sections (s01–s12) plus the three RF-appendix sections (rf01–rf03), every field initialised
 to `missing`. Set `project_name` and `include_rf` (true if the product has any radio).
 
@@ -233,14 +292,18 @@ it's signed, downstream stages may *read* the draft but must treat its targets a
 
 ## Deliverables
 
-| Artifact | Path | Format | Role |
+Audience-split filing (see `references/stage-structure.md`): human-facing at the stage root; AI/machine-facing in `03_output/`.
+
+| Artifact | Path | Format | Audience / Role |
 |---|---|---|---|
-| Answer-state | `C00-PRD/answer_state.json` | JSON | **Source of truth** — field states, owners, sources, handoff targets |
-| Project Requirements | `C00-PRD/Project_Requirements.md` | Markdown | Rendered SoT document (mirrors the answer-state, open items visible) |
-| RF Requirements | `C00-PRD/RF_Requirements.md` | Markdown | RF appendix (only if `include_rf`) |
-| Handoff report | `C00-PRD/C00_Handoff_Report.md` | Markdown | Readiness %, gates, next blocking question, approval flag |
-| PRD .docx | `C00-PRD/Project_Requirements.docx` | docx | Optional, via docxmcp |
-| Architecture diagram | `C00-PRD/source/` or inline | SVG/PPTX | Optional, via drawmiat |
+| Answer-state | `C00-PRD/03_output/answer_state.json` | JSON | AI — **source of truth** (in `03_output/`; resolver falls back to root for legacy projects) — field states, owners, sources, handoff targets |
+| Project Requirements | `C00-PRD/03_output/Project_Requirements.md` | Markdown | AI — rendered SoT document (mirrors the answer-state, open items visible) |
+| RF Requirements | `C00-PRD/03_output/RF_Requirements.md` | Markdown | AI — RF appendix (only if `include_rf`) |
+| Handoff report | `C00-PRD/03_output/C00_Handoff_Report.md` | Markdown | AI — readiness %, gates, next blocking question, approval flag |
+| Capability/gap table | `C00-PRD/03_output/Capability_Gap_Table.md` | Markdown | AI — baseline vs net-new with provenance |
+| PRD / 彙編 / 交付報告 .docx | `C00-PRD/C00_*.docx` | docx | **Human** — the review deliverables (繁體中文, self-contained) |
+| Module breakout | `C00-PRD/C00_模組Breakout.pptx` (+PNG) | PPTX/PNG | **Human** — s1 board/module partition + s2 functional architecture audit view (one deck, two projections) |
+| Adjudication ledger | `C00-PRD/01_refs/Adjudication_Ledger.md` | Markdown | AI+Human — rich-media adjudication record |
 | Preserved originals | `c00-prd/source/` | as-received | Archive track only — verbatim, never mutated |
 
 The markdown + JSON are source-of-truth and version-controlled; `.docx`/SVG/PDF are generated and
@@ -286,6 +349,22 @@ a consumer can pull exactly what it needs and see the field's state:
 | **C05 FW** (`../c05-fw/GUIDE.md`) | s07 software requirements, s02 use-cases, s08 owner | firmware functional spec, modes/state machine |
 | **C06 Verify** (`../c06-verify/GUIDE.md`) | s03 objectives, s01 success metric, s09 | test plan acceptance criteria, cross-check targets |
 | **C07 MFG** (`../c07-mfg/GUIDE.md`) | **cost & quantity targets** (s01/s02/s03), **certification targets** (rf03/s09) | cost gate, build volume, cert plan |
+
+### Mother-source matrix — what C00 must PROVIDE each layer (machine-checkable intent)
+
+The table above says what each consumer *reads*; this matrix says what C00 must have *produced and
+kept current* for that read to be possible. Every row is a C00 obligation — if the artifact is stale
+relative to a newer owner ruling (DD-N), C00 is NOT done, even if the file exists:
+
+| Consumer | Required mother-source artifacts (beyond the PRD text) | Staleness trigger |
+|---|---|---|
+| **C01 ID** | s05 ID intent fields; `01_refs/Adjudication_Ledger.md` (adjudicated concept images) | a form-factor ruling (like DD-11) not reflected in s05 / ledger |
+| **C02 ME** | s05 envelope/mounting/environment fields; zone/partition logic when the enclosure is multi-zone | enclosure logic change without s05 update |
+| **C03 EE** | s04 subsystems + `C00_模組Breakout.pptx` (s1 board partition · s2 functional blocks); s06 electrical fields | any partition or subsystem ruling not re-rendered into BOTH slides |
+| **C04 Layout** | (indirect via C03/C02) the breakout's board-count/partition premise; certification target (review severity) | board-partition premise invalidated (e.g. single-board → multi-zone) without a breakout re-issue |
+| **C05 FW** | s07 software fields; s06 IC inventory; s08 owner matrix | behaviour/mode ruling not in s07 |
+| **C06 Verify** | s03 acceptance criteria; s01 success metric; s09 risks/accepted gaps | acceptance change not in s03 |
+| **C07 MFG** | **explicit cost / quantity / certification target fields with `handoff_targets: ["C07"]`** + a C07 gate row in the handoff report | targets exist only as prose in s01–s03 with no C07-tagged field (defect: C07 cannot pull) |
 
 Downstream stages should treat the PRD as authoritative-but-provisional until `human_approved: true`;
 if a target changes later, write it back here as a new version (keep a version-history table) so the

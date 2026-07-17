@@ -40,7 +40,7 @@ required file must be present and the statuses must agree across files.
 
 | # | Required artifact | File |
 |---|---|---|
-| 1 | Verification summary (machine-readable) | `Verification_Summary.json` |
+| 1 | Verification summary (machine-readable) | `03_output/Verification_Summary.json` (AI-facing — not at the stage root) |
 | 2 | Test plan | `Test_Plan.md` |
 | 3 | Bring-up checklist | `Bring_Up_Checklist.md` |
 | 4 | Reference cross-check run | `analysis/<run>/cross_verify.json` (→ `02_build/`) |
@@ -196,7 +196,7 @@ rather than implying every part is active.
 
 ### 6. Assemble the four C06 deliverables
 
-Author `Verification_Summary.json` (schema `bodesign.c06.verification_summary.v1`) as the
+Author `03_output/Verification_Summary.json` (schema `bodesign.c06.verification_summary.v1`) as the
 machine-readable source of truth, then derive `Test_Plan.md` and `Bring_Up_Checklist.md` from it.
 Model them on the real example in `openmv/C06-Verification/`. The summary schema is the honesty
 contract in data form:
@@ -246,7 +246,7 @@ Modelled on `openmv/C06-Verification/`.
 
 | Artifact | File | Format / source-of-truth |
 |----------|------|--------------------------|
-| Verification summary | `Verification_Summary.json` | JSON, schema `…v1` — **machine-readable source of truth** |
+| Verification summary | `03_output/Verification_Summary.json` | JSON, schema `…v1` — **machine-readable source of truth** (AI output track; stage root is human deliverables only) |
 | Test plan | `Test_Plan.md` | markdown source, derived from the summary |
 | Bring-up checklist | `Bring_Up_Checklist.md` | markdown source, engineer-executed |
 | Reference cross-check | `analysis/<run>/cross_verify.json` | generated (control-group delta evidence) |
@@ -315,7 +315,7 @@ carries it through as "open, routed to <stage>", not as resolved.
 ## Handoff to C07 (MFG)
 
 To **C07 (`../c07-mfg/GUIDE.md`)** export the **verification evidence bundle** for the transfer
-package: `Verification_Summary.json` (the authoritative status), `Test_Plan.md`,
+package: `03_output/Verification_Summary.json` (the authoritative status), `Test_Plan.md`,
 `Bring_Up_Checklist.md`, the `cross_verify.json` control-group delta, and the `C06_Design_Review.md`/
 PDF. C07 attaches these as the "what we verified, what is still open" section of the manufacturing
 transfer — and it must carry the `not-run`/external-gate statuses through unchanged. C07 also consumes

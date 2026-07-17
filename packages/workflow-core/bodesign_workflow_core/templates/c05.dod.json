@@ -12,6 +12,7 @@
       "title": "Functional spec",
       "guide_row": 1,
       "any_of": [
+        "C05-FW/03_output/Functional_Spec.md",
         "C05-FW/Functional_Spec.md"
       ],
       "required": true
@@ -21,6 +22,7 @@
       "title": "Module architecture",
       "guide_row": 2,
       "any_of": [
+        "C05-FW/03_output/Module_Architecture.md",
         "C05-FW/Module_Architecture.md"
       ],
       "required": true
@@ -30,6 +32,7 @@
       "title": "State machine",
       "guide_row": 3,
       "any_of": [
+        "C05-FW/03_output/State_Machine.md",
         "C05-FW/State_Machine.md"
       ],
       "required": true
@@ -39,6 +42,7 @@
       "title": "Task breakdown",
       "guide_row": 4,
       "any_of": [
+        "C05-FW/03_output/Task_Breakdown.md",
         "C05-FW/Task_Breakdown.md"
       ],
       "required": true
@@ -48,6 +52,7 @@
       "title": "Pin-map bridge",
       "guide_row": 5,
       "any_of": [
+        "C05-FW/03_output/Pin_Map_Bridge.json",
         "C05-FW/Pin_Map_Bridge.json"
       ],
       "required": true
@@ -57,6 +62,7 @@
       "title": "Build notes",
       "guide_row": 6,
       "any_of": [
+        "C05-FW/03_output/Firmware_Build_Notes.md",
         "C05-FW/Firmware_Build_Notes.md"
       ],
       "required": true

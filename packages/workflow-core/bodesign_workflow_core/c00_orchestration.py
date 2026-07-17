@@ -26,7 +26,8 @@ from .mode_contracts import enter_c01_mode
 from .orchestration import dispatch_work_packet, list_blockers, list_work_packets
 from .refs_gate import RefsGateError, require_refs
 
-_C00_ANSWER_STATE_REL = Path("C00-PRD") / "answer_state.json"
+_C00_ANSWER_STATE_REL = Path("C00-PRD") / "03_output" / "answer_state.json"
+_C00_ANSWER_STATE_REL_LEGACY = Path("C00-PRD") / "answer_state.json"
 
 # Blocker severity → preemption priority (lower = handled first).
 _SEVERITY_ORDER = {"decision": 0, "accepted-risk-request": 1, "external-needed": 2, "blocked": 3}
@@ -137,7 +138,7 @@ def _objective_for(code: str, role_target: str) -> str:
 
 def _gather(root: Path):
     """Read all runtime state once; returns (scaffolded, readiness, gates, packets, blockers)."""
-    scaffolded = (root / _C00_ANSWER_STATE_REL).exists()
+    scaffolded = (root / _C00_ANSWER_STATE_REL).exists() or (root / _C00_ANSWER_STATE_REL_LEGACY).exists()
     if not scaffolded:
         return False, None, {}, [], []
     readiness = assess_c00_prd_readiness(root)

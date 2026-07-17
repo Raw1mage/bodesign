@@ -160,6 +160,11 @@ from .prd_bom_crosscheck import (
     Verdict,
     prd_bom_crosscheck,
 )
+from .check_c03 import (
+    CheckC03Result,
+    RowFinding,
+    check_c03,
+)
 from .c00_prd_docx import (
     C00DocxArchitecture,
     C00DocxArchitectureError,
@@ -328,6 +333,9 @@ __all__ = [
     "PackageReadiness",
     "ReferenceCheck",
     "CrosscheckResult",
+    "CheckC03Result",
+    "RowFinding",
+    "check_c03",
     "Verdict",
     "assess_c00_prd_readiness",
     "prd_bom_crosscheck",

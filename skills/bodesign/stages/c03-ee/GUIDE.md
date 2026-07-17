@@ -44,6 +44,7 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 | 7 | Netlist status | `Netlist_Status.md` | required **iff** a full netlist is not recoverable |
 | 8 | Mechanical bridge | `Mechanical_Constraint_Export.json` | `approval=false` |
 | 9 | PRD-BOM crosscheck report | `prd_bom_crosscheck.report.json` | `gate: PASS` required; report absent = gate **not run** (never presume PASS) — § 3b |
+| 10 | C03 stage-entry gate report | `check_c03.report.json` | `gate: PASS` required — BOM schema/readiness/drawability/SSOT crosscheck before C04 entry (`bodesign_check_c03`); absent = **not run** — § 3c |
 
 **Self-verify:** run `analyze_schematic.py` and clear (or explicitly justify) every `high` finding —
 no open DS-001 / SS-001 / PP-001 / RS-002. There is **no `c03_readiness` verb**; the analyzer's gate
@@ -217,6 +218,44 @@ and human-audited) is the envelope SSOT:
    out-of-envelope substitution) refuses C04 entry until the design is fixed or the user
    records an approval. A degraded schematic that passes ERC is still a non-conforming
    deliverable — ERC checks self-consistency; this gate checks PRD fulfilment.
+
+### 3c. BOM 提案必讀清單 + SSOT 衝突自查段（MANDATORY，先讀後提）
+
+R4 的 BOM↔SSOT 衝突（U4 wireless-scheme 的類別：BOM 提了一顆 pin allocation 從未帳到的
+主動件）之所以要到 C04 才被碰撞發現，根因是 **BOM 提案時沒有把 pin-allocation SSOT 當前提
+讀進來對照**。以下把「先讀」變成硬性前置，把「衝突自查」變成必附段落。
+
+**提出任何 BOM 行之前，必讀（缺一即不得宣稱 BOM ready）：**
+
+1. `Pin_Allocation.csv`（本階段 pin 分配 SSOT）——每一個 active ref（`U*` / `J*` / `Y*` /
+   `SW*`）是否已在此登錄；BOM 若引入 SSOT 沒有的 active 件 = 衝突，不是新增。
+2. `Interface_Definitions.md` + C01 連接器/外部埠清單——確認接口方案（有線 vs 無線、
+   哪顆 PHY/無線模組）在 BOM 與 pinmap 之間**單一**、不並存兩套。
+3. `main_components_structured.json`（C00 role 封套 SSOT）——候選件落在 role 的 `patterns`
+   / `allowed_alternatives` 封套內；越界走 §3b 的 approvals 流程，不自行落點。
+4. `frozen_pad_counts`（若 J_* 已凍結）——連接器 pad 數必須與凍結值一致，改動要回 C02/C04
+   重新凍結，不在 BOM 端偷改。
+
+**BOM 交付必附「SSOT 衝突自查」段（固定格式，逐項填、不得留空）：**
+
+```md
+## SSOT 衝突自查 (C03 BOM ready 前置)
+- Pin_Allocation 對照: <PASS | CONFLICT: ref 清單> — 每個 active BOM ref 是否在 Pin_Allocation.csv
+- 接口方案單一性: <PASS | CONFLICT: 說明> — 有線/無線、PHY/模組是否僅一套 (U4-class 檢查)
+- Role 封套 (C00): <PASS | OUT-OF-ENVELOPE: role→substitute + 是否已 approvals[]>
+- 連接器 pad 凍結: <PASS | N/A | MISMATCH: ref 期望 vs 實際>
+- 自查結論: <READY | BLOCKED: 待決事項清單>
+```
+
+每列必須是 `PASS` 或明列衝突內容 + 負責人/待決；**禁止**用「大致沒問題」等模糊字帶過
+（no-silent-fallback 天條）。此段是 `bodesign_check_c03` 機檢的人類對應面——自查段說 READY
+但 `check_c03` 回 `gate=FAIL`，以機檢為準、回頭修設計或補 approvals。
+
+**機檢 gate（§ Gate 引用）：** 提完 BOM，跑 `bodesign_check_c03`（`bom_csv` + 選配
+`pin_allocation_csv` + `frozen_pad_counts`）作為 C04 **入口** gate；R1 schema / R2 readiness /
+R3 drawability / R4 SSOT 任一 blocking 即 `gate=FAIL`，拒絕進 C04，直到修正或使用者記錄
+approvals。這是 §3b `prd_bom_crosscheck`（PRD role 履行）之外、針對 **C03 交付完整性**的
+互補入口關卡：前者問「PRD 要的角色到齊了嗎」，後者問「BOM 本身可繪、就緒、與 SSOT 不衝突嗎」。
 
 ### 4. Run the schematic analyzer
 
@@ -406,6 +445,10 @@ C03 is genuinely complete when:
 - `bodesign_prd_bom_crosscheck` has run against the exported netlist and reports `gate: PASS`
   (every `main_components_structured.json` role `present` or non-blocking `substituted` — § 3b).
   A missing report means the gate **has not run**: say so explicitly; never presume PASS.
+- `bodesign_check_c03` (C03→C04 stage-entry gate) has run against the exported BOM (+ `Pin_Allocation.csv`
+  and any `frozen_pad_counts`) and reports `gate: PASS` — no R1 schema / R2 readiness / R3 drawability /
+  R4 SSOT blocker (§ 3c). A missing `check_c03.report.json` means the entry gate **has not run**: say so;
+  never presume PASS. This gate is deliverable-completeness; § 3b is PRD-role fulfilment — both must PASS.
 - `Mechanical_Constraint_Export.json` is produced with `approval=false`.
 - If a full netlist is not recoverable, `Netlist_Status.md` documents the source-data limit.
 - **Schematic fidelity gate PASS** (when the schematic is engine-composed): `compose_schematic(..., fidelity=True)` returns `fidelity.ok` / diff 0/0 — the emitted net partition matches the spec. ERC passing is NOT sufficient; it is blind to collinear-wire net FUSION. A connector-dense sheet with no fidelity check is `draft`.
@@ -439,6 +482,8 @@ Anchored in `../../references/honesty-model.md`:
 To **C04 (`../c04-layout/GUIDE.md`)** export:
 - the **PRD-BOM crosscheck PASS** (`prd_bom_crosscheck.report.json`) — C04 entry is refused
   while the gate reports `FAIL` or has not run (§ 3b),
+- the **C03 stage-entry gate PASS** (`check_c03.report.json`) — C04 entry is refused while
+  BOM schema/readiness/drawability/SSOT reports `FAIL` or the gate has not run (§ 3c),
 - the verified **netlist** (the connectivity C04 routes — full or the honest subset),
 - the **SI requirements as targets** (USB 90 Ω diff; MIPI CSI-2 100 Ω diff length-matched; XSPI
   50 Ω SE DQS-matched; SDMMC 50 Ω) — C04 makes copper meet these; you do not pre-route,

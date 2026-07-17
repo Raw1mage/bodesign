@@ -22,7 +22,9 @@ from .readiness_common import boundary_next_step, root_guard
 from .guide_dod import guide_compliance_for
 
 C06_FOLDER = Path("C06-Verification")
-C06_SUMMARY = C06_FOLDER / "Verification_Summary.json"
+C06_OUTPUT = C06_FOLDER / "03_output"
+C06_SUMMARY = C06_OUTPUT / "Verification_Summary.json"
+C06_SUMMARY_LEGACY = C06_FOLDER / "Verification_Summary.json"
 C06_TEST_PLAN = C06_FOLDER / "Test_Plan.md"
 C06_BRINGUP = C06_FOLDER / "Bring_Up_Checklist.md"
 
@@ -222,6 +224,8 @@ def assess_c06_readiness(folder: str | Path) -> C06Readiness:
             root_visible=False, warnings=[warning] if warning else [],
         )
     summary_path = root / C06_SUMMARY
+    if not summary_path.exists():
+        summary_path = root / C06_SUMMARY_LEGACY
     if not summary_path.exists():
         return C06Readiness(str(root), {}, 0, list(_CHECKS), False,
                             "missing", "Run bodesign_c06_assemble_test_plan with the verify verdicts.")

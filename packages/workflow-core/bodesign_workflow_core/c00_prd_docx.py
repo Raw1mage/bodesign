@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .c00_prd_template import C00TemplateError, _read_answer_state, _read_json_object
+from .readiness_common import resolve_stage_json
 
 DEFAULT_C00_ARTIFACT_DIR = Path(__file__).resolve().parent / "templates"
 DEFAULT_C00_DOCX_ARCH_PATH = DEFAULT_C00_ARTIFACT_DIR / "c00_prd.docx_architecture.json"
@@ -137,7 +138,7 @@ def render_c00_prd_docx_package(
     referenced .dotx template is missing."""
     root = Path(folder)
     c00_dir = root / "C00-PRD"
-    state = _read_answer_state(c00_dir / "answer_state.json")  # fail-fast if absent
+    state = _read_answer_state(resolve_stage_json(c00_dir, "answer_state.json"))  # fail-fast if absent
     arch = architecture or load_c00_docx_architecture()
 
     build_root = c00_dir / "docx_build"

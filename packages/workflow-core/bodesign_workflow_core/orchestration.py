@@ -45,7 +45,7 @@ _LOG_REL_PATH = ORCH_REL_DIR / "log.jsonl"
 
 # Default C00 source pointers (mirror the contract's `source` block).
 _DEFAULT_C00_FOLDER = "C00-PRD"
-_DEFAULT_ANSWER_STATE = "C00-PRD/answer_state.json"
+_DEFAULT_ANSWER_STATE = "C00-PRD/03_output/answer_state.json"
 
 _INPUT_BUCKETS = ["answered", "drafted", "accepted_risks", "external_needed", "blocked"]
 _SEVERITIES = {"decision", "external-needed", "blocked", "accepted-risk-request"}

@@ -9,30 +9,41 @@ a subfolder for the messier supporting material. So every `cXX-*/` stage folder 
 ```
 cXX-<name>/
 ├── README.md / CHANGELOG.md   ← the stage's meta record (project-execution log / index, not a deliverable)
-├── <deliverables…>            ← every clean output flat at the root, NO subfolders: .docx documents, .json
-│                                  bridges, engineering files, a viewable PNG  (one glance = what this stage delivered)
+├── <human-facing deliverables…> ← what a HUMAN reviews, flat at the root: C0N_*.docx documents, the
+│                                  engineering files a person opens, a viewable PNG/PPTX
 ├── 01_refs/                   reference — external inputs this stage CONSUMES
-└── 02_build/                  build     — intermediate/derived products + build workspaces (garbage-collectable)
+├── 02_build/                  build     — intermediate/derived products + build workspaces (garbage-collectable)
+└── 03_output/                 output    — AI/machine-facing deliverables: generated .md reports + .json
+                                           bridges that downstream tools and agents consume (humans don't read raw md/json)
 ```
 
-> **Convention (changed 2026-06-16):** deliverables live **at the stage root**, not in a `03_output/`
-> bucket. Rationale: a reader entering the folder should see the deliverables first; supporting clutter
-> (consumed inputs, intermediates) is what gets pushed into subfolders. This also matches what the
-> bodesign **MCP tools already emit** (flat, at the stage root) — `03_output/` was only ever a
-> skill-doc convention that required a manual reconcile step. **Legacy = migration debt, not a permanent
-> exemption.** The `thesmart_products/rockbox/` and `openmv/` tracks predate this convention and may
-> still carry the old `03_output/` layout (and `.md` deliverables at the root without the `C0N_` prefix).
-> This is **debt to be paid down on touch**, not a sanctioned alternative: whenever you do real work in a
-> legacy stage, migrate that stage to the current contract (flat root, `C0N_*.docx` deliverables, `.md`
-> sources moved into `02_build/`). The `aiguard/` track is the reference implementation. Do **not** cite
-> "legacy" to justify leaving a freshly-touched stage non-compliant.
+> **Convention (changed 2026-07-17, audience split — supersedes 2026-06-16 "everything flat"):**
+> deliverables are split by **AUDIENCE**, owner-ruled. **Human-facing deliverables** — the `C0N_*.docx`
+> documents and the viewable PNG/render — live **flat at the stage root**: a reader opening the folder
+> sees what the stage delivered without stepping into any bucket. Humans don't read raw `.md`/`.json`,
+> so **AI/machine-facing deliverables** — generated `.md` reports, `.json` bridges, machine-readable
+> tables — live in **`03_output/`**, consumed by downstream tools/agents by path. Cross-stage
+> `_consumed_from` references point into the owner's `03_output/`
+> (e.g. `../C01-ID/03_output/Interface_Constraints.json`).
+> History: the pre-2026-06-16 layout buried ALL deliverables (incl. the human-reviewed ones) in
+> `03_output/`; the 2026-06-16 rule over-corrected to "everything flat" and left the root littered with
+> machine-only md/json. This audience split is the stable resolution. **Legacy = migration debt, not a
+> permanent exemption.** The `thesmart_products/rockbox/` and `openmv/` tracks may still carry the
+> OLD-semantics `03_output/` (every deliverable in the bucket, no `C0N_*.docx` at the root) — whenever
+> you do real work in a legacy stage, migrate it to the current contract. The `aiguard/` track is the
+> reference implementation. Do **not** cite "legacy" to justify leaving a freshly-touched stage
+> non-compliant.
 
 > **Convention (changed 2026-06-19):** **document deliverables are delivered as `.docx`**, not `.md`.
 > The editable Markdown is an **intermediate source** that lives in `02_build/` (e.g.
 > `02_build/<Doc>.docx.body.md`); docxmcp assembles it into the `.docx` deliverable at the stage root.
-> Author/edit content in the `.md` under `02_build/`, then (re)assemble the `.docx`. **No deliverable
-> subfolders** — every deliverable sits flat at the stage root; the only subfolders are `01_refs/` and
-> `02_build/`. (So a `schematics/` folder for schematic PNGs is wrong — the PNGs go at the stage root.)
+> Author/edit content in the `.md` under `02_build/`, then (re)assemble the `.docx`. **No ad-hoc deliverable
+> subfolders** — the only sanctioned subfolders are `01_refs/`, `02_build/`, and `03_output/`. (So a
+> `schematics/` folder for schematic PNGs is wrong — viewable PNGs go at the stage root; machine-readable
+> exports go in `03_output/`.) One additional sanctioned dot-folder: **`.history/`** — version backups
+> and retired/superseded assets (retirement is never deletion; everything reversible). This is the
+> fleet-wide specbase convention (owner ruling 2026-07-17); do not use per-project synonyms like
+> `superseded/` or a root-level `old/`.
 > Files a professional tool *needs* in a specific tree (a KiCad project's own `generated/` workspace, a
 > routing tool's relative-path bundle) stay as that tool requires under `02_build/` — see "Complex
 > stages" below; the **viewable result** (PNG/PDF) is copied flat to the root.
@@ -59,12 +70,13 @@ cXX-<name>/
 >    opening one `C0N_*.docx` sees that document's complete picture —图、表、说明 — without opening the
 >    package folder.
 >
-> 3. **Intermediate `.md` is never a deliverable → it lives in `02_build/`.** Any `.md` that is the
->    editable *source* of a docx (the body the assembler consumes), a working note, or a generated
->    intermediate is **not** a stage-root deliverable and must sit under `02_build/`. The only `.md`
->    permitted at the stage root is the meta layer (`README.md`/`CHANGELOG.md`). A stage root littered
->    with `Project_Requirements.md` / `*.generated.md` next to its docx is a **defect** — move the `.md`
->    into `02_build/` and keep only the assembled `C0N_*.docx` at the root.
+> 3. **`.md`/`.json` never sits at the stage root (except `README.md`/`CHANGELOG.md`) — route by role.**
+>    The editable *source* of a docx (the body the assembler consumes) and working notes are
+>    intermediates → `02_build/`. A generated `.md`/`.json` that downstream tools or agents CONSUME as a
+>    deliverable (`*.generated.md`, machine handoff/readiness reports, `Interface_Constraints.json`-class
+>    bridges) is an AI-facing deliverable → `03_output/`. A stage root littered with
+>    `Project_Requirements.md` / `*.generated.md` next to its docx is a **defect** — file each by role
+>    and keep only the assembled `C0N_*.docx` (+ viewable PNG) at the root.
 >
 > **Language:** the `.docx` document deliverable is written in **繁體中文 (Traditional Chinese)** —
 > translate the `.md` source if it is in English or 簡體中文 before assembling. The `.md` intermediate
@@ -76,9 +88,11 @@ cXX-<name>/
 
 | Location | Put here | Examples |
 |---|---|---|
-| **stage root** | **The stage's `README.md`/`CHANGELOG.md` (meta/index) AND every clean deliverable** downstream consumes — document deliverables as **`.docx`** (the editable `.md` source stays in `02_build/`), structured-data bridges (`.json`), the real engineering files, and a viewable `.png` so the result can be eyeballed without opening CAD/EDA. Flat — **no deliverable subfolders**. The README is named distinctly, so deliverables vs the index stay clear. | `README.md`; `Design_Definition.docx`, `Functional_Spec.docx`, `*_Handoff*.docx`, `Interface_Constraints.json`, `Pin_Map_Bridge.json`, `.kicad_sch`, BOM, Gerbers, STEP, a render/preview PNG |
+| **stage root** | **The stage's `README.md`/`CHANGELOG.md` (meta/index) AND the human-facing deliverables** — document deliverables as **`.docx`** (the editable `.md` source stays in `02_build/`), the engineering files a human opens in their native tool, and a viewable `.png` so the result can be eyeballed. Flat — no ad-hoc subfolders. | `README.md`; `C00_產品需求規格書.docx`, `*_Handoff*.docx` (docx), `.kicad_sch`, Gerbers, STEP, `C0N_BOM.csv` (reviewer-facing), a render/preview PNG |
 | **`01_refs/`** | **External reference source** the stage reads but did not produce — anything consumed as input. PDFs, datasheets, client requirement specs, a reference design, a constraint export consumed from an earlier stage. | requirement `.pdf`/`.docx`, `datasheets/`, an upstream `Mechanical_Constraint_Export.json` mirror |
-| **`02_build/`** | **Intermediate & derived** artifacts produced on the way to the deliverables. **Transient — a later garbage-collection pass keeps only what has lasting value.** | analyzer runs (`analysis/`), schematic viewers (`.jrl`/`.opj`), granular per-layer copper PNGs, debug overlays + scripts, working state (`answer_state.json`), docx body sources |
+| **`02_build/`** | **Intermediate & derived** artifacts produced on the way to the deliverables. **Transient — a later garbage-collection pass keeps only what has lasting value.** | analyzer runs (`analysis/`), schematic viewers (`.jrl`/`.opj`), granular per-layer copper PNGs, debug overlays + scripts, docx body sources |
+| **`.history/`** | **Version backups & retired assets** — superseded deliverables, pre-revision snapshots. Zero-deletion, fully reversible. | retired `answer_state_YYYYMMDD_*.json`, old docx/pptx versions, obsoleted SSOT files |
+| **`03_output/`** | **AI/machine-facing deliverables** downstream tools and agents consume by path — generated `.md` reports, `.json` bridges, machine tables. Humans review the `.docx` at the root; machines read here. **No AI-facing `.json` stays at the stage root** — `answer_state.json` / `Verification_Summary.json` class state files live here too (tool resolvers prefer `03_output/`, root only as legacy fallback). | `03_output/answer_state.json`, `Project_Requirements.generated.md`, `C00_Handoff_Report.md`, `Capability_Gap_Table.md`, `Interface_Constraints.json`, `Pin_Map_Bridge.json`, `Mechanical_Constraint_Export.json`, netlist exports |
 
 ### The recurring judgment calls (decide consistently)
 
@@ -88,10 +102,10 @@ cXX-<name>/
   README/CHANGELOG stay at the root as the *meta* layer (Markdown is fine for them — they are an
   index/log, not deliverables). "Is this a document I hand downstream?" yes → `.docx` at the root, `.md`
   in `02_build/`; "is this a log/index about my own work?" → `README.md` (stays `.md` at root).
-- **No deliverable subfolders.** Every deliverable sits flat at the stage root; the only subfolders are
-  `01_refs/` and `02_build/`. Don't create a `schematics/`, `docs/`, `figures/` bucket — viewable PNGs,
-  `.docx`, bridges, and engineering files all go flat at the root.
-- **Structured-data deliverables (`.json` bridges, BOM/netlist tables) → stage root.**
+- **No ad-hoc subfolders.** The only sanctioned subfolders are `01_refs/`, `02_build/`, `03_output/`.
+  Don't create a `schematics/`, `docs/`, `figures/` bucket — human-facing PNGs / `.docx` / engineering
+  files go flat at the root; machine-facing `.md`/`.json` go in `03_output/`.
+- **Structured-data deliverables (`.json` bridges, generated `.md`, machine tables) → `03_output/`.**
 - **Deliverables must be eyeball-able.** Mechanical → a render/`.glb`+viewer or PNG; circuit/PCB →
   a schematic/board/copper PNG. If only a binary deliverable exists, generate a preview (the MCP's
   `render_board_model` / `render_gerber_preview` / a board render) so the result is viewable.
@@ -168,7 +182,7 @@ propagating a bug). Each shared artifact has **exactly one owning stage** that p
 canonical copy at its root; every downstream stage that needs it **references that path** and records
 the provenance, rather than holding an editable duplicate:
 
-- **Mechanical constraints** — owned by **C03** (`c03-ee/Mechanical_Constraint_Export.json`).
+- **Mechanical constraints** — owned by **C03** (`c03-ee/03_output/Mechanical_Constraint_Export.json`).
   C02 and C04 consume it (`01_refs/` mirror or a `_consumed_from` pointer) and add only their own
   stage-specific fields. Fix the data in the C03 export and re-consume; never hand-edit a mirror.
 - **Pin/GPIO map** — owned by **C03**; C05's `Pin_Map_Bridge.json` derives from it (zero invented pins).
@@ -219,12 +233,13 @@ subtree keeps that role as a whole — you never have to shred a working directo
 ## Relationship to the Definition of Done
 
 The per-stage **Required deliverables — Definition of Done** block (top of each guide) enumerates
-what must exist. "Stage done" = every required artifact is present **at the stage root** (the spec
-docs, the bridges, the engineering files, the preview PNG) **or** carries an explicit blocked/not-run
+what must exist. "Stage done" = every required artifact is present **at its sanctioned location**
+(human-facing at the stage root; machine-facing bridges/reports in `03_output/`) **or** carries an explicit blocked/not-run
 status with a reason + owner. The readiness tools (`bodesign_cXX_readiness`, `package_readiness`)
 score it. `02_build/` proves how you got there; the **deliverables at the root** are what you are
 accountable for; the root `README.md` indexes and logs it.
 
 The worked-example tracks `thesmart_products/rockbox/` and `openmv/` still show the **legacy
-`03_output/`** layout (deliverables in a bucket); the `aiguard/` track shows the current **flat**
-layout (deliverables at the stage root). New stages follow the flat layout.
+`03_output/`** semantics (ALL deliverables in the bucket); the `aiguard/` track shows the current
+**audience-split** layout (human-facing docx/PNG at the stage root; AI-facing md/json in `03_output/`).
+New stages follow the audience-split layout.

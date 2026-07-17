@@ -17,7 +17,7 @@ from pathlib import Path
 
 from bodesign_reverse_core import ingest_project_folder
 
-from .readiness_common import boundary_next_step, root_guard
+from .readiness_common import boundary_next_step, resolve_stage_json, root_guard
 from .guide_dod import assess_guide_dod
 
 
@@ -179,7 +179,7 @@ def assess_package_readiness(folder: str | Path, milestone: str = "POC") -> Pack
     # reflects how complete the PRD actually is (100% answered -> present, else partial),
     # and its next action becomes the C00 next-best question.
     c00_result = None
-    prd_state = Path(folder) / "C00-PRD" / "answer_state.json"
+    prd_state = resolve_stage_json(Path(folder) / "C00-PRD", "answer_state.json")
     if prd_state.exists():
         try:
             from .c00_prd_template import assess_c00_prd_readiness

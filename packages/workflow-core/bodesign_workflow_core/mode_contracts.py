@@ -27,7 +27,8 @@ from .c00_prd_template import load_c00_prd_template
 from .c01_id_package import C01_OUTPUTS, c01_next_question, emit_c01_rockbox_package
 from .orchestration import WorkPacket, dispatch_work_packet
 
-_C00_ANSWER_STATE_REL = Path("C00-PRD") / "answer_state.json"
+_C00_ANSWER_STATE_REL = Path("C00-PRD") / "03_output" / "answer_state.json"
+_C00_ANSWER_STATE_REL_LEGACY = Path("C00-PRD") / "answer_state.json"
 # C00 sections whose content feeds the C01 corpus → the chunk keys _source_text reads.
 _C00_SECTION_TO_C01_CHUNK = {
     "s02_project_overall": "project_overall",
@@ -42,6 +43,8 @@ def _c00_corpus_from_state(root: Path) -> dict[str, Any] | None:
     feeds C00's real content to C01 (fixes the sand-table C00→C01 break) instead of
     emitting an empty C01 package. Returns None when no answered C00 content exists."""
     path = root / _C00_ANSWER_STATE_REL
+    if not path.exists():
+        path = root / _C00_ANSWER_STATE_REL_LEGACY
     if not path.exists():
         return None
     try:

@@ -14,6 +14,7 @@
       "title": "Mechanical constraints",
       "guide_row": 1,
       "any_of": [
+        "C02-ME/03_output/Mechanical_Constraints.json",
         "C02-ME/Mechanical_Constraints.json"
       ],
       "required": true
@@ -23,6 +24,7 @@
       "title": "Mechanical assumptions",
       "guide_row": 2,
       "any_of": [
+        "C02-ME/03_output/Mechanical_Assumptions.md",
         "C02-ME/Mechanical_Assumptions.md"
       ],
       "required": true
@@ -53,6 +55,7 @@
       "title": "Assembly notes",
       "guide_row": 5,
       "any_of": [
+        "C02-ME/03_output/Assembly_Notes.md",
         "C02-ME/Assembly_Notes.md"
       ],
       "required": true
@@ -62,6 +65,7 @@
       "title": "Print settings",
       "guide_row": 6,
       "any_of": [
+        "C02-ME/03_output/Print_Settings.md",
         "C02-ME/Print_Settings.md"
       ],
       "required": true
@@ -71,6 +75,7 @@
       "title": "Vendor handoff",
       "guide_row": 7,
       "any_of": [
+        "C02-ME/03_output/Vendor_Handoff.md",
         "C02-ME/Vendor_Handoff.md"
       ],
       "required": true
@@ -80,6 +85,7 @@
       "title": "SketchUp import guide",
       "guide_row": 8,
       "any_of": [
+        "C02-ME/03_output/SketchUp_Import_Guide.md",
         "C02-ME/SketchUp_Import_Guide.md"
       ],
       "required": true
