@@ -1,0 +1,122 @@
+[
+  {
+    "id": "TV-1",
+    "description": "R17.1.2 init capability summary is test-branchable: container UDS endpoint flagged host_executable=false",
+    "input": {"tool": "bodesign_init"},
+    "expected": {"has_key": "capabilities", "capabilities.transport.service_endpoints[].host_executable": false, "capabilities.companion_skill": "bodesign", "doctrine_preserved": true}
+  },
+  {
+    "id": "TV-2",
+    "description": "R17.2.2 portable egress: bare client reads a token blob via resources/read with no HTTP",
+    "input": {"stage": {"a/b.txt": "hello"}, "read_uri": "bodesign://files/<token>/a/b.txt"},
+    "expected": {"bytes": "hello", "traversal_guard": true}
+  },
+  {
+    "id": "TV-3",
+    "description": "R17.2.2 traversal guard: resources/read of an escaping rel is rejected",
+    "input": {"read_uri": "bodesign://files/<token>/../escape"},
+    "expected": {"error": "RESOURCE_NOT_FOUND_OR_ESCAPE"}
+  },
+  {
+    "id": "TV-4",
+    "description": "R17.2.3 workspace inspection returns the token tree without mutation",
+    "input": {"tool": "bodesign_workspace_inspect", "stage": {"x.gbr": "g", "sub/y.drl": "d"}},
+    "expected": {"files": ["sub/y.drl", "x.gbr"], "count": 2, "mutated": false}
+  },
+  {
+    "id": "TV-5",
+    "description": "R17.2.4 preflight rejects an unresolved asset path with a remedy line",
+    "input": {"fn": "preflight_assets", "asset_paths": ["missing.svg"]},
+    "expected": {"ok": false, "failures[0].reason": "unresolved", "error.code": "PREFLIGHT_UNRESOLVED", "remedy_present": true}
+  },
+  {
+    "id": "TV-6",
+    "description": "R17.2.4 preflight rejects an out-of-namespace path",
+    "input": {"fn": "preflight_assets", "asset_paths": ["../../etc/passwd"]},
+    "expected": {"ok": false, "failures[0].reason": "out_of_namespace", "error.code": "PREFLIGHT_OUT_OF_NAMESPACE"}
+  },
+  {
+    "id": "TV-7",
+    "description": "R17.2.4 host-only absolute path in a token call is flagged (advisory in token-less same-host)",
+    "input": {"fn": "preflight_assets", "asset_paths": ["/home/user/board.kicad_pcb"], "in_token": true},
+    "expected": {"failures[0].reason": "host_only_absolute"}
+  },
+  {
+    "id": "TV-8",
+    "description": "R17.2.5 content-assertion refuses a transport-valid but EMPTY artifact as delivery-ready",
+    "input": {"fn": "assert_content", "produced": [{"rel": "out.pdf", "size": 0}], "assertions": {"non_empty": true}},
+    "expected": {"delivery_ready": false, "error.code": "ASSERTION_EMPTY"}
+  },
+  {
+    "id": "TV-9",
+    "description": "R17.2.5 content-assertion passes a non-empty artifact with the expected file",
+    "input": {"fn": "assert_content", "produced": [{"rel": "out.pdf", "size": 4096}], "assertions": {"non_empty": true, "expected_files": ["out.pdf"]}},
+    "expected": {"delivery_ready": true}
+  },
+  {
+    "id": "TV-10",
+    "description": "R17.2.5 content-assertion fails when required_text is absent",
+    "input": {"fn": "assert_content", "produced": [{"rel": "report.md", "size": 20, "text": "no marker here"}], "assertions": {"required_text": ["FCC"]}},
+    "expected": {"delivery_ready": false, "error.code": "ASSERTION_MISSING_TEXT"}
+  },
+  {
+    "id": "TV-11",
+    "description": "R0.6 hard wall: grain-mismatch zero-element edit is a loud failure carrying the single-source nudge (was silent ok=true)",
+    "input": {"fn": "detect_wall", "name": "edit", "args": {"target": "nonexistent-id"}, "matches": 0},
+    "expected": {"force": "hard", "correct_primitive_present": true, "remedy.note_contains": "skill(bodesign)"}
+  },
+  {
+    "id": "TV-12",
+    "description": "R0.6 advisory wall: first unbounded sweep with no prior recon returns a non-blocking hint, success preserved",
+    "input": {"fn": "detect_wall", "name": "unbounded_scan", "args": {"bounded": false}, "prior_recon": false, "large": true},
+    "expected": {"force": "advisory", "converts_success_to_failure": false}
+  },
+  {
+    "id": "TV-13",
+    "description": "R0.6.1 定海神針: detect_wall never consults caller skill-state; a legitimate call (recon done) yields no nudge",
+    "input": {"fn": "detect_wall", "name": "edit", "args": {"target": "p_valid"}, "matches": 1, "prior_recon": true},
+    "expected": {"nudge": null}
+  },
+  {
+    "id": "TV-14",
+    "description": "R0.6.4 remedy projection: error.remedy dict renders to a portable content-text remedy: line; no remedy -> byte-identical",
+    "input": {"fn": "_render_remedy_line", "cases": [{"error": {"remedy": {"note": "load skill(bodesign)"}}}, {"error": {}}]},
+    "expected": {"case0": "remedy: load skill(bodesign)", "case1": null}
+  },
+  {
+    "id": "TV-15",
+    "description": "R17.5 parity: skillPaths, GET /skills, bodesign_init all resolve to the same COMPANION_SKILL",
+    "input": {"faces": ["mcp.json.skillPaths", "GET /skills", "bodesign_init.capabilities.companion_skill"]},
+    "expected": {"all_equal": "bodesign"}
+  },
+  {
+    "id": "TV-16",
+    "description": "R17.6 (a): a host-readable FUSE/absolute path passed as a container path is flagged, not silently accepted",
+    "input": {"scenario": "a", "fn": "preflight_assets", "asset_paths": ["/mnt/fuse/board.pcb"], "in_token": true},
+    "expected": {"silent_pass": false, "failures[0].reason": "host_only_absolute"}
+  },
+  {
+    "id": "TV-17",
+    "description": "R17.6 (b): init never recommends a UDS command with only a container-side socket path unflagged",
+    "input": {"scenario": "b", "tool": "bodesign_init"},
+    "expected": {"container_socket.host_executable": false}
+  },
+  {
+    "id": "TV-18",
+    "description": "R17.6 (c): assemble/render with unresolved media does not complete silently",
+    "input": {"scenario": "c", "fn": "preflight_assets", "asset_paths": ["logo.png"], "present": false},
+    "expected": {"silent_pass": false, "error.code": "PREFLIGHT_UNRESOLVED"}
+  },
+  {
+    "id": "TV-19",
+    "description": "R17.6 (d): a QA/delivery tool never returns ready=true for an empty template when assertions were requested",
+    "input": {"scenario": "d", "fn": "assert_content", "produced": [{"rel": "deck.pptx", "size": 0}], "assertions": {"non_empty": true}},
+    "expected": {"ready": false, "error.code": "ASSERTION_EMPTY"}
+  },
+  {
+    "id": "TV-20",
+    "description": "R17.6 (e): companion skill, guide, and manifest never advertise different transfer rails",
+    "input": {"scenario": "e", "faces": ["mcp.json.skillPaths", "GET /skills", "bodesign_init"]},
+    "expected": {"single_source": true, "all_equal": "bodesign"}
+  }
+]

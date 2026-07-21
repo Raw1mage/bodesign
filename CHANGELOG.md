@@ -4,6 +4,17 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [未發布] — 2026-07-11
+
+### Added
+- **R16 domain-KB in-band serving（spec `plans/mcp_r16-domain-kb/`，fleet 標準 R16 reference impl）**：
+  - 新增兩個 read-only core-group 工具（TOOLS 53→55，version 0.3.0）：`bodesign_kb_query(q, type?, limit?)`（確定性檢索 repo ragbase KB；token 規劃比照 specbase：全 ≥3 碼點→FTS AND、全 <3→LIKE scan、混合→hybrid；payload 自述 `matchMode`）與 `bodesign_kb_get(id)`（全文 body_md + confidence + source_weight + lineage provenance）。
+  - **One KB, two doors（R16.7）**：容器內工具與 host-side specbase `gate.ts ragbase_query` 讀同一個 `.specbase/ragbase.sqlite`（bind mount `/var/lib/bodesign/kb`，rw 掛載 + 連線層 `mode=ro`+`PRAGMA query_only` 強制唯讀——純 ro mount 無法讀 WAL store，DD-3）；無任何 KB 寫入工具（R16.4）。
+  - Fail-fast：KB 缺失/不可開 → typed `KB_UNAVAILABLE` + remedy 行；空 query → `KB_BAD_QUERY`；id 不存在 → `KB_OBJECT_NOT_FOUND`（天條 1，不回靜默空 hits）。
+  - Recall-first signpost（R16.5）：`mcp.json.instructions` + server INSTRUCTIONS 加 KB 宣告；8 個判斷密集工具 description 帶 `consider: bodesign_kb_query`。
+  - 驗證：`tests/test_kb_tools.py` 11/11 OK；live smoke UDS kb_query "EMC decoupling" 命中（matchMode=fts, total=5）；兩門一致性（同 query 同 id 集合）通過；既有失敗集與 pre-change baseline byte-identical 零新增（並修正 test_mcp_server 硬編碼舊工具數 47→55）。
+  - KB 內容：同日從 6 個 GitHub PCB-design skill repos 蒸餾 52 筆 evidence-graded 知識物件（IPC-2221B 間距、IPC-2152 載流、EMC 去耦、DFM 閘、derating gate、failure modes 等）。
+
 ## [未發布] — 2026-07-06
 
 ### Added

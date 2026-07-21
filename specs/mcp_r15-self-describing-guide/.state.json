@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-07T06:58:26.589Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-07T11:44:16.742Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "design.md + idef0.json + grafcet.json authored & validated (drawmiat OK); IDEF0 skeleton mapped in design"
+    },
+    {
+      "from": "designed",
+      "to": "verified",
+      "at": "2026-07-07T11:44:52.754Z",
+      "by": "pkcs12",
+      "mode": "migration",
+      "reason": "burst implementation: all tasks [x] with live UDS smoke evidence (tool+prompts byte-identical doctrine 11872 chars, signpost present, missing-doctrine fail-fast verified); R15.1-R15.5 §13 checklist passed. No standalone implementing window existed."
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-16T13:05:53.265Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確裁決 2026-07-16：6 個 verified plan 全部畢業"
+    }
+  ]
+}

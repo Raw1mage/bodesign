@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Bare client: ingest -> transform -> assert -> portable egress (R17.6 minimum eval, no WebDAV)",
+    "participants": ["BareClient", "bodesign_server", "TokenStore", "preflight", "handler"],
+    "messages": [
+      {"from": "BareClient", "to": "bodesign_server", "label": "bodesign_init"},
+      {"from": "bodesign_server", "to": "BareClient", "label": "{doctrine, capabilities{transport.service_endpoints[].host_executable=false}}"},
+      {"from": "BareClient", "to": "bodesign_server", "label": "bodesign_stage_dir(files)"},
+      {"from": "bodesign_server", "to": "TokenStore", "label": "stage_files -> {token, doc_dir, files}"},
+      {"from": "BareClient", "to": "bodesign_server", "label": "bodesign_workspace_inspect(token)"},
+      {"from": "bodesign_server", "to": "TokenStore", "label": "list_files(doc_dir)"},
+      {"from": "bodesign_server", "to": "BareClient", "label": "{files[], count} (assets proven present)"},
+      {"from": "BareClient", "to": "bodesign_server", "label": "emit/render(token, assets, assert{non_empty,expected_files})"},
+      {"from": "bodesign_server", "to": "preflight", "label": "preflight_assets(doc_dir, asset_paths)"},
+      {"from": "preflight", "to": "bodesign_server", "label": "ok / PREFLIGHT_* + remedy"},
+      {"from": "bodesign_server", "to": "handler", "label": "run handler (only if preflight ok)"},
+      {"from": "bodesign_server", "to": "preflight", "label": "assert_content(produced, assertions)"},
+      {"from": "preflight", "to": "bodesign_server", "label": "delivery_ready / ASSERTION_EMPTY"},
+      {"from": "bodesign_server", "to": "BareClient", "label": "delivery-ready result (or typed error + remedy in content text)"},
+      {"from": "BareClient", "to": "bodesign_server", "label": "resources/read bodesign://files/<token>/<rel>"},
+      {"from": "bodesign_server", "to": "TokenStore", "label": "resolve + safe_join"},
+      {"from": "bodesign_server", "to": "BareClient", "label": "blob bytes (portable floor, no HTTP needed)"}
+    ]
+  },
+  {
+    "title": "Wall-nudge: skipped-contract reflex meets a hard wall (R0.6)",
+    "participants": ["ColdAgent", "bodesign_server", "_skill_nudge", "error_wrapper"],
+    "messages": [
+      {"from": "ColdAgent", "to": "bodesign_server", "label": "edit(token, target=bad-shape-id) — never loaded skill(bodesign)"},
+      {"from": "bodesign_server", "to": "_skill_nudge", "label": "detect_wall(name, args, doc_dir)"},
+      {"from": "_skill_nudge", "to": "bodesign_server", "label": "('hard', why='grain-mismatch zero-element', correct_primitive='bodesign_workspace_inspect')"},
+      {"from": "bodesign_server", "to": "error_wrapper", "label": "loud failure + error.remedy{note}"},
+      {"from": "error_wrapper", "to": "ColdAgent", "label": "content text: 'remedy: <why>; load skill(bodesign); correct primitive is ...' (portable R0.5)"}
+    ]
+  }
+]

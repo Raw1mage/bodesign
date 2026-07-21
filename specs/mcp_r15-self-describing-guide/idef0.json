@@ -1,0 +1,130 @@
+{
+  "diagram_title": "Self-ship bodesign usage doctrine in-band (R15 self-describing organism)",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Load doctrine one-source at startup",
+      "description": "Read skills/bodesign/doctrine.md once at import into the BODESIGN_GUIDE_DOCTRINE constant; fail fast (DOCTRINE_SOURCE_MISSING/_EMPTY) if absent or empty so an empty-doctrine guide is never served.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Serve guide via bodesign_init tool",
+      "description": "Dispatch tools/call bodesign_init in-process in run_tool, returning the loaded doctrine as {ok, doctrine, source}; advertised read-only / closed-world in the tool registry.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Serve guide via prompts/get",
+      "description": "Expose the new prompts/list + prompts/get handler; the bodesign_init prompt entry projects the SAME BODESIGN_GUIDE_DOCTRINE constant, byte-identical to the tool face.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Signpost the guide surface",
+      "description": "Declare the guide in the service-authored instructions manifest (mcp.json.instructions + server INSTRUCTIONS) so an agent discovers bodesign_init before reflexing wrong.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "type": "input",
+      "label": "skills/bodesign/doctrine.md (condensate of SKILL.md)"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "type": "control",
+      "label": "no-silent-fallback rule (tiantiao 11)"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "type": "mechanism",
+      "label": "server.py _load_doctrine + Dockerfile/dev-mount transport"
+    },
+    {
+      "id": "AR4",
+      "source": "A1:output",
+      "target": "A2:input",
+      "type": "output",
+      "label": "BODESIGN_GUIDE_DOCTRINE constant"
+    },
+    {
+      "id": "AR5",
+      "source": "A1:output",
+      "target": "A3:input",
+      "type": "output",
+      "label": "BODESIGN_GUIDE_DOCTRINE constant (same object)"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "R15.1 tool face + R15.5 one-source"
+    },
+    {
+      "id": "AR7",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "MCP tools/call + run_tool in-process dispatch"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "type": "control",
+      "label": "R15.1 prompts face + R15.5 one-source"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "MCP prompts/list + prompts/get handler"
+    },
+    {
+      "id": "AR10",
+      "source": "EXTERNAL",
+      "target": "A4:control",
+      "type": "control",
+      "label": "R15.3 service-authored manifest, not host nudge"
+    },
+    {
+      "id": "AR11",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "type": "mechanism",
+      "label": "mcp.json.instructions + server INSTRUCTIONS rail"
+    },
+    {
+      "id": "AR12",
+      "source": "A2:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "doctrine delivered in-band (tool-first agent)"
+    },
+    {
+      "id": "AR13",
+      "source": "A3:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "doctrine delivered in-band (bare prompts client)"
+    },
+    {
+      "id": "AR14",
+      "source": "A4:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "guide-surface signpost in system prompt"
+    }
+  ]
+}

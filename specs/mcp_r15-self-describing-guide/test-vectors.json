@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TV-1",
+    "description": "bodesign_init tool returns full doctrine (R15.1 tool face)",
+    "input": { "method": "tools/call", "name": "bodesign_init", "arguments": {} },
+    "expected": { "ok": true, "doctrine_nonempty": true, "covers_r15_2_four_classes": true, "source_present": true }
+  },
+  {
+    "id": "TV-2",
+    "description": "prompts/get returns byte-identical doctrine (R15.1 prompts face + R15.5 one-source)",
+    "input": { "method": "prompts/get", "name": "bodesign_init" },
+    "expected": { "text_byte_identical_to_tool": true, "observed_len_chars": 11872 }
+  },
+  {
+    "id": "TV-3",
+    "description": "initialize.instructions carries R15.3 signpost",
+    "input": { "method": "initialize" },
+    "expected": { "instructions_contains": "USAGE GUIDE", "points_to": "bodesign_init" }
+  },
+  {
+    "id": "TV-4",
+    "description": "Missing doctrine.md fails startup fast (R15.5 no-fallback, tiantiao 11)",
+    "input": { "container_state": "skills/bodesign/doctrine.md removed", "action": "start container" },
+    "expected": { "boot": "refused", "error_code": "DOCTRINE_SOURCE_MISSING" }
+  },
+  {
+    "id": "TV-5",
+    "description": "Single-source drift check — edit doctrine.md, restart, tool reflects marker",
+    "input": { "edit": "insert DRIFT-MARKER into doctrine.md", "action": "dev restart" },
+    "expected": { "tool_doctrine_contains": "DRIFT-MARKER", "prompts_doctrine_contains": "DRIFT-MARKER" }
+  },
+  {
+    "id": "TV-6",
+    "description": "guide tool annotations declare read-only/closed-world (DD-5)",
+    "input": { "method": "tools/list" },
+    "expected": { "bodesign_init.readOnlyHint": true, "bodesign_init.openWorldHint": false }
+  }
+]

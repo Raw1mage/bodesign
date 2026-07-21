@@ -16,21 +16,31 @@ services:
     volumes:
       - "./packages:/app/packages:ro"
       - "./services:/app/services:ro"
+      # R15 self-describing guide (plans/mcp_r15-self-describing-guide): the image
+      # COPYs skills/bodesign/doctrine.md, but the raw skills/ tree is NOT bind-
+      # mounted in dev, so shadow-mount just the doctrine one-source too — else
+      # server.py _load_doctrine() FAILS LOUD at import (as designed) on restart.
+      - "./skills/bodesign/doctrine.md:/app/skills/bodesign/doctrine.md:ro"
       # Dev: a host work dir the container can read/write, so you can drive real
       # project folders through the MCP tools (pass paths under /work). Set
       # BODESIGN_WORK_DIR to your projects dir (default: ./.work in the repo).
       - "${BODESIGN_WORK_DIR:-./.work}:/work"
       # T2: E2E experiment artifacts visible on the host (no docker cp round-trips).
       - "./experiments:/work/experiments"
+      # R16 domain KB (plan mcp_r16-domain-kb): same repo ragbase store as the
+      # base compose — restated here so the dev overlay's volume list keeps it.
+      - "./.specbase:/var/lib/bodesign/kb"
   # Workers also get the live source so a code change reloads on restart (no rebuild).
   # Only active when the worker overlay is composed too (docker-compose.workers.yml).
   bodesign-ee:
     volumes:
       - "./packages:/app/packages:ro"
       - "./services:/app/services:ro"
+      - "./skills/bodesign/doctrine.md:/app/skills/bodesign/doctrine.md:ro"
       - "./experiments:/work/experiments"
   bodesign-me:
     volumes:
       - "./packages:/app/packages:ro"
       - "./services:/app/services:ro"
+      - "./skills/bodesign/doctrine.md:/app/skills/bodesign/doctrine.md:ro"
       - "./experiments:/work/experiments"

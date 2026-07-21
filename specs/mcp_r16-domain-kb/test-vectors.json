@@ -1,0 +1,44 @@
+[
+  {
+    "id": "TV-1",
+    "description": "FTS happy path: existing distilled object reachable in-band",
+    "input": { "tool": "bodesign_kb_query", "args": { "q": "EMC decoupling" } },
+    "expected": { "matchMode": "fts", "hits_contains_id": "control.pcb.emc-decoupling-placement", "isError": false }
+  },
+  {
+    "id": "TV-2",
+    "description": "short CJK tokens degrade to LIKE scan, self-described",
+    "input": { "tool": "bodesign_kb_query", "args": { "q": "\u4f48\u7dda" } },
+    "expected": { "matchMode": "like-scan", "isError": false }
+  },
+  {
+    "id": "TV-3",
+    "description": "KB file missing -> typed fail-fast with remedy",
+    "input": { "tool": "bodesign_kb_query", "args": { "q": "anything" }, "env": { "BODESIGN_KB_DB": "/nonexistent/kb.sqlite" } },
+    "expected": { "isError": true, "content_starts_with": "KB_UNAVAILABLE", "content_contains": "remedy:" }
+  },
+  {
+    "id": "TV-4",
+    "description": "kb_get returns full body + provenance grading",
+    "input": { "tool": "bodesign_kb_get", "args": { "id": "control.pcb.emc-decoupling-placement" } },
+    "expected": { "has_fields": ["body_md", "confidence", "source_weight"], "isError": false }
+  },
+  {
+    "id": "TV-5",
+    "description": "read-only enforced: write attempt on serving connection fails",
+    "input": { "internal": "execute INSERT on the kb connection" },
+    "expected": { "raises": "sqlite readonly/query_only error" }
+  },
+  {
+    "id": "TV-6",
+    "description": "one KB two doors: same query, same id set via gate.ts and MCP tool",
+    "input": { "query": "clearance voltage", "doors": ["gate.ts ragbase_query", "bodesign_kb_query"] },
+    "expected": { "same_object_id_set": true }
+  },
+  {
+    "id": "TV-7",
+    "description": "empty query rejected",
+    "input": { "tool": "bodesign_kb_query", "args": { "q": "  " } },
+    "expected": { "isError": true, "content_starts_with": "KB_BAD_QUERY" }
+  }
+]

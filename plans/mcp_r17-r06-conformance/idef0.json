@@ -1,0 +1,61 @@
+{
+  "diagram_title": "bodesign MCP R17+R0.6 conformance surface",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Advertise machine-readable capabilities",
+      "description": "bodesign_init returns a structured capability summary (transport / ingress / egress / webdav_state / companion_skill / conditional_tool_families) with service-vs-host endpoint flags, alongside the existing prose doctrine (R17.1.1/.1.2).",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Serve portable resource egress",
+      "description": "resources/list + resources/read expose every token-produced blob as bodesign://files/<token>/<rel> so a bare MCP client retrieves deliverables with no host-private extension (R17.2.2 portable floor).",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Inspect workspace before transform",
+      "description": "A list/status/probe tool enumerates a token namespace tree and proves expected assets exist before any mutation/render (R17.2.3).",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Preflight + assert delivery",
+      "description": "Typed asset preflight rejects unresolved / missing-media / out-of-namespace / host-only-absolute paths before render/emit/assemble; content-assertion refuses transport-valid-but-empty artifacts as delivery-ready (R17.2.4/.2.5).",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Nudge skipped-contract walls",
+      "description": "A single-source wall-nudge detector fingerprints a skipped-companion-skill wall from the toolcall itself and enriches the error (hard) or attaches a non-blocking hint (advisory), projected onto the portable content-text remedy surface (R0.6).",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "bodesign_init call" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A2:input", "type": "input", "label": "resources/read request + token blob" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A3:input", "type": "input", "label": "token namespace" },
+    { "id": "AR4", "source": "EXTERNAL", "target": "A4:input", "type": "input", "label": "render/emit/assemble call + asset paths + assertions" },
+    { "id": "AR5", "source": "EXTERNAL", "target": "A5:input", "type": "input", "label": "toolcall + document/workspace state" },
+
+    { "id": "AR6", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "mcp-integration-standard R17.1 + R0 portability floor" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "R17.2.2 + R0.1 resources/read floor" },
+    { "id": "AR8", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "R17.2.3" },
+    { "id": "AR9", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "R17.2.4/.2.5 + no-fabrication 天條 2/3" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A5:control", "type": "control", "label": "R0.6.1 定海神針 (judge the action, never the caller)" },
+
+    { "id": "AR11", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "server.run_tool bodesign_init branch" },
+    { "id": "AR12", "source": "EXTERNAL", "target": "A2:mechanism", "type": "mechanism", "label": "TokenStore.list_files + @server.read_resource" },
+    { "id": "AR13", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "in-process workspace-inspect tool" },
+    { "id": "AR14", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "preflight.py pure functions + safe_join" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A5:mechanism", "type": "mechanism", "label": "_skill_nudge.py generator + run_tool error wrapper remedy projection" },
+
+    { "id": "AR16", "source": "A1:output", "target": "EXTERNAL", "type": "output", "label": "structured capabilities payload (test-branchable)" },
+    { "id": "AR17", "source": "A2:output", "target": "EXTERNAL", "type": "output", "label": "portable resource bytes" },
+    { "id": "AR18", "source": "A3:output", "target": "EXTERNAL", "type": "output", "label": "workspace asset inventory" },
+    { "id": "AR19", "source": "A4:output", "target": "EXTERNAL", "type": "output", "label": "delivery-ready verdict OR typed preflight/assertion error + R0.5 remedy" },
+    { "id": "AR20", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "enriched error (hard) / advisory hint (advisory) with skill-load remedy" }
+  ]
+}

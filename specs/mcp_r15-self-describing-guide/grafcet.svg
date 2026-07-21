@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1353" height="1180" viewBox="-14.00 -2.00 67.64 59.00" role="img">
+<style>
+.step{fill:#fff;stroke:#111;stroke-width:.14}.step-inner{fill:none;stroke:#111;stroke-width:.08}
+.action{fill:#fff;stroke:#111;stroke-width:.14}.action-inner{fill:none;stroke:#111;stroke-width:.08}.gate{stroke:#111;stroke-width:.16}
+.edge{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round;stroke-linejoin:round}.edge-arrow{marker-end:url(#arrow)}
+.flyover-mask{stroke:#fff;stroke-width:.12;stroke-linecap:round}
+.flyover{fill:none;stroke:#111;stroke-width:.05;stroke-linecap:round}
+.junction{fill:#111;stroke:#111;stroke-width:0}.branch-junction{fill:#fff;stroke:#111;stroke-width:.08}
+.assoc{stroke:#111;stroke-width:.05}.label{font:bold .7px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}
+.action-label{font:.55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:middle;dominant-baseline:middle}.gate-label{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:start;dominant-baseline:middle}.gate-label-left{font:italic .55px 'Times New Roman', 'BiauKai', 'DFKai-SB', serif;text-anchor:end;dominant-baseline:middle}
+</style>
+<defs><marker id="arrow" markerWidth="0.4" markerHeight="0.4" refX="0.36" refY="0.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 0.4 0.2 L 0 0.4 z" fill="#111"/></marker></defs>
+<rect x="-14.00" y="-2.00" width="67.64" height="59.00" fill="white"/>
+<path class="edge edge-arrow" data-edge-id="edge:S0O1S1I1" data-segment-ids="S0O1S1I1:1S" d="M 26.32 7.00 L 26.32 11.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S1O1G1I1" data-segment-ids="S1O1G1I1:1S" d="M 26.32 14.00 L 26.32 16.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O1G3I1" data-segment-ids="G1O1G3I1:1S" d="M 26.32 16.00 L 26.32 24.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G1O2S3I1" data-segment-ids="G1O2S3I1:1E G1O2S3I1:2S" d="M 26.32 16.00 L 38.98 16.00 Q 39.48 16.00 39.48 16.50 L 39.48 26.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S2O1G2I1" data-segment-ids="S2O1G2I1:1S" d="M 13.16 29.00 L 13.16 31.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O1S4I1" data-segment-ids="G2O1S4I1:1S" d="M 0.00 31.00 L 0.00 37.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O2S6I1" data-segment-ids="G2O2S6I1:1S" d="M 13.16 31.00 L 13.16 37.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G2O3S8I1" data-segment-ids="G2O3S8I1:1S" d="M 26.32 31.00 L 26.32 37.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S3O1S0I1" data-segment-ids="S3O1S0I1:1S S3O1S0I1:2W S3O1S0I1:3N S3O1S0I1:4E S3O1S0I1:5S" d="M 39.48 29.00 L 39.48 34.50 Q 39.48 35.00 38.98 35.00 L -9.50 35.00 Q -10.00 35.00 -10.00 34.50 L -10.00 2.50 Q -10.00 2.00 -9.50 2.00 L 25.82 2.00 Q 26.32 2.00 26.32 2.50 L 26.32 4.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S4O1S5I1" data-segment-ids="S4O1S5I1:1S" d="M 0.00 40.00 L 0.00 46.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S5O1G3I2" data-segment-ids="S5O1G3I2:1S S5O1G3I2:2W S5O1G3I2:3N S5O1G3I2:4E S5O1G3I2:5S" d="M 0.00 49.00 L 0.00 50.50 Q 0.00 51.00 -0.50 51.00 L -5.50 51.00 Q -6.00 51.00 -6.00 50.50 L -6.00 20.50 Q -6.00 20.00 -5.50 20.00 L 13.82 20.00 Q 14.32 20.00 14.32 20.50 L 14.32 24.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:G3O1S2I1" data-segment-ids="G3O1S2I1:1S" d="M 13.16 24.00 L 13.16 26.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S6O1S7I1" data-segment-ids="S6O1S7I1:1S" d="M 13.16 40.00 L 13.16 46.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S7O1G3I3" data-segment-ids="S7O1G3I3:1S S7O1G3I3:2W S7O1G3I3:3N S7O1G3I3:4E S7O1G3I3:5S" d="M 13.16 49.00 L 13.16 52.50 Q 13.16 53.00 12.66 53.00 L -7.50 53.00 Q -8.00 53.00 -8.00 52.50 L -8.00 18.50 Q -8.00 18.00 -7.50 18.00 L 17.82 18.00 Q 18.32 18.00 18.32 18.50 L 18.32 24.00"/>
+<path class="edge edge-arrow" data-edge-id="edge:S8O1G3I4" data-segment-ids="S8O1G3I4:1S S8O1G3I4:2W S8O1G3I4:3N S8O1G3I4:4E S8O1G3I4:5S" d="M 26.32 40.00 L 26.32 43.50 Q 26.32 44.00 25.82 44.00 L -3.50 44.00 Q -4.00 44.00 -4.00 43.50 L -4.00 16.50 Q -4.00 16.00 -3.50 16.00 L 21.82 16.00 Q 22.32 16.00 22.32 16.50 L 22.32 24.00"/>
+<rect class="step" x="24.32" y="4.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<rect class="step-inner" x="24.57" y="4.25" width="3.50" height="2.50" rx="0.22" ry="0.22"/>
+<text class="label" x="26.32" y="5.50">0</text>
+<rect class="step" x="24.32" y="11.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="26.32" y="12.50">1</text>
+<rect class="step" x="11.16" y="26.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="13.16" y="27.50">2</text>
+<rect class="step" x="37.48" y="26.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="39.48" y="27.50">3</text>
+<rect class="step" x="-2.00" y="37.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="0.00" y="38.50">4</text>
+<rect class="step" x="-2.00" y="46.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="0.00" y="47.50">5</text>
+<rect class="step" x="11.16" y="37.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="13.16" y="38.50">6</text>
+<rect class="step" x="11.16" y="46.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="13.16" y="47.50">7</text>
+<rect class="step" x="24.32" y="37.00" width="4.00" height="3.00" rx="0.35" ry="0.35"/>
+<text class="label" x="26.32" y="38.50">8</text>
+<line class="assoc" x1="28.32" y1="5.50" x2="29.32" y2="5.50"/>
+<rect class="action" x="29.32" y="4.07" width="7.16" height="2.86"/>
+<text class="action-label" x="32.90" y="5.09"><tspan x="32.90" dy="0">Server process idle before</tspan><tspan x="32.90" dy="0.82">import (no doctrine loaded)</tspan></text>
+<line class="assoc" x1="28.32" y1="12.50" x2="29.32" y2="12.50"/>
+<rect class="action" x="29.32" y="11.07" width="7.16" height="2.86"/>
+<text class="action-label" x="32.90" y="12.09"><tspan x="32.90" dy="0">_load_doctrine() reads</tspan><tspan x="32.90" dy="0.82">skills/bodesign/doctrine.md</tspan></text>
+<line class="assoc" x1="15.16" y1="27.50" x2="16.16" y2="27.50"/>
+<rect class="action" x="16.16" y="26.07" width="7.16" height="2.86"/>
+<text class="action-label" x="19.74" y="26.68"><tspan x="19.74" dy="0">Bind BODESIGN_GUIDE_</tspan><tspan x="19.74" dy="0.82">DOCTRINE; server ready</tspan><tspan x="19.74" dy="0.82">to serve (steady state)</tspan></text>
+<line class="assoc" x1="41.48" y1="27.50" x2="42.48" y2="27.50"/>
+<rect class="action" x="42.48" y="26.07" width="7.16" height="2.86"/>
+<text class="action-label" x="46.06" y="26.68"><tspan x="46.06" dy="0">Raise DOCTRINE_SOURCE_</tspan><tspan x="46.06" dy="0.82">MISSING/_EMPTY; refuse to</tspan><tspan x="46.06" dy="0.82">boot (fail-fast, tiantiao 11)</tspan></text>
+<line class="assoc" x1="2.00" y1="38.50" x2="3.00" y2="38.50"/>
+<rect class="action" x="3.00" y="37.07" width="7.16" height="2.86"/>
+<text class="action-label" x="6.58" y="38.09"><tspan x="6.58" dy="0">run_tool dispatches</tspan><tspan x="6.58" dy="0.82">bodesign_init in-process</tspan></text>
+<line class="assoc" x1="2.00" y1="47.50" x2="3.00" y2="47.50"/>
+<rect class="action" x="3.00" y="46.07" width="7.16" height="2.86"/>
+<text class="action-label" x="6.58" y="47.09"><tspan x="6.58" dy="0">Doctrine delivered in-</tspan><tspan x="6.58" dy="0.82">band to tool-first agent</tspan></text>
+<line class="assoc" x1="15.16" y1="38.50" x2="16.16" y2="38.50"/>
+<rect class="action" x="16.16" y="37.07" width="7.16" height="2.86"/>
+<text class="action-label" x="19.74" y="37.68"><tspan x="19.74" dy="0">get_prompt projects</tspan><tspan x="19.74" dy="0.82">the same BODESIGN_</tspan><tspan x="19.74" dy="0.82">GUIDE_DOCTRINE constant</tspan></text>
+<line class="assoc" x1="15.16" y1="47.50" x2="16.16" y2="47.50"/>
+<rect class="action" x="16.16" y="46.07" width="7.16" height="2.86"/>
+<text class="action-label" x="19.74" y="47.09"><tspan x="19.74" dy="0">Doctrine delivered in-band</tspan><tspan x="19.74" dy="0.82">to bare prompts client</tspan></text>
+<line class="assoc" x1="28.32" y1="38.50" x2="29.32" y2="38.50"/>
+<rect class="action" x="29.32" y="37.07" width="7.16" height="2.86"/>
+<text class="action-label" x="32.90" y="37.68"><tspan x="32.90" dy="0">initialize returns</tspan><tspan x="32.90" dy="0.82">instructions carrying</tspan><tspan x="32.90" dy="0.82">the R15.3 signpost</tspan></text>
+<circle class="branch-junction" cx="26.32" cy="16.00" r="0.28"/>
+<line class="gate" x1="-2.00" y1="31.00" x2="28.32" y2="31.00"/>
+<line class="gate" x1="12.32" y1="24.00" x2="28.32" y2="24.00"/>
+<line class="gate" x1="25.32" y1="9.00" x2="27.32" y2="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"/>
+<text class="gate-label" x="27.72" y="9.00" data-label-kind="condition-stub" data-edge-id="edge:S0O1S1I1" data-arrow-id="condition_stub:T1" data-transition-id="T1" data-condition-stub-id="condition_stub:T1"><tspan x="27.72" dy="0">server.py imported</tspan></text>
+<line class="gate" x1="25.32" y1="18.00" x2="27.32" y2="18.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1G3I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"/>
+<text class="gate-label" x="27.72" y="18.00" data-label-kind="condition-stub" data-edge-id="edge:G1O1G3I1" data-arrow-id="condition_stub:T2" data-transition-id="T2" data-condition-stub-id="condition_stub:T2"><tspan x="27.72" dy="0">file present AND non-empty</tspan></text>
+<line class="gate" x1="38.48" y1="18.00" x2="40.48" y2="18.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"/>
+<text class="gate-label" x="40.88" y="18.00" data-label-kind="condition-stub" data-edge-id="edge:G1O2S3I1" data-arrow-id="condition_stub:T3" data-transition-id="T3" data-condition-stub-id="condition_stub:T3"><tspan x="40.88" dy="0">file missing OR empty</tspan></text>
+<line class="gate" x1="-1.00" y1="33.00" x2="1.00" y2="33.00" data-label-kind="condition-stub" data-edge-id="edge:G2O1S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"/>
+<text class="gate-label-left" x="-1.40" y="32.66" data-label-kind="condition-stub" data-edge-id="edge:G2O1S4I1" data-arrow-id="condition_stub:T4" data-transition-id="T4" data-condition-stub-id="condition_stub:T4"><tspan x="-1.40" dy="0">tools/call</tspan><tspan x="-1.40" dy="0.68">bodesign_init</tspan></text>
+<line class="gate" x1="12.16" y1="33.00" x2="14.16" y2="33.00" data-label-kind="condition-stub" data-edge-id="edge:G2O2S6I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"/>
+<text class="gate-label" x="14.56" y="33.00" data-label-kind="condition-stub" data-edge-id="edge:G2O2S6I1" data-arrow-id="condition_stub:T5" data-transition-id="T5" data-condition-stub-id="condition_stub:T5"><tspan x="14.56" dy="0">prompts/get bodesign_init</tspan></text>
+<line class="gate" x1="25.32" y1="33.00" x2="27.32" y2="33.00" data-label-kind="condition-stub" data-edge-id="edge:G2O3S8I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"/>
+<text class="gate-label" x="27.72" y="33.00" data-label-kind="condition-stub" data-edge-id="edge:G2O3S8I1" data-arrow-id="condition_stub:T6" data-transition-id="T6" data-condition-stub-id="condition_stub:T6"><tspan x="27.72" dy="0">initialize (client bootstrap)</tspan></text>
+<line class="gate" x1="38.48" y1="31.00" x2="40.48" y2="31.00" data-label-kind="condition-stub" data-edge-id="edge:S3O1S0I1" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"/>
+<text class="gate-label" x="40.88" y="30.32" data-label-kind="condition-stub" data-edge-id="edge:S3O1S0I1" data-arrow-id="condition_stub:T7" data-transition-id="T7" data-condition-stub-id="condition_stub:T7"><tspan x="40.88" dy="0">operator restores</tspan><tspan x="40.88" dy="0.68">doctrine.md +</tspan><tspan x="40.88" dy="0.68">restarts container</tspan></text>
+<line class="gate" x1="-1.00" y1="42.00" x2="1.00" y2="42.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"/>
+<text class="gate-label" x="1.40" y="42.00" data-label-kind="condition-stub" data-edge-id="edge:S4O1S5I1" data-arrow-id="condition_stub:T8" data-transition-id="T8" data-condition-stub-id="condition_stub:T8"><tspan x="1.40" dy="0">return {ok, doctrine, source}</tspan></text>
+<line class="gate" x1="13.32" y1="22.00" x2="15.32" y2="22.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1G3I2" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"/>
+<text class="gate-label-left" x="12.92" y="22.00" data-label-kind="condition-stub" data-edge-id="edge:S5O1G3I2" data-arrow-id="condition_stub:T9" data-transition-id="T9" data-condition-stub-id="condition_stub:T9"><tspan x="12.92" dy="0">resume steady state</tspan></text>
+<line class="gate" x1="12.16" y1="42.00" x2="14.16" y2="42.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1S7I1" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"/>
+<text class="gate-label" x="14.56" y="42.00" data-label-kind="condition-stub" data-edge-id="edge:S6O1S7I1" data-arrow-id="condition_stub:T10" data-transition-id="T10" data-condition-stub-id="condition_stub:T10"><tspan x="14.56" dy="0">return PromptMessage (byte-identical to tool)</tspan></text>
+<line class="gate" x1="17.32" y1="20.00" x2="19.32" y2="20.00" data-label-kind="condition-stub" data-edge-id="edge:S7O1G3I3" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"/>
+<text class="gate-label-left" x="16.92" y="19.32" data-label-kind="condition-stub" data-edge-id="edge:S7O1G3I3" data-arrow-id="condition_stub:T11" data-transition-id="T11" data-condition-stub-id="condition_stub:T11"><tspan x="16.92" dy="0">resume steady state</tspan></text>
+<line class="gate" x1="21.32" y1="18.00" x2="23.32" y2="18.00" data-label-kind="condition-stub" data-edge-id="edge:S8O1G3I4" data-arrow-id="condition_stub:T12" data-transition-id="T12" data-condition-stub-id="condition_stub:T12"/>
+<text class="gate-label" x="23.72" y="17.32" data-label-kind="condition-stub" data-edge-id="edge:S8O1G3I4" data-arrow-id="condition_stub:T12" data-transition-id="T12" data-condition-stub-id="condition_stub:T12"><tspan x="23.72" dy="0">signpost folded into</tspan><tspan x="23.72" dy="0.68">system prompt;</tspan><tspan x="23.72" dy="0.68">resume steady state</tspan></text>
+</svg>

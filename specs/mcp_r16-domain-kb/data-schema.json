@@ -1,0 +1,49 @@
+{
+  "schemas": [
+    {
+      "name": "kb_query_request",
+      "kind": "message",
+      "fields": [
+        { "name": "q", "type": "string (required)", "notes": "query text; tokenized by whitespace for FTS planning" },
+        { "name": "type", "type": "string (optional)", "notes": "filter: concept|control|workflow|step|failure-mode|issue|source|..." },
+        { "name": "limit", "type": "integer (optional, default 10, max 50)", "notes": "" }
+      ]
+    },
+    {
+      "name": "kb_query_response",
+      "kind": "message",
+      "fields": [
+        { "name": "hits", "type": "array<{id,type,title,score,confidence,source_weight}>", "notes": "evidence-graded per R16.3" },
+        { "name": "matchMode", "type": "string enum fts|like-scan|hybrid", "notes": "R16.6 self-describing degradation" },
+        { "name": "total", "type": "integer", "notes": "hit count returned" }
+      ]
+    },
+    {
+      "name": "kb_get_response",
+      "kind": "message",
+      "fields": [
+        { "name": "id", "type": "string", "notes": "dotted slug object id" },
+        { "name": "type", "type": "string", "notes": "" },
+        { "name": "title", "type": "string", "notes": "" },
+        { "name": "body_md", "type": "string", "notes": "full distilled knowledge body" },
+        { "name": "confidence", "type": "string enum verified|partial|inferred|todo", "notes": "R16.3" },
+        { "name": "source_weight", "type": "integer 1..7", "notes": "R16.3" },
+        { "name": "provenance", "type": "object", "notes": "source object id / lineage where derivable from ragbase edges" }
+      ]
+    },
+    {
+      "name": "ragbase_objects_table",
+      "kind": "table",
+      "fields": [
+        { "name": "(actual columns)", "type": "TBD at impl", "notes": "MUST be read from sqlite3 .schema before writing SQL (DD-2); scaffold does not guess column names" }
+      ]
+    },
+    {
+      "name": "container_env",
+      "kind": "config",
+      "fields": [
+        { "name": "BODESIGN_KB_DB", "type": "string path", "notes": "/var/lib/bodesign/kb/ragbase.sqlite; unset => KB_UNAVAILABLE (no path guessing, DD-6)" }
+      ]
+    }
+  ]
+}

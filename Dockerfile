@@ -61,6 +61,14 @@ RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt
 COPY packages /app/packages
 COPY services /app/services
 
+# R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-3/DD-7): the
+# usage-doctrine one-source that the bodesign_init tool + prompts/get entry both
+# project. The raw skills/ tree is deliberately NOT bundled (only scrubbed engine
+# tarballs above), so COPY this ONE file explicitly. server.py _load_doctrine()
+# FAILS LOUD at import if it is missing/empty, so a doctrine-less image is never
+# silently produced. Path matches _DOCTRINE_PATH = <app>/skills/bodesign/doctrine.md.
+COPY skills/bodesign/doctrine.md /app/skills/bodesign/doctrine.md
+
 # Bundle the analyzer engine SCRIPTS (kicad/spice/emc) the C06 verification tools
 # resolve via resolve_skill(). The image already ships the BINARIES (kicad-cli /
 # ngspice); these are the engine scripts that drive them. Without them,

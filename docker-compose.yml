@@ -18,6 +18,11 @@ services:
     volumes:
       # IPC rendezvous: the UDS lives here, host-visible.
       - "./.run:/run/bodesign"
+      # Domain KB (R16, plan mcp_r16-domain-kb DD-3): the repo ragbase store.
+      # Mounted rw because sqlite WAL reads need -shm/-wal side files; read-only
+      # is enforced at the CONNECTION layer (URI mode=ro + PRAGMA query_only=ON)
+      # and the MCP surface has zero KB write tools.
+      - "./.specbase:/var/lib/bodesign/kb"
       # Token file store + analysis cache (host-invisible named volume).
       - "bodesign-sessions:/var/cache/bodesign/sessions"
       # Component Vault (R10): repo-local, host-visible, long-term store under
@@ -34,6 +39,8 @@ services:
       PYTHONUTF8: "1"
       BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
       BODESIGN_VAULT_DIR: "/run/bodesign/vault"
+      # R16 domain KB location (DD-6): env-located, never guessed.
+      BODESIGN_KB_DB: "/var/lib/bodesign/kb/ragbase.sqlite"
       # Gateway prefix for in-page links (gateway strips it for the UDS route).
       BODESIGN_HTTP_BASE: "/bodesign"
       # R14.5 (BR_20260706): explicit per-host WebDAV provision — "capability

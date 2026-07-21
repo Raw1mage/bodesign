@@ -27,7 +27,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 SERVER_NAME = "bodesign"
-SERVER_VERSION = "0.2.0"
+SERVER_VERSION = "0.3.0"
+
+# R17.5 / R0.6 companion-skill identity — SINGLE SOURCE. mcp.json.skillPaths,
+# GET /skills, bodesign_init.capabilities and _skill_nudge all resolve the same
+# companion from this one constant (parity/drift test asserts the three faces).
+COMPANION_SKILL = "bodesign"
 INSTRUCTIONS = (
     "bodesign is an AI PCB design copilot. Since v0.2.0 its surface has THREE classes (R13.5):\n\n"
     "1) COMPUTE TOOLS (this MCP server, prefix bodesign_): the heavy toolchain a host cannot run — "
@@ -64,6 +69,11 @@ INSTRUCTIONS = (
     "self-bundles these analyzer engines (under /opt/bodesign-engines) and sets those env vars, so "
     "C06 simulate/EMC/thermal run out of the box.\n\n"
     "No send-to-fab output without deterministic validation + explicit approval.\n\n"
+    "DOMAIN KB (R16 self-shipped knowledge): bodesign self-ships its PCB-design domain KB — call "
+    "bodesign_kb_query(q) before judgment-heavy design steps (layout, EMC, SI, derating) to recall "
+    "distilled design rules, IPC tables and failure modes; bodesign_kb_get(id) returns the full "
+    "body. Read-only serving of the repo's ragbase store; a missing KB fails fast with "
+    "KB_UNAVAILABLE + remedy, never empty hits.\n\n"
     "USAGE GUIDE: this service self-ships its full usage doctrine — call bodesign_init "
     "(or prompts/get bodesign_init) for the two-plane routing model (landing verbs via "
     "gate.py vs bodesign_ compute tools), the honesty/no-fallback contract, pre-call "
@@ -465,6 +475,31 @@ def _h_stage_dir(a: dict) -> Any:
     return default_store().stage_files(a["files"])
 
 
+def _h_workspace_inspect(a: dict) -> Any:
+    """R17.2.3 workspace inspection: enumerate a token namespace tree so a caller
+    can PROVE expected assets exist before a mutation/render. Pure read — never
+    mutates. Optional `subpath` filters to a subtree (rejected if it escapes the
+    token dir). Returns {token, doc_dir, files[], count}."""
+    from token_store import TokenError, default_store
+    store = default_store()
+    token = a["token"]
+    try:
+        doc_dir = store.resolve(token)
+    except TokenError as error:
+        return {"ok": False, "error": f"token: {error}"}
+    files = store.list_files(doc_dir)
+    subpath = a.get("subpath")
+    if isinstance(subpath, str) and subpath.strip():
+        try:
+            store.safe_join(doc_dir, subpath)  # traversal guard (raises on escape)
+        except ValueError:
+            return {"ok": False, "error": "WORKSPACE_SUBPATH_ESCAPE",
+                    "message": f"subpath {subpath!r} escapes the token namespace"}
+        prefix = subpath.strip("/")
+        files = [f for f in files if f == prefix or f.startswith(prefix + "/")]
+    return {"token": token, "doc_dir": str(doc_dir), "files": files, "count": len(files)}
+
+
 def _h_mcp_call(a: dict) -> Any:
     from mcp_delegate import call_external_mcp_tool
     return call_external_mcp_tool(a["server"], a["tool"], a.get("arguments"))
@@ -781,6 +816,177 @@ def _h_cache_close(a: dict) -> Any:
         return out
 
 
+# ── Domain KB serving (plan mcp_r16-domain-kb, R16) ─────────────────────
+# Read-only in-band serving of the repo ragbase KB (.specbase/ragbase.sqlite,
+# host-side producer: specbase producer.ts ragbase_distill). DD-3: the mount is
+# rw (WAL side files need a writable dir) but read-only is enforced at the
+# CONNECTION layer — URI mode=ro + PRAGMA query_only=ON, per-request, zero
+# write tools on the MCP surface. DD-4/DD-6: fail-fast typed errors, no path
+# guessing, no empty-hits masquerade.
+
+
+class KbError(Exception):
+    """Typed KB serving error — str() is the full content text; the first line
+    carries the error code (KB_UNAVAILABLE / KB_BAD_QUERY / KB_OBJECT_NOT_FOUND)
+    per plans/mcp_r16-domain-kb/errors.md."""
+
+
+_KB_REMEDY = ("remedy: KB lives host-side at <repo>/.specbase/ragbase.sqlite; "
+              "distill via specbase producer.ts (ragbase_distill); mount is live, "
+              "no restart needed.")
+# ragbase FTS5 uses the trigram tokenizer (specbase ragbase-schema): only runs
+# of ≥3 codepoints are indexed, so a shorter token can NEVER match via FTS.
+_KB_MIN_TRIGRAM = 3
+
+
+def _kb_connect():
+    """Per-request read-only sqlite connection (DD-3/DD-6). Env-located; any
+    unavailability raises KB_UNAVAILABLE with the remedy line — never a guessed
+    path, never a silent empty store."""
+    import sqlite3
+    db_path = (os.environ.get("BODESIGN_KB_DB") or "").strip()
+    if not db_path:
+        raise KbError("KB_UNAVAILABLE: BODESIGN_KB_DB env is not set\n" + _KB_REMEDY)
+    if not Path(db_path).is_file():
+        raise KbError(f"KB_UNAVAILABLE: KB sqlite not found at {db_path}\n" + _KB_REMEDY)
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        raise KbError(f"KB_UNAVAILABLE: cannot open KB at {db_path}: {exc}\n" + _KB_REMEDY) from exc
+    try:
+        conn.execute("PRAGMA query_only=ON")
+    except sqlite3.Error as exc:
+        conn.close()
+        raise KbError(f"KB_UNAVAILABLE: cannot open KB at {db_path}: {exc}\n" + _KB_REMEDY) from exc
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _kb_match_plan(q: str) -> dict:
+    """DD-2: specbase gate.ts query-planning semantics, not reinvented.
+    All tokens ≥3 codepoints → FTS AND ('fts'); all <3 → LIKE scan
+    ('like-scan', score=0, recency order); mixed → 'hybrid'."""
+    tokens = [t for t in q.split() if t]
+    fts_tokens = [t for t in tokens if len(t) >= _KB_MIN_TRIGRAM]
+    like_tokens = [t for t in tokens if len(t) < _KB_MIN_TRIGRAM]
+    # per-token quoted phrases: operator-injection guard (fail-loud, a:b literal)
+    fts_expr = " AND ".join('"' + t.replace('"', '""') + '"' for t in fts_tokens) or None
+    if not like_tokens:
+        mode = "fts"
+    elif fts_expr is None:
+        mode = "like-scan"
+    else:
+        mode = "hybrid"
+    return {"fts_expr": fts_expr, "like_tokens": like_tokens, "mode": mode}
+
+
+def _kb_like_pattern(token: str) -> str:
+    escaped = "".join("\\" + c if c in ("\\", "%", "_") else c for c in token)
+    return f"%{escaped}%"
+
+
+def _kb_source_weight(conn, obj_id: str):
+    """Max source_weight (1-7) over the object's distilled_from/extracted_from
+    lineage edges (specbase DD-14 metadata); None when ungraded — never fabricated."""
+    weights = []
+    for r in conn.execute(
+            "SELECT metadata_json FROM ragbase_lineage WHERE source_id = ? "
+            "AND edge_type IN ('distilled_from','extracted_from') "
+            "AND metadata_json != ''", (obj_id,)).fetchall():
+        try:
+            w = json.loads(r["metadata_json"]).get("source_weight")
+        except (ValueError, AttributeError):
+            continue
+        if isinstance(w, (int, float)):
+            weights.append(w)
+    return max(weights) if weights else None
+
+
+_KB_LIKE_COND = "(o.title LIKE ? ESCAPE '\\' OR o.body_md LIKE ? ESCAPE '\\')"
+
+
+def _h_kb_query(a: dict) -> Any:
+    q = (a.get("q") or "").strip()
+    if not q:
+        raise KbError("KB_BAD_QUERY: empty query")
+    type_filter = (a.get("type") or "").strip() or None
+    try:
+        limit = int(a.get("limit", 10))
+    except (TypeError, ValueError):
+        limit = 10
+    limit = min(max(limit, 1), 50)
+    plan = _kb_match_plan(q)
+    conn = _kb_connect()
+    try:
+        where: list[str] = []
+        params: list = []
+        if plan["mode"] == "like-scan":
+            base_from = "FROM ragbase_objects o"
+            select_score = "0 AS score"
+            order = "o.updated_at DESC"
+        else:
+            base_from = "FROM ragbase_fts JOIN ragbase_objects o ON o.rowid = ragbase_fts.rowid"
+            select_score = "bm25(ragbase_fts) AS score"
+            order = "bm25(ragbase_fts)"
+            where.append("ragbase_fts MATCH ?")
+            params.append(plan["fts_expr"])
+        for t in plan["like_tokens"]:
+            where.append(_KB_LIKE_COND)
+            p = _kb_like_pattern(t)
+            params.extend([p, p])
+        if type_filter:
+            where.append("o.type = ?")
+            params.append(type_filter)
+        where_sql = " AND ".join(where) or "1=1"
+        total = conn.execute(f"SELECT count(*) {base_from} WHERE {where_sql}", params).fetchone()[0]
+        rows = conn.execute(
+            f"SELECT o.id, o.type, o.title, o.confidence, {select_score} "
+            f"{base_from} WHERE {where_sql} ORDER BY {order} LIMIT ?",
+            [*params, limit]).fetchall()
+        hits = [{"id": r["id"], "type": r["type"], "title": r["title"],
+                 "score": r["score"], "confidence": r["confidence"],
+                 "source_weight": _kb_source_weight(conn, r["id"])} for r in rows]
+        return {"query": q, "matchMode": plan["mode"], "hits": hits,
+                "total": total, "limit": limit}
+    finally:
+        conn.close()
+
+
+def _h_kb_get(a: dict) -> Any:
+    obj_id = (a.get("id") or "").strip()
+    if not obj_id:
+        raise KbError("KB_BAD_QUERY: id is required")
+    conn = _kb_connect()
+    try:
+        row = conn.execute(
+            "SELECT id, type, title, batch_id, locator, confidence, extraction_status, "
+            "body_md, metadata_json, captured_at, updated_at, scope "
+            "FROM ragbase_objects WHERE id = ?", (obj_id,)).fetchone()
+        if row is None:
+            raise KbError(f"KB_OBJECT_NOT_FOUND: {obj_id}\nconsider: bodesign_kb_query")
+        provenance = []
+        for r in conn.execute(
+                "SELECT target_id, edge_type, metadata_json FROM ragbase_lineage "
+                "WHERE source_id = ? AND edge_type IN ('distilled_from','extracted_from')",
+                (obj_id,)).fetchall():
+            weight = None
+            if r["metadata_json"]:
+                try:
+                    w = json.loads(r["metadata_json"]).get("source_weight")
+                    if isinstance(w, (int, float)):
+                        weight = w
+                except (ValueError, AttributeError):
+                    pass
+            provenance.append({"edge_type": r["edge_type"], "derived_from": r["target_id"],
+                               "source_weight": weight})
+        out = {k: row[k] for k in row.keys()}
+        out["source_weight"] = _kb_source_weight(conn, obj_id)
+        out["provenance"] = provenance
+        return out
+    finally:
+        conn.close()
+
+
 _STR = {"type": "string"}
 TOOLS: list[dict] = [
     # R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-1/DD-5):
@@ -810,22 +1016,22 @@ TOOLS: list[dict] = [
      "description": "Clearance-aware C04 bus length matching: add safe serpentine detours to short routed nets when possible; writes a new .kicad_pcb and returns per-net lengths, skew, budget status, tuned count, and explicit untuned statuses.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "budget_ps": {"type": "number"}, "ps_per_mm": {"type": "number"}, "report_path": _STR, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "budget_ps", "ps_per_mm"]}},
     {"name": "bodesign_layout_drc_gate", "handler": _h_layout_drc_gate,
-     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool. classify_intrinsic (BR_20260708): further split copper clearance violations into package_intrinsic (same-footprint adjacent pads at the land-pattern's own spacing — USB-C/LGA pad gaps that a pad-level clearance override resolves, NOT a routing error) vs true copper. When on, `copper` EXCLUDES intrinsic ones, and package_intrinsic + package_intrinsic_items (evidence: refs + description) are reported; clean still requires zero TRUE copper + unconnected, so intrinsic gaps neither silently pass nor masquerade as routing errors. Gate values are never relaxed to pass — reclassified with evidence, not waved through.",
+     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool. classify_intrinsic (BR_20260708): further split copper clearance violations into package_intrinsic (same-footprint adjacent pads at the land-pattern's own spacing — USB-C/LGA pad gaps that a pad-level clearance override resolves, NOT a routing error) vs true copper. When on, `copper` EXCLUDES intrinsic ones, and package_intrinsic + package_intrinsic_items (evidence: refs + description) are reported; clean still requires zero TRUE copper + unconnected, so intrinsic gaps neither silently pass nor masquerade as routing errors. Gate values are never relaxed to pass — reclassified with evidence, not waved through. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "classify_intrinsic": {"type": "boolean", "description": "split package-intrinsic pad-gap clearance from true copper errors"}, "pad_adjacency": {"type": "object", "description": "optional {REF: true} for footprints known to have intrinsic sub-rule pad gaps"}}, "required": ["board_path"]}},
     {"name": "bodesign_clean_micro_stubs", "handler": _h_clean_micro_stubs,
      "description": "C04 finish (BR_20260708): remove track segments shorter than min_len_mm (default 0.02mm) left by freerouting SES import — the <0.01mm fragments that read as false unconnected / false clearance (the MIC1 GND 0.0001mm-track symptom). Strips ONLY true micro-stubs below the threshold; vias/zones untouched. Returns removed count + each removed stub's net+length so the cleanup is auditable and never silently drops real routing.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "min_len_mm": {"type": "number"}}, "required": ["in_path", "out_path"]}},
     {"name": "bodesign_si_check", "handler": _h_si_check,
-     "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup. Driver/load/edge/thresholds (rdrv/cload/edge_ns/overshoot_pass_pct/overshoot_warn_pct) are caller-overridable — defaults are a documented STM32-class CMOS reference, not a hidden assumption; the result echoes the effective values under `effective`.",
+     "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup. Driver/load/edge/thresholds (rdrv/cload/edge_ns/overshoot_pass_pct/overshoot_warn_pct) are caller-overridable — defaults are a documented STM32-class CMOS reference, not a hidden assumption; the result echoes the effective values under `effective`. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "nets": {"type": "array", "items": _STR}, "z0": {"type": "number"}, "rs": {"type": "number"}, "vdd": {"type": "number"}, "rdrv": {"type": "number"}, "cload": {"type": "number"}, "edge_ns": {"type": "number"}, "overshoot_pass_pct": {"type": "number"}, "overshoot_warn_pct": {"type": "number"}}, "required": ["board_path", "nets"]}},
     {"name": "bodesign_autoroute", "handler": _h_autoroute,
      "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing. NET-CLASS RULES (BR_20260708): pass `netclasses`=[{name,width_mm,clearance_mm,nets?:[exact],match?:[substrings]}] (ORDERED; a net joins the FIRST class that claims it) to inject per-class width/clearance into the exported Specctra DSN — so a 0.5mm-pitch BGA escape region can route at 0.1/0.1mm while signal/power nets keep their own widths, instead of KiCad's single global 0.2mm rule that makes BGA escape impossible. Unclaimed nets fall into a synthesized default class (default_width_mm/default_clearance_mm). Run bodesign_via_in_pad (BGA fanout) BEFORE autoroute so escape stubs exist. Result adds `netclasses` (per-class net counts + DSN-unit widths + dropped-empty warnings) and structured completion (`unconnected`/`complete`) so a router that converged short is visible here, not only at downstream DRC.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_path": _STR, "passes": {"type": "integer"}, "netclasses": {"type": "array", "items": {"type": "object", "properties": {"name": _STR, "width_mm": {"type": "number"}, "clearance_mm": {"type": "number"}, "nets": {"type": "array", "items": _STR}, "match": {"type": "array", "items": _STR}}, "required": ["name", "width_mm", "clearance_mm"]}, "description": "ordered per-class DSN rules; a net joins the first class claiming it (exact `nets` or `match` substring)"}, "default_width_mm": {"type": "number"}, "default_clearance_mm": {"type": "number"}}, "required": ["board_path", "out_path"]}},
     {"name": "bodesign_autoroute_preflight", "handler": _h_autoroute_preflight,
-     "description": "C04 route-step diagnostic gate (BR_20260708): probe the ee worker for freerouting prerequisites and say EXACTLY what is missing instead of leaving the route step to die on a raw Java HeadlessException. Checks four things: freerouting.jar on disk, java on PATH, a HEADFUL JRE (freerouting v1.9.0 CLI still calls Toolkit.getScreenSize(), so a *-headless JRE lacking libawt_xawt.so throws HeadlessException even under xvfb), and xvfb-run/DISPLAY. Returns {ready, missing:[...], reason, remedy:[...], probe:{...}} — ready=true ONLY when jar+java+headful-JRE+xvfb/DISPLAY are all present. Call this before bodesign_autoroute on a fresh worker; on ready=false do NOT claim a routed board, fix the named gap (or route interactively in KiCad). No arguments.",
+     "description": "C04 route-step diagnostic gate (BR_20260708): probe the ee worker for freerouting prerequisites and say EXACTLY what is missing instead of leaving the route step to die on a raw Java HeadlessException. Checks four things: freerouting.jar on disk, java on PATH, a HEADFUL JRE (freerouting v1.9.0 CLI still calls Toolkit.getScreenSize(), so a *-headless JRE lacking libawt_xawt.so throws HeadlessException even under xvfb), and xvfb-run/DISPLAY. Returns {ready, missing:[...], reason, remedy:[...], probe:{...}} — ready=true ONLY when jar+java+headful-JRE+xvfb/DISPLAY are all present. Call this before bodesign_autoroute on a fresh worker; on ready=false do NOT claim a routed board, fix the named gap (or route interactively in KiCad). No arguments. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {}}},
     {"name": "bodesign_placement_preflight", "handler": _h_placement_preflight,
-     "description": "C04 pre-route placement gate (BR_20260708): read a placed .kicad_pcb and fail fast on a doomed floorplan BEFORE routing, from REAL footprint courtyards (no guessing). Two conditions: (1) courtyard_overlap — any two footprint courtyards that intersect (optionally grown by courtyard_margin_mm) are listed in `overlaps` with the measured mm² (route would inherit a wall of clearance DRC — the 65-violation symptom); (2) sheet_under_filled — total courtyard area / usable board area below min_utilization (default 0.40) means everything is crammed into a strip (the 20%% center-strip symptom). Returns passed=true ONLY when zero overlaps AND utilization meets the floor, plus utilization, overlap_pairs, parts/board areas, board_mm (read from Edge.Cuts unless overridden) and human-readable `reasons`. Never mutates the board and never routes: the caller checks passed and, on failure, re-places (strategy='deterministic') rather than routing into overlap.",
+     "description": "C04 pre-route placement gate (BR_20260708): read a placed .kicad_pcb and fail fast on a doomed floorplan BEFORE routing, from REAL footprint courtyards (no guessing). Two conditions: (1) courtyard_overlap — any two footprint courtyards that intersect (optionally grown by courtyard_margin_mm) are listed in `overlaps` with the measured mm² (route would inherit a wall of clearance DRC — the 65-violation symptom); (2) sheet_under_filled — total courtyard area / usable board area below min_utilization (default 0.40) means everything is crammed into a strip (the 20%% center-strip symptom). Returns passed=true ONLY when zero overlaps AND utilization meets the floor, plus utilization, overlap_pairs, parts/board areas, board_mm (read from Edge.Cuts unless overridden) and human-readable `reasons`. Never mutates the board and never routes: the caller checks passed and, on failure, re-places (strategy='deterministic') rather than routing into overlap. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "min_utilization": {"type": "number", "description": "floor for parts-courtyard-area / usable-board-area (default 0.40); below it = sheet_under_filled fail"}, "board_mm": {"type": "array", "items": {"type": "number"}, "description": "[width, height] mm override; omit to read board size from Edge.Cuts"}, "courtyard_margin_mm": {"type": "number", "description": "grow each courtyard by this margin before the overlap test (default 0)"}}, "required": ["board_path"]}},
     {"name": "bodesign_component_search", "handler": _h_component_search,
      "description": "Search the LCSC/EasyEDA vendor component library by MPN or keyword; returns real candidate parts [{mpn, lcsc_id, package, manufacturer, stock, rohs, price1}] for the 100%-fidelity source gate. No fabrication: an empty vendor result is reported found=0, never padded with guesses. Pair with bodesign_component_fetch to pull the chosen lcsc_id's authoritative symbol/footprint/3D.",
@@ -849,6 +1055,10 @@ TOOLS: list[dict] = [
     {"name": "bodesign_stage_dir", "handler": _h_stage_dir,
      "description": "Stage an inline file tree {relpath:{content,encoding}} into a token namespace; returns {token, doc_dir, files}. Pass the token to other tools to operate inside that tree (docxmcp-style).",
      "schema": {"type": "object", "properties": {"files": {"type": "object"}}, "required": ["files"]}},
+    {"name": "bodesign_workspace_inspect", "handler": _h_workspace_inspect,
+     "description": "R17.2.3 workspace inspection: enumerate a token namespace tree and PROVE expected assets exist BEFORE a transform (render/emit/assemble). Pure read — never mutates. Returns {token, doc_dir, files[], count}; optional subpath filters to a subtree (traversal-guarded). Run this before a render/emit call to confirm the inputs you staged are present, and to feed the R0.6 recon step so a first unbounded operation is not flagged as a skipped-contract wall.",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "schema": {"type": "object", "properties": {"token": _STR, "subpath": _STR}, "required": ["token"]}},
     {"name": "bodesign_emit_symbol", "handler": _h_emit_symbol,
      "description": "Generate a KiCad .kicad_sym symbol from a pin list [{number,name,type}].",
      "schema": {"type": "object", "properties": {"symbol_name": _STR, "pins": {"type": "array"}, "output_path": _STR,
@@ -863,23 +1073,23 @@ TOOLS: list[dict] = [
                 "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"},
                 "fidelity": {"type": "boolean", "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."}}, "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
-     "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid.",
+     "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "components": {"type": "array"},
                 "board_mm": {"type": "array"}, "columns": {"type": "integer"}, "place_start_mm": {"type": "number"}, "place_pitch_mm": {"type": "number"}, "margin_mm": {"type": "number"}}, "required": ["out_dir", "project_name", "components"]}},
     {"name": "bodesign_emit_fab", "handler": _h_fab,
      "description": "Export fab outputs (gerbers/drill/pos/step/pdf) from a .kicad_pcb via kicad-cli. The PDF layer set is caller-overridable via pdf_layers; the default (F.Cu,B.Cu,F.SilkS,B.SilkS,Edge.Cuts) suits 2/4-layer boards — pass inner copper layers for 6+ layer stacks so they are not omitted.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "out_dir": _STR, "formats": {"type": "array", "items": _STR}, "pdf_layers": _STR}, "required": ["board_path", "out_dir"]}},
     {"name": "bodesign_simulate", "handler": _h_simulate,
-     "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer.",
+     "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "simulator": _STR, "types": _STR}, "required": ["schematic_path", "out_dir"]}},
     {"name": "bodesign_spice_model_card", "handler": _h_spice_model_card,
      "description": "Generate a datasheet-grounded SPICE model card (diode/ldo/passive) from vault L4 spice_model.* params — deterministic, byte-identical, provenance-stamped. Optional materialize writes the smoke-tested card into <project>/spice/models/ (cascade tier-1, source=vault-grounded). SPX_* errors (missing/ambiguous params, unsupported category) pass through structured; never fabricates parameters.",
      "schema": {"type": "object", "properties": {"mpn": _STR, "category": _STR, "vault_dir": _STR, "materialize": {"type": "boolean"}, "project_dir": _STR}, "required": ["mpn", "category"]}},
     {"name": "bodesign_analyze_emc", "handler": _h_analyze_emc,
-     "description": "EMC pre-compliance risk analysis on a schematic + .kicad_pcb (via kicad analyzers + emc skill): severity-bucketed findings (ground plane, decoupling, return paths, stitching, …). Pre-silicon risk, not certification.",
+     "description": "EMC pre-compliance risk analysis on a schematic + .kicad_pcb (via kicad analyzers + emc skill): severity-bucketed findings (ground plane, decoupling, return paths, stitching, …). Pre-silicon risk, not certification. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "pcb_path": _STR, "out_dir": _STR, "standard": _STR}, "required": ["schematic_path", "pcb_path", "out_dir"]}},
     {"name": "bodesign_analyze_thermal", "handler": _h_analyze_thermal,
-     "description": "Thermal hotspot estimate on a schematic + .kicad_pcb (kicad analyze_thermal); per-component temps + thermal score.",
+     "description": "Thermal hotspot estimate on a schematic + .kicad_pcb (kicad analyze_thermal); per-component temps + thermal score. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "pcb_path": _STR, "out_dir": _STR, "ambient": {"type": "number"}}, "required": ["schematic_path", "pcb_path", "out_dir"]}},
     {"name": "bodesign_export_bom", "handler": _h_export_bom,
      "description": "Export a grouped Bill of Materials (CSV, qty + MPN, DNP excluded) from a schematic; optional xlsx companion.",
@@ -955,6 +1165,16 @@ TOOLS: list[dict] = [
     {"name": "bodesign_analyzer_selfcheck", "handler": _h_analyzer_selfcheck,
      "description": "Deployment self-check for the C06 analyzer engines (kicad/spice/emc): per engine reports engine_resolvable (the analyzer SCRIPTS are bundled + resolvable via BODESIGN_*_SKILL) and binary_present (kicad-cli / ngspice on PATH), plus can_run, resolved_path, image_role (monolith/ee/core), and all_runnable. Answers 'can simulate/analyze_emc/analyze_thermal actually run in this process?' without a docker exec probe. Distinguishes a missing engine script (would cause skipped-no-skills) from a missing binary (skipped-no-simulator). EE-group: runs on the monolith locally, or forwards to the bodesign-ee worker; the lean core reports image_role=core (engines absent by design — it forwards EE).",
      "schema": {"type": "object", "properties": {}}},
+
+    # ── Domain KB serving (plan mcp_r16-domain-kb, R16) ──
+    {"name": "bodesign_kb_query", "handler": _h_kb_query,
+     "description": "READ-ONLY, no side effects: query bodesign's self-shipped PCB-design domain KB (the repo ragbase store — distilled, evidence-graded design rules, IPC tables, derating curves, EMC/SI failure modes, workflow controls). Specbase-identical query semantics: all whitespace tokens ≥3 codepoints → FTS AND (matchMode 'fts'); all <3 (short CJK) → LIKE scan over title/body, score=0, recency-ordered ('like-scan'); mixed → 'hybrid'. Payload always carries matchMode (0 hits is self-describing), hits[] (id/type/title/score/confidence/source_weight) and total. Fail-fast: missing/unmounted KB → KB_UNAVAILABLE + remedy, never empty hits masquerading as no knowledge. Call before judgment-heavy design steps (layout, EMC, SI, derating); bodesign_kb_get(id) returns a hit's full body.",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "schema": {"type": "object", "properties": {"q": {"type": "string", "description": "search query; whitespace-tokenized"}, "type": {"type": "string", "description": "optional object-type filter: concept|control|workflow|failure-mode|source|extract|asset|issue|role|step"}, "limit": {"type": "integer", "description": "max hits; default 10, cap 50"}}, "required": ["q"]}},
+    {"name": "bodesign_kb_get", "handler": _h_kb_get,
+     "description": "READ-ONLY, no side effects: fetch ONE domain-KB object's full distilled body (body_md) plus evidence grading (confidence, source_weight) and provenance (its distilled_from/extracted_from lineage edges with per-edge source_weight). Unknown id → KB_OBJECT_NOT_FOUND (consider: bodesign_kb_query to find the right id).",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "schema": {"type": "object", "properties": {"id": {"type": "string", "description": "KB object id, e.g. control.pcb.emc-decoupling-placement"}}, "required": ["id"]}},
 
     # ── Deliverable-cache lifecycle (plan mcp_r13-landing-webdav-cache, DD-5/DD-6) ──
     {"name": "bodesign_cache_provision", "handler": _h_cache_provision,
@@ -1198,6 +1418,125 @@ def _produced(doc_dir: Path, before: dict) -> list[str]:
     return sorted(out)
 
 
+# R17.2.4/.2.5 typed asset preflight + content assertion (pure functions) and
+# R0.6 companion-skill wall-nudge (single-source generator + fingerprint). Both
+# live in sibling modules so the SAME logic drives run_tool AND the pytest suite.
+try:
+    import preflight as _preflight
+    import _skill_nudge
+except ImportError:  # pragma: no cover - direct-module import path (tests add sys.path)
+    from services.mcp import preflight as _preflight  # type: ignore
+    from services.mcp import _skill_nudge  # type: ignore
+
+# R17.2 tools whose declared asset paths are preflighted before dispatch and whose
+# produced artifacts are content-asserted after. Maps tool name -> the arg keys
+# that name an INPUT asset that must resolve inside the token namespace. Only the
+# render/emit/assemble mutation entries (design DD-4 接入點); pure landing/verify
+# tools are unaffected (additive, no behaviour change on the success path).
+_RENDER_EMIT_ASSET_KEYS = {
+    "bodesign_emit_fab": ("board_path",),
+    "bodesign_emit_doc": ("md_path",),
+    "bodesign_render_companion": ("path",),
+    "bodesign_render_board_model": ("glb_path",),
+    "bodesign_c02_render_enclosure": ("stl_path",),
+}
+
+
+def _endpoint(url: str, transport: str, *, host_executable: bool) -> dict:
+    """One capability-summary endpoint row. host_executable=False marks a
+    container/service endpoint that MUST NOT be presented as host-runnable
+    (R17.1.1) — a bare client reads this flag instead of guessing from the URL."""
+    return {"url": url, "transport": transport, "host_executable": host_executable}
+
+
+def _build_capabilities() -> dict:
+    """R17.1.1 machine-readable capability summary returned alongside the prose
+    doctrine by bodesign_init. Compact + actionable; a conformance test executes
+    a decision from it (R17.1.2) — e.g. branches on
+    transport.service_endpoints[].host_executable being False for a container
+    UDS path. Endpoint values come from mcp.json / the running config, never
+    hard-coded prose."""
+    uds = os.environ.get("BODESIGN_UDS") or str(
+        Path(__file__).resolve().parents[2] / ".run" / "bodesign.sock")
+    port = os.environ.get("BODESIGN_TCP_PORT", "8077")
+    host = os.environ.get("BODESIGN_TCP_HOST", "")
+    # The UDS endpoint is a container/service socket: NOT host-executable as a
+    # bare shell command (R17.6 (b) — init must not recommend a UDS command that
+    # is only a container-side socket path). The TCP endpoint is host-visible.
+    service_endpoints = [
+        _endpoint(f"unix://{uds}:/mcp/", "streamable-http", host_executable=False),
+    ]
+    host_endpoints = []
+    if host:
+        host_endpoints.append(
+            _endpoint(f"http://{host}:{port}/mcp/", "streamable-http", host_executable=True))
+    return {
+        "transport": {
+            "service_endpoints": service_endpoints,
+            "host_endpoints": host_endpoints,
+        },
+        "file_ingress": {
+            "tools": ["bodesign_stage_dir"],
+            "token_model": True,
+            "http": "POST /files (tarball)",
+        },
+        "file_egress": {
+            "resources_read": True,
+            "uri_scheme": "bodesign://files/<token>/<rel>",
+            "http_blob": "/files/{token}/blob/{rel}",
+        },
+        "webdav_state": {
+            "writable": True,
+            "lifecycle": ["bodesign_cache_provision", "bodesign_cache_export",
+                          "bodesign_cache_close"],
+        },
+        "companion_skill": COMPANION_SKILL,
+        "conditional_tool_families": [
+            {"group": "me", "available": bool(os.environ.get("BODESIGN_ME_WORKER_URL")),
+             "tools": sorted(_ME_GROUP_TOOLS)},
+            {"group": "ee", "available": bool(os.environ.get("BODESIGN_EE_WORKER_URL")),
+             "tools": sorted(_EE_GROUP_TOOLS)},
+        ],
+    }
+
+
+def render_remedy_line(result: dict) -> str | None:
+    """R0.6.4 / R0.5: project a structured ``error.remedy`` dict onto MCP's only
+    portable error surface — a ``remedy:`` text line — so a bare client's model
+    sees the fix with zero parsing. Returns None when there is no remedy to
+    project (byte-identical to before — 天條 11, no fabricated affordance).
+
+    Mirrors docxmcp bin/mcp_server.py _render_remedy_line: a plain-string remedy
+    is emitted verbatim; a dict remedy surfaces its ``note`` (+ first runnable
+    ``command`` when present)."""
+    if not isinstance(result, dict):
+        return None
+    err = result.get("error")
+    if not isinstance(err, dict):
+        return None
+    remedy = err.get("remedy")
+    if remedy is None:
+        return None
+    if isinstance(remedy, str):
+        body = remedy.strip()
+        return f"remedy: {body}" if body else None
+    if not isinstance(remedy, dict):
+        return None
+    parts: list[str] = []
+    note = remedy.get("note")
+    if isinstance(note, str) and note.strip():
+        parts.append(note.strip())
+    commands = remedy.get("commands")
+    if isinstance(commands, list):
+        for cmd in commands:
+            if isinstance(cmd, dict) and isinstance(cmd.get("cmd"), str) and cmd["cmd"].strip():
+                parts.append(f"run on host: {cmd['cmd'].strip()}")
+                break
+    if not parts:
+        return None
+    return f"remedy: {'; '.join(parts)}"
+
+
 def run_tool(name: str, arguments: dict) -> dict:
     # Landed tool (v0.2.0 R13 split): typed TOOL_LANDED + the equivalent gate.py
     # command line — never a silent 404 / anonymous unknown-tool error (R3).
@@ -1220,8 +1559,19 @@ def run_tool(name: str, arguments: dict) -> dict:
     # doctrine is served whole (no silent truncation of the contract).
     if name == "bodesign_init":
         _tools_log.info("bodesign_init_hit")
+        # R17.1.1: prose doctrine preserved byte-for-byte (three existing keys);
+        # `capabilities` is ADDITIVE and machine-readable so a conformance test
+        # can execute a decision from it (R17.1.2), e.g. branch on a container
+        # UDS endpoint carrying host_executable=False.
         return {"ok": True, "doctrine": BODESIGN_GUIDE_DOCTRINE,
-                "source": "skills/bodesign/doctrine.md"}
+                "source": "skills/bodesign/doctrine.md",
+                "capabilities": _build_capabilities()}
+    # R17.2.3 workspace inspection is served IN-PROCESS (like bodesign_init): its
+    # handler resolves the token itself, so it must NOT go through the generic
+    # token-pop / path-resolution dispatch below (which would strip `token` before
+    # the handler sees it). Pure read; never mutates.
+    if name == "bodesign_workspace_inspect":
+        return _h_workspace_inspect(dict(arguments or {}))
     # Worker routing: forward a non-local tool to its worker, or report it
     # unavailable when no worker is configured (the build123d gate, generalized).
     decision, target = _route_tool(name)
@@ -1240,6 +1590,9 @@ def run_tool(name: str, arguments: dict) -> dict:
         return {"error": f"unknown tool: {name}"}
     args = dict(arguments or {})
     token = args.pop("token", None)
+    # R17.2.5 content assertions ride as an opt-in `assert` arg, popped so it never
+    # reaches the handler; None means no assertion requested (delivery_ready default).
+    assertions = args.pop("assert", None)
     doc_dir = before = None
     if token:
         from token_store import TokenError, default_store
@@ -1247,18 +1600,112 @@ def run_tool(name: str, arguments: dict) -> dict:
             doc_dir = default_store().resolve(token)
         except TokenError as error:
             return {"ok": False, "error": f"token: {error}"}
+        # R17.2.4 typed asset preflight: BEFORE the handler runs, reject unresolved /
+        # missing-media / out-of-namespace / host-only-absolute asset paths for the
+        # render/emit/assemble mutation entries — fail-fast + typed code + R0.5 remedy,
+        # never a silent continue (design DD-4). Uses the pre-resolution rel args so
+        # the token namespace is the reference frame.
+        asset_keys = _RENDER_EMIT_ASSET_KEYS.get(name)
+        if asset_keys:
+            asset_paths = [args[k] for k in asset_keys if isinstance(args.get(k), str)]
+            verdict = _preflight.preflight_assets(doc_dir, asset_paths, in_token=True)
+            if not verdict["ok"]:
+                _tools_log.info("preflight_reject tool=%s reasons=%s", name,
+                                [f["reason"] for f in verdict["failures"]])
+                return {"ok": False, "error": verdict["error"]["code"],
+                        "message": verdict["error"]["message"],
+                        "preflight": verdict, "remedy": verdict["error"]["remedy"]}
         for key in PATH_ARG_KEYS:
             if isinstance(args.get(key), str):
                 args[key] = str((doc_dir / args[key].lstrip("/")).resolve())
         before = _snapshot(doc_dir)
     try:
         result = {"ok": True, "result": _jsonable(spec["handler"](args))}
+    except KbError as error:
+        # R16 typed KB errors: content first line IS the code (KB_UNAVAILABLE /
+        # KB_BAD_QUERY / KB_OBJECT_NOT_FOUND) — no exception-class prefix.
+        return {"ok": False, "isError": True, "error": str(error)}
     except Exception as error:  # surface tool errors as data, not transport failures
-        return {"ok": False, "error": f"{type(error).__name__}: {error}"}
+        return _maybe_nudge({"ok": False, "error": f"{type(error).__name__}: {error}"},
+                            name, args, doc_dir)
     if token:
         result["token"] = token
         result["doc_dir"] = str(doc_dir)
-        result["produced"] = [{"rel": r, "url": f"/files/{token}/blob/{r}"} for r in _produced(doc_dir, before)]
+        produced = [{"rel": r, "url": f"/files/{token}/blob/{r}"} for r in _produced(doc_dir, before)]
+        result["produced"] = produced
+        # R17.2.5: when the caller asked for content assertions, a transport-valid
+        # but EMPTY / short artifact is NOT delivery-ready — refuse it loudly.
+        if assertions is not None:
+            produced_meta = _produced_meta(doc_dir, [p["rel"] for p in produced])
+            averdict = _preflight.assert_content(produced_meta, assertions)
+            result["content_assertion"] = averdict
+            if not averdict["delivery_ready"]:
+                _tools_log.info("assertion_not_delivery_ready tool=%s code=%s",
+                                name, averdict["error"]["code"])
+                return {"ok": False, "error": averdict["error"]["code"],
+                        "message": averdict["error"]["message"],
+                        "delivery_ready": False, "content_assertion": averdict,
+                        "produced": produced}
+    return _maybe_nudge(result, name, args, doc_dir)
+
+
+def _produced_meta(doc_dir: Path, rels: list) -> list:
+    """Build the {rel,size,text?} list assert_content consumes from produced rels.
+    Text is only read for small text-like artifacts (required_text checks); binary
+    / large files carry size only (never loaded into memory)."""
+    out = []
+    for rel in rels:
+        p = (Path(doc_dir) / rel)
+        try:
+            size = p.stat().st_size
+        except OSError:
+            size = 0
+        meta = {"rel": rel, "size": size}
+        if p.suffix.lower() in (".md", ".txt", ".csv", ".json", ".xml", ".svg") and size <= 1_000_000:
+            try:
+                meta["text"] = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                pass
+        out.append(meta)
+    return out
+
+
+def _maybe_nudge(result: dict, name: str, args: dict, doc_dir) -> dict:
+    """R0.6 companion-skill wall-nudge. Fingerprint a skipped-companion-skill wall
+    from the toolcall itself (never caller skill-state — R0.6.1 定海神針) and, on
+    the message the caller ALREADY hit, attach a single-source remedy.
+
+    - hard: enrich the (already-failing) result's error.remedy; a silent ok=True
+      no-op at a hard wall is converted to a loud failure (R0.6.3 hard).
+    - advisory: append a NON-blocking hint to warnings; success is preserved.
+
+    The structured remedy also gets projected onto the portable content-text line
+    by render_remedy_line when the transport serialises the error (R0.6.4)."""
+    if not isinstance(result, dict):
+        return result
+    workspace_files = None
+    if doc_dir is not None:
+        try:
+            from token_store import default_store
+            workspace_files = default_store().list_files(Path(doc_dir))
+        except Exception:  # pragma: no cover - inspection best-effort, never blocks
+            workspace_files = None
+    wall = _skill_nudge.detect_wall(name, args, doc_dir, workspace_files=workspace_files)
+    if wall is None:
+        return result
+    if wall["force"] == "hard":
+        # Convert a silent ok=True no-op into a loud failure; enrich an existing one.
+        if result.get("ok") is not False:
+            result = {"ok": False, "error": "WALL_SKIPPED_CONTRACT",
+                      "message": wall["why"], "was_silent_noop": True}
+        result.setdefault("error", "WALL_SKIPPED_CONTRACT")
+        result["remedy"] = wall["remedy"]
+        _tools_log.info("wall_nudge_attached tool=%s force=hard why=%s", name, wall["why"])
+    else:  # advisory — never converts success to failure
+        result.setdefault("warnings", [])
+        if isinstance(result["warnings"], list):
+            result["warnings"].append(wall["advisory"])
+        _tools_log.info("wall_nudge_attached tool=%s force=advisory why=%s", name, wall["why"])
     return result
 
 
@@ -1647,7 +2094,75 @@ def build_server():
             )],
         )
 
+    # R17.2.2 portable resource egress (plan mcp_r17-r06-conformance DD-2): expose
+    # every token-produced blob as bodesign://files/<token>/<rel> so a BARE MCP
+    # client (stdio-only; no HTTP blob route / WebDAV / UDS curl) retrieves
+    # deliverables through the standard resources/* floor (R0.1). Same permission
+    # model as the HTTP blob route: the caller must hold the token (a capability),
+    # and TokenStore.safe_join guards traversal — no new exposure surface.
+    from mcp.types import Resource
+    from pydantic import AnyUrl
+
+    _RES_SCHEME = "bodesign"
+
+    def _parse_resource_uri(uri: str) -> tuple[str, str]:
+        # bodesign://files/<token>/<rel...>
+        s = str(uri)
+        prefix = f"{_RES_SCHEME}://files/"
+        if not s.startswith(prefix):
+            raise ValueError(f"not a bodesign files resource: {uri}")
+        rest = s[len(prefix):]
+        token, _, rel = rest.partition("/")
+        if not token or not rel:
+            raise ValueError(f"resource uri needs <token>/<rel>: {uri}")
+        return token, rel
+
+    @server.list_resources()
+    async def list_resources() -> list:
+        from token_store import default_store
+        store = default_store()
+        out: list = []
+        root = store.root
+        try:
+            token_dirs = [d for d in root.glob("tok_*") if d.is_dir()]
+        except OSError:
+            token_dirs = []
+        for d in token_dirs:
+            token = d.name
+            for rel in store.list_files(d):
+                out.append(Resource(
+                    uri=AnyUrl(f"{_RES_SCHEME}://files/{token}/{rel}"),
+                    name=f"{token}/{rel}",
+                    description=f"token-produced artifact {rel} in {token}",
+                    mimeType=_mime_for(rel),
+                ))
+        return out
+
+    @server.read_resource()
+    async def read_resource(uri) -> bytes:
+        from token_store import TokenError, default_store
+        store = default_store()
+        try:
+            token, rel = _parse_resource_uri(uri)
+        except ValueError as error:
+            raise KeyError(f"RESOURCE_NOT_FOUND: {error}")
+        try:
+            doc_dir = store.resolve(token)
+            target = store.safe_join(doc_dir, rel)
+        except (TokenError, ValueError) as error:
+            raise KeyError(f"RESOURCE_NOT_FOUND: {error}")
+        if not target.is_file():
+            raise KeyError(f"RESOURCE_NOT_FOUND: {token}/{rel}")
+        _tools_log.info("resource_read token=%s rel=%s", token, rel)
+        return target.read_bytes()
+
     return server
+
+
+def _mime_for(rel: str) -> str:
+    import mimetypes
+    mt, _ = mimetypes.guess_type(rel)
+    return mt or "application/octet-stream"
 
 
 async def run_stdio() -> None:

@@ -490,8 +490,11 @@ class McpServerTests(unittest.TestCase):
         plus bodesign_ato_build (dsl/atopile-integration) and
         bodesign_prd_bom_crosscheck (quality/prd-bom-crosscheck L1) = 45,
         plus bodesign_si_check + bodesign_vault_spec_check
-        (quality/verify-checker-skillification advisory checkers) = 47."""
-        self.assertEqual(len(self.server.TOOLS), 47)
+        (quality/verify-checker-skillification advisory checkers) = 47,
+        plus subsequent registry additions (see CHANGELOG) = 53,
+        plus bodesign_kb_query + bodesign_kb_get
+        (mcp_r16-domain-kb in-band domain KB, R16) = 55."""
+        self.assertEqual(len(self.server.TOOLS), 55)
         names = {t["name"] for t in self.server.TOOLS}
         # borderline / infrastructure keeps (design.md DD-3):
         for kept in ("bodesign_c00_emit_prd_docx", "bodesign_c02_voice_to_design",

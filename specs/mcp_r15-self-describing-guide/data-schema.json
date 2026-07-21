@@ -1,0 +1,39 @@
+{
+  "schemas": [
+    {
+      "name": "bodesign_init tool result",
+      "kind": "json",
+      "fields": [
+        { "name": "ok", "type": "boolean", "notes": "always true on success; startup fail-fast means the server never serves with false" },
+        { "name": "doctrine", "type": "string", "notes": "full BODESIGN_GUIDE_DOCTRINE text (~11872 chars); covers R15.2 four classes" },
+        { "name": "source", "type": "string", "notes": "provenance marker, e.g. skills/bodesign/doctrine.md" }
+      ]
+    },
+    {
+      "name": "prompts/get bodesign_init result",
+      "kind": "message",
+      "fields": [
+        { "name": "description", "type": "string", "notes": "prompt entry description" },
+        { "name": "messages[].role", "type": "string", "notes": "user|assistant per MCP prompts spec" },
+        { "name": "messages[].content.text", "type": "string", "notes": "byte-identical to tool doctrine (same BODESIGN_GUIDE_DOCTRINE constant)" }
+      ]
+    },
+    {
+      "name": "bodesign_init tool annotations (DD-5)",
+      "kind": "config",
+      "fields": [
+        { "name": "readOnlyHint", "type": "boolean", "notes": "true — guide never mutates state" },
+        { "name": "destructiveHint", "type": "boolean", "notes": "false" },
+        { "name": "idempotentHint", "type": "boolean", "notes": "true" },
+        { "name": "openWorldHint", "type": "boolean", "notes": "false — closed, self-contained" }
+      ]
+    },
+    {
+      "name": "INSTRUCTIONS signpost constant (R15.3)",
+      "kind": "config",
+      "fields": [
+        { "name": "instructions", "type": "string", "notes": "server + mcp.json both carry: 'USAGE GUIDE: ... call bodesign_init (or prompts/get bodesign_init) ... before first use'" }
+      ]
+    }
+  ]
+}

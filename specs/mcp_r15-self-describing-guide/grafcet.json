@@ -1,0 +1,191 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Server process idle before import (no doctrine loaded)",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      3
+    ],
+    "LinkOutputNumber": [
+      1
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "server.py imported"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "_load_doctrine() reads skills/bodesign/doctrine.md",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      0
+    ],
+    "LinkOutputNumber": [
+      2,
+      3
+    ],
+    "LinkOutputType": "divergence_or",
+    "Condition": [
+      "file present AND non-empty",
+      "file missing OR empty"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Bind BODESIGN_GUIDE_DOCTRINE; server ready to serve (steady state)",
+    "LinkInputType": [
+      "convergence_or"
+    ],
+    "LinkInputNumber": [
+      1,
+      5,
+      7,
+      8
+    ],
+    "LinkOutputNumber": [
+      4,
+      6,
+      8
+    ],
+    "LinkOutputType": "divergence_or",
+    "Condition": [
+      "tools/call bodesign_init",
+      "prompts/get bodesign_init",
+      "initialize (client bootstrap)"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Raise DOCTRINE_SOURCE_MISSING/_EMPTY; refuse to boot (fail-fast, tiantiao 11)",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      1
+    ],
+    "LinkOutputNumber": [
+      0
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "operator restores doctrine.md + restarts container"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "run_tool dispatches bodesign_init in-process",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      2
+    ],
+    "LinkOutputNumber": [
+      5
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "return {ok, doctrine, source}"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Doctrine delivered in-band to tool-first agent",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      4
+    ],
+    "LinkOutputNumber": [
+      2
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "resume steady state"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "get_prompt projects the same BODESIGN_GUIDE_DOCTRINE constant",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      2
+    ],
+    "LinkOutputNumber": [
+      7
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "return PromptMessage (byte-identical to tool)"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Doctrine delivered in-band to bare prompts client",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      6
+    ],
+    "LinkOutputNumber": [
+      2
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "resume steady state"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 8,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "initialize returns instructions carrying the R15.3 signpost",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      2
+    ],
+    "LinkOutputNumber": [
+      2
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "signpost folded into system prompt; resume steady state"
+    ],
+    "SubGrafcet": []
+  }
+]

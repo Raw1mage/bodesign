@@ -1,0 +1,45 @@
+{
+  "schemas": [
+    {
+      "name": "InitCapabilities",
+      "kind": "json",
+      "fields": [
+        {"name": "transport", "type": "object", "notes": "{ service_endpoints[]:{url,transport,host_executable:bool}, host_endpoints[]:{url,transport,host_executable:bool} } — container UDS path carries host_executable=false (R17.1.1)"},
+        {"name": "file_ingress", "type": "object", "notes": "{ tools:[bodesign_stage_dir], token_model:true }"},
+        {"name": "file_egress", "type": "object", "notes": "{ resources_read:true, http_blob:'/files/{token}/blob/{rel}', uri_scheme:'bodesign://files/<token>/<rel>' }"},
+        {"name": "webdav_state", "type": "object", "notes": "{ lifecycle:[cache_provision,cache_export,cache_close], writable:bool }"},
+        {"name": "companion_skill", "type": "string", "notes": "COMPANION_SKILL constant = 'bodesign' (single-source, R17.5)"},
+        {"name": "conditional_tool_families", "type": "array", "notes": "[{group, tools[], available:bool}] — worker-routed families flagged by availability"}
+      ]
+    },
+    {
+      "name": "PreflightVerdict",
+      "kind": "json",
+      "fields": [
+        {"name": "ok", "type": "bool", "notes": "true iff every declared asset resolved inside the token namespace"},
+        {"name": "resolved", "type": "array", "notes": "rel paths that resolved"},
+        {"name": "failures", "type": "array", "notes": "[{path, reason: 'unresolved'|'missing_media'|'out_of_namespace'|'host_only_absolute'}]"},
+        {"name": "error", "type": "object", "notes": "when !ok: {code:'PREFLIGHT_UNRESOLVED'|'PREFLIGHT_OUT_OF_NAMESPACE'|..., message, remedy:{note}}"}
+      ]
+    },
+    {
+      "name": "AssertionVerdict",
+      "kind": "json",
+      "fields": [
+        {"name": "delivery_ready", "type": "bool", "notes": "false when any assertion fails; a transport-valid but empty artifact is NOT delivery-ready"},
+        {"name": "checked", "type": "object", "notes": "{expected_files, expected_media, required_text, non_empty} echoed with per-item pass/fail"},
+        {"name": "error", "type": "object", "notes": "when !delivery_ready: {code:'ASSERTION_EMPTY'|'ASSERTION_MISSING_FILE'|'ASSERTION_MISSING_TEXT', message}"}
+      ]
+    },
+    {
+      "name": "WallNudge",
+      "kind": "json",
+      "fields": [
+        {"name": "force", "type": "string", "notes": "'hard' (enrich existing failure) | 'advisory' (non-blocking hint)"},
+        {"name": "why", "type": "string", "notes": "the observable fingerprint: bad-shape id / grain-mismatch zero-element / first unbounded sweep"},
+        {"name": "correct_primitive", "type": "string", "notes": "the primitive the caller should have used (e.g. bodesign_workspace_inspect)"},
+        {"name": "remedy", "type": "object", "notes": "{note} — single-source from _skill_nudge, projected to portable content text via _render_remedy_line equivalent"}
+      ]
+    }
+  ]
+}

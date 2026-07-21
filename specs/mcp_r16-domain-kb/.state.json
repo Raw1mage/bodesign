@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-11T10:55:26.548Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-11T11:01:40.649Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "proposal/spec/design DD-1..6 + idef0 4-activity skeleton + grafcet 7-step runtime complete; R16 reference impl scoped"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-11T11:01:40.766Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md 3 phases + handoff + test-vectors TV-1..7 + errors + observability complete"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-11T11:01:40.887Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "begin bodesign_kb_query/kb_get implementation (coding subagent dispatch)"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-11T11:22:44.917Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "all tasks checked; validation evidence: test_kb_tools 11/11, baseline-identical regression set, live UDS smoke fts total=5, TV-6 two-doors consistency passed"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-16T13:05:53.816Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確裁決 2026-07-16：6 個 verified plan 全部畢業"
+    }
+  ]
+}

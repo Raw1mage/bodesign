@@ -63,6 +63,7 @@ bodesign 現況（recon 2026-07-07）：
 - **DD-6 (新建 prompts handler)**：bodesign 現無 prompts/get handler，需在
   `services/mcp/server.py` 新建 `prompts/list`+`prompts/get`（至少含 R15 guide entry）。
   異於 docxmcp（已有 curated prompts、只需擴充）。範本：docxmcp `bin/mcp_server.py`。
+- **DD-7**: DD-2a (doctrine source form = condensed doctrine.md, NOT raw SKILL.md): Recon 證實 bodesign Dockerfile 刻意不 COPY 原始 skills/ 樹 (line 68-69: "NOT the raw skills/ tree, which is incomplete + unscrubbed"), 只 extract scrubbed engine tarballs (kicad/spice/emc)。因此 DD-2 的 "直接用 skills/bodesign/SKILL.md 為 source" 在 container 內檔案不存在。且 SKILL.md 為 32KB/424 行 (spine + router + honesty), 過大且非 portable condensate。決定比照 docxmcp reference pattern: author 一份 condensed skills/bodesign/doctrine.md (docxmcp doctrine.md 為 174 行), 承載 R15.2 四類 (cross-tool tradeoffs / pre-call disciplines / organ coordination / gotchas), 並在 Dockerfile 加 targeted COPY skills/bodesign/doctrine.md。doctrine.md 開頭註明與 SKILL.md 同步關係。此舉同時滿足 R1 mitigation (檔過大退回抽核心段) 與 DD-3 (啟動載入 fail-fast)。
 
 ## Risks / Trade-offs
 
@@ -116,3 +117,21 @@ Flow：companion skill SKILL.md 是 doctrine 唯一權威 → server 啟動時�
 與 prompts entry 同源投影 → instructions signpost 指向 guide → agent 在 action
 boundary 依 signpost 呼叫 guide → doctrine 以 tool result 就地遞送（delivered
 context）。
+
+### IDEF0 skeleton mapping（architecture derived from idef0.json）
+
+此設計掛在 `idef0.json` 的 A0 分解骨架上，逐一對應：
+
+- **A1 — Load & bind doctrine at startup**：`_load_doctrine()` 讀
+  `skills/bodesign/doctrine.md` 到 `BODESIGN_GUIDE_DOCTRINE` 常數，缺檔/空檔
+  fail-fast（DD-3、DD-7、天條 11）。A1 的 output（doctrine 常數）是 A2/A3 的 input。
+- **A2 — Serve bodesign_init tool（R15.1 tool face）**：`run_tool` in-process 分派
+  `bodesign_init`，回 `{ok, doctrine, source}`（DD-5 annotations）。
+- **A3 — Serve prompts/get bodesign_init（R15.1 prompts face）**：新建 `get_prompt`
+  handler，投影**同一** A1 常數，回 byte-identical doctrine（DD-1、DD-6）。
+- **A4 — Emit R15.3 signpost via instructions**：`INSTRUCTIONS` 常數 +
+  `mcp.json.instructions` 各載 signpost（DD-4），於 `initialize` 回傳。
+
+A2/A3/A4 皆以 A1 綁定的單一 doctrine 常數為 control-bound source（R15.5 one-source）；
+grafcet.json 描述這四個 activity 在 runtime 的 step-transition 行為（startup →
+steady-state serve → fail-fast branch）。

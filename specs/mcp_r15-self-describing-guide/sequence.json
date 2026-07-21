@@ -1,0 +1,32 @@
+[
+  {
+    "title": "bodesign_init tool call (R15.1 tool face)",
+    "participants": ["Agent", "bodesign server", "BODESIGN_GUIDE_DOCTRINE"],
+    "messages": [
+      { "from": "Agent", "to": "bodesign server", "label": "tools/call bodesign_init" },
+      { "from": "bodesign server", "to": "BODESIGN_GUIDE_DOCTRINE", "label": "read in-memory constant (loaded at startup)" },
+      { "from": "BODESIGN_GUIDE_DOCTRINE", "to": "bodesign server", "label": "doctrine text" },
+      { "from": "bodesign server", "to": "Agent", "label": "{ok:true, doctrine, source}" }
+    ]
+  },
+  {
+    "title": "prompts/get bodesign_init (R15.1 prompts face, same source)",
+    "participants": ["BareClient", "bodesign server", "BODESIGN_GUIDE_DOCTRINE"],
+    "messages": [
+      { "from": "BareClient", "to": "bodesign server", "label": "prompts/get bodesign_init" },
+      { "from": "bodesign server", "to": "BODESIGN_GUIDE_DOCTRINE", "label": "project same constant" },
+      { "from": "BODESIGN_GUIDE_DOCTRINE", "to": "bodesign server", "label": "doctrine text (byte-identical)" },
+      { "from": "bodesign server", "to": "BareClient", "label": "PromptMessage(doctrine)" }
+    ]
+  },
+  {
+    "title": "Startup doctrine load + signpost (R15.3, fail-fast R15.5)",
+    "participants": ["Container", "bodesign server", "doctrine.md"],
+    "messages": [
+      { "from": "Container", "to": "bodesign server", "label": "import server.py" },
+      { "from": "bodesign server", "to": "doctrine.md", "label": "_load_doctrine() read skills/bodesign/doctrine.md" },
+      { "from": "doctrine.md", "to": "bodesign server", "label": "content (or missing/empty -> raise, refuse boot)" },
+      { "from": "bodesign server", "to": "bodesign server", "label": "bind BODESIGN_GUIDE_DOCTRINE; INSTRUCTIONS carries signpost" }
+    ]
+  }
+]

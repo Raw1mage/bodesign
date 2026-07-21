@@ -17,6 +17,10 @@ services:
     environment:
       BODESIGN_ME_WORKER_URL: "http://bodesign-me:8077"
       BODESIGN_EE_WORKER_URL: "http://bodesign-ee:8077"
+      # R16 domain KB (plan mcp_r16-domain-kb DD-6): kb tools are core-group,
+      # so only the core front needs the env; the ./.specbase mount is inherited
+      # from the base compose (volume lists merge across files).
+      BODESIGN_KB_DB: "/var/lib/bodesign/kb/ragbase.sqlite"
     depends_on:
       - bodesign-me
       - bodesign-ee

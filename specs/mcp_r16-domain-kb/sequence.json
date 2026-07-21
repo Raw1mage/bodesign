@@ -1,0 +1,33 @@
+[
+  {
+    "title": "kb_query happy path (FTS)",
+    "participants": ["Agent", "MCPServer", "RagbaseSqlite"],
+    "messages": [
+      { "from": "Agent", "to": "MCPServer", "label": "tools/call bodesign_kb_query(q='EMC decoupling', limit=10)" },
+      { "from": "MCPServer", "to": "RagbaseSqlite", "label": "open mode=ro + PRAGMA query_only=ON" },
+      { "from": "MCPServer", "to": "RagbaseSqlite", "label": "FTS MATCH (all tokens >=3 codepoints)" },
+      { "from": "RagbaseSqlite", "to": "MCPServer", "label": "rows: id/type/title/score/confidence/source_weight" },
+      { "from": "MCPServer", "to": "Agent", "label": "{hits[], matchMode:'fts', total}" }
+    ]
+  },
+  {
+    "title": "kb_query fail-fast (KB missing)",
+    "participants": ["Agent", "MCPServer"],
+    "messages": [
+      { "from": "Agent", "to": "MCPServer", "label": "tools/call bodesign_kb_query(q=...)" },
+      { "from": "MCPServer", "to": "MCPServer", "label": "BODESIGN_KB_DB missing/unreadable" },
+      { "from": "MCPServer", "to": "Agent", "label": "isError: KB_UNAVAILABLE + remedy line (host-side distill path)" }
+    ]
+  },
+  {
+    "title": "one KB two doors (R16.7)",
+    "participants": ["HostAgent", "GateTs", "RagbaseSqlite", "MCPServer", "RemoteAgent"],
+    "messages": [
+      { "from": "HostAgent", "to": "GateTs", "label": "bun gate.ts ragbase_query --arg q='clearance voltage'" },
+      { "from": "GateTs", "to": "RagbaseSqlite", "label": "read (host path .specbase/ragbase.sqlite)" },
+      { "from": "RemoteAgent", "to": "MCPServer", "label": "bodesign_kb_query(q='clearance voltage')" },
+      { "from": "MCPServer", "to": "RagbaseSqlite", "label": "read (bind mount, same inode)" },
+      { "from": "RagbaseSqlite", "to": "RagbaseSqlite", "label": "same object id set both doors" }
+    ]
+  }
+]
