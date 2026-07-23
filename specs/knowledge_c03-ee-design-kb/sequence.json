@@ -1,0 +1,16 @@
+[
+  {
+    "title": "C03 KB 可發現性 + passive-completeness gate 依賴序（A1→A2→A3）",
+    "participants": ["Agent", "kb_query(server.py)", "ragbase(specbase)", "compose_schematic/analyze/check_c03", "User"],
+    "messages": [
+      { "from": "Agent", "to": "kb_query(server.py)", "label": "A1: 多詞英文 query → 改 OR-ranked 召回（bm25），AND 降 opt-in mode=all" },
+      { "from": "kb_query(server.py)", "to": "Agent", "label": "A1 驗證: crystal oscillator load capacitor 命中在庫物件；單詞不退化；matchMode 自描述" },
+      { "from": "Agent", "to": "ragbase(specbase)", "label": "A2: producer.ts ingest regulator拓撲/SI數值/pull-up sizing（provenance 分級，無源標 UNVERIFIED）" },
+      { "from": "ragbase(specbase)", "to": "kb_query(server.py)", "label": "A2 驗證: LDO buck boost topology / signal integrity termination / I2C pull-up 各命中新 control" },
+      { "from": "kb_query(server.py)", "to": "compose_schematic/analyze/check_c03", "label": "A3 判準供給: decoupling 每2pin 0.1µF / crystal load cap 公式 / I²C pull-up 區間（可查詢 threshold）" },
+      { "from": "Agent", "to": "User", "label": "A3 gate policy 確認: 哪些 pin class 算 mandatory obligation + waiver 語義（升使用者）" },
+      { "from": "Agent", "to": "compose_schematic/analyze/check_c03", "label": "A3: 把 9-class obligation 表機器投影到已組出的圖（校驗非合成），seam 三候選裁決" },
+      { "from": "compose_schematic/analyze/check_c03", "to": "Agent", "label": "A3 輸出: pinout-only→HARD FAIL(passive_gaps/PC-001)；honest-subset+waiver→PASS(記錄)" }
+    ]
+  }
+]

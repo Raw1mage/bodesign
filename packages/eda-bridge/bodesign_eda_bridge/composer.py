@@ -283,6 +283,35 @@ class ComposeResult:  # noqa: D101 — fidelity field appended for BR1 (2026-07-
     # BR_20260708: drawn wire segments crossing a NON-host symbol body (keep-out).
     # Empty == every drawn wire clears all symbol bodies (the BR geometry check).
     wire_body_intrusions: list[dict] = field(default_factory=list)
+    # BR_20260723d: active-IC symbols that failed to load (fail-visible). Empty ==
+    # every active IC resolved its symbol. Non-empty is a blocking defect (compose
+    # raises SymbolLoadError before returning a "looks complete" result) — never a
+    # silent empty-box on a missing multi-pin IC symbol.
+    symbol_load_failures: list[dict] = field(default_factory=list)
+
+
+class SymbolLoadError(RuntimeError):
+    """BR_20260723d: an ACTIVE IC's symbol failed to load — fail-loud.
+
+    A missing/mismatched symbol library for a multi-pin active IC (e.g. lib name
+    `stm32n657_full` when the file on disk is `stm32_pruned.kicad_sym`) previously
+    degraded to a silent empty-box: the IC rendered pinless, every net on its pins
+    lost its route, and compose still returned a "looks complete" schematic. That
+    is a No-silent-fallback 天條 violation. This error carries the full failure
+    list so the caller sees exactly which active IC symbols could not be resolved.
+    Passive (<=2-pin R/C/L) symbol misses are NOT this error — they legitimately
+    degrade to a small placeholder box (BR NOT-bug boundary).
+    """
+
+    def __init__(self, failures: list[dict]):
+        self.failures = failures
+        refs = ", ".join(f"{f['ref']}({f['symbol']})" for f in failures)
+        super().__init__(
+            f"active IC symbol(s) failed to load: {refs}. "
+            f"compose refuses to emit a schematic with pinless active-IC empty boxes "
+            f"(No-silent-fallback). See symbol_load_failures for per-ref reason + "
+            f"the symbol libraries actually present on the search path."
+        )
 
 
 def _auto_place(index: int, columns: int = 4, dx: float = 45.0, dy: float = 45.0, x0: float = 35.0, y0: float = 35.0) -> tuple[float, float]:
@@ -1701,6 +1730,65 @@ def compose_schematic(
             kind = str(net.get("kind", "")).strip()
             if kind:
                 net_kinds[name] = kind
+
+    # BR_20260723d: active-IC symbol-load gate (fail-loud, No-silent-fallback). An
+    # active IC whose symbol library cannot be resolved used to degrade silently to
+    # a pinless empty box (every net on its pins lost its route, compose still
+    # returned a "looks complete" schematic). Detect the failure HERE — before the
+    # bbox/pin-count/placement sites that swallow it — and raise SymbolLoadError so
+    # the caller sees exactly which active IC symbols are missing.
+    #
+    # "active IC" criterion (honest, no fabrication):
+    #   - spec declares comp["type"] == "ic" (explicit), OR
+    #   - the ref appears with >2 DISTINCT pins across nets (used-as-an-IC proxy:
+    #     a part wired on >2 pins is an active multi-pin device, not a 2-pin
+    #     R/C/L passive).
+    # Passive (<=2-pin, type != ic) symbol misses are NOT this gate — they keep the
+    # legitimate small-placeholder degrade (BR NOT-bug boundary).
+    _raw_type_by_ref: dict[str, str] = {}
+    for _comp in raw_components:
+        _r = str(_comp.get("ref", "")).strip()
+        if _r:
+            _raw_type_by_ref[_r] = str(_comp.get("type", "")).strip().lower()
+    _distinct_pins_by_ref: dict[str, set[str]] = {}
+    for _net in raw_nets:
+        for _node in _net.get("nodes", []):
+            _ns = str(_node)
+            if "." in _ns:
+                _r, _, _p = _ns.partition(".")
+                _r = _r.strip()
+                _p = _p.strip()
+                if _r and _p:
+                    _distinct_pins_by_ref.setdefault(_r, set()).add(_p)
+
+    def _is_active_ic(ref: str) -> bool:
+        if _raw_type_by_ref.get(ref) == "ic":
+            return True
+        return len(_distinct_pins_by_ref.get(ref, ())) > 2
+
+    _symload_failures: list[dict] = []
+    for _c in parsed:
+        if not _is_active_ic(_c["ref"]):
+            continue
+        try:
+            load_symbol(_c["symbol"], symbol_dirs)
+        except (FileNotFoundError, KeyError) as _exc:
+            _lib = _c["symbol"].partition(":")[0]
+            _available = sorted({
+                _p.name
+                for _d in symbol_dirs
+                if _d and Path(_d).is_dir()
+                for _p in Path(_d).glob("*.kicad_sym")
+            })
+            _symload_failures.append({
+                "ref": _c["ref"],
+                "symbol": _c["symbol"],
+                "reason": f"{type(_exc).__name__}: {_exc}",
+                "expected_library": f"{_lib}.kicad_sym",
+                "available_libraries": _available,
+            })
+    if _symload_failures:
+        raise SymbolLoadError(_symload_failures)
 
     # T1: declared no-connect pins (forwarded verbatim; emitter fail-fasts on
     # unresolvable entries).

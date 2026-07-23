@@ -1,0 +1,74 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "兩張 BR 已受理、plan 合併規劃（BR_A 檢索/內容 + BR_B gate），依賴序 A1→A2→A3 確立",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["proposal/design 定調 = 選項 4；BR_A + BR_B 已 file"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "BR_A Fix1：先寫 test_kb_tools.py 多詞召回回歸 → 改 _h_kb_query 多詞英文為 OR-ranked（AND 降 opt-in mode=all）→ mcpctl.sh restart",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [0],
+    "LinkOutputNumber": [2],
+    "LinkOutputType": "track",
+    "Condition": ["test_kb_tools.py 綠：crystal oscillator load capacitor 命中在庫物件；單詞召回集不退化；mode=all 精確保留"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "BR_A Fix2：從 ee-design-advisory.md / schematic-analysis.md 蒸餾 regulator 拓撲選型 / SI 需求數值 / pull-up sizing 三主題，走 specbase producer ingest 為 graded control.*（provenance 分級 + 誠實掛帳）",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [1],
+    "LinkOutputNumber": [3],
+    "LinkOutputType": "track",
+    "Condition": ["ingest 後 LDO buck boost topology selection / signal integrity termination / I2C pull-up 各命中對應新 control；lineage 錨到來源 prose"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "BR_B：架構裁決 gate seam（compose passive_completeness / analyze PC-001 / check_c03 R5 擇一或組合），把 9-class obligation 表機器投影到已組出的圖，判準引 A2 KB threshold",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["gate 實作完成；判準 threshold 來自可查詢 KB（非硬編）；gate policy 已向使用者確認 mandatory obligation 範圍"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "驗證：pinout-only fixture → HARD FAIL(passive_gaps/PC-001)；properly-decoupled → PASS；honest-subset+waiver → PASS(waiver 記錄)；aiguard 02_mcu_core 加去耦前後 FAIL→PASS；既有 test_composer/test_check_c03 綠",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [3],
+    "LinkOutputNumber": [5],
+    "LinkOutputType": "track",
+    "Condition": ["BR_B validation 5 案全過；BR_A + BR_B 收尾 event 已記；架構同步"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A3",
+    "StepType": "final",
+    "StepAction": "兩 BR 修復落地；C03 知識可查詢 + passive-completeness 校驗網織密；BRNS relay 回報 sender（[BRNS-DONE]）",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [],
+    "LinkOutputType": "track",
+    "Condition": [],
+    "SubGrafcet": []
+  }
+]

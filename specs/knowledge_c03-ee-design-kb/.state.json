@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [
+    "docs"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-23T00:32:39.872Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "proposed",
+      "at": "2026-07-23T01:09:15.340Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "KB ingest + passive-completeness gate 混合；CORE=proposal+design+tasks，modeling 已有 idef0/grafcet；spec/sequence/data-schema 對此知識-gate plan 非核心"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-23T01:11:52.569Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "IDEF0(A1檢索修/A2 ingest/A3 passive gate)+GRAFCET wiki_validate 通過；spec/sequence/data-schema 填實；docs profile；兩 BR 合併規劃、選項4定調"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-23T01:13:11.321Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md 拆解 A1(檢索修)/A2(ingest 3主題)/A3(passive gate)+收尾含逐項驗證；handoff/test-vectors/errors/observability 填實；兩 BR 合併規劃完成"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-23T02:23:55.683Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者裁決推進：治『pinout-only 無電路設計』缺口。A1 檢索修+A2 內容ingest 先行，A3 passive gate 待 policy 裁決"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-23T03:02:25.754Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "實作已完成並 commit（320bed0 A1檢索修 / 68bdde1 PC-001 gate）+ A2 三主題 ingest 在庫 + tasks.md 全[x] + A3.5 用 consumer 真實 spec 驗 PC-001 PASS。狀態機先前 stale 停 implementing，本輪同步 verified"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-23T03:42:22.202Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "user-confirmed graduation"
+    }
+  ]
+}

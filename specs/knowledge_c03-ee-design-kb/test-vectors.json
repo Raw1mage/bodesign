@@ -1,0 +1,50 @@
+[
+  {
+    "id": "TV-1",
+    "description": "BR_A Fix1: 多詞 query 撈到在庫物件（假陰性修復）",
+    "input": { "tool": "kb_query", "query": "crystal oscillator load capacitor", "mode": "or" },
+    "expected": { "hits_contains": "control.si.crystal-oscillator-layout", "matchMode": "fts-or", "min_hits": 1 }
+  },
+  {
+    "id": "TV-2",
+    "description": "BR_A Fix1: 單詞召回不退化",
+    "input": { "tool": "kb_query", "query": "decoupling" },
+    "expected": { "hits_contains": "control.power.decoupling-pdn-strategy", "no_regression": true }
+  },
+  {
+    "id": "TV-3",
+    "description": "BR_A Fix1: mode=all 精確 AND 保留",
+    "input": { "tool": "kb_query", "query": "crystal oscillator load capacitor", "mode": "all" },
+    "expected": { "matchMode": "fts-and", "semantics": "implicit-AND preserved" }
+  },
+  {
+    "id": "TV-4",
+    "description": "BR_A Fix2: 真缺主題 ingest 後可查",
+    "input": { "tool": "kb_query", "query": "LDO buck boost topology selection" },
+    "expected": { "hits_contains": "control.power.regulator-topology-selection", "min_hits": 1 }
+  },
+  {
+    "id": "TV-5",
+    "description": "BR_B: pinout-only 板 HARD FAIL",
+    "input": { "fixture": "active IC + power pins + zero passives" },
+    "expected": { "verdict": "HARD_FAIL", "passive_gaps_nonempty": true, "names": ["ref", "pin", "class", "missing_obligation"] }
+  },
+  {
+    "id": "TV-6",
+    "description": "BR_B: properly-decoupled 板 PASS",
+    "input": { "fixture": "active IC with per-power-pin decoupling + required pulls" },
+    "expected": { "verdict": "PASS", "passive_gaps_empty": true }
+  },
+  {
+    "id": "TV-7",
+    "description": "BR_B: honest interface-subset + waiver PASS（no-silent-fallback）",
+    "input": { "fixture": "interface-subset", "waiver": "Netlist_Status.md documented gap + provenance" },
+    "expected": { "verdict": "PASS", "waiver_recorded": true }
+  },
+  {
+    "id": "TV-8",
+    "description": "BR_B: 真板迴歸 aiguard 02_mcu_core 加去耦前後",
+    "input": { "board": "aiguard/C03-EE 02_mcu_core", "sequence": ["before decoupling", "after decoupling"] },
+    "expected": { "before": "HARD_FAIL", "after": "PASS" }
+  }
+]

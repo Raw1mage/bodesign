@@ -1,0 +1,40 @@
+{
+  "diagram_title": "C03 EE 知識可查詢 + passive-completeness 校驗（BR_A 檢索/內容 + BR_B gate）",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "修 kb_query 多詞可發現性（BR_A Fix1）",
+      "description": "把 _h_kb_query 多詞英文從 FTS5 implicit-AND 改為 OR-ranked（bm25 排序），AND 降為 opt-in mode=all，matchMode 自描述。讓 cold-context agent 用自然多詞情境句撈得到在庫物件（在庫但撈不到 → 撈得到）。",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "ingest C03 真缺主題（BR_A Fix2）",
+      "description": "從 ee-design-advisory.md / schematic-analysis.md prose 蒸餾 regulator 拓撲選型、SI 需求數值（Z0/3W/λ10/termination）、I²C-SPI pull-up/termination sizing 為 graded control.*，走 specbase producer 鏈，帶 provenance 分級（heuristic=rot / datasheet-bus-spec=primary）。誠實掛帳無來源主題。",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "建 passive-completeness gate（BR_B）",
+      "description": "把 pinout-to-circuit-method.md 9-class per-pin obligation 表機器投影到已組出的圖：active IC 零必要被動件（power→去耦 / clock→load cap / boot-strap→定態 pull …）= HARD FAIL 或顯式 waiver。gate 判準 threshold 引用 A2/既有 KB 可查詢規則。支援 honest-subset waiver。seam 三候選由架構裁決。校驗非合成。",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "BR_A Symptom：多詞 query 假陰性（crystal oscillator load capacitor→0）" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "no-silent-fallback：模式可見；不退化既有單詞召回 / mode=all 精確查詢（DD-5）" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "services/mcp/server.py _h_kb_query（FTS5 OR）+ test_kb_tools.py + mcpctl.sh restart" },
+    { "id": "AR4", "source": "A1:output", "target": "A2:control", "type": "output", "label": "可 OR-ranked 檢索的 kb_query（A2 ingest 後才撈得到、A3 gate 才能引 threshold）" },
+
+    { "id": "AR5", "source": "EXTERNAL", "target": "A2:input", "type": "input", "label": "來源 prose：ee-design-advisory.md（regulator 拓撲/SI）+ schematic-analysis.md（pull-up 公式）" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "provenance 分級 + no-fabrication（每筆帶來源錨點，無源標 UNVERIFIED）" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A2:mechanism", "type": "mechanism", "label": "specbase producer.ts（ragbase_ingest_source/register_asset/record_extract/distill）--repo bodesign" },
+    { "id": "AR8", "source": "A2:output", "target": "A3:control", "type": "output", "label": "可查詢的判準 threshold（decoupling 每2pin 0.1µF / crystal load cap 公式 / I²C pull-up 區間）" },
+
+    { "id": "AR9", "source": "EXTERNAL", "target": "A3:input", "type": "input", "label": "已組出的 schematic（compose_schematic 產物）+ pinout-to-circuit-method 9-class obligation SSOT" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "守哲學：校驗非合成、不代 LLM 決定要哪些件；gate policy 升使用者（DD-2/DD-3）；honest-subset waiver 必支援（DD-4）" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "seam 三候選：compose_schematic(passive_completeness) / analyze_schematic PC-001 / check_c03 R5 + test_composer/test_check_c03" },
+    { "id": "AR12", "source": "A3:output", "target": "EXTERNAL", "type": "output", "label": "passive_gaps[] / PC-001 / check_c03 R5：pinout-only 板 HARD FAIL；已織密的 C03→C04 校驗網" }
+  ]
+}

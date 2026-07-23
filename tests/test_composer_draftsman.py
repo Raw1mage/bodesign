@@ -344,6 +344,80 @@ class DraftsmanComposerTests(unittest.TestCase):
             shutil.rmtree(w2, ignore_errors=True)
 
 
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+class SymbolLoadFailLoudTests(unittest.TestCase):
+    """BR_20260723d: active-IC symbol-not-found is fail-loud, not a silent empty box."""
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-symload-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    # 1. active IC (type=ic) pointing at a missing lib → SymbolLoadError, not a
+    #    "looks complete" schematic. The failure list names the ref + lib-id.
+    def test_active_ic_missing_symbol_raises_by_type(self):
+        from bodesign_eda_bridge.composer import SymbolLoadError
+        spec = {
+            "components": [
+                {"ref": "U1", "symbol": "nonexistent_lib:BIG_MCU", "type": "ic"},
+                {"ref": "C1", "symbol": "Device:C", "value": "100n"},
+            ],
+            "nets": [{"name": "VCC", "nodes": ["U1.1", "C1.1"], "kind": "power"}],
+        }
+        with self.assertRaises(SymbolLoadError) as ctx:
+            compose_schematic(self.work, "symload_type", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        refs = {f["ref"] for f in ctx.exception.failures}
+        self.assertIn("U1", refs)
+        u1 = next(f for f in ctx.exception.failures if f["ref"] == "U1")
+        self.assertEqual(u1["symbol"], "nonexistent_lib:BIG_MCU")
+        self.assertEqual(u1["expected_library"], "nonexistent_lib.kicad_sym")
+        # actionable: lists the .kicad_sym libraries actually present (stdlib Device etc.)
+        self.assertTrue(any(name.endswith(".kicad_sym") for name in u1["available_libraries"]))
+
+    # 1b. no explicit type, but the ref is wired on >2 distinct pins → used-as-an-IC
+    #     proxy classifies it active → missing symbol raises.
+    def test_active_ic_missing_symbol_raises_by_pincount_proxy(self):
+        from bodesign_eda_bridge.composer import SymbolLoadError
+        spec = {
+            "components": [
+                {"ref": "U9", "symbol": "nonexistent_lib:WIDE_PART"},  # no type field
+                {"ref": "R1", "symbol": "Device:R"},
+                {"ref": "R2", "symbol": "Device:R"},
+                {"ref": "R3", "symbol": "Device:R"},
+            ],
+            "nets": [
+                {"name": "N1", "nodes": ["U9.1", "R1.1"]},
+                {"name": "N2", "nodes": ["U9.2", "R2.1"]},
+                {"name": "N3", "nodes": ["U9.3", "R3.1"]},  # U9 now on 3 distinct pins
+            ],
+        }
+        with self.assertRaises(SymbolLoadError) as ctx:
+            compose_schematic(self.work, "symload_proxy", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        self.assertIn("U9", {f["ref"] for f in ctx.exception.failures})
+
+    # 2. passive (2-pin, no type=ic) pointing at a missing symbol → NO raise; keeps
+    #    the legitimate small-placeholder degrade (BR NOT-bug boundary).
+    def test_passive_missing_symbol_does_not_raise(self):
+        spec = {
+            "components": [
+                {"ref": "C7", "symbol": "nonexistent_lib:WEIRD_CAP"},  # 2-pin, no type
+                {"ref": "R1", "symbol": "Device:R"},
+            ],
+            "nets": [{"name": "NETX", "nodes": ["C7.1", "R1.1"]}],  # C7 on 1 pin only
+        }
+        # Must not raise SymbolLoadError — passive miss degrades, not fails.
+        r = compose_schematic(self.work, "symload_passive", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        self.assertEqual(r.symbol_load_failures, [])
+
+    # 3. normal spec (all symbols resolve) → no failures, compose succeeds.
+    def test_normal_spec_no_failures(self):
+        r = compose_schematic(self.work, "symload_ok", TV1_SPEC, symbol_dirs=SYMBOL_DIR, style="draftsman")
+        self.assertEqual(r.symbol_load_failures, [])
+        self.assertEqual("draftsman", r.style)
+
+
 class InkMetricsTests(unittest.TestCase):
     def setUp(self):
         PRIVATE_BASE.mkdir(parents=True, exist_ok=True)

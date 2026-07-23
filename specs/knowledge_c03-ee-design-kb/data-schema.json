@@ -1,0 +1,35 @@
+{
+  "schemas": [
+    {
+      "name": "kb_query payload (multi-word OR-ranked)",
+      "kind": "message",
+      "fields": [
+        { "name": "query", "type": "string", "notes": "多詞英文 → per-token FTS5 OR（'t1' OR 't2'…），bm25 排序" },
+        { "name": "mode", "type": "enum(or|all)", "notes": "預設 or（召回優先）；all=opt-in implicit-AND 精確查詢（DD-5）" },
+        { "name": "matchMode", "type": "enum(fts-or|fts-and|like-scan|hybrid)", "notes": "回傳自描述實際模式；0 hits self-describing" },
+        { "name": "hits[]", "type": "array<{id,type,title,score,confidence,source_weight}>", "notes": "score=bm25；confidence/source_weight 分級" }
+      ]
+    },
+    {
+      "name": "ingested control.* (A2 新主題)",
+      "kind": "json",
+      "fields": [
+        { "name": "id", "type": "string", "notes": "control.power.regulator-topology-selection / control.si.interface-requirements / control.sch.pullup-termination-sizing" },
+        { "name": "confidence", "type": "enum(verified|partial|todo)", "notes": "provenance 分級；heuristic prose 多為 partial/rot，非 datasheet-backed 不得標 verified" },
+        { "name": "threshold_block", "type": "json?", "notes": "machine-checkable metric（如 I²C Rp_min/Rp_max 公式參數），供 A3 gate 引用" },
+        { "name": "provenance", "type": "array<{edge_type:distilled_from, derived_from}>", "notes": "lineage 錨到來源 prose（ee-design-advisory.md / schematic-analysis.md）；無源標 UNVERIFIED" }
+      ]
+    },
+    {
+      "name": "passive_gaps[] / PC-001 (A3 gate 輸出)",
+      "kind": "json",
+      "fields": [
+        { "name": "ref", "type": "string", "notes": "違規 active IC（U*/Q*）" },
+        { "name": "pin", "type": "string", "notes": "未履行義務的 pin" },
+        { "name": "class", "type": "enum(power|clock|boot-strap|analog-ref|hs-diff|…)", "notes": "9-class obligation 表對應類別" },
+        { "name": "missing_obligation", "type": "string", "notes": "缺的支援（decoupling / load cap / pull / termination）+ 引用的 KB threshold 錨點" },
+        { "name": "verdict", "type": "enum(HARD_FAIL|WAIVED)", "notes": "零支援=FAIL；WAIVED 需 Netlist_Status.md documented gap + provenance（DD-4，no-silent-fallback）" }
+      ]
+    }
+  ]
+}
