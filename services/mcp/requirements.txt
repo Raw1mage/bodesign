@@ -10,3 +10,9 @@ ezdxf
 # easyeda2kicad: real MPN -> authoritative KiCad symbol + footprint + 3D STEP from
 # the LCSC/EasyEDA vendor library (component_fetch; the 100%-fidelity source gate).
 easyeda2kicad
+# kiutils: .kicad_sch/.kicad_sym parse+emit — hard import in eda-bridge
+# (block_drafter.py:25 / symbol_index.py:17 / block_qa.py:67, chained via
+# bodesign_eda_bridge/__init__.py). Was never in the image (only ad-hoc
+# pip-installed in a running container; evaporated on restart —
+# scale-coherence M6-7 blocker 2026-07-07).
+kiutils

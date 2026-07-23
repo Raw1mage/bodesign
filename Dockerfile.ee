@@ -46,6 +46,12 @@ RUN pip install --no-cache-dir uv \
 COPY packages /app/packages
 COPY services /app/services
 
+# R15 usage-doctrine one-source (matches monolith Dockerfile). server.py
+# _load_doctrine() FAILS LOUD at import if missing/empty (天條 11), so a
+# doctrine-less worker image is never silently produced. Path matches
+# _DOCTRINE_PATH = <app>/skills/bodesign/doctrine.md.
+COPY skills/bodesign/doctrine.md /app/skills/bodesign/doctrine.md
+
 # Bundle the analyzer engine SCRIPTS (kicad/spice/emc) the EE-group C06 verification
 # tools resolve via resolve_skill(). This worker already ships kicad-cli + ngspice;
 # these are the engine scripts that drive them. Without them, simulate / analyze_emc /
