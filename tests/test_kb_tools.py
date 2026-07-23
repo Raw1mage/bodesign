@@ -30,7 +30,9 @@ class KbToolsTest(unittest.TestCase):
     def test_tv1_fts_hits_known_object(self):
         with self._env(KB_DB):
             result = self.server._h_kb_query({"q": "EMC decoupling"})
-        self.assertEqual(result["matchMode"], "fts")
+        # A1 (BR_A Fix1): multi-word default recall is OR-ranked, self-describing
+        # matchMode -> "fts-or" (was bare "fts" before the OR-ranked fix).
+        self.assertEqual(result["matchMode"], "fts-or")
         ids = [h["id"] for h in result["hits"]]
         self.assertIn(KNOWN_ID, ids)
         self.assertGreater(result["total"], 0)
@@ -49,7 +51,8 @@ class KbToolsTest(unittest.TestCase):
     def test_tv2b_mixed_tokens_hybrid(self):
         with self._env(KB_DB):
             result = self.server._h_kb_query({"q": "EMC 佈線"})
-        self.assertEqual(result["matchMode"], "hybrid")
+        # A1: mixed long+short tokens, OR-ranked default -> "hybrid-or".
+        self.assertEqual(result["matchMode"], "hybrid-or")
 
     # TV-3: KB file missing → typed fail-fast with remedy (run_tool surface).
     def test_tv3_kb_missing_unavailable(self):
@@ -121,6 +124,57 @@ class KbToolsTest(unittest.TestCase):
         self.assertLessEqual(len(result["hits"]), 3)
         for h in result["hits"]:
             self.assertEqual(h["type"], "control")
+
+    # --- A1 (BR_A Fix1): multi-word discoverability — OR-ranked recall ---
+    # Baseline crash (implicit-AND): an in-store object reachable by a single
+    # word drops to total=0 as soon as a co-occurring word is added, because
+    # `_kb_match_plan` joins FTS tokens with AND. After the OR-ranked fix these
+    # multi-word situational queries MUST recall the object again.
+
+    def _ids(self, q, **kw):
+        with self._env(KB_DB):
+            r = self.server._h_kb_query({"q": q, **kw})
+        return [h["id"] for h in r["hits"]], r
+
+    def test_a1_multiword_recalls_crystal_object(self):
+        ids, r = self._ids("crystal oscillator load capacitor")
+        self.assertIn("control.si.crystal-oscillator-layout", ids)
+        self.assertGreater(r["total"], 0)
+
+    def test_a1_multiword_recalls_decoupling_object(self):
+        ids, r = self._ids("regulator LDO buck decoupling")
+        self.assertIn("control.power.decoupling-pdn-strategy", ids)
+        self.assertGreater(r["total"], 0)
+
+    def test_a1_matchmode_self_describes_or(self):
+        # multi-word default recall reports an OR-flavoured matchMode, not bare "fts"
+        _, r = self._ids("crystal oscillator load capacitor")
+        self.assertIn(r["matchMode"], ("fts-or", "fts"))
+        self.assertIn("or", r["matchMode"].lower())
+
+    def test_a1_single_word_recall_not_regressed(self):
+        # the single-word hit sets that already worked must not shrink
+        crystal_ids, cr = self._ids("crystal")
+        self.assertIn("control.si.crystal-oscillator-layout", crystal_ids)
+        self.assertGreaterEqual(cr["total"], 10)
+        dec_ids, dr = self._ids("decoupling")
+        self.assertIn("control.power.decoupling-pdn-strategy", dec_ids)
+        self.assertGreaterEqual(dr["total"], 19)
+
+    def test_a1_mode_all_preserves_exact_and(self):
+        # opt-in exact AND: the multi-word query that OR-recalls stays 0 under AND,
+        # proving mode=all still enforces conjunction (no silent widening).
+        _, r_or = self._ids("crystal oscillator load capacitor")
+        _, r_and = self._ids("crystal oscillator load capacitor", mode="all")
+        self.assertGreater(r_or["total"], 0)
+        self.assertEqual(r_and["total"], 0)
+        self.assertIn(r_and["matchMode"], ("fts-and", "fts"))
+
+    def test_a1_or_ranks_target_near_top(self):
+        # bm25 ordering: the intended object should rank in the top results,
+        # not be buried under OR noise.
+        ids, _ = self._ids("crystal oscillator load capacitor", limit=10)
+        self.assertIn("control.si.crystal-oscillator-layout", ids[:5])
 
 
 if __name__ == "__main__":

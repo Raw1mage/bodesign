@@ -866,21 +866,33 @@ def _kb_connect():
     return conn
 
 
-def _kb_match_plan(q: str) -> dict:
-    """DD-2: specbase gate.ts query-planning semantics, not reinvented.
-    All tokens ≥3 codepoints → FTS AND ('fts'); all <3 → LIKE scan
-    ('like-scan', score=0, recency order); mixed → 'hybrid'."""
+def _kb_match_plan(q: str, match_mode: str = "any") -> dict:
+    """DD-2 + A1(BR_A Fix1): FTS query planning.
+
+    Multi-word English queries default to OR-ranked recall (`match_mode='any'`,
+    bm25 order) so an in-store object reachable by one word is not dropped the
+    moment a co-occurring word is added (the implicit-AND crash BR_A recorded:
+    `crystal oscillator load capacitor` → 0 while the object matches `crystal`).
+    Exact conjunction is opt-in via `match_mode='all'` (no silent widening).
+
+    Tokens ≥３ codepoints join the FTS expression; shorter tokens degrade to a
+    LIKE scan. matchMode is self-describing: `fts-or` / `fts-and` when FTS runs,
+    `like-scan` when only short tokens, `hybrid-or` / `hybrid-and` when mixed.
+    """
+    want_and = str(match_mode).strip().lower() == "all"
+    joiner = " AND " if want_and else " OR "
     tokens = [t for t in q.split() if t]
     fts_tokens = [t for t in tokens if len(t) >= _KB_MIN_TRIGRAM]
     like_tokens = [t for t in tokens if len(t) < _KB_MIN_TRIGRAM]
     # per-token quoted phrases: operator-injection guard (fail-loud, a:b literal)
-    fts_expr = " AND ".join('"' + t.replace('"', '""') + '"' for t in fts_tokens) or None
-    if not like_tokens:
-        mode = "fts"
-    elif fts_expr is None:
+    fts_expr = joiner.join('"' + t.replace('"', '""') + '"' for t in fts_tokens) or None
+    op = "and" if want_and else "or"
+    if fts_expr is None:
         mode = "like-scan"
+    elif not like_tokens:
+        mode = f"fts-{op}"
     else:
-        mode = "hybrid"
+        mode = f"hybrid-{op}"
     return {"fts_expr": fts_expr, "like_tokens": like_tokens, "mode": mode}
 
 
@@ -919,7 +931,12 @@ def _h_kb_query(a: dict) -> Any:
     except (TypeError, ValueError):
         limit = 10
     limit = min(max(limit, 1), 50)
-    plan = _kb_match_plan(q)
+    # A1/DD-5: opt-in exact conjunction. `mode='all'` must reach _kb_match_plan
+    # (which defaults to OR-ranked recall) or the AND request is silently widened
+    # to OR — the exact regression BR_A's DD-5 forbids. Accept `mode` (public arg)
+    # or `match_mode` (alias).
+    match_mode = (a.get("mode") or a.get("match_mode") or "any")
+    plan = _kb_match_plan(q, match_mode)
     conn = _kb_connect()
     try:
         where: list[str] = []
@@ -1172,9 +1189,9 @@ TOOLS: list[dict] = [
 
     # ── Domain KB serving (plan mcp_r16-domain-kb, R16) ──
     {"name": "bodesign_kb_query", "handler": _h_kb_query,
-     "description": "READ-ONLY, no side effects: query bodesign's self-shipped PCB-design domain KB (the repo ragbase store — distilled, evidence-graded design rules, IPC tables, derating curves, EMC/SI failure modes, workflow controls). Specbase-identical query semantics: all whitespace tokens ≥3 codepoints → FTS AND (matchMode 'fts'); all <3 (short CJK) → LIKE scan over title/body, score=0, recency-ordered ('like-scan'); mixed → 'hybrid'. Payload always carries matchMode (0 hits is self-describing), hits[] (id/type/title/score/confidence/source_weight) and total. Fail-fast: missing/unmounted KB → KB_UNAVAILABLE + remedy, never empty hits masquerading as no knowledge. Call before judgment-heavy design steps (layout, EMC, SI, derating); bodesign_kb_get(id) returns a hit's full body.",
+     "description": "READ-ONLY, no side effects: query bodesign's self-shipped PCB-design domain KB (the repo ragbase store — distilled, evidence-graded design rules, IPC tables, derating curves, EMC/SI failure modes, workflow controls). Query semantics: whitespace tokens ≥3 codepoints run over FTS; by default a multi-word query is OR-ranked (bm25) so an in-store object reachable by one word is not dropped when a co-occurring word is added (matchMode 'fts-or') — pass mode='all' for exact conjunction (matchMode 'fts-and'). Short CJK tokens (<3) → LIKE scan over title/body, score=0, recency-ordered ('like-scan'); mixed → 'hybrid-or'/'hybrid-and'. Payload always carries matchMode (0 hits is self-describing), hits[] (id/type/title/score/confidence/source_weight) and total. Fail-fast: missing/unmounted KB → KB_UNAVAILABLE + remedy, never empty hits masquerading as no knowledge. Call before judgment-heavy design steps (layout, EMC, SI, derating); bodesign_kb_get(id) returns a hit's full body.",
      "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
-     "schema": {"type": "object", "properties": {"q": {"type": "string", "description": "search query; whitespace-tokenized"}, "type": {"type": "string", "description": "optional object-type filter: concept|control|workflow|failure-mode|source|extract|asset|issue|role|step"}, "limit": {"type": "integer", "description": "max hits; default 10, cap 50"}}, "required": ["q"]}},
+     "schema": {"type": "object", "properties": {"q": {"type": "string", "description": "search query; whitespace-tokenized"}, "mode": {"type": "string", "enum": ["any", "all"], "description": "multi-word FTS combination: 'any' (default, OR-ranked recall) or 'all' (exact AND conjunction)"}, "type": {"type": "string", "description": "optional object-type filter: concept|control|workflow|failure-mode|source|extract|asset|issue|role|step"}, "limit": {"type": "integer", "description": "max hits; default 10, cap 50"}}, "required": ["q"]}},
     {"name": "bodesign_kb_get", "handler": _h_kb_get,
      "description": "READ-ONLY, no side effects: fetch ONE domain-KB object's full distilled body (body_md) plus evidence grading (confidence, source_weight) and provenance (its distilled_from/extracted_from lineage edges with per-edge source_weight). Unknown id → KB_OBJECT_NOT_FOUND (consider: bodesign_kb_query to find the right id).",
      "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
