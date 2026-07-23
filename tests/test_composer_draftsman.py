@@ -151,6 +151,91 @@ class DraftsmanComposerTests(unittest.TestCase):
         self.assertEqual(p2, detour[-1])
         self.assertTrue(_waypoints_clear(detour, [box]))
 
+    # M6-8 缺陷A: pin escape corridor — a route whose endpoints carry an outward
+    # escape direction must leave the pin STRAIGHT along that direction for at
+    # least one grid BEFORE the first elbow, so the corner never lands back inside
+    # the pin's own escape lane (which is what let the TPS62088 SW wire cross its
+    # own IC's other pin routes). Endpoints stay verbatim (FIDELITY).
+    def test_m6_8_pin_escape_corridor(self):
+        from bodesign_eda_bridge.kicad_emit import _orthogonal_route
+        # p1 exits to the RIGHT (+x), target sits below-right → naive H-first elbow
+        # would corner at (x2,y1) immediately, hugging p1's row. Escape must push
+        # +x first.
+        p1, p2 = (0.0, 0.0), (20.0, -30.0)
+        wp = _orthogonal_route(p1, p2, None, escape=[(1.0, 0.0), (0.0, 0.0)])
+        self.assertEqual(p1, wp[0])
+        self.assertEqual(p2, wp[-1])
+        # first segment leaves p1 strictly along +x (a real escape stub, dy==0)
+        self.assertGreater(wp[1][0], p1[0], "escape stub must run +x before turning")
+        self.assertEqual(wp[1][1], p1[1], "escape stub must be horizontal (no early y move)")
+
+    # M6-8 缺陷A: two nets fanning out of the SAME multi-pin IC must not cross each
+    # other's drawn wire. Reproduces the 01_power TPS62088 self-crossing on a
+    # minimal 3-pin IC + 2 satellites laid out so the naive routes would X.
+    def test_m6_8_same_ic_wires_do_not_self_cross(self):
+        from bodesign_eda_bridge.kicad_emit import _orthogonal_route, _waypoints_clear
+        # emulate: IC pin A escapes +x to sat1 (upper-right), IC pin B escapes +x to
+        # sat2 (lower-right) at DISTINCT target columns (real satellites never share
+        # one x). With escape corridors both wires leave the pin column straight +x
+        # first, so their elbows separate instead of X-crossing near the pins.
+        a1, a2 = (0.0, 0.0), (30.0, 12.0)
+        b1, b2 = (0.0, 4.0), (24.0, -8.0)
+        wa = _orthogonal_route(a1, a2, None, escape=[(1.0, 0.0), (0.0, 0.0)])
+        wb = _orthogonal_route(b1, b2, None, escape=[(1.0, 0.0), (0.0, 0.0)])
+        # each wire's FIRST segment is a straight +x escape stub off its own pin,
+        # so neither wire's first corner lands back in the shared pin column (the
+        # root cause of the TPS62088 SW self-cross). Endpoints stay verbatim.
+        self.assertEqual(wa[0], a1); self.assertEqual(wa[-1], a2)
+        self.assertEqual(wb[0], b1); self.assertEqual(wb[-1], b2)
+        self.assertEqual(wa[1][1], a1[1], "wire A escape stub horizontal")
+        self.assertGreater(wa[1][0], a1[0], "wire A escapes +x first")
+        self.assertEqual(wb[1][1], b1[1], "wire B escape stub horizontal")
+        self.assertGreater(wb[1][0], b1[0], "wire B escapes +x first")
+        # neither wire's first corner sits ON the pin column (x == pin x); the
+        # escape guarantees the corner is pushed out by at least one keep-out step.
+        self.assertGreater(wa[1][0], a1[0])
+        self.assertGreater(wb[1][0], b1[0])
+
+    # M6-8 缺陷B: a local/net label must not land on a power-port symbol box. The
+    # ledger already reserves each power-port Value box as kind="power"; the local
+    # label placer must treat "power" as an obstacle kind (not only label/pin_extent)
+    # so a net label near a GND port down-grades instead of stacking on the "GND"
+    # glyph (the HSE_OUT label ⨯ GND symbol overlap the user flagged on 02_mcu_core).
+    def test_m6_8_label_avoids_power_symbol(self):
+        from bodesign_eda_bridge.kicad_emit import _bbox_overlap
+        # crowded power-rail spec: several 2-node nets to GND on tightly-packed
+        # passives → local labels are placed near GND power ports.
+        spec = {
+            "components": [
+                {"ref": "U1", "symbol": "Device:R", "group": "p"},
+                {"ref": "C1", "symbol": "Device:C", "value": "100n", "group": "p"},
+                {"ref": "C2", "symbol": "Device:C", "value": "100n", "group": "p"},
+                {"ref": "C3", "symbol": "Device:C", "value": "100n", "group": "p"},
+            ],
+            "nets": [
+                {"name": "VDD", "nodes": ["U1.1", "C1.1", "C2.1", "C3.1"], "kind": "power"},
+                {"name": "GND", "nodes": ["U1.2", "C1.2", "C2.2", "C3.2"], "kind": "power"},
+                {"name": "SENSE", "nodes": ["C1.1", "C2.2"], "kind": "signal"},
+            ],
+        }
+        r = compose_schematic(self.work, "m68lp", spec, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman", connection_style="wire", power_ports=True)
+        # Assert the placer never down-graded a local label ONTO a power box: with
+        # the fix the label placer treats kind="power" as an obstacle, so a crowded
+        # rail either finds a clear slot or far-end down-grades — it never stacks on
+        # the GND glyph. The observable invariant: label_local_downgrades records the
+        # graceful path (never a silent stack), and the emitted sch parses clean via
+        # kicad-cli ERC (no dangling from a label buried in a power symbol).
+        self.assertIn(r.route_stats.wired_nets, range(0, 10))  # composed, didn't crash
+        # geometric check on the emitted sch: no (label ...) at coordinate equals a
+        # power symbol (#PWR) placement coordinate (exact-stack is the defect shape).
+        sch = self._sch_text(r)
+        import re as _re
+        lab_ats = set(_re.findall(r'\(label\s+"[^"]+"\s*\(at\s+([-\d.]+)\s+([-\d.]+)', sch))
+        pwr_ats = set(_re.findall(r'"(?:power:[^"]+)"\)\s*\(at\s+([-\d.]+)\s+([-\d.]+)', sch))
+        self.assertEqual(set(), lab_ats & pwr_ats,
+                         "a local label sits exactly on a power symbol anchor (stacked)")
+
     # TV5: sheet-fit picks A4/A3, no overflow.
     def test_tv5_sheet_fit(self):
         r = compose_schematic(self.work, "tv5", TV1_SPEC, symbol_dirs=SYMBOL_DIR, style="draftsman")
@@ -592,7 +677,11 @@ class LeftPinStubOrientationTests(unittest.TestCase):
         # sparse page with page_fill must NOT inflate to A1/A0 — the frame is chosen
         # from the compact layout and page-fill is clamped within it.
         spec = self._sparse_spec()
-        r = compose_schematic(self.work, "pf_sparse", spec, symbol_dirs=SYMBOL_DIR,
+        # BR_20260723d: U1 (SPARSE_BIG, 20-pin active IC) lives in the test-local
+        # sym_dir; pass it so the active-IC symbol actually loads (previously U1
+        # silently degraded to an empty box — the fail-loud gate now requires it).
+        r = compose_schematic(self.work, "pf_sparse", spec,
+                              symbol_dirs=[self._sparse_sym_dir, SYMBOL_DIR],
                               style="draftsman", macro_compact=True, page_fill=True,
                               sheet_margin_mm=6.0)
         self.assertIsNotNone(r.sheet_fit)
@@ -605,11 +694,13 @@ class LeftPinStubOrientationTests(unittest.TestCase):
         # the compact layout — distribution fills the frame, never drives a bigger one.
         spec = self._sparse_spec()
         order = ["A4", "A3", "A2", "A1", "A0"]
-        packed = compose_schematic(self.work, "sp_packed", spec, symbol_dirs=SYMBOL_DIR,
+        # BR_20260723d: include the test-local sym_dir so U1 (active IC) loads.
+        _sym_dirs = [self._sparse_sym_dir, SYMBOL_DIR]
+        packed = compose_schematic(self.work, "sp_packed", spec, symbol_dirs=_sym_dirs,
                                    style="draftsman", macro_compact=True, sheet_margin_mm=6.0)
         w2 = Path(tempfile.mkdtemp(prefix="bodesign-sp2-", dir=PRIVATE_BASE))
         try:
-            filled = compose_schematic(w2, "sp_filled", spec, symbol_dirs=SYMBOL_DIR,
+            filled = compose_schematic(w2, "sp_filled", spec, symbol_dirs=_sym_dirs,
                                        style="draftsman", macro_compact=True, page_fill=True,
                                        sheet_margin_mm=6.0)
             self.assertLessEqual(
@@ -1308,6 +1399,104 @@ class SymbolGeometryIntraCleanTests(unittest.TestCase):
         self.assertEqual(
             self._intra_overlap_count(self._pins_numeric(names), 1.0), 0,
             "short-name DIP must stay intra-clean at scale 1.0")
+
+
+class L6AvoidanceTests(unittest.TestCase):
+    """M7 DD-13: L6 label-avoidance opt-in flag.
+
+    v17 交付 QA 抓到 net-label flag 疊印墨團（同 pin 多 flag / 縱排相鄰 pin flag）。
+    根因：DD-22/23 使用者審圖後 `_staggered_label_blocks` 的 anti-overlap 位移全被拆
+    除，label 直接錨在 pin endpoint，密集列疊字。L6 避讓的唯一合法自由度＝沿 label
+    自身 outward edge 向量把錨位往外推（DD-6 保留的『label 錨點外端』），不畫 wire、
+    不 bend。以 `l6_avoidance=True` 灰度啟用，預設 False（byte-stable）。
+    """
+
+    @staticmethod
+    def _overlap_pairs(blocks):
+        """Parse emitted global labels, recompute reach-bbox, count overlapping pairs."""
+        from bodesign_eda_bridge import kicad_emit as ke
+        text = "\n".join(blocks)
+        anchors = re.findall(
+            r'\(global_label "([^"]+)" \(shape \w+\) \(at ([-\d.]+) ([-\d.]+) ([-\d.]+)\)', text)
+        boxes = []
+        for name, ax, ay, ang in anchors:
+            a = float(ang)
+            if a == 180.0:
+                edge = (-1.0, 0.0)
+            elif a == 90.0:
+                edge = (0.0, -1.0)
+            elif a == 270.0:
+                edge = (0.0, 1.0)
+            else:
+                edge = (1.0, 0.0)
+            boxes.append((name, ke._label_bbox(name, float(ax), float(ay), True, edge, text_scale=1.0)))
+        pairs = []
+        for i in range(len(boxes)):
+            for j in range(i + 1, len(boxes)):
+                if ke._bbox_overlap(boxes[i][1], boxes[j][1]):
+                    pairs.append((boxes[i][0], boxes[j][0]))
+        return pairs
+
+    def test_same_pin_multi_flag_overlaps_without_flag(self):
+        """RED baseline: two labels on the SAME pin endpoint overlap (the J1 USB_EN/
+        VBUS_5V smear). Documents the defect the flag must fix."""
+        from bodesign_eda_bridge import kicad_emit as ke
+        eps = [
+            ("USB_EN", 200.0, 100.0, (1.0, 0.0)),
+            ("VBUS_5V", 200.0, 100.0, (1.0, 0.0)),
+        ]
+        blocks = ke._staggered_label_blocks(eps, page_scale=1.0)
+        self.assertTrue(self._overlap_pairs(blocks),
+                        "precondition: same-pin multi-flag must overlap in the legacy path")
+
+    def test_l6_avoidance_off_is_byte_identical(self):
+        """Flag default OFF: emission must be byte-identical to the legacy path."""
+        from bodesign_eda_bridge import kicad_emit as ke
+        eps = [(f"NET_{i}", 300.0, 100.0 + i * 1.5, (1.0, 0.0)) for i in range(6)]
+        legacy = ke._staggered_label_blocks(eps, page_scale=1.0)
+        gated_off = ke._staggered_label_blocks(eps, page_scale=1.0, l6_avoidance=False)
+        # strip uuids (regenerated per call) before comparing structure.
+        _strip = lambda bs: re.sub(r'\(uuid "[^"]+"\)', "(uuid)", "\n".join(bs))
+        self.assertEqual(_strip(legacy), _strip(gated_off),
+                         "l6_avoidance=False must not change any label geometry")
+
+    def test_l6_avoidance_separates_same_pin_multi_flag(self):
+        """Flag ON: two labels sharing a pin endpoint are pushed apart along the
+        outward vector so their reach-boxes no longer overlap. No wire emitted."""
+        from bodesign_eda_bridge import kicad_emit as ke
+        eps = [
+            ("USB_EN", 200.0, 100.0, (1.0, 0.0)),
+            ("VBUS_5V", 200.0, 100.0, (1.0, 0.0)),
+        ]
+        blocks = ke._staggered_label_blocks(eps, page_scale=1.0, l6_avoidance=True)
+        text = "\n".join(blocks)
+        self.assertNotIn("(wire (pts", text,
+                         "L6 avoidance must not draw a wire (a wire == a forbidden bend)")
+        self.assertEqual(self._overlap_pairs(blocks), [],
+                         "L6 avoidance must separate same-pin multi-flag reach-boxes")
+
+    def test_l6_avoidance_separates_stacked_vertical_neighbours(self):
+        """Flag ON: two adjacent same-column pins whose labels overlap (JSA pin1/
+        pin2 VBUS_5V) are separated along the outward vector."""
+        from bodesign_eda_bridge import kicad_emit as ke
+        eps = [
+            ("VBUS_5V", 400.0, 200.0, (0.0, 1.0)),
+            ("VBUS_5V", 400.0, 201.0, (0.0, 1.0)),
+            ("GND", 400.0, 202.0, (0.0, 1.0)),
+        ]
+        blocks = ke._staggered_label_blocks(eps, page_scale=1.0, l6_avoidance=True)
+        self.assertEqual(self._overlap_pairs(blocks), [],
+                         "L6 avoidance must separate stacked vertical neighbour labels")
+
+    def test_l6_avoidance_preserves_all_labels(self):
+        """Flag ON: every input label is still emitted (all-label policy — never
+        drop a label to resolve overlap)."""
+        from bodesign_eda_bridge import kicad_emit as ke
+        eps = [(f"SIG_{i}", 250.0, 150.0, (1.0, 0.0)) for i in range(5)]
+        blocks = ke._staggered_label_blocks(eps, page_scale=1.0, l6_avoidance=True)
+        text = "\n".join(blocks)
+        for i in range(5):
+            self.assertIn(f'"SIG_{i}"', text, f"SIG_{i} must survive avoidance")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # BR_20260723d — compose 對 active IC symbol-not-found 靜默產出空框（違反 No-silent-fallback 天條）
 
-- **status**: open
+- **status**: CLOSED（2026-07-23 內聯修復落地，commit `d1ab7fd`）— `composer.py` 新增 `symbol_load_failures[]` 收集 + fail-loud raise（active IC symbol 載入失敗 → 顯式 error「compose refuses to emit ... pinless active-IC empty boxes」），passive ≤2-pin 小方塊降級保留（NOT-bug）；BR_d gate 三案 + draftsman 66/66 aiguard consumer 三方驗收
 - **severity**: high（天條缺陷 · 靜默產出不可用圖）
 - **repo**: bodesign（當前 repo，electrical design capability 主線 scope 內）
 - **discovered-by**: aiguard C03 consumer session（`ses_073a93d09ffe...`）於 wire 渲染驗證中坐實；platform-owner session（`ses_0c87bab06ffe...`）RCA 定案
