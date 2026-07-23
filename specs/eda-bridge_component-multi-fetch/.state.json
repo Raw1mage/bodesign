@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "state": "living",
+  "profile": [
+    "docs"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-07-07T16:03:05.549Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "proposed",
+      "at": "2026-07-07T16:03:13.234Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "set lifecycle profile software → docs (drives plan-validate artifact requirements)"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-07-07T16:05:24.168Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "multi-fetch design done"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-07-07T16:09:05.692Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks + tests done"
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-07-07T16:09:34.736Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "fast-forward pass-through (burst implementation; all tasks checked + validation evidence): 6 pass 0 fail, no regression, syntax OK"
+    },
+    {
+      "from": "implementing",
+      "to": "verified",
+      "at": "2026-07-07T16:09:34.736Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "6 pass 0 fail, no regression, syntax OK"
+    },
+    {
+      "from": "verified",
+      "to": "living",
+      "at": "2026-07-16T13:05:52.719Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "使用者明確裁決 2026-07-16：6 個 verified plan 全部畢業"
+    }
+  ]
+}

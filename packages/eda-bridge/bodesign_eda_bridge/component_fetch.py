@@ -107,3 +107,36 @@ def fetch_component(lcsc_id: str, output_lib: str, *, overwrite: bool = True) ->
         "has_3d": bool(steps),
         "lib_nickname": os.path.basename(output_lib),
     }
+
+
+def fetch_components(lcsc_ids: list[str], output_lib: str, *, overwrite: bool = True) -> dict[str, Any]:
+    """Batch variant of `fetch_component`: pull N authoritative parts into one
+    shared `output_lib`, in SEQUENCE (they share the easyeda2kicad CLI and the
+    output library — parallel fetch would race on the same files).
+
+    Continue-on-error: a failing part (vendor lacks the id, CLI error, timeout)
+    does NOT abort the rest. Every part is reported in `results[]` with its own
+    ok/paths-or-reason, and the top-level `fetched`/`failed` counts summarise —
+    so one call surfaces ALL source-data gaps at once, per the no-fallback
+    contract (nothing is padded or silently substituted).
+    """
+    if not isinstance(lcsc_ids, list) or not lcsc_ids:
+        return {"ok": False, "reason": "empty lcsc_ids (provide a non-empty list)",
+                "output_lib": output_lib, "results": []}
+    results: list[dict[str, Any]] = []
+    fetched = 0
+    for raw in lcsc_ids:
+        one = fetch_component(raw, output_lib, overwrite=overwrite)
+        if one.get("ok"):
+            fetched += 1
+        results.append(one)
+    failed = len(results) - fetched
+    return {
+        "ok": failed == 0,
+        "output_lib": output_lib,
+        "lib_nickname": os.path.basename(output_lib),
+        "requested": len(results),
+        "fetched": fetched,
+        "failed": failed,
+        "results": results,
+    }

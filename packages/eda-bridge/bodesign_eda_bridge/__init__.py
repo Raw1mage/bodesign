@@ -35,7 +35,7 @@ from .block_drafter import PinoutBlock, draw_block
 from .block_qa import BlockQAVerdict, qa_block, qa_loop
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .bom_export import BomResult, export_bom, export_netlist
-from .component_fetch import fetch_component, search_components
+from .component_fetch import fetch_component, fetch_components, search_components
 from .dxf_dwg import dwg_to_dxf, dxf_to_dwg
 from .composer import ComposeResult, compose_schematic
 from .fab import FabResult, emit_fab_outputs
@@ -80,6 +80,7 @@ __all__ = [
     "analyzer_engine_status",
     "resolve_skill",
     "fetch_component",
+    "fetch_components",
     "search_components",
     "autoroute",
     "autoroute_preflight",
