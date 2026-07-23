@@ -149,8 +149,12 @@ def _h_emit_symbol(a: dict) -> Any:
 def _h_compose(a: dict) -> Any:
     import bodesign_eda_bridge as _eb
     from bodesign_eda_bridge import compose_schematic
+    # symbol_dirs pass-through: compose_schematic ALWAYS merges the KiCad standard
+    # library itself (BR_20260723), so the facade must NOT inject a stdlib default
+    # that would override a caller's custom dir. Absent → composer's own default
+    # (stdlib only); present → caller's dirs, merged with stdlib downstream.
     r = compose_schematic(a["out_dir"], a["project_name"], a["spec"],
-                          symbol_dirs=a.get("symbol_dirs", "/usr/share/kicad/symbols"),
+                          **({"symbol_dirs": a["symbol_dirs"]} if a.get("symbol_dirs") is not None else {}),
                           validate=a.get("validate", True),
                           connection_style=a.get("connection_style"),
                           style=a.get("style", "netlist"),

@@ -32,6 +32,9 @@ from .kicad_emit import (
     emit_kicad_schematic,
     load_symbol,
     validate_kicad_schematic,
+    _vendor_sym_scale,
+    _native_pitch_and_count,
+    _page_pitch_floor,
     _snap_grid,
     _LABEL_STUB_STEP_MM,
     _LABEL_CW_MM,
@@ -321,7 +324,8 @@ def _is_per_page_symbol(lib_id: str) -> bool:
     return library.startswith("u1_")
 
 
-def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict, page_scale: float = 1.0) -> tuple[float, float] | None:
+def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict, page_scale: float = 1.0,
+                   page_floor: float = 0.0, _npitch_cache: dict | None = None) -> tuple[float, float] | None:
     """Estimate (width, height) in mm — pin endpoints ∪ ref/value text envelope.
 
     Effective bbox = pin graphic extent + margin, then widened/heightened by the
@@ -334,8 +338,20 @@ def _estimate_bbox(lib_id: str, symbol_dir, _cache: dict, page_scale: float = 1.
     so its bbox reflects the SAME per-page density as the main symbol. The U1
     variant is exempt (already ×page_scale). The cache key includes the scale so
     two pages at different scales never collide.
+
+    page_floor (DD-29/30/31): when >0, a stored ≥4-pin symbol's scale is lifted to
+    max(page_scale, page_floor / native_pitch) via the SAME _vendor_sym_scale helper
+    the emitter uses — so the placement bbox and the emitted geometry stay
+    same-source (a bbox computed at page_scale while the symbol emits larger would
+    under-reserve and collide). page_floor==0.0 keeps the legacy page_scale bbox.
     """
-    _sym_scale = 1.0 if _is_per_page_symbol(lib_id) else page_scale
+    if _is_per_page_symbol(lib_id):
+        _sym_scale = 1.0
+    elif page_floor > 0.0:
+        _npitch, _ncount = _native_pitch_and_count(lib_id, symbol_dir, _npitch_cache)
+        _sym_scale = _vendor_sym_scale(page_scale, _npitch, page_floor, _ncount)
+    else:
+        _sym_scale = page_scale
     _key = (lib_id, _sym_scale)
     if _key in _cache:
         return _cache[_key]
@@ -884,33 +900,42 @@ def _macro_compact(
     for b in big:
         bw, bh = _bb(b)
         sats = sats_by_host[b]
-        sat_w = max((_bb(s)[0] for s in sats), default=0.0)
-        # big↔satellite-column horizontal gap: clear the port zone when the widest
+        sat_w1 = max((_bb(s)[0] for s in sats), default=0.0)
+        sat_h1 = max((_bb(s)[1] for s in sats), default=0.0)
+        # big↔satellite-block horizontal gap: clear the port zone when the widest
         # satellite is a real body (a port on the big's right edge could fall in).
-        big_sat_gap = _sat_gap(True, (sat_w, max((_bb(s)[1] for s in sats), default=0.0))) if sats else 0.0
-        sat_h_total = 0.0
-        _prev_sat_bb: tuple[float, float] | None = None
-        for s in sats:
-            g = _sat_gap(False, _prev_sat_bb) if _prev_sat_bb is not None else 0.0
-            sat_h_total += g + _bb(s)[1]
-            _prev_sat_bb = _bb(s)
-        core_w = bw + (big_sat_gap + sat_w if sats else 0.0)
-        core_h = max(bh, sat_h_total)
+        big_sat_gap = _sat_gap(True, (sat_w1, sat_h1)) if sats else 0.0
+        # Satellite GRID (M6-6 fix): a big IC with a full power rail draws 20+
+        # decoupling caps as its satellites; a single vertical column縱疊 them into
+        # one x-line spanning the whole sheet (the '超大畫布超小重點' relapse — the
+        # column height dwarfs the big body, the sheet grows to A1 and every part
+        # is a tiny speck on one line). Pack the satellites into a near-square grid
+        # (~√N columns) beside the big body instead of one tall column, so the unit
+        # stays compact on BOTH axes. Cell = per-axis max satellite bbox + the same
+        # port-clearance gap the column used. Deterministic (sats already sorted).
+        n_sat = len(sats)
+        sat_cols = max(1, int(n_sat ** 0.5 + 0.9999)) if n_sat else 1
+        sat_cell_gap = max(sat_gutter, PORT_CLEARANCE_MM) if sat_h1 > _SAT_BODY_MM or sat_w1 > _SAT_BODY_MM else sat_gutter
+        sat_cell_w = sat_w1 + sat_cell_gap
+        sat_cell_h = sat_h1 + sat_cell_gap
+        sat_nrows = (n_sat + sat_cols - 1) // sat_cols if n_sat else 0
+        sat_block_w = sat_cols * sat_cell_w - (sat_cell_gap if sat_cols else 0.0)
+        sat_block_h = sat_nrows * sat_cell_h - (sat_cell_gap if sat_nrows else 0.0)
+        core_w = bw + (big_sat_gap + sat_block_w if sats else 0.0)
+        core_h = max(bh, sat_block_h)
         unit_bbox[b] = (core_w + 2 * _pad, core_h + 2 * _pad)
         offs: dict[str, tuple[float, float]] = {}
         # big body centre: left region, vertically centred in the core (offset by pad).
         offs[b] = (_pad + bw / 2.0, _pad + core_h / 2.0)
-        # satellite column: to the big body's right, vertically centred block.
+        # satellite grid: to the big body's right, vertically centred block.
         sat_x0 = _pad + bw + big_sat_gap
-        sy = _pad + (core_h - sat_h_total) / 2.0
-        _prev_sat_bb = None
-        for s in sats:
+        sat_y0 = _pad + (core_h - sat_block_h) / 2.0
+        for i, s in enumerate(sats):
             sw, sh = _bb(s)
-            if _prev_sat_bb is not None:
-                sy += _sat_gap(False, _prev_sat_bb)
-            offs[s] = (sat_x0 + sat_w / 2.0, sy + sh / 2.0)
-            sy += sh
-            _prev_sat_bb = (sw, sh)
+            c, r = i % sat_cols, i // sat_cols
+            cx = sat_x0 + c * sat_cell_w + sat_w1 / 2.0
+            cy = sat_y0 + r * sat_cell_h + sat_h1 / 2.0
+            offs[s] = (cx, cy)
         local_offsets[b] = offs
 
     leftover = [s for s in small if s not in sat_of]
@@ -1570,6 +1595,7 @@ def compose_schematic(
     page_scale: float = 1.0,
     paper_whitelist: set[str] | None = None,
     power_port_gate: str = "error",
+    ink_gate: bool = True,
 ) -> ComposeResult:
     """Compose a schematic from a declarative spec.
 
@@ -1601,9 +1627,33 @@ def compose_schematic(
     if style not in ("netlist", "draftsman"):
         raise ValueError(f"style must be 'netlist' or 'draftsman', got {style!r}")
 
+    # symbol_dirs resolution (BR_20260723_compose_symbol_dirs_stdlib_merge):
+    # a caller that supplies a custom symbol dir (e.g. a staged token path holding
+    # a pruned STM32 symbol) still needs the KiCad standard library for R/C/L and
+    # other stock passives (Device.kicad_sym etc.). The historical `.get(default)`
+    # / default-parameter semantics treated user dir and stdlib as MUTUALLY
+    # EXCLUSIVE — passing any custom dir silently dropped the stdlib, so every
+    # stock passive failed to resolve and placement collapsed to placed:0. Merge
+    # instead of override: user dirs first (caller precedence for symbol
+    # shadowing), DEFAULT_SYMBOL_DIR always appended as a fallback, order-preserving
+    # dedup. This is the single caller chokepoint (MCP facade + direct-Python +
+    # worker callers all pass through here), so the merge lives ONLY here.
+    if isinstance(symbol_dirs, (str, Path)):
+        _user_dirs = [symbol_dirs]
+    elif symbol_dirs is None:
+        _user_dirs = []
+    else:
+        _user_dirs = list(symbol_dirs)
+    _merged_dirs: list = []
+    for _d in [*_user_dirs, DEFAULT_SYMBOL_DIR]:
+        if _d and str(_d) not in {str(x) for x in _merged_dirs}:
+            _merged_dirs.append(_d)
+    symbol_dirs = _merged_dirs
+
     raw_components = spec.get("components", [])
     raw_nets = spec.get("nets", [])
     warnings: list[str] = []
+    _ink_gate_verdict = None  # M6-5: observe-only true-ink gate verdict, attached to result post-emit (None on non-page_fill / A4-exempt path)
 
     # Effective connection style: explicit caller value wins; else derive from style.
     # T3: in the derived draftsman default, multi-node nets are labelled per-net
@@ -1674,6 +1724,38 @@ def compose_schematic(
     elif style == "draftsman" and not explicit_conn:
         multi_node_to_label = True
         label_nets = {net.name for net in nets if len(net.nodes) >= 3}
+        # M6-8d (user 03a ruling): cross-IC bus policy. When >=2 signals cross the
+        # SAME pair of ICs, every cross-IC signal between them is forced to a global
+        # label (all-label for that IC pair) — this kills the 12+ unordered wire
+        # crossings a drawn cross-IC bus produced. A drawn wire is retained ONLY for
+        # short IC<->satellite-passive and intra-cluster links. Style stays uniform
+        # per bus: once an IC pair is label-ized, ALL its signals are labels (never a
+        # mix of drawn + label on one bus). ICs are pin-count>2 parts (passives are
+        # <=2-pin R/C/L); a net's "IC endpoints" are its multi-pin member refs.
+        _pin_ct: dict[str, int] = {}
+        for _c in parsed:
+            try:
+                _def, _pins = load_symbol(_c["symbol"], symbol_dirs)
+                _pin_ct[_c["ref"]] = len(_pins)
+            except Exception:
+                _pin_ct[_c["ref"]] = 0
+        def _is_ic(ref: str) -> bool:
+            return _pin_ct.get(ref, 0) > 2
+        # Count signals per unordered IC pair; a signal "crosses" an IC pair when its
+        # nodes touch >=2 distinct ICs.
+        _pair_sig: dict[frozenset, list[str]] = {}
+        for net in nets:
+            ic_refs = sorted({r for (r, _p) in net.nodes if _is_ic(r)})
+            if len(ic_refs) < 2:
+                continue
+            for _i in range(len(ic_refs)):
+                for _j in range(_i + 1, len(ic_refs)):
+                    _pair_sig.setdefault(frozenset((ic_refs[_i], ic_refs[_j])), []).append(net.name)
+        _crossic_label = {
+            n for names in _pair_sig.values() if len(names) >= 2 for n in names
+        }
+        if _crossic_label:
+            label_nets |= _crossic_label
 
     clusters: list[Cluster] = []
     sheet_fit: SheetFit | None = None
@@ -1700,8 +1782,20 @@ def compose_schematic(
         paper = "A4"
     else:
         # ---- draftsman path: cluster → refine → de-overlap → sheet-fit ----
+        # DD-29/30/31: the page pitch floor (main-chip rendered pitch, or 7.62 mm on
+        # a chip-less page) so a dense vendor symbol's placement bbox reflects the
+        # SAME lifted density the emitter will draw (same-source via _vendor_sym_scale).
+        _floor_comps = [
+            EmitComponent(ref=c["ref"], lib_id=c["symbol"], value=c["value"],
+                          footprint=c["footprint"], x=0.0, y=0.0)
+            for c in parsed
+        ]
+        _page_floor = _page_pitch_floor(_floor_comps, symbol_dirs)
+        _npitch_cache: dict = {}
         for c in parsed:
-            bboxes[c["ref"]] = _estimate_bbox(c["symbol"], symbol_dirs, bbox_cache, page_scale=page_scale)
+            bboxes[c["ref"]] = _estimate_bbox(
+                c["symbol"], symbol_dirs, bbox_cache, page_scale=page_scale,
+                page_floor=_page_floor, _npitch_cache=_npitch_cache)
             if bboxes[c["ref"]] is None:
                 warnings.append(f"{c['ref']}: symbol '{c['symbol']}' bbox unavailable; excluded from force-directed placement")
 
@@ -1855,34 +1949,110 @@ def compose_schematic(
                 ink_area += len(_lbl_names) * _label_reach * _lbl_h
             ink_density = ink_area / usable
             aabb_util = (sheet_fit.content_w * sheet_fit.content_h) / usable
-            # DD-6b DUAL criterion (a page PASSES iff EITHER holds):
-            #   (1) aabb_util >= MIN_SHEET_UTILIZATION — the content AABB already fills
-            #       the frame (content is genuinely frame-sized; not a sparse balloon).
-            #   (2) ink_density  >= MIN_INK_DENSITY      — the REAL ink fills the frame.
-            # The defect the user rejected 4× is the page where BOTH are low: a few
-            # small parts flung into a large frame (sparse balloon). The TV-7 attack
-            # the OLD single-AABB gate missed is aabb_util HIGH + ink LOW (one long
-            # label chain stretches the AABB to fake-fill a frame that is really
-            # mostly whitespace) — criterion (2) alone would catch it, but pairing it
-            # OR-wise with (1) also spares the genuinely-small sparse fixtures whose
-            # AABB is tight to their (small) frame. Only BOTH-low is the real defect.
-            # A true-ink page is strictly sparser than its AABB (ink ⊆ AABB), so the
-            # ink floor is set LOWER than the AABB floor (0.18 vs 0.40) accordingly.
-            # DD-12: ink-density is now an OBSERVATION log, not a driving gate. The
-            # constructive closed-form sizer (size_paper_closed_form) picks the
-            # smallest paper for the real content and scales it up to fill the frame,
-            # so a sparse balloon cannot arise by construction — there is nothing to
-            # eliminate/retry. The measurement is retained as a `[gate]` observation
-            # line so a human reviewer can still see the density; it never raises.
-            _ink_verdict = (
-                "LOW" if (aabb_util < MIN_SHEET_UTILIZATION and ink_density < MIN_INK_DENSITY)
-                else "OK"
-            )
+            # M6-3 (DD-12 revision, 2026-07-10 使用者「超大畫布超小重點」裁決):
+            # SINGLE-criterion TRUE-INK gate. The DD-6b DUAL (aabb_util OR ink_density)
+            # criterion is REMOVED — it is exactly what let a hollow-large U1 pass: a
+            # 223-ball BGA drawn as an empty rectangle inflates the content AABB so
+            # aabb_util is HIGH while the REAL ink (frame outline + pins + text) is a
+            # thin shell → ink_density LOW. The OR let criterion (1) rubber-stamp that
+            # hollow page. Now ONLY true-ink counts: a page PASSES iff
+            #   ink_density >= MIN_INK_DENSITY.
+            # ink_area sums per-component bbox area — but a hollow body's ink is its
+            # OUTLINE + pin/text, NOT the empty interior. We therefore charge the
+            # hollow interior of a large body as ZERO ink by capping each component's
+            # counted ink at a shell model: min(full bbox, outline+pins). For the
+            # closed-form CCM path the bbox IS the drawn ink for compact parts, so
+            # small parts are unaffected; only a large mostly-empty body is discounted.
+            _INK_SHELL_FRAC = 0.35   # a hollow BGA body inks ~its frame+pins ≈ 35% of bbox
+            ink_area = 0.0
+            for c in components:
+                _bb = bboxes.get(c.ref)
+                if _bb is not None and _bb[0] > 0 and _bb[1] > 0:
+                    _area = _bb[0] * _bb[1]
+                    # large body (> ~1 A5 worth) is treated as a shell, not a solid.
+                    if _area > 40000.0:   # mm² ; ~200×200, i.e. a page-dominating IC
+                        _area *= _INK_SHELL_FRAC
+                    ink_area += _area
+            if _label_reach > 0.0:
+                _lbl_names = [n.name for n in nets] if effective_conn == "label" else list(label_nets or ())
+                _lbl_h = _BASE_TEXT_HEIGHT_MM * page_scale
+                ink_area += len(_lbl_names) * _label_reach * _lbl_h
+            ink_density = ink_area / usable
+            _ink_pass = ink_density >= MIN_INK_DENSITY
             warnings.append(
                 f"[gate] page={project_name} paper={paper} "
                 f"ink_density={ink_density * 100:.1f}% aabb_util={aabb_util * 100:.1f}% "
-                f"verdict={_ink_verdict} (observation)"
+                f"floor={MIN_INK_DENSITY * 100:.0f}% verdict={'PASS' if _ink_pass else 'INK_DENSITY_LOW'}"
             )
+            # M6-5 (DD-12 companion, observe-only probe): the sizer's STEP-1/STEP-2
+            # probe composes UNBOUNDED at candidate (paper,scale) purely to MEASURE the
+            # emitted true-ink extent. On a sparse candidate the gate would raise BEFORE
+            # emit (composer.py emit is below), so the probe's .kicad_sch is never
+            # written → the sizer parses 0.0×0.0 → CONTENT_EXCEEDS_A0 false fault. With
+            # ink_gate=False the gate becomes OBSERVE-ONLY: it records the measured
+            # ink_density into ink_metrics (read by the sizer to reject sub-floor
+            # candidates) and lets emit run so the probe file exists. The DELIVERABLE
+            # path keeps the default ink_gate=True → still fail-loud on a hollow frame.
+            _ink_gate_verdict = {
+                "ink_density": ink_density,
+                "aabb_util": aabb_util,
+                "floor": MIN_INK_DENSITY,
+                "ink_ok": _ink_pass,
+                "paper": paper,
+            }
+            if not _ink_pass and ink_gate:
+                # fail-loud per-(paper,scale) verdict (INK_DENSITY_LOW is in
+                # _PAPER_FIRST_VERDICT_MARKERS): solve_paper_first / the closed-form
+                # caller reads this to reject the hollow page and pick a SMALLER
+                # paper / pitch, never to ship the sparse frame the user rejected.
+                raise ValueError(
+                    f"INK_DENSITY_LOW: page={project_name} paper={paper} "
+                    f"ink_density={ink_density * 100:.1f}% < floor {MIN_INK_DENSITY * 100:.0f}% "
+                    f"(hollow/sparse frame — pick smaller paper or higher fill)"
+                )
+
+        # M6-5 (observe-only contract, 續棒 fix): the gate block above only runs on the
+        # page_fill / non-overflow / non-A4 path. But the sizer's probe (ink_gate=False)
+        # MUST get a density verdict for EVERY candidate (paper,scale) it tries, else a
+        # candidate whose paper is A4 / overflowing / whatever leaves _ink_gate_verdict
+        # None → the ladder reads ink_ok defaulting True → it wrongly ACCEPTS a page the
+        # deliverable (ink_gate=True) then rejects at STEP 3 (INK_DENSITY_LOW), and the
+        # chosen paper is non-deterministic. So when ink_gate=False and the gate block
+        # did NOT run, compute the SAME true-ink density here as an OBSERVATION. The A4 /
+        # overflow / non-page_fill exemptions mean "do not REJECT for density" → ink_ok
+        # is forced True on the exempt path (density is still reported for the ladder /
+        # calibration), matching the deliverable's own A4 exemption.
+        if not ink_gate and _ink_gate_verdict is None and components:
+            _pw, _ph = next((w, h) for name, w, h in STANDARD_PAPERS if name == paper)
+            _usable = max((_pw - 2 * SHEET_MARGIN_MM) * (_ph - 2 * SHEET_MARGIN_MM), 1.0)
+            _ink_area = 0.0
+            for c in components:
+                _bb = bboxes.get(c.ref)
+                if _bb is not None and _bb[0] > 0 and _bb[1] > 0:
+                    _a = _bb[0] * _bb[1]
+                    if _a > 40000.0:
+                        _a *= 0.35   # _INK_SHELL_FRAC: hollow large body inks ~its frame+pins
+                    _ink_area += _a
+            if _label_reach > 0.0:
+                _ln = [n.name for n in nets] if effective_conn == "label" else list(label_nets or ())
+                _ink_area += len(_ln) * _label_reach * (_BASE_TEXT_HEIGHT_MM * page_scale)
+            _obs_density = _ink_area / _usable
+            _obs_aabb = (sheet_fit.content_w * sheet_fit.content_h) / _usable
+            # Exempt path: never REJECT for density (ink_ok=True). Only a page that both
+            # ran through the gate's own conditions AND failed would be ink_ok=False, and
+            # that path is handled by the gate block above — here we are on the exempt
+            # branch, so ink_ok is True by definition of "exempt".
+            _smallest = STANDARD_PAPERS[0][0]
+            _exempt = (not page_fill) or sheet_fit.overflow or paper == _smallest
+            _obs_ok = True if _exempt else (_obs_density >= MIN_INK_DENSITY)
+            _ink_gate_verdict = {
+                "ink_density": _obs_density,
+                "aabb_util": _obs_aabb,
+                "floor": MIN_INK_DENSITY,
+                "ink_ok": _obs_ok,
+                "paper": paper,
+                "exempt": _exempt,
+            }
 
     # Fail-fast: if the caller declared components but EVERY one was skipped, the
     # emitted schematic would be empty and ERC would report 0 violations — a false
@@ -1912,7 +2082,7 @@ def compose_schematic(
                 continue
             _ledger.try_reserve(LedgerRect(
                 comp.x - _hw, comp.y - _hh, comp.x + _hw, comp.y + _hh,
-                comp.ref, "body",
+                comp.ref, "body", source_layer="L1",
             ))
 
     emit = emit_kicad_schematic(
@@ -1920,6 +2090,8 @@ def compose_schematic(
         symbol_dir=symbol_dirs, connection_style=effective_conn, paper=paper,
         nc=nc_list or None, label_nets=label_nets, power_ports=power_ports,
         page_scale=page_scale, ledger=_ledger, power_port_gate=power_port_gate,
+        clusters=clusters,
+        l6_avoidance=bool(spec.get("l6_avoidance", False)),
     )
     warnings.extend(emit.warnings)
 
@@ -2042,6 +2214,13 @@ def compose_schematic(
         ledger=_ledger,
         wire_body_intrusions=list(getattr(emit, "wire_body_intrusions", [])),
     )
+
+    # M6-5 (DD-12 companion): expose the observe-only true-ink gate verdict so the
+    # closed-form sizer can read ink_ok and reject sub-floor candidates. Only set when
+    # the page_fill gate actually ran (>A4 page); None on the A4-exempt / non-page_fill
+    # path. measure_ink below (if requested) overwrites with the full ink report.
+    if _ink_gate_verdict is not None:
+        result.ink_metrics = _ink_gate_verdict
 
     if measure_ink and style == "draftsman":
         from .ink_metrics import measure_schematic_ink
