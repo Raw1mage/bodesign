@@ -339,6 +339,7 @@ class Det:
     POWER_SEQUENCING = 'validate_power_sequencing'
     LED_RESISTORS = 'validate_led_resistors'
     FEEDBACK_STABILITY = 'validate_feedback_stability'
+    PASSIVE_COMPLETENESS = 'validate_passive_completeness'
 
 
 # ---------------------------------------------------------------------------

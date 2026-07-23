@@ -123,6 +123,7 @@ from validation_detectors import (
     validate_power_sequencing as validate_power_seq_deps,
     validate_led_resistors,
     validate_feedback_stability,
+    validate_passive_completeness,
 )
 from finding_schema import compute_trust_summary, sort_findings
 
@@ -784,6 +785,7 @@ def analyze_signal_paths(ctx: AnalysisContext) -> dict:
     power_seq_dep_findings = validate_power_seq_deps(ctx, power_regulators)
     led_resistor_findings = validate_led_resistors(ctx)
     feedback_stability_findings = validate_feedback_stability(ctx, power_regulators)
+    passive_completeness_findings = validate_passive_completeness(ctx)
 
     # New domain detectors (rich format)
     wireless_modules = detect_wireless_modules(ctx)
@@ -1008,7 +1010,8 @@ def analyze_signal_paths(ctx: AnalysisContext) -> dict:
             usb_findings +
             power_seq_dep_findings +
             led_resistor_findings +
-            feedback_stability_findings
+            feedback_stability_findings +
+            passive_completeness_findings
         ),
     }
 
@@ -3080,6 +3083,7 @@ def parse_legacy_schematic(path: str) -> dict:
         lib_symbols=lib_symbols,
         pin_net=pin_net,
         no_connects=all_no_connects,
+        sch_path=path,
     )
     from netlist_queries import NetlistQueries
     ctx.nq = NetlistQueries(ctx)
@@ -8764,6 +8768,7 @@ def analyze_schematic(path: str, project_root: str | None = None,
         no_connects=all_no_connects,
         generator_version=generator_version,
         hierarchy_context=hierarchy_ctx,
+        sch_path=path,
     )
     from netlist_queries import NetlistQueries
     ctx.nq = NetlistQueries(ctx)

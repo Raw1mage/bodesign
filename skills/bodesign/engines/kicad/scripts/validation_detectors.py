@@ -1130,3 +1130,223 @@ def validate_feedback_stability(
                     ))
 
     return findings
+
+
+# ---------------------------------------------------------------------------
+# PC-001: passive-completeness gate (BR_20260723)
+#
+# The C03 method (pinout-to-circuit-method.md) says "discharge every power
+# pin's decoupling obligation", but nothing mechanically rejected a schematic
+# that skipped it — a STM32N657 with zero decoupling passed ERC, fidelity, and
+# analyze_schematic with no high finding. This is the C03 analogue of C04's
+# floating-copper HARD FAIL. PC-001 is the machine backstop: an active IC whose
+# power rails carry ZERO decoupling is a blocking error unless an explicit,
+# provenance-carrying waiver covers the gap (never a silent pass).
+#
+# Policy (USER-adjudicated, plan c03-ee_passive-completeness-gate DD-2/DD-3):
+#   - Mandatory obligation scope = DECOUPLING-ONLY (blocking).
+#   - Waiver = sidecar passive_waivers.json + per-(ref, obligation) match; a
+#     matched gap is recorded as `waived` (info, visible), not suppressed.
+# ---------------------------------------------------------------------------
+
+# Component types treated as "active ICs" that carry a decoupling obligation.
+_ACTIVE_IC_TYPES = frozenset({'ic'})
+# Pin electrical types that mark a power-input pin on an active IC.
+_POWER_PIN_TYPES = frozenset({'power_in'})
+# Pin-name fragments that additionally mark a power pin when the symbol lacks a
+# power_in electrical type (common in vendor-drawn hierarchical symbols).
+_POWER_PIN_NAME_HINTS = ('VDD', 'VCC', 'AVDD', 'DVDD', 'VBAT', 'VIN', 'VDDA',
+                         'VDDIO', 'VREF+', 'AVCC', 'VDDCORE', 'VDD33', 'VDD18')
+WAIVER_SIDECAR_FILENAME = 'passive_waivers.json'
+
+
+class PassiveWaiverError(ValueError):
+    """Malformed passive_waivers.json — fail-fast, never silently ignored."""
+
+
+def _load_passive_waivers(sch_path: str | None) -> list[dict]:
+    """Load the passive_waivers.json sidecar next to the .kicad_sch.
+
+    Returns a list of {ref, obligation, source, reason, scope} dicts. Missing
+    sidecar => no waivers (all gaps block). Malformed sidecar => fail-fast
+    (PassiveWaiverError), never a silent empty list. Each waiver MUST carry
+    provenance (source + reason); a waiver missing them is malformed.
+    """
+    import json
+    import os as _os
+    if not sch_path:
+        return []
+    sidecar = _os.path.join(_os.path.dirname(_os.path.abspath(sch_path)),
+                            WAIVER_SIDECAR_FILENAME)
+    if not _os.path.isfile(sidecar):
+        return []
+    try:
+        with open(sidecar, 'r', encoding='utf-8') as fp:
+            raw = json.load(fp)
+    except (json.JSONDecodeError, OSError) as exc:
+        raise PassiveWaiverError(
+            f'{WAIVER_SIDECAR_FILENAME} is not readable/valid JSON: {exc}') from exc
+    # Accept either a bare list or {"waivers": [...]}.
+    items = raw.get('waivers', raw) if isinstance(raw, dict) else raw
+    if not isinstance(items, list):
+        raise PassiveWaiverError(
+            f'{WAIVER_SIDECAR_FILENAME} must be a JSON list (or {{"waivers": [...]}}), '
+            f'got {type(items).__name__}')
+    waivers: list[dict] = []
+    for i, w in enumerate(items):
+        if not isinstance(w, dict):
+            raise PassiveWaiverError(
+                f'{WAIVER_SIDECAR_FILENAME}[{i}] must be an object, got {type(w).__name__}')
+        ref = str(w.get('ref', '')).strip()
+        obligation = str(w.get('obligation', '')).strip().lower()
+        source = str(w.get('source', '')).strip()
+        reason = str(w.get('reason', '')).strip()
+        if not ref or not obligation:
+            raise PassiveWaiverError(
+                f'{WAIVER_SIDECAR_FILENAME}[{i}] missing required ref/obligation')
+        if not source or not reason:
+            raise PassiveWaiverError(
+                f'{WAIVER_SIDECAR_FILENAME}[{i}] ({ref}/{obligation}) missing provenance '
+                '(source + reason are mandatory — a waiver may not be silent)')
+        waivers.append({
+            'ref': ref, 'obligation': obligation,
+            'source': source, 'reason': reason,
+            'scope': str(w.get('scope', '')).strip(),
+        })
+    return waivers
+
+
+def _ic_power_rails(ctx: AnalysisContext, ref: str) -> set[str]:
+    """Return the set of distinct power-rail net names an active IC's power pins
+    connect to. A rail is a net that is a power net and not ground."""
+    rails: set[str] = set()
+    comp = ctx.comp_lookup.get(ref)
+    if not comp:
+        return rails
+    # Build a pin_number -> electrical type / name map from the component symbol.
+    pin_meta: dict[str, tuple[str, str]] = {}
+    for p in comp.get('pins', []):
+        num = str(p.get('number', ''))
+        pin_meta[num] = (str(p.get('type', '')).lower(), str(p.get('name', '')).upper())
+    for pnum, (net, _info) in ctx.ref_pins.get(ref, {}).items():
+        if not net:
+            continue
+        ptype, pname = pin_meta.get(str(pnum), ('', ''))
+        is_power_pin = ptype in _POWER_PIN_TYPES or any(
+            h in pname for h in _POWER_PIN_NAME_HINTS)
+        if not is_power_pin:
+            continue
+        if ctx.is_power_net(net) and not ctx.is_ground(net):
+            rails.add(net)
+    return rails
+
+
+def _rail_has_decoupling(ctx: AnalysisContext, rail: str) -> bool:
+    """True if the rail carries >=1 capacitor whose other pin goes to ground
+    (a decoupling / bypass cap). Mirrors detect_decoupling's rail walk."""
+    net_info = ctx.nets.get(rail)
+    if not net_info:
+        return False
+    for p in net_info.get('pins', []):
+        comp = ctx.comp_lookup.get(p['component'])
+        if not comp or comp.get('type') != 'capacitor':
+            continue
+        c_n1, c_n2 = ctx.get_two_pin_nets(p['component'])
+        other = c_n2 if c_n1 == rail else c_n1
+        if ctx.is_ground(other):
+            return True
+    return False
+
+
+def validate_passive_completeness(
+    ctx: AnalysisContext,
+    sch_path: str | None = None,
+) -> list[dict]:
+    """PC-001: an active IC whose power rails carry ZERO decoupling is a HARD
+    FAIL (error) unless an explicit sidecar waiver covers the (ref, decoupling)
+    gap — in which case it is recorded as `waived` (info, visible).
+
+    Decoupling-only mandatory scope (DD-2); waiver via passive_waivers.json
+    sidecar with per-gap match (DD-3). Deterministic; fail-fast on malformed
+    waiver sidecar.
+
+    The sidecar is located next to the schematic: `sch_path` overrides, else
+    `ctx.sch_path` (populated by analyze_schematic). None => no sidecar lookup.
+    """
+    findings: list[dict] = []
+    waivers = _load_passive_waivers(sch_path or getattr(ctx, 'sch_path', None))
+    waived_index = {(w['ref'], w['obligation']): w for w in waivers}
+
+    # Deterministic ordering: iterate refs sorted.
+    active_ics = sorted(
+        c['reference'] for c in ctx.components
+        if c.get('type') in _ACTIVE_IC_TYPES)
+
+    for ref in active_ics:
+        rails = _ic_power_rails(ctx, ref)
+        if not rails:
+            # No detectable power pins on this IC — not a decoupling obligation
+            # we can assert deterministically (e.g. a logic buffer powered via a
+            # signal pin). Skip rather than false-positive.
+            continue
+        undecoupled = sorted(r for r in rails if not _rail_has_decoupling(ctx, r))
+        if not undecoupled:
+            continue  # every power rail has decoupling — obligation discharged
+
+        # An active IC with >=1 power rail and NONE of them decoupled is the
+        # smoking-gun pinout-only case. If SOME rails are decoupled we still
+        # flag the bare rails, but the "zero decoupling anywhere" case is the
+        # headline the BR names.
+        zero_anywhere = len(undecoupled) == len(rails)
+        waiver = waived_index.get((ref, 'decoupling'))
+
+        comp = ctx.comp_lookup.get(ref, {})
+        val = comp.get('value', '') or comp.get('lib_id', '')
+        rails_str = ', '.join(undecoupled)
+
+        if waiver:
+            findings.append(make_finding(
+                detector='validate_passive_completeness', rule_id='PC-001',
+                category='passive_completeness',
+                summary=f'{ref}: decoupling gap WAIVED on {rails_str}',
+                description=(
+                    f'Active IC {ref} ({val}) has power rail(s) [{rails_str}] with no '
+                    f'decoupling — WAIVED. source={waiver["source"]!r} '
+                    f'reason={waiver["reason"]!r} scope={waiver["scope"]!r}.'),
+                severity='info', confidence='deterministic', evidence_source='topology',
+                components=[ref], nets=undecoupled,
+                recommendation='Waiver recorded; add decoupling before send-to-fab if scope changes.',
+                impact='Waived — deliberately-partial deliverable (honest subset).',
+                standard_ref='pinout-to-circuit-method.md #Power',
+                waived=True, waiver=waiver, obligation='decoupling',
+                provenance=make_provenance('pc_passive_completeness', 'deterministic', [ref]),
+            ))
+            continue
+
+        findings.append(make_finding(
+            detector='validate_passive_completeness', rule_id='PC-001',
+            category='passive_completeness',
+            summary=f'{ref}: active IC with zero decoupling on {rails_str}',
+            description=(
+                f'Active IC {ref} ({val}) has power rail(s) [{rails_str}] carrying ZERO '
+                f'decoupling capacitance. The pinout-to-circuit method requires a '
+                f'decoupling cascade per power pin. '
+                + ('This IC has NO decoupling on any power rail — a pinout-only placement '
+                   'that cannot physically work. '
+                   if zero_anywhere else '')
+                + 'Add decoupling, or record an explicit waiver in passive_waivers.json.'),
+            severity='error', confidence='deterministic', evidence_source='topology',
+            components=[ref], nets=undecoupled,
+            recommendation=(
+                f'Add >=1 decoupling capacitor (rail->GND) per power rail on {ref}, '
+                'per the datasheet decoupling recommendation.'),
+            fix_params={'type': 'add_component', 'components': [
+                {'type': 'capacitor', 'value': '100n', 'net_from': r, 'net_to': 'GND'}
+                for r in undecoupled], 'basis': 'PC-001 decoupling obligation'},
+            impact='Board cannot physically work; unsupported active device (false-pass class).',
+            standard_ref='pinout-to-circuit-method.md #Power',
+            obligation='decoupling',
+            provenance=make_provenance('pc_passive_completeness', 'deterministic', [ref]),
+        ))
+
+    return findings

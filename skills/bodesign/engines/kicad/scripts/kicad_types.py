@@ -72,6 +72,7 @@ class AnalysisContext:
     generator_version: str = "unknown"
     nq: 'NetlistQueries | None' = field(default=None, repr=False)
     hierarchy_context: dict | None = field(default=None, repr=False)
+    sch_path: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not self.comp_lookup:
