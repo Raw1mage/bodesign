@@ -1622,6 +1622,25 @@ def run_tool(name: str, arguments: dict) -> dict:
         for key in PATH_ARG_KEYS:
             if isinstance(args.get(key), str):
                 args[key] = str((doc_dir / args[key].lstrip("/")).resolve())
+        # symbol_dirs is NOT a plain PATH_ARG_KEYS entry (it may be a str OR a
+        # list, and absolute/stdlib entries must be left untouched). A caller
+        # staging a custom symbol lib under a token and passing a RELATIVE
+        # symbol_dirs (e.g. "symbols") needs each relative entry resolved against
+        # the token's doc_dir — otherwise the composer's stdlib merge produces a
+        # dir list whose custom entry resolves against the container CWD, never
+        # finds the staged lib, and every custom-symbol component collapses to
+        # placed:0 (BR_20260723 compose-symbol-dirs round 2). Absolute entries
+        # (the KiCad stdlib, or a caller's own absolute path) pass through as-is.
+        _sd = args.get("symbol_dirs")
+        if _sd is not None:
+            def _resolve_sd(v):
+                if isinstance(v, str) and not os.path.isabs(v):
+                    return str((doc_dir / v.lstrip("/")).resolve())
+                return v
+            if isinstance(_sd, str):
+                args["symbol_dirs"] = _resolve_sd(_sd)
+            elif isinstance(_sd, (list, tuple)):
+                args["symbol_dirs"] = [_resolve_sd(v) for v in _sd]
         before = _snapshot(doc_dir)
     try:
         result = {"ok": True, "result": _jsonable(spec["handler"](args))}
