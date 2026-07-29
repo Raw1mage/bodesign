@@ -1587,7 +1587,43 @@ def autoroute_preflight() -> dict:
 
 
 # -------------------------------------------------------------------------------- autoroute (opt)
-def autoroute(board_path: str, out_path: str, *, passes: int = 40,
+# BR_20260729 §J: freerouting's `-mp` is the UPPER LIMIT of auto-router passes — its own
+# command_line_help reads "Sets the upper limit of the number of auto-router passes that will
+# be performed". This constant is the SINGLE source for the default; the MCP handler must not
+# re-declare it (V4-c: a hand-copied default drifts from the one that actually applies, and
+# would also drift from the `passes_limit_default` echoed back to the caller).
+DEFAULT_AUTOROUTE_PASSES = 40
+
+
+def autoroute_budget_report(passes: int, unconnected: int | None) -> dict:
+    """Attribute a routing outcome to the search BUDGET it was produced under (BR_20260729 §J).
+
+    Pure so it is testable without pcbnew/java: the discrimination that matters here is *when the
+    advisory fires*, and a test that could only run in the ee worker would skip on the host and
+    report 0-coverage-as-clean (the L10 failure mode).
+
+    ``unconnected`` is not a property of the board alone but of (board, budget). Throttling ``-mp``
+    yields a worse number out of identical geometry, so a caller reading only ``unconnected`` can
+    mistake "I did not pay for enough search" for "this board cannot be routed".
+    """
+    throttled = passes < DEFAULT_AUTOROUTE_PASSES
+    rep = {"passes_limit": passes, "passes_limit_default": DEFAULT_AUTOROUTE_PASSES,
+           "throttled": throttled}
+    # Fire ONLY when the budget was cut AND the outcome is adverse. Two deliberate silences:
+    # a fully routed board (unconnected == 0) needs no caveat even if throttled, and an unrouted
+    # board at FULL budget is a real geometry/stackup finding that must not be diluted by a note
+    # about effort. `unconnected is None` (count unavailable) also stays silent — asserting the
+    # budget explains an outcome we could not measure would be a fabricated attribution.
+    if throttled and unconnected is not None and unconnected != 0:
+        rep["advisories"] = [
+            f"passes_throttled: produced with -mp {passes}, below the default "
+            f"{DEFAULT_AUTOROUTE_PASSES}. `unconnected` here is a function of both the board and "
+            "the search budget, so it is NOT evidence that the geometry/stackup cannot be routed. "
+            f"Re-run at passes={DEFAULT_AUTOROUTE_PASSES} before concluding the board is infeasible."]
+    return rep
+
+
+def autoroute(board_path: str, out_path: str, *, passes: int = DEFAULT_AUTOROUTE_PASSES,
               netclasses: list[dict] | None = None,
               default_width_mm: float = 0.2, default_clearance_mm: float = 0.2) -> dict:
     """Freerouting autoroute if available (java + freerouting.jar + xvfb); else no-op passthrough.
@@ -1597,7 +1633,15 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40,
     signal/power nets keep their own widths — instead of a single global 0.2mm rule that makes
     0.5mm-pitch BGA escape impossible. Each entry: {name, width_mm, clearance_mm, nets?:[exact],
     match?:[substrings]}. Run BGA fanout (via_in_pad) BEFORE this so escape stubs exist. When
-    omitted, the DSN keeps KiCad's default single rule (backward-compatible)."""
+    omitted, the DSN keeps KiCad's default single rule (backward-compatible).
+
+    ``passes`` maps to freerouting's ``-mp`` and is the UPPER LIMIT of auto-router passes, not a
+    count of passes performed. Lowering it below :data:`DEFAULT_AUTOROUTE_PASSES` buys a faster
+    but weaker search, and the resulting ``unconnected`` then measures *board AND budget* — so
+    the return echoes ``passes_limit`` / ``throttled`` (BR_20260729 §J). The passes ACTUALLY run
+    are deliberately NOT reported: freerouting gates its per-pass log line behind TestLevel, so
+    at the default log level only wall-clock totals reach stdout, and inventing a number here
+    would trade one misleading value for another."""
     _need_pcbnew()
     jar = os.environ.get("FREEROUTING_JAR", "/opt/freerouting/freerouting.jar")
     java = os.environ.get("JAVA_BIN", "java")
@@ -1660,10 +1704,19 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40,
             unconnected = int(b2.GetConnectivity().GetUnconnectedCount())
     except Exception:
         unconnected = None
+    # BR_20260729 §J: echo the search BUDGET that produced this verdict. `unconnected` reads like
+    # a property of the board, but it is a property of (board, budget): a caller who throttled
+    # `-mp` gets a worse number out of identical geometry, and can mistake "I did not pay for
+    # enough search" for "this board cannot be routed" — a consumer did exactly that for four
+    # rounds, and wrote the wrong conclusion into a deliverable. Note this function ALREADY
+    # echoed the other caller-supplied constraint (`netclasses`); passes was the asymmetric gap.
     out = {"routed": True, "board": out_path,
            "segments": sum(1 for x in t if x.GetClass() == 'PCB_TRACK'),
            "vias": sum(1 for x in t if x.GetClass() == 'PCB_VIA'),
-           "unconnected": unconnected, "complete": (unconnected == 0) if unconnected is not None else None}
+           "unconnected": unconnected, "complete": (unconnected == 0) if unconnected is not None else None,
+           # Never flips `complete` — the routing result itself is accurate; it was the
+           # ATTRIBUTION (board vs budget) that was missing.
+           **autoroute_budget_report(passes, unconnected)}
     if netclass_report is not None:
         out["netclasses"] = netclass_report
     return out

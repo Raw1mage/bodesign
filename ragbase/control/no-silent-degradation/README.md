@@ -29,7 +29,9 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
    `dropped[]` / `unresolved[]` / `basis` 非預設值），且
 3. `expected` 與 `actual` 的計數必須同時可見（讓「84 vs 92」這種落差無法被單看一個數字掩蓋）。
 
-## 五種變體
+## 變體家族
+
+（標題不寫數量：這張表每次長大，一個寫死的「五種」就是下一個 V4-c 手抄副本。）
 
 | 變體 | 定義 | 實例（BR_20260729） |
 |---|---|---|
@@ -39,6 +41,7 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
 | **V4 量測基準分散** | 同一物理量在多處各自實作，修正只落其中一處 | §E `_extract_part_geoms` vs `placement_preflight` |
 | **V4-b 參考系不一致** | 只有一份實作，但跨模組對同一座標的**參考系**假設不同 | §F origin vs courtyard-centre |
 | **V4-c 事實雙重記錄** | 同一個事實被記在**權威來源**與**手抄副本**兩處，而沒有任何機制強迫兩者一致 | §A/§I `_need_pcbnew()` vs `_EE_GROUP_TOOLS` |
+| **V5 判決未帶產生它的預算** | 回傳值**完全誠實**，但它是 (標的, 呼叫端給的預算) 的函數，而讀起來像只是標的的屬性 | §J `autoroute` 不 echo `-mp` |
 
 **V4/V4-b 與 V1–V3 的關鍵差異（勿混淆，修法不同）**：V1–V3 是**假綠**（靜默成功，違反天條）；
 V4/V4-b 是**假紅**（gate 大聲失敗且訊息精確，*沒有*違反 no-silent-fallback，壞的是餵給它的量測）。
@@ -71,6 +74,47 @@ V4 是同一物理量有兩份實作；V4-c 只有一份實作，但它的一個
 pyrender/build123d）沒有等價標記，**所以這條守衛涵蓋不到 ME group**，它仍是手維護的。
 測試裡有一條斷言「哨兵只有這一個」，新增哨兵時會紅，提醒把推導延伸過去——把缺口寫成
 會爆的測試，而不是寫成注解。
+
+### V5：沒人說謊、沒東西被丟，卻仍造成錯結論
+
+V5 是本 control 的**邊境**，認真區別它與 V1–V3 很重要：沒有任何元素被丟、沒有降級、也沒有 `except`
+吃錯。`unconnected: 138` 是**正確的量測**。缺陷在於它被讀成「這塊板佈不通」，而它真正的語意是
+「這塊板 **在這個搜尋預算下** 佈不通」。
+
+實例（§J）：呼叫端將 freerouting 節流到 `-mp 10`（預設 40），連續四轮拿到的低佈通率被它定性成
+「freerouting 搜尋能力不足」這種**外生限制**，並寫進了交付文件。回預設重跑：74 → 81/111。
+
+**判別句**：
+
+> 這個數字是不是只要呼叫端沒改標的、只改了一個參數，就會變？
+> 若是，而那個參數**不在回傳裏**，就是 V5。
+
+這也讓 V2 的位置更清楚：**V2 是 V5 的特例**——差別只在「影響判決的那個輸入是誰選的」：V2（`basis`）
+是**工具自己**降級時選了別的量測法；V5（`passes_limit`）是**呼叫端**選了較低的努力。兩者修法同形：
+把產生判決的那個輸入寫進回傳。§C 之前呼叫端不知道 `1008.8` 是用 courtyard 還是含絲印 bbox 量的；
+§J 之前呼叫端不知道 `unconnected:138` 是用幾 pass 跑出來的。
+
+**「呼叫端自己帶的參數，它自己知道」是最常見的反駁，但經驗上站不住**：
+1. 參數在上游設定、幾十分鐘後才讀結果，中間隔了 pour / DRC / 分類，**人不會把兩端連起來**；
+2. 判決往下游流动時參數不跟著跑——寫進交付文件的只有 `74/111`，沒有 `-mp 10`；
+3. 從一開始就帶錯的參數，呼叫端永遠不會回頭懷疑它——四轮都在改別的東西（netclass、板子尺寸、keep_rings）。
+
+**修法的三條約束**（`autoroute_budget_report`）：
+- **預算無條件 echo**（`passes_limit` / `passes_limit_default` / `throttled`）；advisory 才是有條件的那一半。
+- **advisory 只在「預算被削」且「結果不利」時黍。** 三種刻意的沉默：全預算仍未佈通（那是**真的**幾何/疊層
+  發現，不能被一句「你是不是沒付夠錢」稀释）、已完全佈通（便宜搜尋成功就是贏）、以及 `unconnected is None`
+  （**連結果都沒量到卻断言預算是原因，是傑造歸因**——同一缺陷反向）。
+- **advisory 永不翻轉判決。** routing 數字本來就正確，缺的是**歸因**。
+
+**命名上的守則**：欄位叫 `passes_limit` 而不是 `passes`。freerouting 自己的 `command_line_help` 寫的是
+「Sets the **upper limit** of the number of auto-router passes」，而它把 per-pass log（jar 內
+`@BatchAutorouter.autoroute_pass #`）閘在 TestLevel 後面，預設 log level 根本不印——**實際跑了幾 pass 是
+拿不到的**。叫 `passes` 會被讀成「跑了 40 pass」，那是拿一個誤導數字換成另一個。
+**命名必須反映你真的量到什麼，不是呼叫端希望你量到什麼。**
+
+**機制面的暴露面不是 docstring。** 呼叫端是 MCP client，它看不到 Python docstring，只看得到 JSON
+schema。所以除了回傳值之外，`passes` 的 schema `description` 必須自己把「upper limit」、「節流後
+`unconnected` 同時量你的預算」講完——否則這條知識對实際的使用者不存在。
 
 ## 正確樣態（positive pattern，KB 只有反例不夠）
 

@@ -483,19 +483,50 @@ class McpServerTests(unittest.TestCase):
             self.assertIn(f"gate.py {verb} --repo", r["landing_command"],
                           f"{verb}: landing_command must carry the verb")
 
+    # The converged registry, by NAME (6.4/AC-7). Historically this test asserted only
+    # `len(TOOLS) == 55`, which was BOTH stale and blunt (BR_20260729 §J side-finding):
+    #   * stale — it shipped red at 8fd59b0 (56 != 55) and nobody noticed, because the
+    #     full host suite was never run; a later addition took it to 57, still red. A
+    #     permanently-red assertion carries no signal, exactly like a permanently-green one.
+    #   * blunt — a count cannot see a RENAME or a swap (drop one tool, add another and it
+    #     stays green), so the check was weakest against the change most likely to break
+    #     a client: a tool the caller names disappearing.
+    # An explicit name set makes every add / remove / rename fail loudly and self-describe.
+    EXPECTED_TOOLS = {
+        "bodesign_analyze_emc", "bodesign_analyze_thermal", "bodesign_analyzer_selfcheck",
+        "bodesign_apply_pad_intrinsic_overrides", "bodesign_ato_build", "bodesign_autoroute",
+        "bodesign_autoroute_preflight", "bodesign_bga_escape_capacity",
+        "bodesign_c00_emit_prd_docx", "bodesign_c01_generate_concept_image",
+        "bodesign_c02_export_skp", "bodesign_c02_export_step", "bodesign_c02_export_stl",
+        "bodesign_c02_project_svg", "bodesign_c02_render_enclosure",
+        "bodesign_c02_voice_to_design", "bodesign_cache_close", "bodesign_cache_export",
+        "bodesign_cache_provision", "bodesign_check_c03", "bodesign_clean_micro_stubs",
+        "bodesign_component_fetch", "bodesign_component_search", "bodesign_compose_schematic",
+        "bodesign_dwg_to_dxf", "bodesign_dxf_to_dwg", "bodesign_emit_doc", "bodesign_emit_fab",
+        "bodesign_emit_layout", "bodesign_emit_symbol", "bodesign_export_bom",
+        "bodesign_export_netlist", "bodesign_init", "bodesign_kb_get", "bodesign_kb_query",
+        "bodesign_layout_drc_gate", "bodesign_length_match_bus", "bodesign_mcp_call",
+        "bodesign_placement_preflight", "bodesign_pour_planes", "bodesign_prd_bom_crosscheck",
+        "bodesign_render_board_model", "bodesign_render_companion",
+        "bodesign_render_gerber_preview", "bodesign_route_net2pcb", "bodesign_si_check",
+        "bodesign_simulate", "bodesign_spice_model_card", "bodesign_stage_dir",
+        "bodesign_vault_diagnostics", "bodesign_vault_ingest", "bodesign_vault_query",
+        "bodesign_vault_queue", "bodesign_vault_spec_check", "bodesign_via_in_pad",
+        "bodesign_widen_bus_tracks", "bodesign_workspace_inspect",
+    }
+
     def test_converged_registry_tool_count(self):
-        """6.4/AC-7: GET /tools reflects the converged registry — pre-refactor 91
-        non-cache tools minus 51 fully-landed verbs (c00_emit_prd_docx stays as a
-        DD-3 borderline keep for the assemble path) plus the 3 cache tools = 43,
-        plus bodesign_ato_build (dsl/atopile-integration) and
-        bodesign_prd_bom_crosscheck (quality/prd-bom-crosscheck L1) = 45,
-        plus bodesign_si_check + bodesign_vault_spec_check
-        (quality/verify-checker-skillification advisory checkers) = 47,
-        plus subsequent registry additions (see CHANGELOG) = 53,
-        plus bodesign_kb_query + bodesign_kb_get
-        (mcp_r16-domain-kb in-band domain KB, R16) = 55."""
-        self.assertEqual(len(self.server.TOOLS), 55)
+        """The registry matches EXPECTED_TOOLS exactly — no additions, removals or renames.
+
+        assertSetEqual names the delta in both directions, so a failure says WHICH tool
+        appeared or vanished instead of leaving a reader to diff two integers.
+        """
         names = {t["name"] for t in self.server.TOOLS}
+        self.assertSetEqual(names, self.EXPECTED_TOOLS)
+        # No duplicate registrations: TOOLS_BY_NAME would silently collapse them, so a
+        # double-registered tool is invisible to the set comparison above.
+        self.assertEqual(len(self.server.TOOLS), len(names),
+                         "duplicate tool name in TOOLS")
         # borderline / infrastructure keeps (design.md DD-3):
         for kept in ("bodesign_c00_emit_prd_docx", "bodesign_c02_voice_to_design",
                      "bodesign_spice_model_card", "bodesign_stage_dir", "bodesign_mcp_call",

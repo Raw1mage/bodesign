@@ -57,6 +57,7 @@ from .preplace import (
     preplace,
 )
 from .routing import (
+    DEFAULT_AUTOROUTE_PASSES,
     apply_pad_intrinsic_overrides,
     autoroute,
     autoroute_preflight,
@@ -77,6 +78,7 @@ from .routing import (
 )
 
 __all__ = [
+    "DEFAULT_AUTOROUTE_PASSES",
     "analyzer_engine_status",
     "resolve_skill",
     "fetch_component",
