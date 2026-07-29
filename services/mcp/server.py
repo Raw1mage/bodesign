@@ -1308,6 +1308,7 @@ _EE_GROUP_TOOLS = {
     "bodesign_layout_drc_gate",
     "bodesign_si_check",
     "bodesign_autoroute",
+    "bodesign_clean_micro_stubs",
     # C04 preflight gates: probe the SAME worker env the gated action runs in
     # (freerouting/pcbnew live in the ee image, NOT the lean facade). Omitting
     # these routed them to `core` -> facade-local probe -> always ready:false

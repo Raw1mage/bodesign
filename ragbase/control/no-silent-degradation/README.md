@@ -38,11 +38,39 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
 | **V3 狀態欄位不反映降級** | 降級資訊有收集也有傳出（誠實），但 `status`/`ok` 恆為成功 | S2 `layout.py unresolved_footprints` |
 | **V4 量測基準分散** | 同一物理量在多處各自實作，修正只落其中一處 | §E `_extract_part_geoms` vs `placement_preflight` |
 | **V4-b 參考系不一致** | 只有一份實作，但跨模組對同一座標的**參考系**假設不同 | §F origin vs courtyard-centre |
+| **V4-c 事實雙重記錄** | 同一個事實被記在**權威來源**與**手抄副本**兩處，而沒有任何機制強迫兩者一致 | §A/§I `_need_pcbnew()` vs `_EE_GROUP_TOOLS` |
 
 **V4/V4-b 與 V1–V3 的關鍵差異（勿混淆，修法不同）**：V1–V3 是**假綠**（靜默成功，違反天條）；
 V4/V4-b 是**假紅**（gate 大聲失敗且訊息精確，*沒有*違反 no-silent-fallback，壞的是餵給它的量測）。
 V1–V3 靠「加欄位讓降級可見」解；V4 靠**收斂實作到單一 helper**解；V4-b 靠**在型別/docstring 上
 明確化參考系**解。把 V4 當 V2 修（加個 `basis` 欄位）不會解決任何事。
+
+### V4-c：實作沒分散，但「事實」被抄了一份
+
+V4 是同一物理量有兩份實作；V4-c 只有一份實作，但它的一個**屬性**被手抄到別處。
+實例：「這個工具需要 pcbnew」這個事實，權威來源是函式體內的 `_need_pcbnew()` 呼叫；
+`_EE_GROUP_TOOLS` 是它的手維護抄本，而 `_group_of()` 對未列名者一律回 `core`。兩者不一致時，
+工具被送到一個**從來不可能執行它**的環境。
+
+**這個漏失發生過兩次**：§A（兩個 preflight 漏列 → gate 在 facade 探一個住在 worker 的 toolchain，
+`ready:false` 但 toolchain 一直都在）、§I（`clean_micro_stubs` 漏列 → 在 facade 拋
+「pcbnew not importable」）。**兩次就不是「有人忘了一個名字」，是這個形狀保證還會有第三次。**
+
+**修法：從權威來源推導，而非平行維護。** `tests/test_worker_group_routing.py` 把推導鏈寫成測試：
+
+    eda_bridge fn 呼叫 _need_pcbnew()          （AST 掃 package）
+      → 哪個 _h_* handler import 了它        （AST 掃 server.py）
+        → 哪個 TOOLS entry 指向那個 handler  （AST 掃 server.py）
+          → 該工具名必須在 _EE_GROUP_TOOLS
+
+測試檔裡**一個工具名都沒寫死**，所以它自己不會 drift；新增一個 pcbnew 工具而忘了加進清單，
+推導會把它點名。另有一條反向測試（拿掉一個真成員，推導**必須**報它）確保推導真的有鑑別力，
+而不是因為集合過寬或 AST walk 壞掉而永遠綠。
+
+**邊界誠實記一筆**：`_need_pcbnew()` 是 packages 內**唯一**的這類哨兵，`_ME_GROUP_TOOLS`（OpenSCAD/
+pyrender/build123d）沒有等價標記，**所以這條守衛涵蓋不到 ME group**，它仍是手維護的。
+測試裡有一條斷言「哨兵只有這一個」，新增哨兵時會紅，提醒把推導延伸過去——把缺口寫成
+會爆的測試，而不是寫成注解。
 
 ## 正確樣態（positive pattern，KB 只有反例不夠）
 
