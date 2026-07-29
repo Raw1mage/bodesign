@@ -312,3 +312,160 @@ lymap.get('In2.Cu:PWR') = None
 2. `plane_layers=["Bogus9"]` → 應 fail-loud（raise 或 warnings + applied 為空），**不得**靜默 `ok:true`。
 3. 既有 `plane_layers=["In1","In2"]` 寫法必須保持相容。
 
+
+---
+
+# §E–§L（round=5–24 續補）
+
+前四節（§A–§D）逐個詳述。§E 之後同一反模式反覆出現，改以**索引 + 各節關鍵證據**記錄；
+完整推理與判別句住在 KB control `ragbase/control/no-silent-degradation/`，此處保留缺陷本身的
+一手證據與 commit 對應，避免 BR 與 KB 互抄（V4-c：同一事實抄兩份必然 drift）。
+
+## 缺陷索引（全 12 節）
+
+| 節 | 缺陷 | KB 變體 | commit |
+|---|---|---|---|
+| §A | `_EE_GROUP_TOOLS` 漏列 preflight 工具 → 在無 toolchain 的 facade 本地跑 → 永遠 `ready:false` | 分派表漏列 | `1269a20` |
+| §B | `route_net2pcb` 遇 footprint lib 未解析即 `continue`，靜默丟 8 顆主動 IC，`unmapped:0` 掩蓋 | V1 | `1269a20` |
+| §C | `GetCourtyardBoundingBox()` 不存在 → 裸 `except` 靜默 fallback 到含絲印 bbox → 面積灌水 11× | V2 | `cdbcb02` |
+| §D | `plane_layers` 值格式不符即靜默跳過 → 4 層板 power plane 從未建立 | V1 | `cdbcb02` |
+| S2 | `layout.py` 收集 `unresolved_footprints` 但 `status` 恆為 `"ok"` | V3 | `cdbcb02` |
+| §E | `_extract_part_geoms` 仍用含絲印 bbox（§C 只修了兩個 call site 之一）→ `PREPLACE_BOARD_TOO_SMALL` 假紅 | V4 | `f958e68` |
+| §F | extent 統一但 anchor 未統一：`_overlap_area` 當 `p` 是盒心、`SetPosition` 寫 origin | V4-b | `a25d898` |
+| §G | `via_in_pad` 對非網格 pad 名裸崩；混合命名則靜默穿透繞過 `keep_rings` | V1 反向 | `58c37cd` |
+| §H | `pcbnew.LoadBoard(不存在路徑)` 回 `None` → 下游 SIGSEGV worker 猝死；DSN export 只信旗標不驗產物 | 資源取得 | `545fddb` |
+| §I | `clean_micro_stubs` 漏於 `_EE_GROUP_TOOLS`（§A 第二次復發） | V4-c | `c87b1ba` |
+| §J | `autoroute` 不 echo 有效搜尋預算 → 呼叫端把「我給的努力不夠」誤讀成「這塊板佈不通」 | V5 | `740ac75` |
+| §K | router 被授權的 via（0.6mm）大於 BGA ball pitch（0.5mm）→ 內層形同不可達，而 `capacity` 算式默認換得了層 | V6 | `b13ae58` |
+| §L | `mcpctl.sh restart` 摧毀他人長跑運算後仍印 `restarted` | ops 層 V1 | `d7a0b86` |
+
+配套 commit：`21a4afc`（KB control + checker + 15 測試）、`33197b2`（L10 checker 自報覆蓋範圍）、
+`1927982`（`bga_escape_capacity` 工具）、`bddfdc8`（KB 驗證工具元層級）、`60b987e`（doctrine §6）。
+
+## §E 關鍵證據：修一半比不修更危險
+
+§C 修好 `placement_preflight` 的量測基準後，`_extract_part_geoms`（preplace 路徑）仍用舊 bbox。
+後果不是「還沒修好」而是**新的假紅**：`PREPLACE_BOARD_TOO_SMALL` 擋掉合法板，因為它用灌水 11× 的
+面積去比板框。真板數據：`parts_area_mm2` courtyard 基準 = 1008.794，含絲印 = 11151.1。
+
+修法是 `footprint_extent(fp)` 單一 helper（回傳 `(w,h,dx,dy,basis,degraded)`），兩個 call site 共用。
+**L8 lint 由此而生**：同一量測 API 在 >1 個函式各自實作即報。
+
+## §F 關鍵證據：extent 對了，參考系仍錯
+
+`_overlap_area` 把 `p` 當盒心用，但 `pcbnew.SetPosition()` 寫的是 **origin**。5 顆 courtyard 不置中的
+元件（JSA/JSB 偏移 22.2mm）於是被 SA 依錯誤世界模型最佳化。修後 HPWL 2453.48 → 2065.235（−15.8%）
+——**這個下降本身就是修前在錯誤前提上最佳化的反證**。
+
+參考系契約寫進 `PartGeom` docstring：placement entry 是 ORIGIN、pads 從 origin 量、
+`anchor_dx_mm` 是 courtyard-centre 減 origin 且為 part-local 未旋轉座標。
+
+## §G 關鍵證據：裸崩在遮蔽一個更糟的靜默缺陷
+
+`via_in_pad` 對 castellated/LGA 的數字 pad 名拋 `max() iterable argument is empty`。修復時挖出：
+**混合命名（部分 `A1`、部分 `1`）不崩，但每個非網格 pad 都繞過 `keep_rings` 保護被塞 via**——
+`cols` 非空所以沒人發現，呼叫端只看到合理的 `vias_added`。只有「全部 pad 都非網格」才崩。
+
+## §H 關鍵證據：SIGSEGV 與 timeout 在外部無法區分
+
+`pcbnew.LoadBoard(不存在路徑)` 回 `None`（不 raise），下一個 pcbnew 呼叫直接 SIGSEGV，worker
+EXIT=139。consumer 側看到的現象是「連線斷」，與 MCP timeout **一模一樣**——它據此做的
+「detached vs MCP」對照實驗從一開始就分不出真相。
+
+修法：`_load_board(path)` SSOT helper，fail-loud `BOARD_NOT_FOUND` 帶 resolved 絕對路徑 + worker cwd +
+「原本會 segfault」三件事，11 個 call site 全部替換。同函式的 DSN export 補產物驗證
+（原本 `.ses` 有驗、`.dsn` 沒驗的不對稱）。
+
+## §I 關鍵證據：第二次復發代表補名字不是解法
+
+`_EE_GROUP_TOOLS` 是**手維護靜態清單**，而「這個工具需要 pcbnew」的權威來源是函式體的
+`_need_pcbnew()` 呼叫。同一事實記在兩處且可以不一致 = V4-c。
+
+守衛 `tests/test_worker_group_routing.py` 從權威 AST 推導（fn → handler import → TOOLS entry → group
+成員），測試檔內**不寫死任何工具名**。三個設計決定：不用命名猜測（真實映射是
+`net2pcb_board` → `bodesign_route_net2pcb`，靠猜會誤報）、加反向鑑別力（拿掉真成員必須被報）、
+ME group 涵蓋不到就把缺口寫成會爆的測試而非注解。
+
+## §J 關鍵證據：判決必須帶著產生它的預算
+
+consumer 四輪全程傳 `-mp 10`（預設 40），卻把結果定性成「freerouting 搜尋能力不足」的外生限制。
+單調關係實測：`-mp 1` → 27/111（1m56s）、`-mp 10` → 74/111（35m40s）、`-mp 40` → 81/111（2h45m）。
+
+從 jar 取得規格證據（freerouting 自己的 `command_line_help`）：`-mp` 是 **upper limit**。因此
+**欄位不叫 `passes`** 而叫 `passes_limit`——叫 `passes` 會被讀成「跑了 40 pass」，是拿一個誤導數字
+換另一個。實跑 `-mp 1` 確認 per-pass log 被 TestLevel 閘住，**實際 pass 數拿不到就誠實不報**。
+
+附帶發現：**docstring 對 MCP 呼叫端不存在**，schema `description` 才是唯一暴露面。已進 doctrine §5。
+
+## §K 關鍵證據：「存在什麼」與「被授權什麼」是兩件事
+
+```
+netclass Default:       via=0.6mm  drill=0.3mm   ← router 被授權新建的
+via OBJECTS on board:   0.3mm/0.15mm × 168       ← via_in_pad 實際打的
+U1 ball pitch = 0.5mm   →  0.6mm via 相鄰邊緣間距 −0.1mm，球陣內開不了孔
+```
+
+`via_in_pad`（`routing.py` `SetWidth(pad_mm)`/`SetDrill(drill_mm)`）從不查板檔規則。呼叫端看到板上
+168 個小 via 就以為小 via 可用——**兩個相鄰事實被讀成一個**。
+
+`bga_escape_capacity` 的 `capacity = perimeter × per_gap × len(signal_layers)` 乘 `len(signal_layers)`
+默認 router 換得了層。所以 `capacity=288`（167 需求的 1.7× 餘裕）建立在假前提上，而實測 B.Cu 只承載
+10% segments、282 個 via 全是貫穿孔。
+
+**下游背黑鍋的部分**：那 168 個 via 低於板檔自己的 `min_via_diameter=0.5`，每個生 3 筆 DRC finding，
+504 筆在三步後的 `drc_gate` 才浮現，讀起來像「這塊板的設計規則有問題」。consumer 真的照這個讀法
+自我歸因，還手改了 `.kicad_pro`（掃 35 個檔坐實：`ccm8_pin`=0.5 → `ccm8_pin_vip`=0.3 是事後編輯）。
+**呼叫端替工具圓場時，缺陷永遠不會被 file，而且圓場動作本身製造假證據。**
+
+修法**不自動修正**（改使用者規則或偷改 via 尺寸都是 fallback）：列 `rule_conflicts`、預告 DRC 筆數、
+明說源自此處，把 fab 製程決定權留給呼叫端。
+
+## §L 關鍵證據：指令回報意圖而非後果
+
+`mcpctl.sh restart` 重建容器後印 `bodesign MCP restarted`——該句在「容器本來就閒著」與「剛殺掉
+165 分鐘 freerouting」兩種情況下完全相同。consumer 的 routing 被腰斬兩次（13:11、13:33，`exit=0`）。
+
+**為何修法不能是約定**：consumer 原本請求「restart 前 inject 我一聲」，但那把守衛託付給雙方記憶，
+而記憶恰好在兩邊最忙時蒸發（code-thinker §7 同一條）。gate 必須在指令自己身上。
+
+最容易寫錯的一行正是本 control：`docker exec ps` 失敗回空清單 → 讀成「沒 process」→ 放行。
+**「我看不到」不是「那裡沒東西」**——探測失敗報 `UNKNOWN` 並同樣擋下。代價不對稱：誤擋成本是
+多等一下，誤放成本是別人 165 分鐘的運算。
+
+實測（用 consumer 當時正在跑的 job，382s）：`restart`/`rebuild`/`stop` 三個指令全部 exit 3，
+java 進程存活。
+
+## Explicitly NOT bugs（§E–§L 期間確認，勿再 file）
+
+- **freerouting toolchain 從未缺失**。round=1 的「restart 空窗暫態」RCA 已被推翻——問題是 §A 的
+  group 分派，preflight 實際在 facade 跑而非 ee 容器。
+- **`autoroute` 運算 8 分鐘 > MCP request timeout 是常態**，非缺陷；它已有 BR_20260708 的 `complete`
+  三態回報（`None` 表無法判定），是 positive pattern。
+- **routing 佈不通的主因是設計層數/授權而非工具缺陷**。U1 STM32N657 19×19 BGA 222 balls / 0.5mm
+  pitch，167 訊號需求 > 144 理論上界（72 通道 × 2 訊號層）。
+- **netclass 差異化線寬無效不是缺陷**：規則確實逐條注入 DSN（已逐 class 核對），是該手段對此問題
+  無效（真正的鎖是 §K 的 via 授權）。
+- **板子加大到 200×120 決定性負面**：面積 1.66×、utilization 掉到 4.2%、佈通 74→70、耗時 35m→1h4m。
+
+## 驗證工具自身被騙的四次（本線元層級）
+
+| # | 側 | 工具 | 壞掉時的表現 |
+|---|---|---|---|
+| 1 | platform | 驗證腳本把 `docker cp` 的 stderr 導進 `/dev/null` | 測試檔沒複製進去卻報成「4 errors」——看起來像測試失敗，實際是測試沒跑 |
+| 2 | consumer | 核 §I 用的 grep parse 寫壞 | 吐出「13 個工具全部不在 EE group」，含 `bodesign__load_board` 這種不存在的名字 |
+| 3 | platform | 回溯 `len(TOOLS)` 的 AST counter 只處理 `Assign`，而 `TOOLS` 是 `AnnAssign` | 回 `0` 而不報錯 |
+| 4 | platform | `undeclared_vias`（**預防性攔截**） | freerouting 對不存在的 padstack 靜默忽略；若 via 字串打錯，會讀到「結果沒變」而結論「via 不是瓶頸」，把真缺陷永久誤判成非缺陷 |
+
+只有第 4 次是在造成誤判**之前**攔住的。推論：**驗證工具的輸出也是回傳值，同樣受本 invariant 約束**
+——掃描類工具必須自報覆蓋範圍（L10 由此而生：README 記 11 筆但預設只跑 5 筆 = CI 假綠），
+守衛測試必須有反向鑑別力（拿掉一個真成員，主檢查必須紅）。
+
+## 順帶修掉的既有債
+
+`tests/test_mcp_server.py::test_converged_registry_tool_count` 斷言 55，但自 `8fd59b0` 起實際就是 56
+（**出生即紅**），`1927982` 加 `bga_escape_capacity` 後變 57。沒人發現，因為沒人跑完整 host suite。
+改成 57 個工具**名單**斷言——計數對改名零鑑別力，而改名正是最會弄壞呼叫端的變更。
+
+## Status
+
+**全部 12 節已修復並經 consumer 側 facade 獨立驗證後 commit。** platform 側無未結驗證債。
