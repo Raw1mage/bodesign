@@ -548,6 +548,55 @@ def _copper_layers(b) -> list[tuple[int, str, bool]]:
     return out
 
 
+def router_via_budget(b, pitch_mm: float) -> dict:
+    """What via geometry is the AUTOROUTER allowed to create on this board, and does it fit?
+
+    BR_20260729 §K. A router that cannot open a via cannot change layer, so inner signal
+    layers it is nominally given are UNREACHABLE. The authorising value is the Default
+    netclass via diameter (KiCad exports exactly one ``use_via`` padstack per class into the
+    Specctra DSN), which is INDEPENDENT of any via already sitting on the board: via-in-pad
+    fanout writes geometry directly and does not touch the rule, so a board can carry 168
+    0.3mm vias while every via the router is permitted to add is 0.6mm.
+
+    ``fits`` is the honest part: a via whose diameter meets or exceeds the ball pitch leaves
+    zero edge-to-edge gap between neighbouring vias inside the grid, so the router cannot
+    place one there at all. Reported as data, never as a verdict — this helper does not know
+    the fab's real capability and must not fail a board that a fab builds routinely.
+
+    Returns the SSOT for this measurement so callers do not each re-derive it (V4).
+    """
+    rules: dict = {"pitch_mm": round(float(pitch_mm), 4)}
+    try:
+        nc = b.GetDesignSettings().m_NetSettings.GetDefaultNetclass()
+        via_mm = pcbnew.ToMM(nc.GetViaDiameter())
+        drill_mm = pcbnew.ToMM(nc.GetViaDrill())
+    except AttributeError as exc:
+        # Fail loud: silently reporting "no constraint" would tell the caller the router is
+        # unconstrained, which is the opposite of the truth this helper exists to expose.
+        raise ValueError(
+            f"ROUTER_VIA_RULE_UNREADABLE: cannot read the Default netclass via diameter "
+            f"({exc}) — refusing to report an unconstrained router") from exc
+    rules["router_via_mm"] = round(via_mm, 4)
+    rules["router_via_drill_mm"] = round(drill_mm, 4)
+    rules["fits_in_ball_grid"] = bool(pitch_mm > 0 and via_mm < pitch_mm)
+    rules["via_gap_mm"] = round(float(pitch_mm) - via_mm, 4) if pitch_mm > 0 else None
+    # Vias ALREADY on the board, by geometry. A mismatch against router_via_mm is exactly the
+    # §K signature: the small padstack is declared in the DSN (because these objects use it)
+    # yet never referenced by a `use_via`, so the router may not use it.
+    on_board: dict[str, int] = {}
+    for t in b.GetTracks():
+        if isinstance(t, pcbnew.PCB_VIA):
+            try:
+                key = f"{round(pcbnew.ToMM(t.GetWidth()), 4)}"
+            except Exception:
+                continue
+            on_board[key] = on_board.get(key, 0) + 1
+    rules["existing_via_mm_counts"] = on_board
+    rules["router_via_matches_existing"] = (
+        list(on_board) == [f"{rules['router_via_mm']}"] if on_board else None)
+    return rules
+
+
 def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
                         clearance_mm: float | None = None,
                         traces_per_gap: int | None = None,
@@ -625,6 +674,8 @@ def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
         pitch = min(steps) if steps else 0.0
         pad_dia = pcbnew.ToMM(pads[0].GetSize().x)
         gap = round(pitch - pad_dia, 4)
+        # BR_20260729 §K: what via geometry may the ROUTER open in this grid (SSOT helper).
+        via_budget = router_via_budget(b, pitch)
 
         override = set(power_nets or [])
         classify = (lambda n: n in override) if override else _is_power_net
@@ -663,6 +714,11 @@ def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
             "signal_layers": signal_layers, "inner_signal_layers": inner_signal_layers,
             "fanout_vias": fanout_vias, "has_escape_route": has_escape_route,
             "capacity": capacity, "blocking": blocking,
+            # BR_20260729 §K: `capacity` multiplies by len(signal_layers), which PRESUMES the
+            # router can change layer. It can only do that by opening a via, and it may only
+            # open the one its netclass authorises — so this rule decides whether the inner
+            # layers counted above are reachable at all.
+            "router_via": via_budget,
         }
         # BR_20260729 round=12: `traces_per_gap_used` is an optimistic floor of 1; when the
         # nominal rules compute 0, surface escape is physically impossible at these widths and
@@ -672,6 +728,23 @@ def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
         # Advisory only: it never flips `blocking`, because the optimistic floor is what keeps
         # this gate from refusing fine-pitch boards that fabs build every day.
         advisories: list[str] = []
+        # BR_20260729 §K — the presumption behind `capacity` is checked BEFORE the width
+        # advisory, because a router that cannot open a via in this grid never reaches the
+        # inner layers whose channels were just counted. Advisory, never a verdict: the fab's
+        # real via capability is not knowable here, and blocking a board a fab builds daily
+        # is the failure mode the optimistic floor above exists to avoid.
+        if inner_signal_layers and not via_budget["fits_in_ball_grid"]:
+            advisories.append(
+                f"router_via_exceeds_ball_pitch: the Default netclass authorises a "
+                f"{via_budget['router_via_mm']}mm via but the ball pitch is "
+                f"{via_budget['pitch_mm']}mm (edge-to-edge gap "
+                f"{via_budget['via_gap_mm']}mm), so the autorouter cannot open a via inside "
+                f"this grid and the {len(inner_signal_layers)} inner signal layer(s) counted "
+                f"in `capacity` may be UNREACHABLE for it. Existing vias on the board "
+                f"({via_budget['existing_via_mm_counts'] or 'none'}) do not change this: "
+                "via-in-pad writes geometry, the netclass authorises what the ROUTER may add. "
+                "Check the board's netclass via diameter / drill against the fab's minimums "
+                "before reading the capacity margin above as usable.")
         if computed < per_gap:
             need_mm = round(per_gap * float(track_mm) + (per_gap + 1) * float(clearance_mm), 4)
             advisories.append(
@@ -779,6 +852,38 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
             f"pad would be drilled regardless of where it sits. Refusing rather than "
             f"punching unguarded vias; fix the footprint pad numbering or drop the ref")
 
+    # BR_20260729 §K: the via geometry written below is set DIRECTLY on each PCB_VIA and does
+    # not consult the board's rules at all. Two consequences the caller could not see:
+    #   1. DRC minimums — a 0.3mm/0.15mm via on a board whose min_via_diameter is 0.5mm yields
+    #      three findings PER VIA (via_diameter / drill_out_of_range / annular_width). 168 vias
+    #      surfaced as 504 findings several steps later at drc_gate, where they read as a board
+    #      problem rather than as "the fanout I just asked for is illegal on this board".
+    #   2. the AUTOROUTER's via — authorised by the Default netclass, INDEPENDENT of these
+    #      objects. Punching 0.3mm vias does not grant the router permission to open one, so a
+    #      board can hold 168 escape vias while the router still cannot change layer.
+    # Both are reported, neither is guessed at or auto-"fixed": the fab capability that makes
+    # 0.3mm legal is the caller's decision, and silently rewriting their rules (or their via
+    # size) would be the fallback this repo forbids.
+    ds = b.GetDesignSettings()
+    rule_conflicts: list[dict] = []
+    for field, getter, value_mm, kind in (
+            ("min_via_diameter", "m_ViasMinSize", pad_mm, "diameter"),
+            ("min_through_hole", "m_MinThroughDrill", drill_mm, "drill")):
+        limit = getattr(ds, getter, None)
+        if limit is None:
+            continue
+        limit_mm = pcbnew.ToMM(limit)
+        if value_mm < limit_mm:
+            rule_conflicts.append({"rule": field, "board_min_mm": round(limit_mm, 4),
+                                   "requested_mm": round(float(value_mm), 4), "kind": kind})
+    annular = getattr(ds, "m_ViasMinAnnularWidth", None)
+    if annular is not None:
+        ring_mm = (float(pad_mm) - float(drill_mm)) / 2.0
+        ann_mm = pcbnew.ToMM(annular)
+        if ring_mm < ann_mm:
+            rule_conflicts.append({"rule": "min_via_annular_width", "board_min_mm": round(ann_mm, 4),
+                                   "requested_mm": round(ring_mm, 4), "kind": "annular"})
+
     per_ref: dict[str, int] = {}
     for ref in sorted(fps):
         fp = fps[ref]
@@ -804,10 +909,41 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
     # per-ref counts let the caller audit WHICH requested part actually got fanned out —
     # a ref that resolved but contributed 0 vias (every ball inside keep_rings, or no nets)
     # is visible here instead of being averaged away into a single plausible total.
-    return {"ok": True, "board": out_path, "vias_added": added,
-            "refs_requested": sorted(refset), "vias_per_ref": per_ref,
-            "keep_rings": int(keep_rings),
-            "process": "via-in-pad (filled+capped / JLCPCB advanced)"}
+    out = {"ok": True, "board": out_path, "vias_added": added,
+           "refs_requested": sorted(refset), "vias_per_ref": per_ref,
+           "keep_rings": int(keep_rings),
+           "via_mm": round(float(pad_mm), 4), "via_drill_mm": round(float(drill_mm), 4),
+           "process": "via-in-pad (filled+capped / JLCPCB advanced)"}
+    advisories: list[str] = []
+    if rule_conflicts and added:
+        detail = "; ".join(f"{c['rule']} {c['board_min_mm']}mm > requested {c['requested_mm']}mm"
+                           for c in rule_conflicts)
+        out["rule_conflicts"] = rule_conflicts
+        advisories.append(
+            f"via_violates_board_rules: the {added} via(s) written are "
+            f"{out['via_mm']}mm/{out['via_drill_mm']}mm drill, below this board's own minimums "
+            f"({detail}). Each such via yields ~3 DRC findings (diameter / drill / annular), so "
+            f"expect ~{added * 3} at drc_gate — they originate HERE, not in the layout. Either "
+            "raise the via geometry, or update the board's design rules to the advanced process "
+            "this fanout assumes (filled+capped). This tool does not edit your rules.")
+    # Does the ROUTER inherit any benefit from this fanout? Only if it may open the same via.
+    try:
+        nc_via_mm = pcbnew.ToMM(ds.m_NetSettings.GetDefaultNetclass().GetViaDiameter())
+    except AttributeError:
+        nc_via_mm = None
+    if nc_via_mm is not None:
+        out["router_via_mm"] = round(nc_via_mm, 4)
+        if added and round(nc_via_mm, 4) > round(float(pad_mm), 4):
+            advisories.append(
+                f"router_via_larger_than_fanout: these vias are {out['via_mm']}mm but the Default "
+                f"netclass authorises {out['router_via_mm']}mm for the autorouter. The fanout "
+                "vias exist as geometry; the router may still be unable to open its own via in "
+                "this grid, in which case the inner layers stay unreachable to it and only the "
+                "nets landing on THESE vias benefit. Check bga_escape_capacity's `router_via` "
+                "before reading a routing shortfall as a stackup problem.")
+    if advisories:
+        out["advisories"] = advisories
+    return out
 
 
 # -------------------------------------------------------------------------------- copper planes
@@ -1425,6 +1561,7 @@ def _fmt_dsn_class(name: str, nets: list[str], w: int, c: int, via: str | None) 
 def build_dsn_with_netclasses(dsn_text: str, classes: list[dict], *,
                               default_width_mm: float = 0.2,
                               default_clearance_mm: float = 0.2,
+                              default_via: str | None = None,
                               default_class_name: str = "kicad_default") -> dict:
     """Rewrite a KiCad-exported Specctra DSN's single global net class into per-class rules
     so freerouting honours a tight BGA-escape width/clearance for escape nets while keeping
@@ -1436,7 +1573,24 @@ def build_dsn_with_netclasses(dsn_text: str, classes: list[dict], *,
     a synthesized default class at default_width_mm/default_clearance_mm. Pure text surgery
     (no pcbnew) so it is bare-host testable. Returns {dsn, unit, classes:[...], default_class,
     missing_explicit_nets, total_nets}. Empty classes are dropped (reported in warnings) since
-    freerouting rejects a class with no nets."""
+    ``via`` per class, and ``default_via`` for the synthesized default class, name a padstack
+    from the DSN's own ``(padstack ...)`` declarations (e.g. ``"Via[0-7]_300:150_um"``) and set
+    that class's ``(use_via ...)``. BR_20260729 §K: this matters more than width on a fine-pitch
+    BGA — a router that may not open a small enough via cannot change layer at all, so inner
+    signal layers are unreachable and widening the tracks changes nothing. When omitted, the
+    class inherits the via harvested from the board's original DSN class. ``default_via`` exists
+    so the fall-through class is not stranded on the harvested value while the named classes get
+    overrides: the nets nobody claimed are exactly the ones a caller forgets, and they were the
+    only ones with no way to be given a via at all.
+
+    ``used_vias`` in the report lists the padstack each emitted class ended up with, and
+    ``undeclared_vias`` names any override that is NOT declared in this DSN — freerouting
+    silently ignores an unknown ``use_via``, which would look exactly like the override having
+    been applied.
+
+    Pure text surgery (no pcbnew) so it is bare-host testable. Returns {dsn, unit, classes:[...],
+    default_class, missing_explicit_nets, total_nets, used_vias, undeclared_vias}. Empty classes
+    are dropped (reported in warnings) since freerouting rejects a class with no nets."""
     unit, per_mm = _dsn_unit_per_mm(dsn_text)
     ns = dsn_text.find("(network")
     if ns < 0:
@@ -1460,6 +1614,19 @@ def build_dsn_with_netclasses(dsn_text: str, classes: list[dict], *,
     orig = net_section[blocks[0][0]:blocks[-1][1]] if blocks else ""
     vm = re.search(r"\(use_via\s+([^\s)]+)", orig)
     via = vm.group(1) if vm else None
+    # BR_20260729 §K: which via padstacks does this DSN actually DECLARE? freerouting silently
+    # ignores a `use_via` naming a padstack it cannot find, which looks identical to the
+    # override having been honoured — so an unknown name must be reported, not assumed applied.
+    declared_vias = {m.group(1) for m in re.finditer(r'\(padstack\s+("[^"]+"|[^\s()]+)', dsn_text)
+                     if m.group(1).strip('"').lower().startswith("via")}
+    _bare = {v.strip('"') for v in declared_vias}
+    undeclared: list[str] = []
+    used_vias: dict[str, str | None] = {}
+
+    def _note_via(v: str | None) -> str | None:
+        if v and v.strip('"') not in _bare:
+            undeclared.append(v)
+        return v
 
     used: set[str] = set()
     report_classes: list[dict] = []
@@ -1480,19 +1647,28 @@ def build_dsn_with_netclasses(dsn_text: str, classes: list[dict], *,
             report_classes.append({"name": name, "width_mm": c["width_mm"],
                                    "clearance_mm": c["clearance_mm"], "nets": [], "count": 0})
             continue
-        class_texts.append(_fmt_dsn_class(name, sel, w, cl, c.get("via", via)))
+        cvia = _note_via(c.get("via", via))
+        used_vias[name] = cvia
+        class_texts.append(_fmt_dsn_class(name, sel, w, cl, cvia))
         report_classes.append({"name": name, "width_mm": c["width_mm"],
                                "clearance_mm": c["clearance_mm"], "width_dsn": w,
-                               "clearance_dsn": cl, "nets": sel, "count": len(sel)})
+                               "clearance_dsn": cl, "nets": sel, "count": len(sel),
+                               "via": cvia})
 
     default_nets = [n for n in nets if n not in used]
     dw = int(round(float(default_width_mm) * per_mm))
     dc = int(round(float(default_clearance_mm) * per_mm))
+    # The fall-through class gets its OWN override; without `default_via` it was stranded on the
+    # harvested value while every named class could be given one — and the nets nobody claimed
+    # are precisely the ones a caller forgets to name (BR_20260729 §K).
+    dvia = _note_via(default_via if default_via is not None else via)
     default_report = {"name": default_class_name, "width_mm": default_width_mm,
                       "clearance_mm": default_clearance_mm, "width_dsn": dw,
-                      "clearance_dsn": dc, "nets": default_nets, "count": len(default_nets)}
+                      "clearance_dsn": dc, "nets": default_nets, "count": len(default_nets),
+                      "via": dvia}
     if default_nets:
-        class_texts.append(_fmt_dsn_class(default_class_name, default_nets, dw, dc, via))
+        used_vias[default_class_name] = dvia
+        class_texts.append(_fmt_dsn_class(default_class_name, default_nets, dw, dc, dvia))
 
     missing = sorted({n for c in classes for n in c.get("nets", []) if n not in nets})
 
@@ -1505,9 +1681,16 @@ def build_dsn_with_netclasses(dsn_text: str, classes: list[dict], *,
         insert_at = net_section.rfind(")")
         new_net_section = net_section[:insert_at] + new_classes + "\n  " + net_section[insert_at:]
     new_dsn = dsn_text[:ns] + new_net_section + dsn_text[ne:]
+    if undeclared:
+        warnings.append(
+            f"undeclared via padstack(s) {sorted(set(undeclared))} — not among this DSN's "
+            f"declared via padstacks {sorted(_bare)}; freerouting IGNORES an unknown use_via, "
+            "so the override will NOT take effect (it would look identical to success)")
     return {"dsn": new_dsn, "unit": unit, "classes": report_classes,
             "default_class": default_report, "missing_explicit_nets": missing,
-            "total_nets": len(nets), "warnings": warnings}
+            "total_nets": len(nets), "warnings": warnings,
+            "used_vias": used_vias, "declared_vias": sorted(_bare),
+            "undeclared_vias": sorted(set(undeclared))}
 
 
 # ------------------------------------------------------------------ autoroute preflight (diagnostic)

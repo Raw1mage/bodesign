@@ -42,6 +42,7 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
 | **V4-b 參考系不一致** | 只有一份實作，但跨模組對同一座標的**參考系**假設不同 | §F origin vs courtyard-centre |
 | **V4-c 事實雙重記錄** | 同一個事實被記在**權威來源**與**手抄副本**兩處，而沒有任何機制強迫兩者一致 | §A/§I `_need_pcbnew()` vs `_EE_GROUP_TOOLS` |
 | **V5 判決未帶產生它的預算** | 回傳值**完全誠實**，但它是 (標的, 呼叫端給的預算) 的函數，而讀起來像只是標的的屬性 | §J `autoroute` 不 echo `-mp` |
+| **V6 判決依賴未檢驗的前提** | 判決的算式默認了一個實際可檢查的前提，而工具既不查也不說 | §K escape gate 乘 `len(signal_layers)` 卻未查 router 開不開得了 via |
 
 **V4/V4-b 與 V1–V3 的關鍵差異（勿混淆，修法不同）**：V1–V3 是**假綠**（靜默成功，違反天條）；
 V4/V4-b 是**假紅**（gate 大聲失敗且訊息精確，*沒有*違反 no-silent-fallback，壞的是餵給它的量測）。
@@ -115,6 +116,37 @@ V5 是本 control 的**邊境**，認真區別它與 V1–V3 很重要：沒有�
 **機制面的暴露面不是 docstring。** 呼叫端是 MCP client，它看不到 Python docstring，只看得到 JSON
 schema。所以除了回傳值之外，`passes` 的 schema `description` 必須自己把「upper limit」、「節流後
 `unconnected` 同時量你的預算」講完——否則這條知識對实際的使用者不存在。
+
+### V6：算式沒錯，但它乘了一個沒人驗過的因子
+
+V5 是「影響判決的**輸入**沒 echo 出來」；V6 是「判決靠一個**前提**成立，而那個前提從未被檢查」。
+兩者共享同一個後果（呼叫端拿到一個自信的數字卻不知道它何時失效），但修法不同：V5 把輸入寫進回傳，
+V6 必須**真的去檢查那個前提**（因為它可檢查——這才是 V6 成罪的理由；不可檢查的前提只能寫進 docstring）。
+
+實例（§K）：`bga_escape_capacity` 的 `capacity = perimeter_channels × per_gap × len(signal_layers)`。
+乘 `len(signal_layers)` 默認了**router 換得了層**，而 router 換層的唯一手段是自己開一個 via。實測的真相：
+Default netclass 只授權 0.6mm via，而 ball pitch 是 0.5mm——**相鄰 via 邊縁間距 −0.1mm，router 在球陣內根本
+開不了孔**。所以那 4 個訊號層裡有 2 個對它不可達，`capacity=288`（167 需求的 1.7× 餘裕）是建立在
+一個假前提上的安心數字。後果：B.Cu 只承載 10% segments、282 個 via 全是貫穔孔，呼叫端側則一路往
+「加層、加大板、再加層」走，**從不懷疑現有資源根本沒用滿**。
+
+**判別句**：
+
+> 把判決的算式拆成因子，逐個問「這個因子成立需要什麼前提？我查了嗎？」
+> 有任何一個因子靠未查証的前提，而那個前提**本來查得到**，就是 V6。
+
+**一個同族的陣形：「有什麼」與「被授權做什麼」是兩件事。** `via_in_pad` 直接在 `PCB_VIA` 上寫幾何，
+從不碰板檔規則；所以同一塊板上可以**存在** 168 個 0.3mm via，而 router 被**授權**的仍是 0.6mm。
+呼叫端看到小 via 就以為「小 via 可用」，這是兩個不同事實被讀成一個。不是 V4-c（同一事實被抄兩份），
+而是**兩個相鄰事實被混為一講**——修法是兩者同時入回傳（`router_via_mm` 與 `existing_via_mm_counts`），
+且明記 `router_via_matches_existing`。
+
+**同一條底線的下游面：產物違法要在當場說，不能等三步後由別人背黍鍋。** `via_in_pad` 打的 168 個
+0.3mm/0.15mm via 低於那塊板自己的 `min_via_diameter=0.5`，每個 via 產生 3 筆 DRC finding，
+**504 筆在三個步驟後的 `drc_gate` 才浮現，讀起來像「這塊板的設計規則有問題」而不是「我剛叫的 fanout 在這塊板上
+非法」**——呼叫端真的就把它自我歸因成自己的板檔問題了。這不是騙人，是**把自己的副作用審計責任候給下游**。
+進一步的紀律：偵測到違規也**不得自動「修好」**（不改使用者規則、也不偷改 via 尺寸）——那是 fallback；
+正解是列出衝突、預告 DRC 筆數、把決定還給呼叫端。
 
 ## 正確樣態（positive pattern，KB 只有反例不夠）
 
