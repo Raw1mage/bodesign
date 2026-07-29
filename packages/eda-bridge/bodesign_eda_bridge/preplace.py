@@ -34,13 +34,32 @@ DECAP_MAX_F = 1.0e-6     # <=1µF counts as a decoupling cap (DD-7)
 
 @dataclass
 class PartGeom:
-    """Footprint geometry in mm. pads maps pad number -> (dx, dy) from part center."""
+    """Footprint geometry in mm.
+
+    REFERENCE FRAME (BR_20260729 §F — read before touching any coordinate here):
+    a placement entry ``(x, y, rot)`` is the footprint ORIGIN, because that is what
+    ``pcbnew.SetPosition()`` writes to the board. It is NOT the courtyard centre.
+
+      - ``pads`` maps pad number -> (dx, dy) measured FROM THE ORIGIN.
+      - ``anchor_dx_mm`` / ``anchor_dy_mm`` is courtyard-centre MINUS origin, in
+        part-local (unrotated) coordinates. For most parts it is (0, 0), but a
+        castellated module whose origin sits at pin 1 can be >22mm off centre.
+
+    Box-level geometry (overlap, board containment, die-shadow) must therefore go
+    through ``box_center()`` rather than using ``(x, y)`` directly — that was the
+    §F defect: the solver measured overlaps around the origin while pcbnew drew the
+    courtyard around a different point, so preplace reported 6 overlapping pairs on
+    a board that really had 8, and its "zero R1/R8 violations" described a board
+    that was never built.
+    """
     ref: str
     w_mm: float
     h_mm: float
     pads: dict = field(default_factory=dict)
     value: str = ""
     kind: str = ""
+    anchor_dx_mm: float = 0.0
+    anchor_dy_mm: float = 0.0
 
     def __post_init__(self) -> None:
         if not self.kind:
@@ -161,6 +180,36 @@ def _dims(part: PartGeom, rot: float) -> tuple[float, float]:
     return (part.h_mm, part.w_mm) if rot % 180 == 90 else (part.w_mm, part.h_mm)
 
 
+def _rotate_local(dx: float, dy: float, rot: float) -> tuple[float, float]:
+    """Rotate a part-local offset into board coordinates (same convention as pad_abs)."""
+    r = rot % 360
+    if r == 0:
+        return (dx, dy)
+    if r == 90:
+        return (-dy, dx)
+    if r == 180:
+        return (-dx, -dy)
+    if r == 270:
+        return (dy, -dx)
+    rad = math.radians(r)
+    return (dx * math.cos(rad) - dy * math.sin(rad),
+            dx * math.sin(rad) + dy * math.cos(rad))
+
+
+def box_center(part: PartGeom, x: float, y: float, rot: float) -> tuple[float, float]:
+    """Courtyard-box centre for a part placed at ORIGIN (x, y) with rotation `rot`.
+
+    BR_20260729 §F: the single conversion between the two reference frames that
+    coexist in a placement dict — origin (what gets written to the board, what
+    `pads` are relative to) and courtyard centre (what every box calculation needs).
+    Anything doing `x ± w/2` MUST take its centre from here.
+    """
+    if not part.anchor_dx_mm and not part.anchor_dy_mm:
+        return (x, y)
+    adx, ady = _rotate_local(part.anchor_dx_mm, part.anchor_dy_mm, rot)
+    return (x + adx, y + ady)
+
+
 def pad_abs(placement: dict, parts: dict, ref: str, pad: str) -> tuple[float, float]:
     x, y, rot = placement[ref]
     dx, dy = parts[ref].pads[pad]
@@ -179,22 +228,35 @@ def pad_abs(placement: dict, parts: dict, ref: str, pad: str) -> tuple[float, fl
 
 
 def _overlap_area(p1, d1, p2, d2) -> float:
+    """Overlap of two boxes given their CENTRES (p1/p2) and dims (d1/d2).
+
+    BR_20260729 §F: p1/p2 must be COURTYARD CENTRES, not raw placement origins.
+    Callers holding a placement dict must convert via `_box()` / `box_center()`.
+    """
     ox = min(p1[0] + d1[0] / 2, p2[0] + d2[0] / 2) - max(p1[0] - d1[0] / 2, p2[0] - d2[0] / 2)
     oy = min(p1[1] + d1[1] / 2, p2[1] + d2[1] / 2) - max(p1[1] - d1[1] / 2, p2[1] - d2[1] / 2)
     return max(0.0, ox) * max(0.0, oy)
 
 
+def _box(part: PartGeom, entry) -> tuple[tuple[float, float], tuple[float, float]]:
+    """(centre, dims) for a placement entry `(x, y, rot)` — the §F conversion point."""
+    x, y, rot = entry[0], entry[1], entry[2]
+    return box_center(part, x, y, rot), _dims(part, rot)
+
+
 def _inside_board(x, y, w, h, board) -> bool:
+    """Containment test on a box CENTRE (x, y) — see §F note on _overlap_area."""
     return (x - w / 2 >= EDGE_MARGIN_MM and y - h / 2 >= EDGE_MARGIN_MM
             and x + w / 2 <= board[0] - EDGE_MARGIN_MM and y + h / 2 <= board[1] - EDGE_MARGIN_MM)
 
 
-def _overlaps_any(x, y, w, h, ref, placement, parts) -> bool:
-    for r2, (x2, y2, rot2) in placement.items():
+def _overlaps_any(cx, cy, w, h, ref, placement, parts) -> bool:
+    """(cx, cy) is the candidate's box CENTRE; peers are converted via _box (§F)."""
+    for r2, entry2 in placement.items():
         if r2 == ref:
             continue
-        w2, h2 = _dims(parts[r2], rot2)
-        if _overlap_area((x, y), (w + GUTTER_MM, h + GUTTER_MM), (x2, y2), (w2, h2)) > 0:
+        c2, d2 = _box(parts[r2], entry2)
+        if _overlap_area((cx, cy), (w + GUTTER_MM, h + GUTTER_MM), c2, d2) > 0:
             return True
     return False
 
@@ -217,12 +279,62 @@ def count_overlap_pairs(placement: dict, parts: dict) -> int:
     refs = sorted(placement)
     n = 0
     for i, a in enumerate(refs):
-        da = _dims(parts[a], placement[a][2])
+        ca, da = _box(parts[a], placement[a])
         for b in refs[i + 1:]:
-            db = _dims(parts[b], placement[b][2])
-            if _overlap_area(placement[a][:2], da, placement[b][:2], db) > 1e-9:
+            cb, db = _box(parts[b], placement[b])
+            if _overlap_area(ca, da, cb, db) > 1e-9:
                 n += 1
     return n
+
+
+def overlap_pair_details(placement: dict, parts: dict) -> list[dict]:
+    """Enumerate courtyard-overlapping ref pairs with the measured overlap area.
+
+    Sibling of count_overlap_pairs, but returns anchored evidence (which refs,
+    how much mm²) so a route-time preflight can fail fast with a readable reason
+    instead of a bare count. Pure; no pcbnew. Ordering is deterministic (sorted
+    refs, then by descending overlap for stable "worst first" reporting)."""
+    refs = sorted(placement)
+    out: list[dict] = []
+    for i, a in enumerate(refs):
+        ca, da = _box(parts[a], placement[a])
+        for b in refs[i + 1:]:
+            cb, db = _box(parts[b], placement[b])
+            area = _overlap_area(ca, da, cb, db)
+            if area > 1e-9:
+                out.append({"refs": [a, b], "overlap_mm2": round(area, 4)})
+    out.sort(key=lambda d: (-d["overlap_mm2"], d["refs"]))
+    return out
+
+
+def compute_utilization(placement: dict, parts: dict, board_mm) -> dict:
+    """Sheet-area utilization: total courtyard footprint area / usable board area.
+
+    BR_20260708 (placement no sheet-fill): a placement that crams everything into
+    a narrow strip leaves most of the board empty. This reports the ratio so the
+    caller (and a QA gate) can see it, plus the parts/board areas it derives from.
+    ``usable`` subtracts the EDGE_MARGIN_MM keep-out ring on all four sides. Pure.
+    Rotation-aware (a 90°-rotated part swaps w/h). Returns ratios in [0, ∞) — a
+    value >1 means courtyards overlap or spill the usable region (physically the
+    preflight should have already failed), never silently clamped."""
+    W, H = float(board_mm[0]), float(board_mm[1])
+    board_area = W * H
+    usable_w = max(0.0, W - 2 * EDGE_MARGIN_MM)
+    usable_h = max(0.0, H - 2 * EDGE_MARGIN_MM)
+    usable_area = usable_w * usable_h
+    parts_area = 0.0
+    for ref, (_, _, rot) in placement.items():
+        if ref not in parts:
+            continue
+        w, h = _dims(parts[ref], rot)
+        parts_area += w * h
+    return {
+        "parts_area_mm2": round(parts_area, 3),
+        "board_area_mm2": round(board_area, 3),
+        "usable_area_mm2": round(usable_area, 3),
+        "utilization": round(parts_area / usable_area, 4) if usable_area > 0 else None,
+        "utilization_of_board": round(parts_area / board_area, 4) if board_area > 0 else None,
+    }
 
 
 # ------------------------------------------------------------------ greedy
@@ -237,6 +349,13 @@ def _ring_offsets(r: int):
 
 
 def _find_slot(part, target_xy, placement, parts, board):
+    """Search feasible box CENTRES, return the ORIGIN to store in placement (§F).
+
+    The ring search and its containment/overlap tests operate on courtyard centres;
+    the value handed back becomes a placement entry, which is an origin. For a part
+    whose courtyard is centred on its origin these coincide — for a castellated
+    module they differ by tens of mm, which is exactly the §F defect.
+    """
     w, h = part.w_mm, part.h_mm
     max_ring = int(max(board)) + 1
     for r in range(0, max_ring):
@@ -244,7 +363,7 @@ def _find_slot(part, target_xy, placement, parts, board):
             x = target_xy[0] + dx * GRID_MM
             y = target_xy[1] + dy * GRID_MM
             if _inside_board(x, y, w, h, board) and not _overlaps_any(x, y, w, h, part.ref, placement, parts):
-                return (x, y)
+                return (x - part.anchor_dx_mm, y - part.anchor_dy_mm)
     raise ValueError(
         f"PREPLACE_BOARD_TOO_SMALL: no feasible slot for {part.ref} "
         f"({w}x{h}mm) on board {board[0]}x{board[1]}mm")
@@ -309,7 +428,9 @@ def greedy_initial(parts: dict, clusters: dict, anchor: str, board,
             else:
                 x = board[0] - EDGE_MARGIN_MM - w / 2
             if _inside_board(x, y, w, h, board) and not _overlaps_any(x, y, w, h, ref, placement, parts):
-                placement[ref] = (x, y, 0.0)
+                # (x, y) is the box centre we just proved feasible; placement stores
+                # the ORIGIN (§F) — rot is 0 here so the offset needs no rotation.
+                placement[ref] = (x - part.anchor_dx_mm, y - part.anchor_dy_mm, 0.0)
                 placed = True
                 break
         if not placed:
@@ -336,14 +457,13 @@ def _energy(placement, parts, clusters, nets, board, weights) -> float:
     ovl = 0.0
     refs = sorted(placement)
     for i, a in enumerate(refs):
-        da = _dims(parts[a], placement[a][2])
+        ca, da = _box(parts[a], placement[a])
         for b in refs[i + 1:]:
-            db = _dims(parts[b], placement[b][2])
-            ovl += _overlap_area(placement[a][:2], da, placement[b][:2], db)
+            cb, db = _box(parts[b], placement[b])
+            ovl += _overlap_area(ca, da, cb, db)
     edge = 0.0
     for r in refs:
-        x, y, rot = placement[r]
-        w, h = _dims(parts[r], rot)
+        (x, y), (w, h) = _box(parts[r], placement[r])
         edge += max(0.0, EDGE_MARGIN_MM - (x - w / 2)) + max(0.0, (x + w / 2) - (board[0] - EDGE_MARGIN_MM))
         edge += max(0.0, EDGE_MARGIN_MM - (y - h / 2)) + max(0.0, (y + h / 2) - (board[1] - EDGE_MARGIN_MM))
     return e + weights["w_aff"] * aff + weights["w_ovl"] * ovl + weights["w_edge"] * edge
@@ -421,10 +541,11 @@ def check_rules(placement, parts, clusters, die_shadow_margin_mm: float | None =
                         f"{c['target_pad']} (limit {r1['value']}mm)"})
         farads = parse_cap_farads(parts[ref].value)
         if farads is not None and farads <= MIDFREQ_MAX_F + 1e-15:
-            ax, ay, arot = placement[tref]
-            aw, ah = _dims(parts[tref], arot)
+            # §F: the die-shadow box is around the IC's COURTYARD centre, and the
+            # decap's own position must be compared in the same frame.
+            (ax, ay), (aw, ah) = _box(parts[tref], placement[tref])
             hx, hy = aw / 2 + margin, ah / 2 + margin
-            cx, cy = placement[ref][:2]
+            cx, cy = box_center(parts[ref], *placement[ref][:3])
             if not (ax - hx <= cx <= ax + hx and ay - hy <= cy <= ay + hy):
                 over = max(abs(cx - ax) - hx, abs(cy - ay) - hy)
                 violations.append({

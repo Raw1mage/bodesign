@@ -125,6 +125,14 @@ def _extract_part_geoms(fps: dict) -> tuple[dict, list[str]]:
             w = pcbnew.ToMM(box.GetWidth())
             h = pcbnew.ToMM(box.GetHeight())
             origin = fp.GetPosition()
+            # BR_20260729 §F: a courtyard is NOT necessarily centred on the footprint
+            # origin (a castellated connector's origin sits at pin 1, 22mm off its
+            # courtyard centre). preplace treats a placement entry as a BOX CENTRE
+            # while pcbnew's SetPosition() writes the ORIGIN, so without this offset
+            # the solver optimises a board whose parts are elsewhere than it thinks.
+            # Stored in part-local coords; preplace rotates it with the part.
+            anchor_dx = pcbnew.ToMM(box.GetCenter().x - origin.x)
+            anchor_dy = pcbnew.ToMM(box.GetCenter().y - origin.y)
             pads = {}
             for p in fp.Pads():
                 pos = p.GetPosition()
@@ -137,7 +145,8 @@ def _extract_part_geoms(fps: dict) -> tuple[dict, list[str]]:
         if w <= 0 or h <= 0 or not pads:
             missing.append(ref)
             continue
-        parts[ref] = PartGeom(ref=ref, w_mm=w, h_mm=h, pads=pads, value=value)
+        parts[ref] = PartGeom(ref=ref, w_mm=w, h_mm=h, pads=pads, value=value,
+                              anchor_dx_mm=anchor_dx, anchor_dy_mm=anchor_dy)
     return parts, missing
 
 
