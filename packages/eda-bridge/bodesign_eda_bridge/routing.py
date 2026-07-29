@@ -107,6 +107,7 @@ def _extract_part_geoms(fps: dict) -> tuple[dict, list[str]]:
 def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
                   plane_layers: list[str] | None = None, track_mm: float | None = None,
                   placement: dict | None = None, fpdir: str | None = None,
+                  fp_dirs: list[str] | None = None,
                   clearance_mm: float = 0.13, connectors: dict | None = None,
                   strategy: str = "grid", seed: int = 42,
                   board_mm: tuple[float, float] | list | None = None) -> dict:
@@ -145,12 +146,20 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             board.GetDesignSettings().m_NetSettings.GetDefaultNetclass().SetTrackWidth(pcbnew.FromMM(track_mm))
         except Exception: pass
     stock = "/usr/share/kicad/footprints"
+    # BR_20260729 §B: footprint search dirs are a MERGE (project libs + stock),
+    # not mutually exclusive. Legacy single `fpdir` is folded in for back-compat;
+    # `fp_dirs` (plural) lets a caller supply project .pretty dirs alongside stock.
+    fp_search: list[str] = []
+    for _d in ([fpdir] if fpdir else []) + list(fp_dirs or []) + [stock]:
+        if _d and _d not in fp_search:
+            fp_search.append(_d)
     fps: dict[str, Any] = {}
+    dropped: list[dict] = []
     gx = gy = 0.0
     for i, (ref, fpid) in enumerate(comps.items()):
         lib, name = fpid.split(":", 1)
         fp = None
-        for base in ([fpdir] if fpdir else []) + [stock]:
+        for base in fp_search:
             try:
                 fp = pcbnew.FootprintLoad(f"{base}/{lib}.pretty", name)
             except Exception:
@@ -158,11 +167,15 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             if fp is not None:
                 break
         if fp is None:
+            # BR_20260729 §B: a footprint that resolves in NO search dir must NOT be
+            # silently skipped (that silently drops whole components — the 8-active-IC
+            # disappearance with unmapped:0). Record it; grid mode now surfaces
+            # dropped_components + ok:false, deterministic still fails fast.
+            dropped.append({"ref": ref, "fpid": fpid, "reason": "footprint_lib_unresolved"})
             if strategy == "deterministic":
                 raise ValueError(
                     f"PREPLACE_MISSING_GEOMETRY: footprint {fpid!r} for {ref} not found "
-                    f"in {[fpdir] if fpdir else []} + [{stock}] — deterministic strategy "
-                    "does not skip parts")
+                    f"in {fp_search} — deterministic strategy does not skip parts")
             continue
         fps[ref] = fp
         fp.SetReference(ref)
@@ -263,11 +276,24 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
             outline_source = "pad_extent"
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, board)
-    out = {"board": out_path, "placed": len(fps), "nets": len(nets),
+    # BR_20260729 §B: ok=False when any netlist component was dropped for an
+    # unresolved footprint lib — a partial board that silently lost active ICs
+    # must NOT read as success. expected_components vs placed makes the gap loud;
+    # dropped_components carries the evidence (ref+fpid) so the caller supplies
+    # fp_dirs and re-runs rather than routing a board missing its MCU.
+    expected = len(comps)
+    out = {"ok": not dropped, "board": out_path, "placed": len(fps),
+           "expected_components": expected, "nets": len(nets),
            "pads_assigned": assigned, "unmapped": unmapped,
+           "dropped_components": dropped,
            "applied_pinmaps": sorted(applied_pinmaps),
            "unmapped_connectors": unmapped_connectors, "strategy": strategy,
            "outline_source": outline_source}
+    if dropped:
+        out["reason"] = (
+            f"footprint_lib_unresolved: {len(dropped)} of {expected} components dropped "
+            f"(missing project footprint dirs) — pass fp_dirs=[...] with the project "
+            f".pretty libraries so these parts are placed, not silently skipped")
     out.update(preplace_out)
     return out
 
