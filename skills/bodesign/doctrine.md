@@ -185,6 +185,15 @@ Fleet SSOT: `opencode/specs/mcp-integration-standard` R2.0 (transfer modes) + R1
   file a local `issues/` BR with the exact missing primitive, and wait for a fix or
   scope change. Never "finish the job" by hand-assembling OOXML / Gerber / a fake
   native file.
+- **Read `expected` vs `actual` BEFORE you read `ok`.** A tool that processed a
+  collection reports what it ACTUALLY did, not what you asked for: check the count
+  pair (`expected_components` vs `placed`), the `dropped_*` / `unresolved_*` /
+  `*_applied` lists, and any `basis` field — THEN the `ok` flag. Reading only `ok`
+  misses partial failure: `route_net2pcb` once returned `ok:true unmapped:0` on a
+  board that had silently lost 8 of its 92 parts — every active IC (BR_20260729 §B).
+  The review question that catches this class: *if the caller reads only `ok` or a
+  single count, can they reach a wrong conclusion?* If yes, the API is at fault, not
+  the caller. Enforced by `checkers/no_silent_degradation.py` (L2/L6/L8, T-A).
 - **Never hand-merge or hand-edit an Office/OOXML deliverable.** `.docx` / `.pptx` /
   `.xlsx` go through `bodesign_emit_doc` (markdown → docx+pdf) or `bodesign_mcp_call`
   driving docxmcp — not a caller-side `zip`/`ElementTree`/`python-docx` script. A

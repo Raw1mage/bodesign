@@ -1,0 +1,108 @@
+---
+slug: control/no-silent-degradation
+title: No Silent Degradation — 部分失敗不得讀成完全成功
+layer: ragbase
+type: control
+confidence: verified
+locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md / checkers/no_silent_degradation.py
+---
+# No Silent Degradation
+
+**一個操作若只完成了它被要求的一部分，回傳的狀態必須讓呼叫端無法把它讀成「完全成功」。**
+
+判準句（review 時問這一句就夠）：
+
+> **如果呼叫端只讀 `ok` 或只讀一個計數就會得出錯誤結論，這個 API 就違反本 invariant。**
+
+`no-silent-fallback` 管的是「缺輸入時不要猜」；本 control 管的是「處理過程掉東西時不要裝沒事」。
+兩者是同一種誠實的兩面，但**測試覆蓋率高完全擋不住後者**——2026-07-29 一輪 C04 交付連續撞出
+5 個實例，全部通過了當時的全部測試，因為測試都在測 happy path 的正確性，沒有一個斷言
+「當 8 顆元件掉了，回傳值必須讓呼叫端知道」。
+
+## 具體要求
+
+任何「輸入元素集合 → 處理 → 輸出」的操作，若集合中任一元素被跳過、丟棄、無法解析、
+或以降級方式處理，則：
+
+1. 該事實必須出現在**回傳值**（不只 log、不只 warning 字串），且
+2. 必須有一個**呼叫端會檢查的欄位**因此改變（`ok:false` / `status != "ok"` /
+   `dropped[]` / `unresolved[]` / `basis` 非預設值），且
+3. `expected` 與 `actual` 的計數必須同時可見（讓「84 vs 92」這種落差無法被單看一個數字掩蓋）。
+
+## 五種變體
+
+| 變體 | 定義 | 實例（BR_20260729） |
+|---|---|---|
+| **V1 元素靜默丟棄** | 迴圈內 skip 掉無法處理的元素，計數器不涵蓋此類 | §B `net2pcb` footprint、§D `plane_layers` key |
+| **V2 量測降級無標記** | 首選量測法不可用時 fallback 到語意不同的次選法，回傳不標 basis | §C `courtyard → 含絲印 bbox` |
+| **V3 狀態欄位不反映降級** | 降級資訊有收集也有傳出（誠實），但 `status`/`ok` 恆為成功 | S2 `layout.py unresolved_footprints` |
+| **V4 量測基準分散** | 同一物理量在多處各自實作，修正只落其中一處 | §E `_extract_part_geoms` vs `placement_preflight` |
+| **V4-b 參考系不一致** | 只有一份實作，但跨模組對同一座標的**參考系**假設不同 | §F origin vs courtyard-centre |
+
+**V4/V4-b 與 V1–V3 的關鍵差異（勿混淆，修法不同）**：V1–V3 是**假綠**（靜默成功，違反天條）；
+V4/V4-b 是**假紅**（gate 大聲失敗且訊息精確，*沒有*違反 no-silent-fallback，壞的是餵給它的量測）。
+V1–V3 靠「加欄位讓降級可見」解；V4 靠**收斂實作到單一 helper**解；V4-b 靠**在型別/docstring 上
+明確化參考系**解。把 V4 當 V2 修（加個 `basis` 欄位）不會解決任何事。
+
+## 正確樣態（positive pattern，KB 只有反例不夠）
+
+- **`plane_layers_applied: [{spec, layer, net, type}]`**（`routing.py net2pcb_board`）——
+  呼叫端傳入的每一個元素，回傳裡都有一筆說明它的**實際去向**。這是要求 2 的教科書實作。
+- **`basis: "courtyard" | "bbox_no_text" | "mixed"` + `courtyard_missing: [refs]`**
+  （`routing.py placement_preflight`）——量測降級時，判決的基準本身是回傳的一部分。
+- **`implausible_measurement`**（同上）——物理量超出定義域（占用率 > 1.0 = 元件面積大於板面積）
+  時回 `passed:false` 並在 reason 明說此判決 **UNUSABLE**，而不是給一個自信的 `false`
+  害呼叫端去「修」一塊從未被正確量測的板。這是 V2 的通用防線：即使降級邏輯沒被 lint 抓到，
+  荒謬的結果會自己爆掉。
+- **`PartGeom` 的 REFERENCE FRAME docstring**（`preplace.py`）——明寫 placement entry 是
+  ORIGIN（因為那是 `pcbnew.SetPosition()` 寫的）、`pads` 從 origin 量、`anchor_dx_mm` 是
+  courtyard-centre 減 origin 且為 part-local 未旋轉座標。V4-b 的正解是讓參考系**無法被誤會**，
+  不是讓每個 caller 自己猜對。
+
+## 可執行的閘
+
+`packages/workflow-core/bodesign_workflow_core/checkers/no_silent_degradation.py`。
+tier **由實測訊噪比決定**（對 §B–§F 修復前後的 `routing.py` 各掃一次，看是否「修前命中、修後歸零」）：
+
+| 規則 | 修前 | 修後 | tier | 內容 |
+|---|---|---|---|---|
+| L2 | 2 | 0 | **T-A** | `except` 只有 pass/log 而函式有回傳值 |
+| L6 | 1 | 0 | **T-A** | 呼叫端傳入的 key 查找失敗即靜默跳過（§D 直接規則） |
+| L8 | 1 | 0 | **T-A** | 同一量測 API 在 >1 個函式各自實作（§E 直接規則） |
+| L1 | 19 | 19 | **T-C** | 迴圈內 `continue` 未記錄被跳過的元素 |
+
+**L1 誠實降為 advisory**（預設不輸出）：它修復前後都報 19 筆，命中的是 regex 不匹配、
+keep-ring 篩選這類**正常 filter 語意**——那些 `continue` 不是在丟棄呼叫端交付的元素，
+而是在表達「這一項本來就不該處理」。AST 分不出「篩掉」與「丟掉」，硬當 T-A 會讓 19 筆雜訊
+淹掉 3 筆真訊號，最後沒人跑這條 lint。
+
+**誠實未實作**（不假裝覆蓋）：L3（expected vs actual 計數，需回傳 schema 對照）、
+L4（primary/fallback 標記，需語意判斷）、L5（荒謬值 tripwire——**runtime domain 檢查，
+靜態不可判**，它是設計規則不是 lint，見上方 `implausible_measurement`）、L7（key 正規化，advisory）。
+
+**為何不進 `checkers/registry.py`**：那張表的每一列是「control → **design-IR** checker」
+（`ir_fields` 是 IR 路徑、`stage` 是 C00–C04 管線階段、evidence 走 `ORACLE_TOOLS` envelope）。
+本 control 檢的是 **Python 原始碼**，沒有 IR 輸入、不屬於任何管線階段、不產生板級 evidence。
+硬註冊會逼我們在 `ir_fields` 填假路徑——那正是本 control 自己禁止的捏造。它改由 CI /
+開發期直接呼叫（`python3 -m ...no_silent_degradation packages services/mcp`）。
+
+## 全 repo 基線（2026-07-29，T-A）
+
+11 筆真陽性：`L2`×8（`c01_id_package._emit_doc_pdf`、`c02_me_package._parse_connector_answer`、
+`guide_dod.assess_guide_dod`、`mcp_delegate.resolve_mcp_server`、`server._h_kb_get`、
+`server._produced_meta`、`token_store._reap_ephemeral`、`token_store.resolve`）、
+`L6`×3（`spice_card._select_value`、`kicad_emit.emit_kicad_schematic`、`l4_check.check`）。
+未修，登記為已知基線。
+
+## Source evidence
+
+- `distilled_from` → `issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md`
+  （aiguard C04 consumer 提案，四實例全帶實測數據）
+- `distilled_from` → BR_20260729 五實例：commit `1269a20`（§B）、`cdbcb02`（§C/§D/S2）、
+  `f958e68`（§E）、`a25d898`（§F）
+
+## Related
+
+- ← `refines` [[control/no-silent-fallback|No Silent Fallback]]（缺輸入不猜 ⊥ 掉東西不裝沒事）
+- → `constrains` [[workflow/c04-layout|C04 Layout — placement → routing → fab outputs]]
+- ← `references` [[concept/impl-evidence-gaps|Evidence-Linked Knowledge, Explicit Gaps]]
