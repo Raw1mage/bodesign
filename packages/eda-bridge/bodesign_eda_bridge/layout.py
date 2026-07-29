@@ -26,7 +26,13 @@ except ImportError:  # pragma: no cover - pcbnew only present where KiCad is ins
 
 @dataclass(slots=True)
 class LayoutResult:
-    status: str  # "ok" | "no-pcbnew" | "failed"
+    # BR_20260729 S2: "degraded" exists because `unresolved_footprints` alone was
+    # not enough — the list was populated and returned honestly, but `status`
+    # stayed "ok" even when EVERY footprint failed to resolve, so a caller that
+    # checked only the status flag read a part-less board as a success (the V3
+    # variant of the silent-degradation antipattern: a status field that does not
+    # reflect an internal downgrade).
+    status: str  # "ok" | "degraded" | "no-pcbnew" | "failed"
     board_path: str | None = None
     placed: int = 0
     unresolved_footprints: list[str] = field(default_factory=list)
@@ -116,4 +122,14 @@ def emit_layout(
                 result.companion = str(svg)
     else:
         result.warnings.append("kicad-cli not found; board saved but DRC/render skipped.")
+    # BR_20260729 S2: the status flag must carry the partial failure, not just the
+    # side list. Any unresolved footprint means the emitted board is missing parts
+    # the caller asked for; `ok` would let that read as a complete layout.
+    if result.unresolved_footprints:
+        result.status = "degraded"
+        result.warnings.append(
+            f"{len(result.unresolved_footprints)} of "
+            f"{result.placed + len(result.unresolved_footprints)} component(s) had no "
+            f"resolvable footprint and are ABSENT from the board: "
+            f"{result.unresolved_footprints} — status is 'degraded', not 'ok'.")
     return result

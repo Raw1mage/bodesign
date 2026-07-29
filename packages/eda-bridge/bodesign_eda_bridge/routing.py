@@ -132,19 +132,46 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
         raise ValueError(f"PREPLACE_UNKNOWN_STRATEGY: {strategy!r} (grid|deterministic)")
     comps, nets = _parse_netlist(netlist_path)
     board = pcbnew.CreateEmptyBoard()
+    # BR_20260729 §D: plane-layer specs are NORMALISED and every one of them is
+    # accounted for. The old code looked the raw string up in a bare-name map and
+    # skipped any miss (`if ly is not None`) with no record, then swallowed real
+    # SetLayerType failures in `except Exception: pass`. A caller passing the
+    # natural KiCad spelling "In1.Cu:GND" therefore got ok:true with NO power
+    # plane built at all — a 4-layer board with two idle copper layers, while
+    # `layers` and `track_mm` from the SAME call did take effect. Downstream
+    # (pour_planes / autoroute / drc_gate / si_check) cannot detect it, so the
+    # board reaches fab with its return-path + Z0 assumptions silently void.
+    plane_layers_applied: list[dict] = []
     if layers > 2:
         board.SetCopperLayerCount(layers)
         lymap = {"In1": pcbnew.In1_Cu, "In2": pcbnew.In2_Cu, "In3": pcbnew.In3_Cu,
                  "In4": pcbnew.In4_Cu, "In5": pcbnew.In5_Cu, "In6": pcbnew.In6_Cu}
+        unknown_planes: list[str] = []
         for nm in (plane_layers or ["In1", "In2"]):
-            ly = lymap.get(nm)
-            if ly is not None:
-                try: board.SetLayerType(ly, pcbnew.LT_POWER)
-                except Exception: pass
+            spec = str(nm).strip()
+            # Accept "In1", "In1.Cu" and "In1.Cu:GND" (layer[.Cu][:NET]); the net
+            # half is intent for pour_planes and is echoed back, not discarded.
+            head, _, net = spec.partition(":")
+            key = head.split(".", 1)[0].strip()
+            ly = lymap.get(key)
+            if ly is None:
+                unknown_planes.append(spec)
+                continue
+            board.SetLayerType(ly, pcbnew.LT_POWER)
+            plane_layers_applied.append(
+                {"spec": spec, "layer": key, "net": net.strip() or None, "type": "LT_POWER"})
+        if unknown_planes:
+            raise ValueError(
+                f"PLANE_LAYER_UNKNOWN: {unknown_planes} — unrecognised plane-layer spec(s). "
+                f"Accepted forms: 'In1', 'In1.Cu', 'In1.Cu:GND' (layer must be one of "
+                f"{sorted(lymap)}). Refusing to build a board whose requested power "
+                f"planes were not created.")
+    elif plane_layers:
+        raise ValueError(
+            f"PLANE_LAYER_UNKNOWN: plane_layers={list(plane_layers)} requested but "
+            f"layers={layers} has no inner copper layers to reserve (need layers>2).")
     if track_mm:
-        try:
-            board.GetDesignSettings().m_NetSettings.GetDefaultNetclass().SetTrackWidth(pcbnew.FromMM(track_mm))
-        except Exception: pass
+        board.GetDesignSettings().m_NetSettings.GetDefaultNetclass().SetTrackWidth(pcbnew.FromMM(track_mm))
     stock = "/usr/share/kicad/footprints"
     # BR_20260729 §B: footprint search dirs are a MERGE (project libs + stock),
     # not mutually exclusive. Legacy single `fpdir` is folded in for back-compat;
@@ -286,6 +313,7 @@ def net2pcb_board(netlist_path: str, out_path: str, *, layers: int = 2,
            "expected_components": expected, "nets": len(nets),
            "pads_assigned": assigned, "unmapped": unmapped,
            "dropped_components": dropped,
+           "plane_layers_applied": plane_layers_applied,
            "applied_pinmaps": sorted(applied_pinmaps),
            "unmapped_connectors": unmapped_connectors, "strategy": strategy,
            "outline_source": outline_source}
@@ -320,19 +348,44 @@ def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
     """
     _need_pcbnew()
     b = pcbnew.LoadBoard(board_path)
-    # Real courtyard bbox per footprint (mm), rotation already baked into the board.
+    # BR_20260729 §C: measure REAL courtyards via the API this pcbnew actually has.
+    # The old code called fp.GetCourtyardBoundingBox() — which does NOT exist on
+    # pcbnew 9.x — inside a bare `except Exception:` that silently fell back to
+    # fp.GetBoundingBox(), whose box INCLUDES F.SilkS/F.Fab text. Every footprint
+    # took the fallback, so every verdict was computed from silkscreen text boxes:
+    # 92-part board reported 135 overlaps / 11151mm² parts area / utilization 1.27
+    # (>100% = physically impossible) when the true courtyards give 6 / 1009mm² /
+    # ~0.115. Two 0402s 8mm apart were "overlapping 27.8mm²" — their text frames.
+    #
+    # Order: real courtyard polygon (F_CrtYd, then B_CrtYd for bottom parts) →
+    # pad/edge bbox EXCLUDING text. The degraded basis is REPORTED, never silent:
+    # `basis` says which rule produced the verdict and `courtyard_missing` names
+    # the parts that had no courtyard layer. An AttributeError here means the
+    # pcbnew API changed under us (a deployment fact, not a per-part variation)
+    # and is raised loudly instead of being swallowed into a different metric.
     boxes: dict[str, tuple[float, float, float, float]] = {}
+    courtyard_missing: list[str] = []
     for fp in b.GetFootprints():
         ref = fp.GetReference()
-        try:
-            bb = fp.GetCourtyardBoundingBox()
-            if bb.GetWidth() <= 0 or bb.GetHeight() <= 0:
-                bb = fp.GetBoundingBox()
-        except Exception:
-            bb = fp.GetBoundingBox()
+        bb = None
+        for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+            poly = fp.GetCourtyard(layer)
+            if poly.OutlineCount() > 0:
+                cand = poly.BBox()
+                if cand.GetWidth() > 0 and cand.GetHeight() > 0:
+                    bb = cand
+                    break
+        if bb is None:
+            # No courtyard on either layer for THIS part (a legitimate per-part
+            # variation, unlike a missing API). Degrade to the geometry bbox with
+            # text EXCLUDED, and record the part so the caller sees the basis.
+            courtyard_missing.append(ref)
+            bb = fp.GetBoundingBox(False, False)
         x1 = pcbnew.ToMM(bb.GetLeft()); y1 = pcbnew.ToMM(bb.GetTop())
         x2 = pcbnew.ToMM(bb.GetRight()); y2 = pcbnew.ToMM(bb.GetBottom())
         boxes[ref] = (x1, y1, x2, y2)
+    basis = "courtyard" if not courtyard_missing else (
+        "bbox_no_text" if len(courtyard_missing) == len(boxes) else "mixed")
     m = float(courtyard_margin_mm)
     refs = sorted(boxes)
     overlaps: list[dict] = []
@@ -355,8 +408,22 @@ def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
     board_area = bw * bh
     utilization = round(parts_area / board_area, 4) if board_area > 0 else None
     under_filled = utilization is not None and utilization < float(min_utilization)
-    passed = not overlaps and utilization is not None and not under_filled
+    # BR_20260729 §C (implausible-measurement tripwire): parts area may not exceed
+    # the board it sits on. utilization > 1.0 is physically impossible for a valid
+    # floorplan, so it is evidence the MEASUREMENT is wrong, not that the board is
+    # over-full — the exact signal the old silkscreen-bbox fallback produced (1.27).
+    # Report it as an unusable verdict instead of a confident `passed:false`, which
+    # would push the caller to "fix" a floorplan that was never measured correctly.
+    implausible = utilization is not None and utilization > 1.0
+    passed = (not overlaps and utilization is not None
+              and not under_filled and not implausible)
     reasons: list[str] = []
+    if implausible:
+        reasons.append(
+            f"implausible_measurement: utilization {utilization} > 1.0 — parts area "
+            f"{round(parts_area,1)}mm² exceeds board area {round(board_area,1)}mm², "
+            f"which is geometrically impossible (basis={basis}). Treat this verdict "
+            f"as UNUSABLE for floorplan decisions and fix the measurement first.")
     if overlaps:
         reasons.append(f"courtyard_overlap: {len(overlaps)} pair(s) intersect "
                        f"(worst {overlaps[0]['refs']} {overlaps[0]['overlap_mm2']}mm²)")
@@ -364,11 +431,18 @@ def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
         reasons.append(f"sheet_under_filled: utilization {utilization} < "
                        f"{min_utilization} floor (parts {round(parts_area,1)}mm² / "
                        f"board {round(board_area,1)}mm²)")
+    if courtyard_missing:
+        reasons.append(
+            f"courtyard_missing: {len(courtyard_missing)} of {len(boxes)} part(s) have no "
+            f"F/B.CrtYd outline; their extent was measured from the text-excluded "
+            f"geometry bbox instead (basis={basis})")
     return {"passed": passed, "board": board_path, "components": len(boxes),
             "overlaps": overlaps, "overlap_pairs": len(overlaps),
             "utilization": utilization, "min_utilization": float(min_utilization),
             "parts_area_mm2": round(parts_area, 3), "board_area_mm2": round(board_area, 3),
-            "board_mm": [round(bw, 3), round(bh, 3)], "reasons": reasons}
+            "board_mm": [round(bw, 3), round(bh, 3)],
+            "basis": basis, "courtyard_missing": courtyard_missing,
+            "implausible_measurement": implausible, "reasons": reasons}
 
 
 # --------------------------------------------------------------------------- via-in-pad BGA fanout
