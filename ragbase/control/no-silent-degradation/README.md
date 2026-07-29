@@ -102,7 +102,7 @@ V5 是本 control 的**邊境**，認真區別它與 V1–V3 很重要：沒有�
 
 **修法的三條約束**（`autoroute_budget_report`）：
 - **預算無條件 echo**（`passes_limit` / `passes_limit_default` / `throttled`）；advisory 才是有條件的那一半。
-- **advisory 只在「預算被削」且「結果不利」時黍。** 三種刻意的沉默：全預算仍未佈通（那是**真的**幾何/疊層
+- **advisory 只在「預算被削」且「結果不利」時響。** 三種刻意的沉默：全預算仍未佈通（那是**真的**幾何/疊層
   發現，不能被一句「你是不是沒付夠錢」稀释）、已完全佈通（便宜搜尋成功就是贏）、以及 `unconnected is None`
   （**連結果都沒量到卻断言預算是原因，是傑造歸因**——同一缺陷反向）。
 - **advisory 永不翻轉判決。** routing 數字本來就正確，缺的是**歸因**。
@@ -115,7 +115,7 @@ V5 是本 control 的**邊境**，認真區別它與 V1–V3 很重要：沒有�
 
 **機制面的暴露面不是 docstring。** 呼叫端是 MCP client，它看不到 Python docstring，只看得到 JSON
 schema。所以除了回傳值之外，`passes` 的 schema `description` 必須自己把「upper limit」、「節流後
-`unconnected` 同時量你的預算」講完——否則這條知識對实際的使用者不存在。
+`unconnected` 同時量你的預算」講完——否則這條知識對實際的使用者不存在。
 
 ### V6：算式沒錯，但它乘了一個沒人驗過的因子
 
@@ -125,15 +125,15 @@ V6 必須**真的去檢查那個前提**（因為它可檢查——這才是 V6 
 
 實例（§K）：`bga_escape_capacity` 的 `capacity = perimeter_channels × per_gap × len(signal_layers)`。
 乘 `len(signal_layers)` 默認了**router 換得了層**，而 router 換層的唯一手段是自己開一個 via。實測的真相：
-Default netclass 只授權 0.6mm via，而 ball pitch 是 0.5mm——**相鄰 via 邊縁間距 −0.1mm，router 在球陣內根本
+Default netclass 只授權 0.6mm via，而 ball pitch 是 0.5mm——**相鄰 via 邊緣間距 −0.1mm，router 在球陣內根本
 開不了孔**。所以那 4 個訊號層裡有 2 個對它不可達，`capacity=288`（167 需求的 1.7× 餘裕）是建立在
-一個假前提上的安心數字。後果：B.Cu 只承載 10% segments、282 個 via 全是貫穔孔，呼叫端側則一路往
+一個假前提上的安心數字。後果：B.Cu 只承載 10% segments、282 個 via 全是貫穿孔，呼叫端側則一路往
 「加層、加大板、再加層」走，**從不懷疑現有資源根本沒用滿**。
 
 **判別句**：
 
 > 把判決的算式拆成因子，逐個問「這個因子成立需要什麼前提？我查了嗎？」
-> 有任何一個因子靠未查証的前提，而那個前提**本來查得到**，就是 V6。
+> 有任何一個因子靠未查證的前提，而那個前提**本來查得到**，就是 V6。
 
 **一個同族的陣形：「有什麼」與「被授權做什麼」是兩件事。** `via_in_pad` 直接在 `PCB_VIA` 上寫幾何，
 從不碰板檔規則；所以同一塊板上可以**存在** 168 個 0.3mm via，而 router 被**授權**的仍是 0.6mm。
@@ -141,7 +141,7 @@ Default netclass 只授權 0.6mm via，而 ball pitch 是 0.5mm——**相鄰 vi
 而是**兩個相鄰事實被混為一講**——修法是兩者同時入回傳（`router_via_mm` 與 `existing_via_mm_counts`），
 且明記 `router_via_matches_existing`。
 
-**同一條底線的下游面：產物違法要在當場說，不能等三步後由別人背黍鍋。** `via_in_pad` 打的 168 個
+**同一條底線的下游面：產物違法要在當場說，不能等三步後由別人背黑鍋。** `via_in_pad` 打的 168 個
 0.3mm/0.15mm via 低於那塊板自己的 `min_via_diameter=0.5`，每個 via 產生 3 筆 DRC finding，
 **504 筆在三個步驟後的 `drc_gate` 才浮現，讀起來像「這塊板的設計規則有問題」而不是「我剛叫的 fanout 在這塊板上
 非法」**——呼叫端真的就把它自我歸因成自己的板檔問題了。這不是騙人，是**把自己的副作用審計責任候給下游**。
@@ -209,6 +209,39 @@ consumer 抓到自己的錯，靠的是「這與我剛才實測成功的 `route_
 - 守衛測試必須有**反向鑑別力**：拿掉一個真成員，主檢查必須紅。沒有這條，一個過寬的集合或壞掉的
   AST walk 會讓主檢查永遠綠——**守衛自己就變成本 control 要修的東西**。
   `tests/test_worker_group_routing.py` 的反向測試即為此而設。
+
+## 這條 invariant 一樣適用於「維運指令」本身（§L）
+
+**成功訊息報的是指令的*意圖*，不是它的*後果*。** `mcpctl.sh restart` 重建容器，然後印
+`bodesign MCP restarted; socket -> ...`——這句話在兩種情況下**長得一模一樣**：容器本來就閒著、
+以及容器裡正跑著一個 165 分鐘的 freerouting 而它剛被殺掉。實際發生的是後者，兩次
+（BR_20260729 round=22，consumer 側的 routing 被腰斬 13:11 / 13:33，`exit=0` 非崩潰）。
+
+這與 V1 同構，只是換了層：**被丟棄的元素不在一個 list 裡，而在一個容器裡**；`removed:17` 的位置
+站著 `restarted`。判別句照樣成立——呼叫端只讀那句成功訊息，就會把「我摧毀了別人的運算」讀成「重啟完成」。
+
+**為什麼修法不能是約定。** 自然的回應是「restart 前先問一聲」。但那把守衛託付給**人的記憶**，
+而記憶會蒸發（code-thinker §7 的同一條）。共用一個 worker 的兩方之中，只要有一方某次忘了，
+損失照樣發生，而且**恰好發生在最忙、最容易忘的時候**。所以 gate 必須在指令自己身上：
+
+- `restart` / `rebuild` / `stop` 動手前探測容器內的長跑 process，**列出它將殺掉什麼**並 exit 3；
+- `BODESIGN_FORCE=1` 可覆寫，但**仍然把犧牲品名字印出來**（覆寫不等於閉嘴）；
+- 新增 `mcpctl.sh busy` 子命令，讓共用 worker 的另一方能**無副作用地**問「現在動安全嗎」。
+
+**這裡最容易寫錯的一行，正是本 control 本身：**
+
+> `docker exec <c> ps` 失敗時，回傳空清單 ≡「沒有 process 在跑」≡ 放行。
+
+**「我看不到」不是「那裡沒東西」。** 探測失敗必須回報 `UNKNOWN` 並**同樣擋下**——這是 L2 在 ops 層的
+實例（`except` 吞掉失敗後回一個看似正常的值）。若寫成放行，則每次探測故障都變成一張摧毀運算的通行證，
+而且**故障與閒置在輸出上無法區分**，正是這條 invariant 禁止的事。對應測試
+`tests/test_mcpctl_busy_gate.py::test_an_unprobeable_container_blocks_rather_than_reads_as_idle`。
+
+**反向鑑別力同樣不可省**：只測「忙碌時會拒絕」的話，一個無條件拒絕的 gate 會全綠並讓工具不可用。
+必須同時鎖住「閒置放行」「pid 1 的 server 自己不算 work」「未達門檻的短命 process 不擋」
+「容器已停止 = 真的閒置」。另有一條測試在**接線層**把關：任何會 `--force-recreate` 或 `down` 的
+case arm 都必須呼叫 `guard_busy`，且該檢查自帶「拿掉一個 guard 必須被點名」的反向測試——
+否則 parser 靜默匹配不到任何東西時，它會永遠綠。
 
 ## §G：裸崩不是 silent degradation，但同樣讓呼叫端拿不到可行動資訊
 

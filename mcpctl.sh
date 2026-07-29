@@ -8,6 +8,11 @@
 #   BODESIGN_DEV=1 ./mcpctl.sh start      # build once + up with source mounted
 #   BODESIGN_DEV=1 ./mcpctl.sh restart    # after a code edit — seconds, no rebuild
 #   ./mcpctl.sh rebuild                    # only when deps (requirements/Dockerfile) change
+#
+# restart/rebuild/stop refuse to run while a worker is busy (see busy_report):
+# they would kill a multi-hour route in flight and still report success.
+#   ./mcpctl.sh busy                       # exit 3 if a restart would destroy work
+#   BODESIGN_FORCE=1 ./mcpctl.sh restart   # override, with a loud warning
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,6 +51,72 @@ CONTAINER="${PROJECT}-bodesign-1"
 # Persist workers mode so it survives later restart/rebuild (call after ensure_run_dir).
 persist_mode() { [ "$USE_WORKERS" = "1" ] && touch "$WORKERS_MARKER" || true; }
 
+# ---------------------------------------------------------------------------
+# Busy gate (BR_20260729 §L).
+#
+# restart/rebuild/stop recreate the containers, which kills everything running
+# inside them. A freerouting run on a real BGA board takes 30-165 minutes; a
+# restart during one destroys it and then prints "bodesign MCP restarted" —
+# reporting the outcome the command INTENDED, not the outcome it produced.
+# That is exactly the silent-degradation shape this repo lints for in its
+# Python (ragbase/control/no-silent-degradation), one layer down in ops.
+#
+# Two people sharing one ee worker cannot fix this with an agreement to "check
+# first", because the check depends on someone remembering. So: detect, refuse,
+# and name what would have been destroyed. BODESIGN_FORCE=1 overrides, loudly.
+BUSY_MIN_SECS="${BODESIGN_BUSY_MIN_SECS:-30}"
+
+# Print one TSV finding per non-idle container; empty output == idle.
+# A container that is absent or stopped is genuinely idle. A container we
+# CANNOT PROBE is NOT idle — an errored probe is reported as UNKNOWN and
+# blocks, because "I could not look" must never be read as "nothing there".
+busy_report() {
+  local c state out
+  for c in "$CONTAINER" "${PROJECT}-bodesign-me-1" "${PROJECT}-bodesign-ee-1"; do
+    state="$(docker inspect "$c" --format '{{.State.Running}}' 2>/dev/null)" || continue
+    [ "$state" = "true" ] || continue
+    if ! out="$(docker exec "$c" ps -eo pid,etimes,args --no-headers 2>&1)"; then
+      printf '%s\tUNKNOWN\t-\t-\tprobe failed: %s\n' \
+        "$c" "$(printf '%s' "$out" | head -1)"
+      continue
+    fi
+    printf '%s\n' "$out" | awk -v c="$c" -v min="$BUSY_MIN_SECS" '
+      { pid=$1; et=$2; $1=""; $2=""; sub(/^[ \t]+/,""); cmd=$0 }
+      pid == 1        { next }   # the MCP server itself is not "work in flight"
+      cmd ~ /ps -eo/  { next }   # this very probe
+      et+0 < min+0    { next }
+      { printf "%s\tBUSY\t%s\t%ss\t%s\n", c, pid, et, cmd }
+    '
+  done
+}
+
+# Refuse a destructive lifecycle action while work is in flight.
+guard_busy() {
+  local action="$1" report
+  report="$(busy_report)" || true
+  [ -n "$report" ] || return 0
+  if [ "${BODESIGN_FORCE:-}" = "1" ]; then
+    {
+      echo "WARNING: BODESIGN_FORCE=1 — proceeding with '$action' over live work:"
+      printf '%s\n' "$report"
+      echo "WARNING: the above will be killed."
+    } >&2
+    return 0
+  fi
+  {
+    echo "REFUSING to $action: the bodesign workers are not idle."
+    echo
+    printf '%s\n' "$report"
+    echo
+    echo "BUSY    = a process older than ${BUSY_MIN_SECS}s that '$action' would kill."
+    echo "UNKNOWN = the container could not be probed; treated as busy on purpose,"
+    echo "          because a failed look is not evidence of an empty container."
+    echo
+    echo "Wait for it, or override with:  BODESIGN_FORCE=1 $0 $action"
+  } >&2
+  exit 3
+}
+
 ensure_run_dir() {
   # 0755 so a local gateway/user can reach the socket the container binds.
   mkdir -p "$RUN_DIR"
@@ -61,12 +132,26 @@ case "${1:-}" in
     echo "bodesign MCP starting; socket -> $SOCK"
     ;;
   stop)
+    guard_busy stop
     "${COMPOSE[@]}" down
     rm -f "$SOCK"
+    ;;
+  busy)
+    # Ask whether a restart/rebuild/stop would destroy work in flight, WITHOUT
+    # doing it. Exit 0 = idle, 3 = busy or unprobeable. Safe to call from a
+    # peer session that shares these workers.
+    report="$(busy_report)" || true
+    if [ -z "$report" ]; then
+      echo "idle: no process older than ${BUSY_MIN_SECS}s in the bodesign containers"
+    else
+      printf '%s\n' "$report"
+      exit 3
+    fi
     ;;
   restart)
     # Fast: recreate the container (re-runs server.py) WITHOUT rebuilding the image.
     # With BODESIGN_DEV=1 the bind-mounted source means this reloads code edits in seconds.
+    guard_busy restart
     ensure_run_dir; persist_mode
     "${COMPOSE[@]}" up -d --force-recreate --remove-orphans
     if [ "${BODESIGN_DEV:-}" = "1" ]; then
@@ -76,6 +161,7 @@ case "${1:-}" in
     fi
     ;;
   rebuild|reload|refresh)
+    guard_busy rebuild
     ensure_run_dir; persist_mode
     echo "rebuilding [mode: $([ "$USE_WORKERS" = 1 ] && echo workers || echo monolith)]..."
     "${COMPOSE[@]}" build --progress=plain 2>&1 | tee "$RUN_DIR/build.log"
@@ -103,9 +189,11 @@ case "${1:-}" in
     "${COMPOSE[@]}" logs --tail "${1:-100}" -f bodesign
     ;;
   *)
-    echo "usage: mcpctl.sh {start|restart|rebuild|stop|status|log}" >&2
+    echo "usage: mcpctl.sh {start|restart|rebuild|stop|status|busy|log}" >&2
     echo "  dev loop:      BODESIGN_DEV=1 ./mcpctl.sh start   then  BODESIGN_DEV=1 ./mcpctl.sh restart" >&2
     echo "  workers mode:  BODESIGN_WORKERS=1 ./mcpctl.sh rebuild   (sticky; BODESIGN_WORKERS=0 reverts to monolith)" >&2
+    echo "  busy check:    ./mcpctl.sh busy        (exit 3 if a restart would kill work in flight)" >&2
+    echo "  override:      BODESIGN_FORCE=1 ./mcpctl.sh restart   (kills it anyway, loudly)" >&2
     exit 2
     ;;
 esac
