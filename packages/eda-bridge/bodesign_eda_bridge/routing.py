@@ -496,28 +496,85 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
         m = re.match(r"^([A-Z]+)(\d+)$", num)
         return (m.group(1), int(m.group(2))) if m else None
 
+    # BR_20260729 §G: this fanout is only meaningful for GRID-named packages (BGA/LGA
+    # pads "A1"/"B12"), because `keep_rings` — the guard that stops us drilling through
+    # the outer balls that escape on the surface — is computed from row/column indices.
+    # Three inputs used to fail SILENTLY or uselessly and are now all fail-loud:
+    #   1. a ref that is not on the board at all   -> was silently ignored (no-op)
+    #   2. a ref whose pads are ALL non-grid       -> bare `max() arg is empty` crash,
+    #      naming neither the ref nor the field (castellated/LGA modules like a BLE or
+    #      WiFi can with pads "1","2","3" are perfectly legal packages, not bad data)
+    #   3. a ref with MIXED naming                 -> WORST case: cols is non-empty so
+    #      nothing crashed, but every non-grid pad fell straight through the `if g:`
+    #      ring guard and got a via punched into it regardless of keep_rings. On a
+    #      castellated edge pad that destroys the part, and the caller saw only a
+    #      plausible vias_added.
+    fps: dict[str, Any] = {}
     for fp in b.GetFootprints():
-        if fp.GetReference() not in refset:
-            continue
+        ref = fp.GetReference()
+        if ref in refset:
+            fps[ref] = fp
+    absent = sorted(refset - set(fps))
+    if absent:
+        raise ValueError(
+            f"VIA_IN_PAD_REF_NOT_ON_BOARD: {absent} not found in {in_path} — "
+            f"via-in-pad fanout cannot silently skip a requested ref; check the "
+            f"reference designators against the board")
+
+    non_grid: list[dict] = []
+    mixed: list[dict] = []
+    for ref in sorted(fps):
+        names = [p.GetNumber() for p in fps[ref].Pads()]
+        gridded = [n for n in names if rc(n)]
+        if not gridded:
+            non_grid.append({"ref": ref, "pads": len(names), "pad_name_sample": names[:5]})
+        elif len(gridded) != len(names):
+            odd = [n for n in names if not rc(n)]
+            mixed.append({"ref": ref, "pads": len(names), "non_grid_pads": len(odd),
+                          "pad_name_sample": odd[:5]})
+    if non_grid:
+        raise ValueError(
+            f"VIA_IN_PAD_NOT_GRID_PACKAGE: {non_grid} — these parts have no BGA/LGA grid "
+            f"pad names (A1/B12 form), so keep_rings cannot identify their outer escape "
+            f"rings and via-in-pad fanout does not apply. Castellated / LGA modules with "
+            f"numeric pads are legal packages, not bad data: drop them from `refs` (fan "
+            f"them out with normal escape traces instead)")
+    if mixed:
+        raise ValueError(
+            f"VIA_IN_PAD_MIXED_PAD_NAMING: {mixed} — these parts mix grid and non-grid pad "
+            f"names, so keep_rings protects only the grid-named ones and every other netted "
+            f"pad would be drilled regardless of where it sits. Refusing rather than "
+            f"punching unguarded vias; fix the footprint pad numbering or drop the ref")
+
+    per_ref: dict[str, int] = {}
+    for ref in sorted(fps):
+        fp = fps[ref]
         pads = list(fp.Pads())
         rcs = [rc(p.GetNumber()) for p in pads]
         rows = sorted({x[0] for x in rcs if x}); cols = sorted({x[1] for x in rcs if x})
         ri = {r: i for i, r in enumerate(rows)}; cmax = max(cols); cmin = min(cols); rmax = len(rows) - 1
+        n = 0
         for p in pads:
             if not p.GetNetname():
                 continue
             g = rc(p.GetNumber())
-            if g:
-                ring = min(ri[g[0]], rmax - ri[g[0]], g[1] - cmin, cmax - g[1])
-                if ring < keep_rings:
-                    continue
+            ring = min(ri[g[0]], rmax - ri[g[0]], g[1] - cmin, cmax - g[1])
+            if ring < keep_rings:
+                continue
             v = pcbnew.PCB_VIA(b); v.SetPosition(p.GetPosition())
             v.SetDrill(pcbnew.FromMM(drill_mm)); v.SetWidth(pcbnew.FromMM(pad_mm))
             v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); v.SetNet(p.GetNet())
-            b.Add(v); added += 1
+            b.Add(v); added += 1; n += 1
+        per_ref[ref] = n
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, b)
-    return {"board": out_path, "vias_added": added, "process": "via-in-pad (filled+capped / JLCPCB advanced)"}
+    # per-ref counts let the caller audit WHICH requested part actually got fanned out —
+    # a ref that resolved but contributed 0 vias (every ball inside keep_rings, or no nets)
+    # is visible here instead of being averaged away into a single plausible total.
+    return {"ok": True, "board": out_path, "vias_added": added,
+            "refs_requested": sorted(refset), "vias_per_ref": per_ref,
+            "keep_rings": int(keep_rings),
+            "process": "via-in-pad (filled+capped / JLCPCB advanced)"}
 
 
 # -------------------------------------------------------------------------------- copper planes

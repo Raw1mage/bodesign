@@ -58,6 +58,28 @@ V1–V3 靠「加欄位讓降級可見」解；V4 靠**收斂實作到單一 hel
   ORIGIN（因為那是 `pcbnew.SetPosition()` 寫的）、`pads` 從 origin 量、`anchor_dx_mm` 是
   courtyard-centre 減 origin 且為 part-local 未旋轉座標。V4-b 的正解是讓參考系**無法被誤會**，
   不是讓每個 caller 自己猜對。
+- **`unconnected` + `complete: (unconnected == 0) if unconnected is not None else None`**
+  （`routing.py autoroute`，BR_20260708）——routing 只完成 22/111 個網路時，回傳**沒有**把它
+  報成成功；`complete` 的三態（True/False/None）還把「無法判定」與「判定為失敗」分開，
+  不用 `False` 冒充「我不知道」。
+- **`vias_per_ref: {ref: n}` + `refs_requested`**（`routing.py via_in_pad`，§G）——呼叫端點名的
+  每一個 ref 都能被稽核：一個成功解析卻貢獻 0 個 via 的 ref（全部球都在 keep_rings 內、或沒接網路）
+  在這裡是可見的，而不是被平均進一個看似合理的 `vias_added` 總數。
+
+## §G：裸崩不是 silent degradation，但同樣讓呼叫端拿不到可行動資訊
+
+§G（`via_in_pad` 對 castellated/LGA 模組的數字 pad 名拋 `max() iterable argument is empty`）
+**不是**本 control 的變體：它沒有騙人，它大聲失敗了。但它與 V1–V3 共有同一個**後果**——
+呼叫端拿不到可行動資訊（訊息未指出哪個 ref、哪個欄位、該怎麼修）。定性為 **L2 的反面案例**：
+
+> `except` 吞掉失敗是一種病；**完全不 guard、讓底層 API 的裸錯冒到呼叫端**是它的鏡像。
+> 兩者都讓呼叫端無法行動。修法對稱：前者要「把吞掉的講出來」，後者要「把底層錯誤翻譯成
+> 領域錯誤」（哪個輸入、為什麼不適用、該怎麼辦）。
+
+§G 修復時另外挖出兩個**真** V1（都已一併修）：(a) `refs` 中不在板上的 ref 原本靜默 no-op；
+(b) **混合命名**（部分 `A1`、部分 `1`）原本不崩，但每個非網格 pad 都繞過 `keep_rings` 保護
+被塞 via——`cols` 非空所以沒人發現，呼叫端只看到一個合理的 `vias_added`。**裸崩其實是在
+遮蔽一個更糟的靜默缺陷**：只有「全部 pad 都非網格」才崩，混合命名反而安靜地毀掉板邊 pad。
 
 ## 可執行的閘
 
@@ -93,6 +115,12 @@ L4（primary/fallback 標記，需語意判斷）、L5（荒謬值 tripwire—�
 `server._produced_meta`、`token_store._reap_ephemeral`、`token_store.resolve`）、
 `L6`×3（`spice_card._select_value`、`kicad_emit.emit_kicad_schematic`、`l4_check.check`）。
 未修，登記為已知基線。
+
+**這個數字必須由無參數的預設指令重現**（`python3 .../no_silent_degradation.py`）。§G 時發現
+`__main__` 的 default roots 只有 `[packages/eda-bridge, packages/workflow-core]`，漏掃 `services/`
+少報 6 筆——文件寫 11、預設跑出 5，CI 若照預設跑會拿到假綠。已改為 `[packages, services]`。
+**一條 lint 的預設掃描範圍自己就是一個「回傳值是否反映實際做了什麼」問題**：它回報「0 findings」
+時，呼叫端無法區分「真的干淨」與「沒掃到那裡」。
 
 ## Source evidence
 

@@ -318,7 +318,11 @@ def check_paths(roots: list[str | Path], *, include_advisory: bool = False) -> l
 
 if __name__ == "__main__":  # pragma: no cover - CI entry point
     import sys
-    targets = sys.argv[1:] or ["packages/eda-bridge", "packages/workflow-core"]
+    # Default roots must match the documented baseline in
+    # ragbase/control/no-silent-degradation/README.md (11 findings). Scanning only
+    # two sub-packages under-reported by 6 (all of services/), so a CI run on the
+    # default would have gone green while services/mcp/server.py still carried L2s.
+    targets = sys.argv[1:] or ["packages", "services"]
     results = check_paths(targets)  # type: ignore[arg-type]
     for f in results:
         print(f)
