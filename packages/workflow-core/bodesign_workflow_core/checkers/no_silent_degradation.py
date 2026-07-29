@@ -304,16 +304,60 @@ def check_file(path: str | Path, *, include_advisory: bool = False) -> list[Find
     return findings
 
 
-def check_paths(roots: list[str | Path], *, include_advisory: bool = False) -> list[Finding]:
+@dataclass(slots=True)
+class Coverage:
+    """What the scan ACTUALLY covered (BR_20260729 L10).
+
+    A checker that returns only findings is itself an instance of the anti-pattern
+    it enforces: on "0 findings" the caller cannot distinguish `clean` from
+    `never scanned`. That is not hypothetical — this checker's own default roots
+    once omitted services/, so the documented 11-finding baseline printed as 5 and
+    a CI run would have gone green over unscanned code. Every scan therefore
+    reports its roots, how many files it actually parsed, and what it skipped.
+    """
+    roots: list[str]
+    missing_roots: list[str]
+    files_scanned: int
+    files_skipped: int
+    unparsable: list[str]
+
+
+def check_paths(roots: list[str | Path], *, include_advisory: bool = False,
+                with_coverage: bool = False):
+    """Scan `roots`. Returns findings, or (findings, Coverage) when with_coverage."""
     out: list[Finding] = []
+    missing: list[str] = []
+    scanned = skipped = 0
+    unparsable: list[str] = []
     for root in roots:
         rp = Path(root)
+        if not rp.exists():
+            # A root that does not exist is a coverage hole, not an empty result:
+            # a typo'd path would otherwise silently contribute zero findings.
+            missing.append(str(root))
+            continue
         files = sorted(rp.rglob("*.py")) if rp.is_dir() else [rp]
         for f in files:
             if "__pycache__" in f.parts or f.name.startswith("test_"):
+                skipped += 1
                 continue
-            out.extend(check_file(f, include_advisory=include_advisory))
-    return out
+            got = check_file(f, include_advisory=include_advisory)
+            out.extend(got)
+            # check_file never raises on a bad parse — it reports L0 and moves on,
+            # which is the right call (a file we cannot read is a finding, not a
+            # skip). Derive coverage from that finding rather than from an except
+            # branch that could never fire. A file we failed to parse is NOT
+            # counted as scanned: inflating the count with files the rules never
+            # actually ran over is the very dishonesty this coverage exists to stop.
+            if any(g.rule == "L0" for g in got):
+                unparsable.append(str(f))
+            else:
+                scanned += 1
+    if not with_coverage:
+        return out
+    return out, Coverage(roots=[str(r) for r in roots], missing_roots=missing,
+                         files_scanned=scanned, files_skipped=skipped,
+                         unparsable=unparsable)
 
 
 if __name__ == "__main__":  # pragma: no cover - CI entry point
@@ -323,7 +367,7 @@ if __name__ == "__main__":  # pragma: no cover - CI entry point
     # two sub-packages under-reported by 6 (all of services/), so a CI run on the
     # default would have gone green while services/mcp/server.py still carried L2s.
     targets = sys.argv[1:] or ["packages", "services"]
-    results = check_paths(targets)  # type: ignore[arg-type]
+    results, cov = check_paths(targets, with_coverage=True)  # type: ignore[arg-type]
     for f in results:
         print(f)
     by_rule: dict[str, int] = {}
@@ -331,3 +375,10 @@ if __name__ == "__main__":  # pragma: no cover - CI entry point
         by_rule[f.rule] = by_rule.get(f.rule, 0) + 1
     print(f"\n{len(results)} finding(s): " +
           ", ".join(f"{k}={v}" for k, v in sorted(by_rule.items())))
+    # Coverage is printed unconditionally, next to the count it qualifies.
+    print(f"coverage: roots={cov.roots} files_scanned={cov.files_scanned} "
+          f"files_skipped={cov.files_skipped}")
+    if cov.missing_roots or cov.unparsable:
+        print(f"COVERAGE GAP: missing_roots={cov.missing_roots} "
+              f"unparsable={cov.unparsable}")
+        sys.exit(2)

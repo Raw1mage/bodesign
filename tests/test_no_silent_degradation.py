@@ -205,6 +205,46 @@ class L1IsAdvisoryOnly(unittest.TestCase):
         self.assertEqual(_rules(_scan(self.SRC, advisory=True)).get("L1"), 1)
 
 
+class L10ScanReportsItsOwnCoverage(unittest.TestCase):
+    """L10: a checker that returns only findings is itself the anti-pattern.
+
+    On "0 findings" the caller must be able to tell `clean` from `never scanned`.
+    This is not hypothetical: this checker's own default roots once omitted
+    services/, so the documented 11-finding baseline printed as 5 and a CI run
+    would have gone green over unscanned code.
+    """
+
+    def _tree(self) -> str:
+        d = tempfile.mkdtemp()
+        Path(d, "pkg").mkdir()
+        Path(d, "pkg/ok.py").write_text("def f():\n    return 1\n")
+        Path(d, "pkg/test_skipme.py").write_text("def f():\n    return 1\n")
+        Path(d, "pkg/broken.py").write_text("def f(:\n")
+        return d
+
+    def test_reports_roots_and_file_count(self):
+        d = self._tree()
+        _, cov = nsd.check_paths([Path(d, "pkg")], with_coverage=True)
+        self.assertEqual(cov.files_scanned, 1)
+        self.assertEqual(cov.files_skipped, 1, "test_*.py is skipped, and said so")
+
+    def test_a_nonexistent_root_is_a_coverage_gap_not_an_empty_result(self):
+        findings, cov = nsd.check_paths(["does/not/exist"], with_coverage=True)
+        self.assertEqual(findings, [], "nothing to find")
+        self.assertEqual(cov.missing_roots, ["does/not/exist"],
+                         "a typo'd root must not masquerade as a clean scan")
+
+    def test_unparsable_file_is_surfaced_not_swallowed(self):
+        d = self._tree()
+        _, cov = nsd.check_paths([Path(d, "pkg")], with_coverage=True)
+        self.assertEqual(len(cov.unparsable), 1)
+        self.assertTrue(cov.unparsable[0].endswith("broken.py"))
+
+    def test_coverage_is_opt_in_so_existing_callers_are_unchanged(self):
+        d = self._tree()
+        self.assertIsInstance(nsd.check_paths([Path(d, "pkg")]), list)
+
+
 class AnchoredToTheRealDefects(unittest.TestCase):
     """The calibration claim in the control object, asserted against real history.
 

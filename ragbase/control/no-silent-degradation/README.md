@@ -92,6 +92,7 @@ tier **由實測訊噪比決定**（對 §B–§F 修復前後的 `routing.py` �
 | L6 | 1 | 0 | **T-A** | 呼叫端傳入的 key 查找失敗即靜默跳過（§D 直接規則） |
 | L8 | 1 | 0 | **T-A** | 同一量測 API 在 >1 個函式各自實作（§E 直接規則） |
 | L1 | 19 | 19 | **T-C** | 迴圈內 `continue` 未記錄被跳過的元素 |
+| L10 | — | — | **設計規則** | 掃描/檢查類工具必須回報實際覆蓋範圍（見下） |
 
 **L1 誠實降為 advisory**（預設不輸出）：它修復前後都報 19 筆，命中的是 regex 不匹配、
 keep-ring 篩選這類**正常 filter 語意**——那些 `continue` 不是在丟棄呼叫端交付的元素，
@@ -101,6 +102,29 @@ keep-ring 篩選這類**正常 filter 語意**——那些 `continue` 不是在�
 **誠實未實作**（不假裝覆蓋）：L3（expected vs actual 計數，需回傳 schema 對照）、
 L4（primary/fallback 標記，需語意判斷）、L5（荒謬值 tripwire——**runtime domain 檢查，
 靜態不可判**，它是設計規則不是 lint，見上方 `implausible_measurement`）、L7（key 正規化，advisory）。
+
+## L10：掃描/檢查類工具必須回報實際覆蓋範圍
+
+> 一個只回 findings 的 checker，**本身就是它所執行的反模式**：回報「0 findings」時，
+> 呼叫端無法區分**真的乾淨**與**根本沒掃到那裡**。掃描範圍必須是回傳值的一部分。
+
+這不是假設性風險，而是**本 checker 自己犯過的錯**：它的 `__main__` default roots 曾只有
+`[packages/eda-bridge, packages/workflow-core]`，漏掃 `services/`——文件記載基線 11 筆，
+預設指令印出 5 筆，**CI 若照預設跑會在從未被檢查的 code 上拿到假綠**。
+
+實作（checker 自己先合規）：`check_paths(..., with_coverage=True)` 回 `Coverage`，
+`__main__` 無條件印在 finding 數旁邊：
+
+- `roots` / `files_scanned` / `files_skipped`——這個數字是由哪些檔支撐的
+- `missing_roots`——**不存在的 root 是覆蓋缺口，不是空結果**（打錯的路徑否則會以「0 findings」冒充乾淨）
+- `unparsable`——parse 不了的檔**不計入 `files_scanned`**：把規則從未真正跑過的檔算進已掃描數，
+  正是這個 coverage 要阻止的不誠實
+- 有缺口時 `exit 2`，CI 不會把「沒掃到」當成通過
+
+一個順帶的發現：實作時我先寫了 `except SyntaxError` 來採集 `unparsable`，測試才曝出
+`check_file` **從不拋** SyntaxError——它回一筆 `L0` finding 繼續（那才是對的：讀不了的檔
+是 findings 不是 skip）。我那個 `except` 是**永不觸發的死碼**，已改成從 L0 finding 推導。
+這條規則對**未來所有 checker** 適用，不只這一個。
 
 **為何不進 `checkers/registry.py`**：那張表的每一列是「control → **design-IR** checker」
 （`ir_fields` 是 IR 路徑、`stage` 是 C00–C04 管線階段、evidence 走 `ORACLE_TOOLS` envelope）。
