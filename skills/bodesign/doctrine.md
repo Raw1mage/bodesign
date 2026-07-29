@@ -212,3 +212,40 @@ Fleet SSOT: `opencode/specs/mcp-integration-standard` R2.0 (transfer modes) + R1
 - **`has_3d:false` / `*_export_unavailable` is a truthful source-data gap to
   surface, not a bug to paper over** by substituting a scaled generic body. The
   honest gap IS the signal — a downstream stage decides how to close it.
+- **A JSON schema `description` is the only documentation an MCP caller has.**
+  Python docstrings do not exist for the thing calling these tools. Any knowledge
+  a caller needs in order to read a return value correctly — a parameter that is
+  an upper limit rather than an amount, a field whose meaning depends on another
+  input — belongs in the schema, not only in the docstring. A caller once threw a
+  router at 25% of its default search budget for four rounds and read the result
+  as "this board cannot be routed"; the docstring said otherwise and the caller
+  could not see it (BR_20260729 §J).
+
+## 6. Operating on shared workers
+
+The ee/me workers are shared. A route on a real BGA board runs 30–165 minutes,
+so the lifecycle commands are not private to whoever types them.
+
+- **`mcpctl.sh restart` / `rebuild` / `stop` refuse to run while a worker is
+  busy** (BR_20260729 §L). They print what they would have killed and exit 3.
+  Before this gate they recreated the containers and reported
+  `bodesign MCP restarted` — the same line whether the workers were idle or
+  whether someone's multi-hour route had just been destroyed. **A command that
+  reports its own intent rather than its effect is the ops-layer form of the
+  silent-degradation anti-pattern this repo lints for in Python.**
+- **`./mcpctl.sh busy` answers "is it safe to restart?" with no side effects**
+  (exit 0 idle, 3 busy). Use it instead of asking a peer session; an agreement to
+  "check with each other first" delegates the guard to memory, which evaporates
+  exactly when both sides are busiest.
+- **`BODESIGN_FORCE=1` overrides, and still names the casualty.** Overriding is
+  allowed; doing it quietly is not.
+- **When a probe fails, block — do not read it as idle.** "I could not look" is
+  not "there is nothing there". The costs are asymmetric: a false block costs a
+  short wait, a false pass costs someone's multi-hour computation, so the default
+  under uncertainty is conservative. This is the general rule behind the
+  `UNKNOWN` state in the busy gate, and it applies to any readiness probe here —
+  a failed check never counts as a passed one.
+- **A restart is not a debugging step for a busy worker.** If a tool call misbehaves
+  while a long job is running, diagnose it in place (`docker exec`, logs, the
+  tool's own return fields). Recreating the container destroys the evidence AND
+  the job.
