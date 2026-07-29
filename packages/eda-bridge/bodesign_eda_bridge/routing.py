@@ -41,6 +41,35 @@ def _ensure_parent_dir(path: str) -> None:
         os.makedirs(parent, exist_ok=True)
 
 
+def _load_board(path: str, *, arg: str = "board_path"):
+    """BR_20260729 §H: the ONLY sanctioned way to open a board in this module.
+
+    ``pcbnew.LoadBoard()`` returns **None** for a path that does not exist — it does not
+    raise. Every downstream pcbnew call then receives a null BOARD*, and the SWIG layer
+    dereferences it: the worker dies with SIGSEGV (exit 139), so the caller sees a dropped
+    connection rather than an error. Measured on a relative path against the server cwd
+    (/app): LoadBoard -> None, then ExportSpecctraDSN(None, dsn) -> SIGSEGV.
+
+    A relative path is the common trigger: callers naturally pass ``ccm8_vip.kicad_pcb``,
+    which resolves against the *server's* cwd, not theirs. Report the resolved absolute path
+    so that mismatch is visible instead of being guessed at.
+    """
+    _need_pcbnew()
+    resolved = os.path.abspath(path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"BOARD_NOT_FOUND: {arg}={path!r} does not exist (resolved to {resolved!r} "
+            f"relative to the worker cwd {os.getcwd()!r}) — pass an absolute path; "
+            "pcbnew.LoadBoard returns None here and the next pcbnew call segfaults the worker")
+    board = pcbnew.LoadBoard(path)
+    if board is None:
+        raise RuntimeError(
+            f"BOARD_LOAD_FAILED: pcbnew.LoadBoard({path!r}) returned None even though the file "
+            "exists — the board is unreadable/corrupt for this KiCad version; refusing to hand a "
+            "null BOARD to pcbnew (that segfaults the worker)")
+    return board
+
+
 # ----------------------------------------------------------------------------- net → netted PCB
 _USBC = {"VBUS": ["A4", "A9", "B4", "B9"], "GND": ["A1", "A12", "B1", "B12"],
          "CC1": ["A5"], "CC2": ["B5"], "SHLD": ["S1"]}
@@ -393,7 +422,7 @@ def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
     explicit ``board_mm`` overrides it.
     """
     _need_pcbnew()
-    b = pcbnew.LoadBoard(board_path)
+    b = _load_board(board_path)
     # BR_20260729 §C: measure REAL courtyards via the API this pcbnew actually has.
     # The old code called fp.GetCourtyardBoundingBox() — which does NOT exist on
     # pcbnew 9.x — inside a bare `except Exception:` that silently fell back to
@@ -556,7 +585,7 @@ def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
     them into one boolean would leave the caller unable to tell which action to take.
     """
     _need_pcbnew()
-    b = pcbnew.LoadBoard(board_path)
+    b = _load_board(board_path)
     layers = _copper_layers(b)
     signal_layers = [nm for _, nm, is_pwr in layers if not is_pwr]
     inner_signal_layers = [nm for _, nm, is_pwr in layers
@@ -635,6 +664,27 @@ def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
             "fanout_vias": fanout_vias, "has_escape_route": has_escape_route,
             "capacity": capacity, "blocking": blocking,
         }
+        # BR_20260729 round=12: `traces_per_gap_used` is an optimistic floor of 1; when the
+        # nominal rules compute 0, surface escape is physically impossible at these widths and
+        # the outer rings CANNOT route out on the copper layer they sit on. That number was
+        # already in the return value, but only a reader who redoes the arithmetic saw it —
+        # a caller lost 50 minutes of routing before working out why keep_rings=2 was wrong.
+        # Advisory only: it never flips `blocking`, because the optimistic floor is what keeps
+        # this gate from refusing fine-pitch boards that fabs build every day.
+        advisories: list[str] = []
+        if computed < per_gap:
+            need_mm = round(per_gap * float(track_mm) + (per_gap + 1) * float(clearance_mm), 4)
+            advisories.append(
+                f"surface_escape_infeasible: computed {computed} trace(s)/gap at "
+                f"track={track_mm} clearance={clearance_mm} (one trace needs {need_mm}mm, "
+                f"the ball gap is {gap}mm) — rings kept on the surface cannot escape at these "
+                f"widths. The capacity above therefore assumes the optimistic floor of "
+                f"{per_gap} trace/channel, not the nominal rules. Either keep fewer rings on "
+                "the surface so the inner ones via down (only viable if the inner layers have "
+                "the capacity), or relax track/clearance, or re-check them against the fab's "
+                "real minimums.")
+        if advisories:
+            entry["advisories"] = advisories
         if blocking:
             # How many signal layers WOULD suffice, so the caller gets an action and
             # not just a refusal.
@@ -657,6 +707,7 @@ def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
         "grid_parts": len(parts), "parts": parts,
         "blocking_parts": [p["ref"] for p in blocking_parts],
         "reasons": [p["reason"] for p in blocking_parts],
+        "advisories": [a for p in parts for a in p.get("advisories", [])],
         "copper_layers": [nm for _, nm, _ in layers],
         "signal_layers": signal_layers, "power_layers": [nm for _, nm, pw in layers if pw],
         "track_mm": round(float(track_mm), 4), "clearance_mm": round(float(clearance_mm), 4),
@@ -671,7 +722,7 @@ def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float 
     rings, which escape on the surface) so fine-pitch BGAs reach inner signal layers.
     Requires a filled+capped (POFV) fab process — JLCPCB 'advanced'."""
     _need_pcbnew()
-    b = pcbnew.LoadBoard(in_path)
+    b = _load_board(in_path, arg="in_path")
     refset = set(refs); added = 0
 
     def rc(num):
@@ -802,7 +853,7 @@ def pour_planes(in_path: str, out_path: str, planes: list[str], *, stitch: bool 
             f'POUR_PLANES_BAD_PAD_CONNECTION: expected "thermal" or "solid", '
             f'got {pad_connection!r}')
     _need_pcbnew()
-    b = pcbnew.LoadBoard(in_path)
+    b = _load_board(in_path, arg="in_path")
     box = b.GetBoardEdgesBoundingBox(); m = pcbnew.FromMM(0.3)
     x1, y1, x2, y2 = box.GetLeft() + m, box.GetTop() + m, box.GetRight() - m, box.GetBottom() - m
     out = []
@@ -916,7 +967,7 @@ def widen_bus_tracks(in_path: str, out_path: str, nets: list[str], target_mm: fl
     if clearance_mm < 0:
         raise ValueError("clearance_mm must be >= 0")
     _need_pcbnew()
-    board = pcbnew.LoadBoard(in_path)
+    board = _load_board(in_path, arg="in_path")
     target_iu = pcbnew.FromMM(float(target_mm)); clearance_iu = pcbnew.FromMM(float(clearance_mm))
     netset = set(nets); widened = kept = 0
     widened_tracks = []  # (track, original_width_iu) for post-widen DRC revert
@@ -973,7 +1024,7 @@ def apply_pad_intrinsic_overrides(in_path: str, out_path: str, *, override_mm: f
     they still fail the gate. The sidecar lists every override (ref + pads + old/new clearance)
     so nothing is silently changed. Returns the applied count + the audit records."""
     _need_pcbnew()
-    board = pcbnew.LoadBoard(in_path)
+    board = _load_board(in_path, arg="in_path")
     report = drc_gate(in_path, classify_intrinsic=True)
     override_iu = pcbnew.FromMM(float(override_mm))
     fps = {fp.GetReference(): fp for fp in board.GetFootprints()}
@@ -1122,7 +1173,7 @@ def length_match_bus(in_path: str, out_path: str, nets: list[str], budget_ps: fl
     if clearance_mm < 0:
         raise ValueError("clearance_mm must be >= 0")
     _need_pcbnew()
-    board = pcbnew.LoadBoard(in_path)
+    board = _load_board(in_path, arg="in_path")
     netset = set(nets)
     missing = [net for net in nets if board.FindNet(net) is None]
     if missing:
@@ -1251,7 +1302,7 @@ def clean_micro_stubs(in_path: str, out_path: str, *, min_len_mm: float = 0.02) 
     (length below the threshold) and reports how many + their nets, so the removal is auditable
     and never silently drops real routing. Vias and zones are untouched."""
     _need_pcbnew()
-    b = pcbnew.LoadBoard(in_path)
+    b = _load_board(in_path, arg="in_path")
     thr_iu = pcbnew.FromMM(float(min_len_mm))
     removed = []
     for t in list(b.GetTracks()):
@@ -1287,7 +1338,7 @@ def si_check(board_path: str, nets: list[str], *, z0: float = 50.0, rs: float = 
     STM32-class CMOS output-buffer reference, NOT a hidden assumption. The result echoes the
     effective values used (``effective``) so the verdict is interpretable on any device."""
     _need_pcbnew()
-    b = pcbnew.LoadBoard(board_path)
+    b = _load_board(board_path)
     res = []
     for nm in nets:
         L = sum(math.hypot(t.GetEnd().x - t.GetStart().x, t.GetEnd().y - t.GetStart().y)
@@ -1555,13 +1606,25 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40,
         return {"routed": False, "reason": "freerouting/java not present in this worker",
                 "board": board_path}
     dsn = board_path.replace(".kicad_pcb", ".dsn"); ses = board_path.replace(".kicad_pcb", ".ses")
-    b = pcbnew.LoadBoard(board_path)
-    if not pcbnew.ExportSpecctraDSN(b, dsn):
+    b = _load_board(board_path)
+    exported = pcbnew.ExportSpecctraDSN(b, dsn)
+    # BR_20260729 §H: verify the ARTIFACT, not just the flag. The SES read below already
+    # does this (os.path.exists(ses)); the DSN side only trusted the boolean, so an export
+    # that reported success without landing a file fell straight through to freerouting,
+    # which then died on FileNotFoundException — the failure surfaced as a java stack trace
+    # about a missing .dsn instead of as an export error here.
+    dsn_size = os.path.getsize(dsn) if os.path.exists(dsn) else -1
+    if not exported or dsn_size <= 0:
         bad = sorted(fp.GetReference() for fp in b.GetFootprints()
                      if not fp.GetReference() or fp.GetReference().startswith("REF**"))
+        why = ("returned False" if not exported else
+               ("reported success but wrote no file" if dsn_size < 0 else
+                "reported success but wrote an empty file"))
         raise RuntimeError(
-            "ExportSpecctraDSN failed (no DSN written) — footprints with missing/unannotated "
-            f"references: {bad or 'none detected; inspect the board in pcbnew'}")
+            f"DSN_EXPORT_FAILED: ExportSpecctraDSN {why} (path={dsn!r}, "
+            f"size={dsn_size if dsn_size >= 0 else 'absent'}) — refusing to invoke freerouting "
+            "on a missing input. Footprints with missing/unannotated references: "
+            f"{bad or 'none detected; inspect the board in pcbnew'}")
     netclass_report = None
     if netclasses:
         with open(dsn) as fh:
@@ -1582,7 +1645,7 @@ def autoroute(board_path: str, out_path: str, *, passes: int = 40,
         raise RuntimeError(f"freerouting exited with code {proc.returncode}: {tail}")
     if not os.path.exists(ses):
         raise RuntimeError(f"freerouting produced no SES session file at {ses} — autoroute did not run")
-    b2 = pcbnew.LoadBoard(board_path); pcbnew.ImportSpecctraSES(b2, ses)
+    b2 = _load_board(board_path); pcbnew.ImportSpecctraSES(b2, ses)
     _ensure_parent_dir(out_path)
     pcbnew.SaveBoard(out_path, b2)
     t = b2.GetTracks()

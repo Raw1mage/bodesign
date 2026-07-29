@@ -65,6 +65,23 @@ V1–V3 靠「加欄位讓降級可見」解；V4 靠**收斂實作到單一 hel
 - **`vias_per_ref: {ref: n}` + `refs_requested`**（`routing.py via_in_pad`，§G）——呼叫端點名的
   每一個 ref 都能被稽核：一個成功解析卻貢獻 0 個 via 的 ref（全部球都在 keep_rings 內、或沒接網路）
   在這裡是可見的，而不是被平均進一個看似合理的 `vias_added` 總數。
+- **`advisories: [surface_escape_infeasible: …]`**（`routing.py bga_escape_capacity`，round=12）——
+  **「資訊有給」與「資訊有用」是兩件事。** `traces_per_gap_computed: 0` 從第一版就在回傳裡，
+  形式上完全合規；但它要求讀者自己重做 `n*w+(n+1)*c <= gap` 的算術才知道「表面逃逸在這個線寬下
+  物理上不可能」。一個呼叫端因此用錯 `keep_rings`，花了 50 分鐘 routing 才回頭讀懂那個 0。
+  修法是把**算術的結論**也講出來（需要 0.416mm、gap 只有 0.22mm、所以容量用的是樂觀 floor），
+  而不是只給原始數字。**invariant 說呼叫端必須能稽核，而能稽核的前提是看得懂。**
+  兩個配套約束：(a) advisory **永不翻轉 `blocking`**——樂觀 floor 正是讓這個 gate 不誤擋 fab
+  天天在做的 fine-pitch 板的設計；(b) 措辭**不得指定動作**（用「only viable if the inner layers
+  have the capacity」條件句，不寫 `keep_rings=1`），因為這個 gate 不評估內層容量，讀起來像
+  指令就會把一個未評估的假設變成建議。有測試分別鎖這兩點。
+- **`_load_board()` 這個 helper 本身**（`routing.py`，§H）——`pcbnew.LoadBoard()` 對不存在的路徑
+  **回 `None` 而不 raise**，下游任何 pcbnew 呼叫拿到 null `BOARD*` 就 **SIGSEGV（exit 139）**，
+  呼叫端只看到連線斷、連 Python 例外都沒有。正解是把「唯一開板方式」收斂成一個會 fail-loud 的
+  helper（`BOARD_NOT_FOUND` 帶 resolved 絕對路徑 + worker cwd，因為觸發條件通常是呼叫端傳了
+  相對於**自己** cwd 的路徑），並用一條 **AST 守衛測試**斷言模組內沒有任何 call site 繞過它。
+  這是 V4（量測基準分散）的解法用在**資源取得**上：SSOT + 機械化防復發，而不是靠每個新 call site
+  的作者記得檢查 `None`。
 
 ## §G：裸崩不是 silent degradation，但同樣讓呼叫端拿不到可行動資訊
 

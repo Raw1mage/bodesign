@@ -150,6 +150,100 @@ class AgainstTheRealBoard(unittest.TestCase):
         self.assertEqual(u1["capacity"], 72 * 2 * 2)
         self.assertFalse(u1["blocking"], "288 >= 167")
 
+    def test_optimistic_floor_is_flagged_as_an_advisory(self):
+        # round=12: `computed 0` was already in the payload, but a caller kept two rings
+        # on the surface and lost 50 minutes of routing before deriving what it meant.
+        u1 = self._u1(self.fn(self.BOARD, track_mm=0.116, clearance_mm=0.15))
+        self.assertEqual(u1["traces_per_gap_computed"], 0)
+        self.assertEqual(u1["traces_per_gap_used"], 1)
+        text = " ".join(u1["advisories"])
+        self.assertIn("surface_escape_infeasible", text)
+        self.assertIn("0.416mm", text, "must show the width the rules actually need")
+        self.assertIn("0.22mm", text, "must show the gap it is compared against")
+
+    def test_advisory_does_not_prescribe_a_ring_count(self):
+        # Fewer surface rings is only viable if the inner layers have the capacity,
+        # which this gate does not evaluate — it must not read as an instruction.
+        u1 = self._u1(self.fn(self.BOARD, track_mm=0.116, clearance_mm=0.15))
+        text = " ".join(u1["advisories"])
+        self.assertIn("only viable if", text)
+        self.assertNotIn("keep_rings=1", text)
+
+    def test_advisory_is_silent_when_the_rules_actually_fit(self):
+        u1 = self._u1(self.fn(self.BOARD, track_mm=0.03, clearance_mm=0.03))
+        self.assertGreaterEqual(u1["traces_per_gap_computed"], u1["traces_per_gap_used"])
+        self.assertNotIn("advisories", u1)
+
+    def test_advisory_never_flips_the_verdict(self):
+        # The optimistic floor is what keeps this gate from refusing boards fabs
+        # build every day; the advisory explains it, it does not enforce it.
+        res = self.fn(self.BOARD, track_mm=0.116, clearance_mm=0.15)
+        u1 = self._u1(res)
+        self.assertTrue(u1["blocking"], "4-layer shortfall stands on its own merits")
+        self.assertIn("re-placing will not fix this", u1["reason"])
+        self.assertTrue(res["advisories"], "top level aggregates per-part advisories")
+
+
+@unittest.skipUnless(_has_pcbnew(), "needs pcbnew (run in the ee worker)")
+class BoardLoading(unittest.TestCase):
+    """BR_20260729 §H: pcbnew.LoadBoard returns None for a missing path instead of
+    raising, and the next pcbnew call dereferences that null BOARD* — the worker dies
+    with SIGSEGV (exit 139), so the caller sees a dropped connection, not an error.
+    Measured: LoadBoard('ccm8_vip.kicad_pcb') -> None, ExportSpecctraDSN(None, dsn) -> 139.
+    """
+
+    BOARD = "/work/experiments/aiguard_c04/ccm_det_f.kicad_pcb"
+
+    def setUp(self):
+        self.load = _routing._load_board
+
+    def test_missing_path_raises_instead_of_returning_none(self):
+        with self.assertRaises(FileNotFoundError) as cm:
+            self.load("definitely_not_a_board.kicad_pcb")
+        self.assertIn("BOARD_NOT_FOUND", str(cm.exception))
+
+    def test_error_shows_where_a_relative_path_resolved_to(self):
+        # The trigger in the wild: a caller passes a path relative to THEIR cwd,
+        # which resolves against the worker's. Naming both ends the guesswork.
+        import os
+        with self.assertRaises(FileNotFoundError) as cm:
+            self.load("ccm8_vip.kicad_pcb")
+        msg = str(cm.exception)
+        self.assertIn(os.path.abspath("ccm8_vip.kicad_pcb"), msg)
+        self.assertIn(os.getcwd(), msg)
+
+    def test_unreadable_board_is_refused_rather_than_handed_on_as_null(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".kicad_pcb", delete=False) as fh:
+            fh.write("not a kicad board\n")
+            junk = fh.name
+        try:
+            with self.assertRaises((RuntimeError, Exception)) as cm:
+                self.load(junk)
+            self.assertNotIsInstance(cm.exception, FileNotFoundError)
+        finally:
+            import os
+            os.unlink(junk)
+
+    def test_a_real_board_still_loads(self):
+        import os
+        if not os.path.exists(self.BOARD):
+            self.skipTest("aiguard fixture board not present")
+        board = self.load(self.BOARD)
+        self.assertIsNotNone(board)
+        self.assertGreater(len(board.GetFootprints()), 0)
+
+    def test_no_call_site_bypasses_the_guard(self):
+        # A future call site added with the raw API reintroduces the segfault, so
+        # assert the module holds no direct uses outside the helper itself.
+        src = _MOD.read_text().splitlines()
+        helper = [i for i, ln in enumerate(src) if ln.startswith("def _load_board")][0]
+        end = next(i for i, ln in enumerate(src[helper + 1:], helper + 1)
+                   if ln and not ln[0].isspace())
+        outside = [f"{i + 1}: {ln.strip()}" for i, ln in enumerate(src)
+                   if "pcbnew.LoadBoard(" in ln and not (helper <= i < end)]
+        self.assertEqual(outside, [], "use _load_board() — raw LoadBoard segfaults on None")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
