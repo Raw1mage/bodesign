@@ -76,15 +76,52 @@ def _parse_netlist(path: str) -> tuple[dict, dict]:
     return comps, nets
 
 
+def footprint_extent(fp) -> tuple[Any, bool]:
+    """SINGLE SOURCE OF TRUTH for "how much board area does this footprint occupy".
+
+    Returns ``(bbox, courtyard_missing)`` where bbox is a pcbnew BOX2I in internal
+    units and the flag says whether we had to fall back off the courtyard.
+
+    BR_20260729 §E: this exists because the SAME physical quantity was measured by
+    two independently-written call sites — ``placement_preflight`` and
+    ``_extract_part_geoms`` — so fixing one (§C) left the other reporting a number
+    8.4x larger for the identical board (13322mm² needed vs 1592mm² real), which
+    made ``PREPLACE_BOARD_TOO_SMALL`` reject a floorplan that fits easily. That is
+    the mirror image of §B/§C/§D: not a silent false-green, but a loud FALSE-RED —
+    the gate worked perfectly and was fed a wrong measurement. Any future consumer
+    of footprint extent MUST call this rather than re-deriving it.
+
+    Order (identical to what §C established for placement_preflight):
+      1. real courtyard polygon, F_CrtYd then B_CrtYd (IPC-7351 "occupied area")
+      2. per-part fallback to the geometry bbox EXCLUDING text — GetBoundingBox()
+         with no args includes F.SilkS/F.Fab, whose frames dwarf 0402s and
+         overlap neighbours that are millimetres apart
+    An AttributeError from the pcbnew API is NOT caught: a missing API is a
+    deployment fact and must fail loudly, unlike a part that legitimately has no
+    courtyard layer.
+    """
+    for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+        poly = fp.GetCourtyard(layer)
+        if poly.OutlineCount() > 0:
+            cand = poly.BBox()
+            if cand.GetWidth() > 0 and cand.GetHeight() > 0:
+                return cand, False
+    return fp.GetBoundingBox(False, False), True
+
+
 def _extract_part_geoms(fps: dict) -> tuple[dict, list[str]]:
     """Build pure PartGeom records from loaded pcbnew footprints (deterministic strategy).
-    Returns (parts, missing) — refs whose bbox/pads are unusable go to `missing`."""
+    Returns (parts, missing) — refs whose bbox/pads are unusable go to `missing`.
+
+    BR_20260729 §E: extent comes from footprint_extent() — the shared courtyard-first
+    helper — so the area this feeds into preplace's board-capacity check matches what
+    placement_preflight reports. Previously this used the text-inclusive bbox."""
     from .preplace import PartGeom
     parts: dict = {}
     missing: list[str] = []
     for ref, fp in fps.items():
         try:
-            box = fp.GetBoundingBox()
+            box, _ = footprint_extent(fp)
             w = pcbnew.ToMM(box.GetWidth())
             h = pcbnew.ToMM(box.GetHeight())
             origin = fp.GetPosition()
@@ -367,20 +404,11 @@ def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
     courtyard_missing: list[str] = []
     for fp in b.GetFootprints():
         ref = fp.GetReference()
-        bb = None
-        for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
-            poly = fp.GetCourtyard(layer)
-            if poly.OutlineCount() > 0:
-                cand = poly.BBox()
-                if cand.GetWidth() > 0 and cand.GetHeight() > 0:
-                    bb = cand
-                    break
-        if bb is None:
-            # No courtyard on either layer for THIS part (a legitimate per-part
-            # variation, unlike a missing API). Degrade to the geometry bbox with
-            # text EXCLUDED, and record the part so the caller sees the basis.
+        # BR_20260729 §E: extent comes from the SHARED helper so this gate and the
+        # deterministic preplace capacity check measure the same board the same way.
+        bb, degraded = footprint_extent(fp)
+        if degraded:
             courtyard_missing.append(ref)
-            bb = fp.GetBoundingBox(False, False)
         x1 = pcbnew.ToMM(bb.GetLeft()); y1 = pcbnew.ToMM(bb.GetTop())
         x2 = pcbnew.ToMM(bb.GetRight()); y2 = pcbnew.ToMM(bb.GetBottom())
         boxes[ref] = (x1, y1, x2, y2)
