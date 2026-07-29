@@ -592,6 +592,15 @@ def _h_placement_preflight(a: dict) -> Any:
                               courtyard_margin_mm=a.get("courtyard_margin_mm", 0.0))
 
 
+def _h_bga_escape_capacity(a: dict) -> Any:
+    from bodesign_eda_bridge.routing import bga_escape_capacity
+    return bga_escape_capacity(a["board_path"],
+                               track_mm=a.get("track_mm"),
+                               clearance_mm=a.get("clearance_mm"),
+                               traces_per_gap=a.get("traces_per_gap"),
+                               power_nets=a.get("power_nets"))
+
+
 def _h_autoroute_preflight(a: dict) -> Any:
     from bodesign_eda_bridge import autoroute_preflight
     return autoroute_preflight()
@@ -1055,6 +1064,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_placement_preflight", "handler": _h_placement_preflight,
      "description": "C04 pre-route placement gate (BR_20260708): read a placed .kicad_pcb and fail fast on a doomed floorplan BEFORE routing, from REAL footprint courtyards (no guessing). Two conditions: (1) courtyard_overlap — any two footprint courtyards that intersect (optionally grown by courtyard_margin_mm) are listed in `overlaps` with the measured mm² (route would inherit a wall of clearance DRC — the 65-violation symptom); (2) sheet_under_filled — total courtyard area / usable board area below min_utilization (default 0.40) means everything is crammed into a strip (the 20%% center-strip symptom). Returns passed=true ONLY when zero overlaps AND utilization meets the floor, plus utilization, overlap_pairs, parts/board areas, board_mm (read from Edge.Cuts unless overridden) and human-readable `reasons`. Never mutates the board and never routes: the caller checks passed and, on failure, re-places (strategy='deterministic') rather than routing into overlap. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "min_utilization": {"type": "number", "description": "floor for parts-courtyard-area / usable-board-area (default 0.40); below it = sheet_under_filled fail"}, "board_mm": {"type": "array", "items": {"type": "number"}, "description": "[width, height] mm override; omit to read board size from Edge.Cuts"}, "courtyard_margin_mm": {"type": "number", "description": "grow each courtyard by this margin before the overlap test (default 0)"}}, "required": ["board_path"]}},
+    {"name": "bodesign_bga_escape_capacity", "handler": _h_bga_escape_capacity,
+     "description": "C04 pre-route STACKUP gate: answer at PLACEMENT time whether the fine-pitch grid parts on a board can physically escape their signals, instead of discovering it after a 16-minute autoroute that lands 27/111 nets (BR_20260729 \u00a7H, aiguard C04). Model: every escaping trace squeezes between two outer balls, so the ceiling is perimeter_channels \u00d7 traces_per_gap \u00d7 signal_layers, where perimeter_channels = 2*(rows+cols)-4 and signal_layers EXCLUDES LT_POWER planes. That ceiling only BINDS when the part has nowhere else to go: with via-in-pad fanout AND at least one inner SIGNAL layer, balls drop to an inner layer instead. So blocking=true is asserted ONLY when need > ceiling AND there is no inner-signal escape route \u2014 aiguard's board is the instructive case (it HAS 128 fanout vias, but In1/In2 are both LT_POWER, so the vias land on power planes and 167 signal balls still face a 144 ceiling). Returns per-part {rows, cols, pitch_mm, ball_gap_mm, signal_balls, perimeter_channels, capacity, fanout_vias, has_escape_route, blocking} plus suggested_signal_layers and a reason saying re-placing will NOT fix it. Power/signal split is a heuristic on net names and is therefore ALWAYS reported (power_nets/signal_nets/classification); override it with power_nets=[...] when the rails are non-standard. Deliberately NOT folded into placement_preflight's passed: an overlap is fixed by re-placing, an escape shortfall is fixed by adding layers \u2014 one boolean would hide which action to take. Never mutates the board. consider: bodesign_placement_preflight, bodesign_via_in_pad.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "track_mm": {"type": "number", "description": "trace width mm; omit to read the board's Default netclass"}, "clearance_mm": {"type": "number", "description": "clearance mm; omit to read the board's Default netclass"}, "traces_per_gap": {"type": "integer", "description": "traces that fit between two adjacent balls; omit for the OPTIMISTIC 1 (the width/clearance computation is razor-sensitive at 0.5mm pitch and is reported as traces_per_gap_computed rather than used to fail a gate)"}, "power_nets": {"type": "array", "items": _STR, "description": "explicit rail net names, overriding the name heuristic (e.g. ['GND','+1V8','+3V3','VDDA']); every ball on a net NOT listed counts as a signal that must escape"}}, "required": ["board_path"]}},
     {"name": "bodesign_component_search", "handler": _h_component_search,
      "description": "Search the LCSC/EasyEDA vendor component library by MPN or keyword; returns real candidate parts [{mpn, lcsc_id, package, manufacturer, stock, rohs, price1}] for the 100%-fidelity source gate. No fabrication: an empty vendor result is reported found=0, never padded with guesses. Pair with bodesign_component_fetch to pull the chosen lcsc_id's authoritative symbol/footprint/3D.",
      "schema": {"type": "object", "properties": {"keyword": _STR, "limit": {"type": "integer"}}, "required": ["keyword"]}},
@@ -1302,6 +1314,7 @@ _EE_GROUP_TOOLS = {
     # (BR_20260729 §A). The gate and the gated action MUST evaluate in one env.
     "bodesign_autoroute_preflight",
     "bodesign_placement_preflight",
+    "bodesign_bga_escape_capacity",
     # Authentic component data (LCSC/EasyEDA vendor lib; the 100%-fidelity source gate)
     "bodesign_component_search",
     "bodesign_component_fetch",

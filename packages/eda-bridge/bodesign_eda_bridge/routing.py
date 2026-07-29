@@ -482,6 +482,188 @@ def placement_preflight(board_path: str, *, min_utilization: float = 0.40,
             "implausible_measurement": implausible, "reasons": reasons}
 
 
+# ------------------------------------------------------------------ BGA escape capacity (stackup)
+# A rail name is a HEURISTIC, and this one is calibrated against a real board
+# (aiguard U1): VDDA/VDDCORE are analog/core rails whose suffix must not break the
+# match, while VBUS_DET / *_SENSE / *_EN are SIGNALS that merely mention a rail.
+# Getting either wrong silently shifts the escape budget, so the classification is
+# always REPORTED (power_nets / signal_nets) and can be overridden per call.
+_POWER_STEMS = r"GND|VSS|VDD|VCC|VDDA|VBAT|VSYS|VBUS|VREF|AVDD|DVDD|AGND|DGND|PGND"
+_SIGNAL_SUFFIX_RE = re.compile(r"_(DET|SENSE|EN|FLT|FAULT|PG|OK|GOOD|STAT|MON|CTRL|SW)\d*$", re.I)
+_POWER_NET_RE = re.compile(rf"^[+-]?({_POWER_STEMS})[A-Z0-9]*$|^[+-]?\d+V\d*$", re.I)
+
+
+def _is_power_net(name: str) -> bool:
+    """Best-effort rail classification. A trailing signal suffix wins over the stem:
+    VBUS_DET is a detect line, not the VBUS rail."""
+    if not name:
+        return False
+    if _SIGNAL_SUFFIX_RE.search(name):
+        return False
+    return bool(_POWER_NET_RE.match(name))
+
+
+def _copper_layers(b) -> list[tuple[int, str, bool]]:
+    """(layer_id, name, is_power) for every copper layer actually on the board."""
+    ids = [pcbnew.F_Cu] + [getattr(pcbnew, f"In{i}_Cu") for i in range(1, 31)] + [pcbnew.B_Cu]
+    out = []
+    n = b.GetCopperLayerCount()
+    seen = 0
+    for lid in ids:
+        if seen >= n:
+            break
+        if not b.IsLayerEnabled(lid):
+            continue
+        out.append((lid, b.GetLayerName(lid), b.GetLayerType(lid) == pcbnew.LT_POWER))
+        seen += 1
+    return out
+
+
+def bga_escape_capacity(board_path: str, *, track_mm: float | None = None,
+                        clearance_mm: float | None = None,
+                        traces_per_gap: int | None = None,
+                        power_nets: list[str] | None = None) -> dict:
+    """Can the fine-pitch grid parts on this board physically escape their signals?
+
+    Answers, at PLACEMENT time, the question that otherwise costs a 16-minute
+    autoroute to discover: a 19x19 0.5mm-pitch BGA with 167 signal balls needs more
+    escape channels than a 4-layer stack with two power planes can offer, so routing
+    it is doomed before it starts (BR_20260729, aiguard C04: 27/111 nets routed).
+
+    MODEL AND ITS LIMITS (stated because the verdict depends on which bound binds):
+
+    * ball-gap bound - every escaping trace must pass between two outer balls, so
+      the hard ceiling is `perimeter_channels x traces_per_gap x signal_layers`.
+      `perimeter_channels` is the outermost ring's ball count, 2*(rows+cols)-4.
+    * that bound only BINDS when the part has nowhere else to go. With via-in-pad
+      fanout AND at least one INNER signal layer, balls drop straight to an inner
+      layer instead of squeezing through the perimeter, and the ball-gap bound stops
+      being the limit. aiguard's board is the instructive case: it HAS 128 fanout
+      vias, but In1/In2 are both LT_POWER, so the vias land on power planes and the
+      signals still have to escape through the perimeter.
+
+    So `blocking` is asserted only when the need exceeds the ball-gap ceiling AND
+    there is no inner signal layer to escape onto - i.e. only when no reasonable
+    reading of the geometry allows it. `traces_per_gap` defaults to the OPTIMISTIC
+    1 rather than the width/clearance computation, because that computation is
+    razor-sensitive at 0.5mm pitch (0.22mm gap: 4mil/4mil already does not fit on
+    paper, yet is fabricated routinely) and a gate must not fail-loud on a value
+    that swings with a fab-capability assumption. The computed value is REPORTED as
+    `traces_per_gap_computed` so the caller can see what the nominal rules give.
+
+    This is deliberately NOT folded into placement_preflight's `passed`: an overlap
+    is fixed by re-placing, an escape shortfall is fixed by adding layers. Merging
+    them into one boolean would leave the caller unable to tell which action to take.
+    """
+    _need_pcbnew()
+    b = pcbnew.LoadBoard(board_path)
+    layers = _copper_layers(b)
+    signal_layers = [nm for _, nm, is_pwr in layers if not is_pwr]
+    inner_signal_layers = [nm for _, nm, is_pwr in layers
+                           if not is_pwr and nm not in ("F.Cu", "B.Cu")]
+
+    if track_mm is None or clearance_mm is None:
+        try:
+            default_nc = b.GetAllNetClasses()["Default"]
+            if track_mm is None:
+                track_mm = pcbnew.ToMM(default_nc.GetTrackWidth())
+            if clearance_mm is None:
+                clearance_mm = pcbnew.ToMM(default_nc.GetClearance())
+        except (KeyError, AttributeError) as exc:
+            raise ValueError(
+                f"ESCAPE_CAPACITY_NO_NETCLASS: cannot read the Default netclass from "
+                f"{board_path} ({exc}) and no explicit track_mm/clearance_mm was given — "
+                f"refusing to assume a fab capability") from exc
+
+    vias = [t for t in b.GetTracks() if isinstance(t, pcbnew.PCB_VIA)]
+    parts: list[dict] = []
+    for fp in b.GetFootprints():
+        pads = list(fp.Pads())
+        grid = []
+        for p in pads:
+            m = re.match(r"^([A-Z]+)(\d+)$", p.GetNumber())
+            if m:
+                grid.append((m.group(1), int(m.group(2))))
+        # Only grid-named packages have a ball-gap escape problem; a 2-pad passive
+        # or a castellated module (numeric pads) is not what this models.
+        if len(grid) < 16 or len(grid) != len(pads):
+            continue
+        rows = sorted({g[0] for g in grid}); cols = sorted({g[1] for g in grid})
+        if len(rows) < 4 or len(cols) < 4:
+            continue
+        xs = sorted({round(pcbnew.ToMM(p.GetPosition().x), 4) for p in pads})
+        steps = [round(xs[i + 1] - xs[i], 4) for i in range(len(xs) - 1)]
+        pitch = min(steps) if steps else 0.0
+        pad_dia = pcbnew.ToMM(pads[0].GetSize().x)
+        gap = round(pitch - pad_dia, 4)
+
+        override = set(power_nets or [])
+        classify = (lambda n: n in override) if override else _is_power_net
+        rails = sorted({p.GetNetname() for p in pads
+                        if p.GetNetname() and classify(p.GetNetname())})
+        sig_nets = sorted({p.GetNetname() for p in pads
+                          if p.GetNetname() and not classify(p.GetNetname())})
+        signal_balls = sum(1 for p in pads
+                          if p.GetNetname() and not classify(p.GetNetname()))
+
+        # nominal traces that fit in one ball gap: n*w + (n+1)*c <= gap
+        denom = float(track_mm) + float(clearance_mm)
+        computed = int((gap - float(clearance_mm)) // denom) if denom > 0 else 0
+        per_gap = int(traces_per_gap) if traces_per_gap is not None else max(1, computed)
+
+        perimeter_channels = 2 * (len(rows) + len(cols)) - 4
+        capacity = perimeter_channels * per_gap * len(signal_layers)
+
+        # BR_20260729 §E: the extent MUST come from the shared helper. Using
+        # fp.GetBoundingBox() here counted neighbours' vias through the silkscreen
+        # frame (U2/U3, 24 pads each, both reported 29 "fanout" vias) — the exact
+        # V4 defect this file already fixed once.
+        bb, _ = footprint_extent(fp)
+        fanout_vias = sum(1 for v in vias if bb.Contains(v.GetPosition()))
+        has_escape_route = fanout_vias > 0 and bool(inner_signal_layers)
+        blocking = signal_balls > capacity and not has_escape_route
+
+        entry = {
+            "ref": fp.GetReference(), "rows": len(rows), "cols": len(cols),
+            "pads": len(pads), "pitch_mm": round(pitch, 4), "pad_dia_mm": round(pad_dia, 4),
+            "ball_gap_mm": gap, "signal_balls": signal_balls,
+            "power_nets": rails, "signal_nets": sig_nets,
+            "classification": "caller_supplied" if override else "heuristic",
+            "perimeter_channels": perimeter_channels,
+            "traces_per_gap_used": per_gap, "traces_per_gap_computed": computed,
+            "signal_layers": signal_layers, "inner_signal_layers": inner_signal_layers,
+            "fanout_vias": fanout_vias, "has_escape_route": has_escape_route,
+            "capacity": capacity, "blocking": blocking,
+        }
+        if blocking:
+            # How many signal layers WOULD suffice, so the caller gets an action and
+            # not just a refusal.
+            per_layer = perimeter_channels * per_gap
+            need_layers = -(-signal_balls // per_layer) if per_layer else 0
+            entry["reason"] = (
+                f"{fp.GetReference()}: {signal_balls} signal balls need to escape but the "
+                f"{len(rows)}x{len(cols)} perimeter offers {perimeter_channels} channels x "
+                f"{per_gap} trace/channel x {len(signal_layers)} signal layer(s) = {capacity}. "
+                f"No inner signal layer to fan out onto ("
+                f"{'no via-in-pad fanout' if not fanout_vias else 'fanout vias land on power planes'}"
+                f"). Needs >= {need_layers} signal layers, i.e. a deeper stackup — "
+                f"re-placing will not fix this")
+            entry["suggested_signal_layers"] = need_layers
+        parts.append(entry)
+
+    blocking_parts = [p for p in parts if p["blocking"]]
+    return {
+        "ok": not blocking_parts, "board": board_path,
+        "grid_parts": len(parts), "parts": parts,
+        "blocking_parts": [p["ref"] for p in blocking_parts],
+        "reasons": [p["reason"] for p in blocking_parts],
+        "copper_layers": [nm for _, nm, _ in layers],
+        "signal_layers": signal_layers, "power_layers": [nm for _, nm, pw in layers if pw],
+        "track_mm": round(float(track_mm), 4), "clearance_mm": round(float(clearance_mm), 4),
+        "basis": "ball_gap_perimeter",
+    }
+
+
 # --------------------------------------------------------------------------- via-in-pad BGA fanout
 def via_in_pad(in_path: str, out_path: str, refs: list[str], *, drill_mm: float = 0.2,
                pad_mm: float = 0.3, keep_rings: int = 2) -> dict:
