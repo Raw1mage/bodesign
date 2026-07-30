@@ -705,3 +705,132 @@ premise survives every test built on top of it.
 3. **Startup-only parity** (§9.5 limit) — a post-boot mutation of a live-bound
    tree is served unchecked. Closing it needs a build-time content pin.
 4. **BR_20260730d residual**, unchanged (§7.6.2).
+
+---
+
+## 10. Round 5 — the consumer axis, and the defect my own fix introduced
+
+Verifier: brief aimed at the blind spot round 4 declared honestly — *"I verified
+content EQUALITY, never content CORRECTNESS. Nobody in 4 rounds has asserted
+that the shipped skill actually WORKS when installed."* Verdict **PARTIAL**.
+
+### 10.1 Z1 PASS — the shipped skill does work
+
+Five rounds in, this is the first time anyone extracted the archive and ran it.
+Downloaded `bodesign.zip` from inside the container, extracted into a real skill
+layout, and interrogated it as a consumer:
+
+| check | result |
+| --- | --- |
+| skill root | single `bodesign/SKILL.md`, 169 files |
+| frontmatter | valid YAML, `name: bodesign` matches the directory |
+| `gate.py --help` / `--list` | exit 0, runs from the extracted tree |
+| verb table | **59 verbs, byte-identical** to the in-image `gate.py --list` |
+| `doctrine.md` | 254 lines of real content, not a stub |
+
+The axis nobody had tested turned out to be sound. Worth stating plainly,
+because four rounds of FAIL make it tempting to assume everything is broken.
+
+### 10.2 Z2 FAIL — round 4's fix broke the thing it claimed to preserve
+
+**This defect is mine, and it was introduced by the previous round's fix.**
+
+Making `kicad`/`kidoc` current (§9.1) also made them **non-installable**:
+
+```
+old kicad.tar.gz  ->  kicad/SKILL.md      (frozen, installable)
+new kicad.tar.gz  ->  kicad/ENGINE.md     (current, NOT installable)
+MANIFEST.md:73    ->  tar -xzf kicad.tar.gz -C ~/.claude/skills/
+```
+
+The live `engines/<name>` trees carry `ENGINE.md` — they lost their standalone
+entry point when they were folded into the unified skill. So the projection is
+faithful *to the source* and simultaneously breaks *the install contract the
+docs still advertise*. I traded a stale-but-installable artifact for a
+fresh-but-uninstallable one, and wrote down only the half that flattered the fix.
+
+**Synthesizing a `SKILL.md` during projection was considered and rejected.** It
+would manufacture a declaration that no source makes — the exact failure this BR
+family exists to stop. The archives stay reachable (a published URL should not
+404 on an unrelated fix), but the documentation now says what they are: engine
+trees, not skills.
+
+### 10.3 A third stale copy, found while fixing the second
+
+Not in the verifier's report — found while checking whether the fix was
+complete. The composite `bodesign-eda-skills-bundle.tar.gz` embeds **a third
+copy** of kicad/kidoc, still frozen at 2026-06-07:
+
+| embedded | live-only | byte-differing |
+| --- | --- | --- |
+| `kicad/` (50 files) | 12 | 9 |
+| `kidoc/` (71 files) | 1 | 1 |
+
+The original defect lived in **three** places. Round 4 found and fixed two of
+them and I declared that half done. The composite has no in-repo source, so it
+cannot be projected like the other two — it is now **disclosed in MANIFEST with
+its exact drift numbers**, and a test asserts the shadow may not GROW past them.
+Disclosure without a guard is just a comment; the ceiling is what makes it a
+claim.
+
+### 10.4 Claims bound to bytes
+
+The Z2 fix is documentation, which is precisely the kind of change that rots
+silently. So each claim is now a test:
+
+- engine trees carry `ENGINE.md` and **not** `SKILL.md` — fails in *either*
+  direction, so a future change that adds one also turns the docs red
+- declared skills **do** carry `SKILL.md` — accepting control; without it,
+  stripping `SKILL.md` from everything would satisfy the assertion above
+- the composite's stale shadow may not grow past the disclosed numbers —
+  mutation-tested by tightening the ceiling to zero → 2 failures
+
+The Contents table also gained an "installable skill?" column. My first pass
+filled **3 rows and left 6 with the wrong column count** — the same half-a-fix
+this BR has now flagged four times, committed by me, inside the commit fixing a
+half-a-fix. Caught by checking, not by care.
+
+### 10.5 Verification
+
+- `tests/test_skill_shipping` **41** (+3); no production code changed this round
+- **Zero regression** — 37 failing test names, identical set to §9.7
+- Deployed (`e8e2e51`, three images rebuilt, **no `/app` bind mount**):
+
+| check | result |
+| --- | --- |
+| served `MANIFEST.md` | 7638B; "no longer standalone-installable" present, `-C ~/.claude/skills/` for kicad **gone** |
+| `kicad` / `kidoc` `.tar.gz` | 60 / 71 members, `ENGINE.md` yes, `SKILL.md` **no**, gzip MTIME 0 |
+| accepting controls | `bodesign.zip` / `bodesign-kb.zip` / `.tar.gz` / `jlcpcb.tar.gz` all 200 |
+| 11 unservable shapes | all 404 |
+| containers | 3 healthy, `Ports=[]` |
+
+### 10.6 The pattern, five rounds in
+
+| Round | Found | Where it hid |
+| --- | --- | --- |
+| 1 | one condition, three statuses | untested `server.py` closure |
+| 2 | over-long name → 500 | same closure; no *long* fixture |
+| 3 | generated page advertising a retired endpoint | an artifact grep cannot see |
+| 4 | the original defect alive in the vendored half | the half I ruled out of scope |
+| 5 | **the previous round's fix broke the install contract** | the half of the consequence that flattered the fix |
+
+Round 5's shape is new again. Rounds 1–4 found pre-existing defects. Round 5
+found a defect **the immediately preceding fix created** — and the mechanism was
+not carelessness: the fix had two consequences, one good and one bad, and I
+recorded the good one. A fix is a change, and a change has a blast radius that
+does not stop at the thing it was aimed at.
+
+### 10.7 Still open
+
+1. **A sixth verification.** Five rounds, five non-PASS verdicts. The prior that
+   any given round is the last one should stay low — and round 5 adds a reason:
+   a round can *introduce* the defect the next one finds.
+2. **The verifier's declared blind spot**, carried forward: Z1 proved the archive
+   *parses, imports and lists* — it never ran a real verb against a real project
+   folder, and never fed the frontmatter to an actual skill loader. A verb that
+   imports cleanly and crashes on invocation would pass everything it did.
+3. **The composite bundle's stale kicad/kidoc shadow** (§10.3) — bounded and
+   disclosed, not fixed. It has no in-repo source; fixing it means regenerating
+   it from the live tree or retiring it.
+4. **Startup-only parity** (§9.5 limit) — unchanged.
+5. **BR_20260730d residual**, unchanged (§7.6.2).
