@@ -34,6 +34,8 @@ never a silent fallback).
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
 import io
 import json
 import os
@@ -60,6 +62,13 @@ _EXCLUDED_DIRS = {"__pycache__", "analysis", "node_modules"}
 # this, "did the shipped skill change?" is unanswerable by hash.
 _FIXED_DATE_TIME = (1980, 1, 1, 0, 0, 0)
 _FIXED_MTIME = 315532800  # 1980-01-01T00:00:00Z, tar's epoch-seconds form
+
+# Substance floor for the startup parity gate (BR_20260730 round 4, D5). Low on
+# purpose: the job is to fail on a truncated/decoy/emptied tree, NOT to assert
+# content correctness -- a threshold pretending to do the latter would be the
+# same overclaim the gate was caught making.
+_MIN_ENTRY_BYTES = 512
+_MIN_COMPANION_FILES = 5
 
 
 class SkillShippingError(Exception):
@@ -258,6 +267,7 @@ def resolve_skill_dir(name: str) -> Path:
 # static-asset fallback.
 SERVE_ZIP = "zip"
 SERVE_TARGZ = "targz"
+SERVE_ENGINE_TARGZ = "engine_targz"
 SERVE_STATIC = "static"
 
 
@@ -289,7 +299,49 @@ def classify_skill_request(name: str) -> tuple[str, str]:
         bare = name[: -len(".tar.gz")]
         if bare in {s["name"] for s in list_shippable_skills()}:
             return SERVE_TARGZ, bare
+        # R9.11 applied to the vendored half (round 4, D4): a bundle name with
+        # an in-repo source is projected from that source, so the frozen copy
+        # can never be what a client receives. Only a name with genuinely no
+        # source falls through to a static file.
+        if resolve_engine_bundle(bare) is not None:
+            return SERVE_ENGINE_TARGZ, bare
     return SERVE_STATIC, name
+
+
+def resolve_engine_bundle(bare: str) -> Path | None:
+    """The in-repo source for a vendored bundle name, or ``None``.
+
+    BR_20260730 round 4 (D4). The BR's original defect -- a frozen tarball
+    served beside a source tree that had moved on -- was fixed for the declared
+    skills and left untouched in the vendored half. Two of the 13 bundles
+    (`kicad`, `kidoc`) DO have a source tree here: they were folded into the
+    unified skill as ``<skill>/engines/<name>``. The frozen copies had drifted
+    12 files and 9 byte-differences behind, the same shape and the same 7-week
+    staleness the BR opened on, while ``MANIFEST.md`` claimed all 13 "have no
+    source tree in this repo" -- false for exactly these two.
+
+    Discovered by walking the declared tree, never hardcoded: a name is
+    projectable iff some declared skill holds ``engines/<name>`` with files.
+    """
+    if not _SAFE_NAME_RE.match(bare):
+        return None
+    root = skills_root()
+    for item in list_shippable_skills():
+        candidate = root / item["name"] / "engines" / bare
+        try:
+            if candidate.is_dir() and _walk_skill_files(candidate):
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def pack_engine_targz(bare: str) -> bytes:
+    """Project a vendored bundle name from its live in-repo engine tree."""
+    src = resolve_engine_bundle(bare)
+    if src is None:
+        raise SkillShippingError("SKILL_NOT_FOUND", f"no engine source for {bare}", 404)
+    return _pack_targz(src, bare)
 
 
 def pack_skill_zip(name: str) -> bytes:
@@ -365,11 +417,23 @@ def pack_skill_targz(name: str) -> bytes:
     trap BR_20260730 found — a stale tarball beside a fresh source tree).
     """
     skill_dir = resolve_skill_dir(name)
-    files = _walk_skill_files(skill_dir)
+    return _pack_targz(skill_dir, name)
+
+
+def _pack_targz(src_dir: Path, arc_prefix: str) -> bytes:
+    """Shared deterministic tar+gzip builder for every projected archive.
+
+    One builder, so a projected engine bundle cannot acquire a different
+    reproducibility posture from a projected skill -- the format must never be
+    able to encode a difference (the original BR_20260730 defect).
+    """
+    name = arc_prefix
+    files = _walk_skill_files(src_dir)
+    skill_dir = src_dir
     if not files:
         raise SkillShippingError("SKILL_EMPTY", f"skill {name} has no shippable files", 500)
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+    tar_buf = io.BytesIO()
+    with tarfile.open(fileobj=tar_buf, mode="w") as tf:
         for p in files:
             data = p.read_bytes()
             info = tarfile.TarInfo(f"{name}/{p.relative_to(skill_dir).as_posix()}")
@@ -379,7 +443,43 @@ def pack_skill_targz(name: str) -> bytes:
             info.uid = info.gid = 0
             info.uname = info.gname = ""
             tf.addfile(info, io.BytesIO(data))
-    return buf.getvalue()
+    # The gzip WRAPPER carries its own header MTIME, which `mode="w:gz"` fills
+    # from the wall clock — so two requests one second apart produced two
+    # different sha256 over an identical tar. That makes "did the shipped skill
+    # change?" unanswerable by hash for this format, which is the very question
+    # R9.11 exists to answer. Compress explicitly with mtime=0 so the fixed
+    # per-member timestamps above are not undone by the container.
+    gz_buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=gz_buf, mode="wb", mtime=0) as gz:
+        gz.write(tar_buf.getvalue())
+    return gz_buf.getvalue()
+
+
+def skill_source_digest() -> dict:
+    """A remotely observable fingerprint of the tree this server actually ships.
+
+    BR_20260730 round 4 (D3). The running image served five files a clean clone
+    of the same commit does not contain (untracked working-tree files that
+    ``COPY skills`` swept into the build context), so the archive a client
+    fetched could not be reproduced from the commit the server names. That is
+    the BR's own defect class one layer out: a claim (``version``) and a
+    reality (the bytes) that nothing forces to agree.
+
+    This does not prevent the divergence -- deciding what belongs in the build
+    context is the deployer's call, not this module's. It makes the divergence
+    VISIBLE: two deployments claiming the same version and serving different
+    trees now differ here, in one field, without downloading either archive.
+    """
+    out: dict = {}
+    for item in list_shippable_skills():
+        files = _walk_skill_files(skills_root() / item["name"])
+        h = hashlib.sha256()
+        for f in files:
+            h.update(f.relative_to(skills_root()).as_posix().encode("utf-8"))
+            h.update(b"\0")
+            h.update(hashlib.sha256(f.read_bytes()).digest())
+        out[item["name"]] = {"files": len(files), "sha256": h.hexdigest()}
+    return out
 
 
 def assert_skill_source_parity(companion: str) -> None:
@@ -396,6 +496,20 @@ def assert_skill_source_parity(companion: str) -> None:
     Raises so the process dies at startup rather than serving a half-contract:
     a server that boots green while shipping nothing is the failure mode the
     whole R9.12 clause exists to catch.
+
+    BR_20260730 round 4 (D5): this asserted PRESENCE only, so a tree holding a
+    single truncated ``SKILL.md`` -- or an outright decoy saying "NOT the real
+    source" -- passed and served a 135-byte "skill". Presence is not parity: a
+    companion the server names in its own identity is not shipped merely by
+    existing as a filename. The substance floor below is what a startup gate
+    can honestly assert without a signed manifest; see the LIMIT note.
+
+    LIMIT, stated rather than implied: this proves the declared tree is
+    structurally capable of being the thing the server claims to ship. It does
+    NOT prove the tree's CONTENT is correct, and it runs once, before bind --
+    so in dev/workers mode, where ``./skills`` is a live bind mount, a mutation
+    after boot is served unchecked. Closing that needs a content digest pinned
+    at build time; recorded as residual risk, not silently implied away.
     """
     declared = declared_skill_paths()
     root = skills_root()
@@ -417,4 +531,30 @@ def assert_skill_source_parity(companion: str) -> None:
             f"R9.11 parity violation: COMPANION_SKILL={companion!r} is absent from "
             f"the declared tree {root} (found: {names}). mcp.json, GET /skills and "
             f"the server's own companion identity must name the same skill."
+        )
+    # Substance floor (round 4, D5). A companion is not shipped by having a
+    # filename: the entry point must carry actual instructions, and the skill
+    # must be more than that one file. These numbers are deliberately low --
+    # they are a floor against a truncated/decoy/emptied tree, not a content
+    # assertion. A gate that cannot fail on an empty SKILL.md is decoration.
+    entry = root / companion / "SKILL.md"
+    try:
+        entry_bytes = entry.stat().st_size
+    except OSError as error:
+        raise RuntimeError(
+            f"R9.11 parity violation: {entry} is unreadable ({error}). The declared "
+            f"entry point of the companion this server names cannot be served."
+        ) from error
+    if entry_bytes < _MIN_ENTRY_BYTES:
+        raise RuntimeError(
+            f"R9.11 parity violation: {entry} is {entry_bytes} bytes, below the "
+            f"{_MIN_ENTRY_BYTES}-byte floor. A companion whose entry point holds no "
+            f"instructions is advertised but not shipped -- the half-shipped shape."
+        )
+    shipped = len(_walk_skill_files(root / companion))
+    if shipped < _MIN_COMPANION_FILES:
+        raise RuntimeError(
+            f"R9.11 parity violation: companion {companion!r} ships {shipped} file(s), "
+            f"below the {_MIN_COMPANION_FILES}-file floor. The declared tree has been "
+            f"truncated to a stub while the listing still advertises it."
         )

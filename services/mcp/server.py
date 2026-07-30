@@ -1257,6 +1257,20 @@ TOOLS: list[dict] = [
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
+
+def tool_detail_status(name: str) -> int:
+    """HTTP status for ``GET /tools/<name>``. Pure; module-scope so it is testable.
+
+    BR_20260730 round 4 (D6). Round 3 fixed the STATUS (200 for an unknown tool
+    became 404) but left the decision inside the ``run_http`` closure, where no
+    test can reach it -- the exact structural condition this BR named twice as
+    the root cause of the two preceding defects. Reverting the fix left every
+    test green, which is the definition of an unguarded fix. The decision now
+    lives where ``tests/test_mcp_server.py`` already imports (the server module
+    itself), so a regression is a red test rather than a silent 200.
+    """
+    return 200 if name in TOOLS_BY_NAME else 404
+
 # ── Landed tools (plan mcp_r13, task 6.1 / R3) ─────────────────────────
 # Bucket-2 verbs moved to the landing plane (skills/bodesign/scripts/gate.py):
 # they run on the HOST, writing directly into the caller's repo. A call to a
@@ -1921,11 +1935,18 @@ th{color:var(--muted);font-weight:600}.req{color:var(--accent2)}.opt{color:var(-
 
 
 def _base() -> str:
-    """Public URL base for in-page links (e.g. '/bodesign' behind the gateway).
+    """Public URL base for in-page links (e.g. '/bodesign' behind a gateway).
 
-    The gateway strips the prefix for UDS routes, so the server's *routes* stay
-    unprefixed, but browser-facing *links* must carry the prefix. Set via
-    BODESIGN_HTTP_BASE; empty for direct access.
+    A prefix-stripping gateway means the server's *routes* stay unprefixed while
+    browser-facing *links* must carry the prefix. Set BODESIGN_HTTP_BASE ONLY
+    when such a gateway is actually deployed in front of this socket.
+
+    BR_20260730 round 4 (D1). The compose file set this unconditionally, so the
+    landing page rendered 75 links that the same server answered 404 for over
+    the only live entry path -- a generated surface asserting an intermediary
+    nobody had verified exists. This is the same class as round 3's D1 (a
+    runtime-generated claim contradicting reality, invisible to grep), so the
+    declaration is now opt-in and its truth is the deployer's explicit act.
     """
     import os
     return os.environ.get("BODESIGN_HTTP_BASE", "").rstrip("/")
@@ -2749,8 +2770,21 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         await session_manager.handle_request(scope, receive, send)
 
     def _health_payload() -> dict:
-        return {"status": "ok", "service": SERVER_NAME, "version": SERVER_VERSION,
-                "tools": len(TOOLS), "served_groups": sorted(SERVED_GROUPS)}
+        # `skill_source` makes the shipped tree's identity REMOTELY OBSERVABLE.
+        # BR_20260730 round 4 (D3): the running image served 169 files while a
+        # clean clone of the same commit yields 164 -- five untracked working
+        # -tree files that `COPY skills` swept in. A consumer had no way to see
+        # that: the archive it fetched could not be reproduced from the commit
+        # the server claims to be. The fix is not to hide the difference (those
+        # files belong to work in progress, not to me) but to publish the digest
+        # so a mismatch is detectable rather than invisible.
+        payload = {"status": "ok", "service": SERVER_NAME, "version": SERVER_VERSION,
+                   "tools": len(TOOLS), "served_groups": sorted(SERVED_GROUPS)}
+        try:
+            payload["skill_source"] = skill_shipping.skill_source_digest()
+        except Exception as error:  # never let observability break liveness
+            payload["skill_source"] = {"error": f"{type(error).__name__}: {error}"}
+        return payload
 
     async def healthz(request: Request) -> Response:
         # /healthz kept for back-compat; /health is the MCP-Integration-Standard
@@ -2817,8 +2851,9 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         name = request.path_params["name"]
 
         async def _packed(bare: str, fmt: str) -> Response:
-            packer = (skill_shipping.pack_skill_zip if fmt == "zip"
-                      else skill_shipping.pack_skill_targz)
+            packer = {"zip": skill_shipping.pack_skill_zip,
+                      "targz": skill_shipping.pack_skill_targz,
+                      "engine": skill_shipping.pack_engine_targz}[fmt]
             media = "application/zip" if fmt == "zip" else "application/gzip"
             suffix = ".zip" if fmt == "zip" else ".tar.gz"
             blob = await asyncio.to_thread(packer, bare)
@@ -2841,6 +2876,13 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                 return await _packed(bare, "zip")
             if action == skill_shipping.SERVE_TARGZ:
                 return await _packed(bare, "targz")
+            if action == skill_shipping.SERVE_ENGINE_TARGZ:
+                # BR_20260730 round 4 (D4): a vendored bundle name that DOES
+                # have an in-repo source is projected from it, so the frozen
+                # 2026-06-07 copy beside it can never be what a client gets --
+                # the same "let the second artifact not exist" fix the declared
+                # skills already received, applied to the half that was skipped.
+                return await _packed(bare, "engine")
         except skill_shipping.SkillShippingError as exc:
             # Typed + honest: a 404 says "no such skill", never a 200 holding an
             # empty archive (R9.6.2 — the two must stay distinguishable).
@@ -2890,7 +2932,7 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         # and R9.6.2's principle is about the status being honest, not about
         # withholding help. Only the status line changes.
         name = request.path_params["name"]
-        status = 200 if name in TOOLS_BY_NAME else 404
+        status = tool_detail_status(name)
         return Response(_tool_detail_html(name, _lang_of(request)),
                         media_type="text/html; charset=utf-8", status_code=status)
 

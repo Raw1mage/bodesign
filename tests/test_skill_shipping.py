@@ -308,18 +308,54 @@ class SkillRequestClassificationTests(unittest.TestCase):
         self.assertEqual((SS.SERVE_ZIP, "nosuch"),
                          SS.classify_skill_request("nosuch.zip"))
 
-    def test_declared_targz_is_projected_but_vendored_targz_falls_through(self):
-        # This distinction is load-bearing, not cosmetic. A DECLARED name must
-        # be projected from the declared tree so the format cannot encode a
-        # content difference -- that drift was the original BR_20260730 defect
-        # (a 7-week-stale frozen tarball beside a live source tree). A vendored
-        # bundle has no in-repo source, so it must reach the static branch.
+    def test_a_name_with_a_source_is_projected_never_served_frozen(self):
+        # This distinction is load-bearing, not cosmetic, and round 4 (D4)
+        # showed it was drawn in the wrong place. A name with an in-repo source
+        # MUST be projected from it, so the format cannot encode a content
+        # difference -- that drift was the original BR_20260730 defect. The
+        # first cut applied it only to DECLARED skills, leaving `kicad`/`kidoc`
+        # (folded in as `engines/<name>`) served from 2026-06-07 frozen copies
+        # that had drifted 12 files and 9 byte-differences behind. Only a name
+        # with genuinely NO source may reach the static branch.
         declared = {s["name"] for s in SS.list_shippable_skills()}
         self.assertIn("bodesign", declared, "fixture assumption")
         self.assertEqual((SS.SERVE_TARGZ, "bodesign"),
                          SS.classify_skill_request("bodesign.tar.gz"))
-        self.assertEqual((SS.SERVE_STATIC, "kicad.tar.gz"),
+        self.assertEqual((SS.SERVE_ENGINE_TARGZ, "kicad"),
                          SS.classify_skill_request("kicad.tar.gz"))
+        self.assertEqual((SS.SERVE_ENGINE_TARGZ, "kidoc"),
+                         SS.classify_skill_request("kidoc.tar.gz"))
+        # Accepting control for the OTHER side of the gate: a bundle with no
+        # in-repo source must still fall through, or this "fix" would 404 the
+        # 11 archives that legitimately have nowhere else to come from.
+        self.assertIsNone(SS.resolve_engine_bundle("jlcpcb"))
+        self.assertEqual((SS.SERVE_STATIC, "jlcpcb.tar.gz"),
+                         SS.classify_skill_request("jlcpcb.tar.gz"))
+
+    def test_projected_engine_bundle_carries_the_live_tree(self):
+        # The regression anchor for D4: assert the SHIPPED bytes hold files the
+        # frozen copy lacked. `ENGINE.md` is live-only in both engines, so its
+        # presence proves the archive came from the tree, not the 7-week-old
+        # snapshot -- exactly the assertion that would have caught the original
+        # BR had it existed for this half.
+        for bare in ("kicad", "kidoc"):
+            with self.subTest(bundle=bare):
+                blob = SS.pack_engine_targz(bare)
+                with tarfile.open(fileobj=io.BytesIO(blob)) as tf:
+                    names = {m.name for m in tf.getmembers() if m.isfile()}
+                self.assertIn(f"{bare}/ENGINE.md", names,
+                              "shipped bundle lacks a live-only file; it is the frozen copy")
+                self.assertEqual(0, int.from_bytes(blob[4:8], "little"))
+
+    def test_engine_projection_refuses_a_name_with_no_source(self):
+        # Negative control: without it, a `resolve_engine_bundle` that returned
+        # some directory for everything would pass the positive tests above.
+        with self.assertRaises(SS.SkillShippingError) as ctx:
+            SS.pack_engine_targz("jlcpcb")
+        self.assertEqual(404, ctx.exception.status)
+        for hostile in ("../mcp.json", "", "a" * 4096, "kicad/../../etc"):
+            with self.subTest(name=hostile[:20]):
+                self.assertIsNone(SS.resolve_engine_bundle(hostile))
 
     def test_classification_never_raises_for_a_hostile_name(self):
         # A raise here would leave as a 500, which is the round-2 defect one
@@ -331,6 +367,50 @@ class SkillRequestClassificationTests(unittest.TestCase):
             with self.subTest(name=hostile[:24]):
                 action, _ = SS.classify_skill_request(hostile)
                 self.assertIn(action, (SS.SERVE_ZIP, SS.SERVE_TARGZ, SS.SERVE_STATIC))
+
+
+class ArchiveReproducibilityTests(unittest.TestCase):
+    """R9.11 — "did the shipped skill change?" MUST be answerable by hash.
+
+    BR_20260730 round 4 (D2). Every member already carried a fixed timestamp,
+    but ``tarfile.open(mode="w:gz")`` writes the WALL CLOCK into the gzip
+    wrapper's header, so two requests one second apart produced two different
+    sha256 over a byte-identical tar. A consumer diffing hashes to detect drift
+    -- the precise question this BR exists to make answerable -- would see a
+    change that did not happen, and would learn to ignore the signal.
+    """
+
+    def test_targz_bytes_are_identical_across_packs(self):
+        first = SS.pack_skill_targz("bodesign")
+        second = SS.pack_skill_targz("bodesign")
+        self.assertEqual(first, second,
+                         "two packs of an unchanged tree produced different bytes; "
+                         "hash-based drift detection is unusable for .tar.gz")
+
+    def test_targz_gzip_header_carries_no_wall_clock(self):
+        # The decisive byte-level assertion: MTIME is bytes 4..8 of the gzip
+        # header. A non-zero value here is the wall clock leaking in, which is
+        # invisible to a whole-file comparison taken inside the same second --
+        # the reason this defect survived a live probe.
+        blob = SS.pack_skill_targz("bodesign")
+        mtime = int.from_bytes(blob[4:8], "little")
+        self.assertEqual(0, mtime,
+                         f"gzip header MTIME={mtime} is a wall clock, not a fixed epoch")
+
+    def test_zip_bytes_are_identical_across_packs(self):
+        # Accepting control for the format that was already correct: without
+        # it, a change making BOTH formats constant-but-empty would pass above.
+        self.assertEqual(SS.pack_skill_zip("bodesign"), SS.pack_skill_zip("bodesign"))
+        self.assertGreater(len(SS.pack_skill_zip("bodesign")), 100_000)
+
+    def test_both_formats_project_the_same_member_set(self):
+        # The original BR defect restated as an invariant: the format choice
+        # must not be able to encode a content difference.
+        with zipfile.ZipFile(io.BytesIO(SS.pack_skill_zip("bodesign"))) as zf:
+            zip_names = {n for n in zf.namelist() if not n.endswith("/")}
+        with tarfile.open(fileobj=io.BytesIO(SS.pack_skill_targz("bodesign"))) as tf:
+            tar_names = {m.name for m in tf.getmembers() if m.isfile()}
+        self.assertEqual(zip_names, tar_names)
 
 
 class SkillSourceParityTests(unittest.TestCase):
@@ -346,6 +426,86 @@ class SkillSourceParityTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             SS.assert_skill_source_parity("not-a-shipped-skill")
         self.assertIn("parity violation", str(ctx.exception))
+
+    def test_source_digest_changes_when_the_tree_changes(self):
+        # BR_20260730 round 4 (D3). The digest exists to make an image/commit
+        # divergence remotely detectable, so its load-bearing property is that
+        # it MOVES: a digest that is stable across a real content change would
+        # be worse than none, since it would certify sameness that is false.
+        import importlib.util
+        import shutil
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp)
+            skill = fake / "skills" / "demo"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# demo\n" + "body\n" * 200)
+            for i in range(5):
+                (skill / f"f{i}.md").write_text(f"file {i}\n")
+            (fake / "mcp.json").write_text(json.dumps({"skillPaths": ["skills"]}))
+            (fake / "services" / "mcp").mkdir(parents=True)
+            shutil.copy(REPO_ROOT / "services" / "mcp" / "skill_shipping.py",
+                        fake / "services" / "mcp" / "skill_shipping.py")
+            spec = importlib.util.spec_from_file_location(
+                "ss_digest_probe", fake / "services" / "mcp" / "skill_shipping.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+
+            before = mod.skill_source_digest()
+            self.assertEqual(6, before["demo"]["files"])
+            # Stable for an unchanged tree, or a consumer cannot diff it.
+            self.assertEqual(before, mod.skill_source_digest())
+            # An ADDED file (the exact D3 shape: untracked files swept into the
+            # image) must move the digest.
+            (skill / "swept_in.py").write_text("# untracked working-tree file\n")
+            added = mod.skill_source_digest()
+            self.assertNotEqual(before["demo"]["sha256"], added["demo"]["sha256"])
+            self.assertEqual(7, added["demo"]["files"])
+            # A same-SIZE content edit must move it too, or the digest would be
+            # a file count wearing a hash's clothes.
+            (skill / "f0.md").write_text("file X\n")
+            edited = mod.skill_source_digest()
+            self.assertNotEqual(added["demo"]["sha256"], edited["demo"]["sha256"])
+            self.assertEqual(7, edited["demo"]["files"])
+
+    def test_gate_rejects_a_decoy_tree_that_is_only_a_filename(self):
+        # BR_20260730 round 4 (D5). The gate asserted PRESENCE only, so a tree
+        # holding one truncated SKILL.md -- or an outright decoy reading "NOT
+        # the real source" -- passed and served a 135-byte "skill". A gate that
+        # cannot fail on an empty entry point is decoration, which is precisely
+        # the accusation this BR has twice levelled at its own tests.
+        import importlib.util
+        import shutil
+        import tempfile
+
+        scenarios = {
+            "empty entry point": "",
+            "decoy stub": "# NOT the real source\n",
+        }
+        for label, entry_text in scenarios.items():
+            with self.subTest(scenario=label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    fake = Path(tmp)
+                    (fake / "skills" / "bodesign").mkdir(parents=True)
+                    (fake / "skills" / "bodesign" / "SKILL.md").write_text(entry_text)
+                    (fake / "mcp.json").write_text(json.dumps({"skillPaths": ["skills"]}))
+                    (fake / "services" / "mcp").mkdir(parents=True)
+                    shutil.copy(REPO_ROOT / "services" / "mcp" / "skill_shipping.py",
+                                fake / "services" / "mcp" / "skill_shipping.py")
+                    spec = importlib.util.spec_from_file_location(
+                        f"ss_decoy_{abs(hash(label))}",
+                        fake / "services" / "mcp" / "skill_shipping.py")
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    # Accepting control INSIDE the scenario: the decoy really is
+                    # discoverable as a skill, so what follows is the floor
+                    # firing, not the tree being invisible.
+                    self.assertEqual(["bodesign"],
+                                     [x["name"] for x in mod.list_shippable_skills()])
+                    with self.assertRaises(RuntimeError) as ctx:
+                        mod.assert_skill_source_parity("bodesign")
+                    self.assertIn("parity violation", str(ctx.exception))
 
     def test_manifest_declaration_matches_the_repo_layout(self):
         manifest = json.loads((REPO_ROOT / "mcp.json").read_text(encoding="utf-8"))

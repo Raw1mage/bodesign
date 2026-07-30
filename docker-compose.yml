@@ -57,8 +57,13 @@ services:
       BODESIGN_VAULT_DIR: "/run/bodesign/vault"
       # R16 domain KB location (DD-6): env-located, never guessed.
       BODESIGN_KB_DB: "/var/lib/bodesign/kb/ragbase.sqlite"
-      # Gateway prefix for in-page links (gateway strips it for the UDS route).
-      BODESIGN_HTTP_BASE: "/bodesign"
+      # Gateway prefix for in-page links. Set this ONLY on a host that actually
+      # runs a prefix-stripping gateway in front of the socket. BR_20260730
+      # round 4 (D1): it was set unconditionally, so the landing page rendered
+      # 75 links the same server answered 404 for over the only live entry
+      # path (UDS) -- a generated surface asserting an intermediary that was
+      # never verified to exist. Unset = links match the routes actually served.
+      # BODESIGN_HTTP_BASE: "/bodesign"
       # R14.5 (BR_20260706): explicit per-host WebDAV provision — "capability
       # compiled in" ≠ "mount provisioned on this host". bodesign ships only
       # the builtin Basic-auth provider (DD-6); declaring it here makes the

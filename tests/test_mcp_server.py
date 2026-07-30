@@ -43,6 +43,22 @@ class McpServerTests(unittest.TestCase):
     def setUp(self):
         self.server = importlib.import_module("services.mcp.server")
 
+    def test_tool_detail_status_is_404_for_an_unknown_tool(self):
+        # BR_20260730 round 4 (D6). Round 3 fixed this status but left the
+        # decision inside the run_http closure, unreachable by any test:
+        # reverting `else 404` to `else 200` left the whole suite green, which
+        # is an unguarded fix. This is the guard.
+        self.assertEqual(404, self.server.tool_detail_status("nosuchtool"))
+        self.assertEqual(404, self.server.tool_detail_status(""))
+        self.assertEqual(404, self.server.tool_detail_status("../mcp.json"))
+
+    def test_tool_detail_status_is_200_for_every_real_tool(self):
+        # Accepting control: a guard that answered 404 for everything would
+        # pass the negative test above while breaking the whole page.
+        for tool in self.server.TOOLS:
+            self.assertEqual(200, self.server.tool_detail_status(tool["name"]),
+                             f"{tool['name']} is registered but its page 404s")
+
     def test_registry_is_well_formed(self):
         names = [t["name"] for t in self.server.TOOLS]
         self.assertEqual(len(names), len(set(names)), "tool names must be unique")

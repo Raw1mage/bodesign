@@ -20,10 +20,20 @@ yourself. (Before 2026-07-30 this listing advertised filenames and served only
 `bodesign.tar.gz.zip` and got a 404 while the snapshot silently rotted 7 weeks out
 of date. Both halves are now one source, asserted at startup.)
 
-**2. Vendored EDA companion bundles — static files.** The 13 archives listed under
-`bundles` (`bodesign-eda-skills-bundle.tar.gz` and the per-skill tarballs) have no
-source tree in this repo, so they cannot be rebuilt on demand and are NOT
-advertised as R9 skills. Fetch them by filename: `GET /skills/<file>.tar.gz`.
+**2. Vendored EDA companion bundles.** The 13 archives listed under `bundles`
+(`bodesign-eda-skills-bundle.tar.gz` and the per-skill tarballs) are NOT advertised
+as R9 skills — their names are not declared in `mcp.json skillPaths`. Fetch them by
+filename: `GET /skills/<file>.tar.gz`. They split two ways:
+
+- **`kicad.tar.gz` / `kidoc.tar.gz` are PROJECTED from this repo**, from
+  `skills/bodesign/engines/{kicad,kidoc}`, packed on demand exactly like the
+  declared skills. (BR_20260730 round 4, D4: this file previously claimed all 13
+  "have no source tree in this repo" — false for these two, and the frozen copies
+  being served had drifted 12 files and 9 byte-differences behind the live tree,
+  the same shape and the same 7-week staleness this BR opened on. The frozen copies
+  can no longer be reached; there is no second artifact left to rot.)
+- **The other 11 are static files** with genuinely no in-repo source, so they cannot
+  be rebuilt on demand and carry no R9 source-parity claim.
 
 All are reviewed and cleaned for distribution (no secrets — all distributor API
 keys are read from environment variables; no `__pycache__`/personal paths/internal
@@ -39,7 +49,8 @@ ticket refs; no symlinks).
 > `/opt/bodesign-engines`) and sets `BODESIGN_KICAD_SKILL` / `BODESIGN_SPICE_SKILL`
 > / `BODESIGN_EMC_SKILL`, so C06 simulate/EMC/thermal run without a host skill
 > install — these tarballs are for host/standalone use. The standalone
-> `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use only.
+> `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use, and are
+> now projected from those same live `engines/` trees rather than frozen copies.
 
 ## Install
 
