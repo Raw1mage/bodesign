@@ -1497,9 +1497,11 @@ def _produced(doc_dir: Path, before: dict) -> list[str]:
 try:
     import preflight as _preflight
     import _skill_nudge
+    import skill_shipping
 except ImportError:  # pragma: no cover - direct-module import path (tests add sys.path)
     from services.mcp import preflight as _preflight  # type: ignore
     from services.mcp import _skill_nudge  # type: ignore
+    from services.mcp import skill_shipping  # type: ignore
 
 # R17.2 tools whose declared asset paths are preflighted before dispatch and whose
 # produced artifacts are content-asserted after. Maps tool name -> the arg keys
@@ -1943,20 +1945,39 @@ def _human_size(n: int) -> str:
 
 
 def _skill_downloads() -> list[tuple[str, str, str]]:
-    """(filename, label, human_size) for vendored skill tarballs; lifecycle first."""
+    """(filename, label, human_size) for the landing page's download links.
+
+    Two sources, deliberately distinguishable (BR_20260730):
+
+    * the DECLARED skills, built live from the tree ``mcp.json skillPaths`` names.
+      Their size is measured by packing them, because there is no file on disk to
+      stat — that absence is the point: nothing can go stale.
+    * the vendored EDA companion bundles, which have no in-repo source and so
+      remain static files (and are NOT advertised as R9 skills for that reason).
+
+    A declared skill SHADOWS any same-named leftover tarball in assets/, so the
+    page can never link a retired frozen copy of something served live.
+    """
+    out: list[tuple[str, str, str]] = []
+    live: set[str] = set()
+    try:
+        for item in skill_shipping.list_shippable_skills():
+            name = item["name"]
+            live.add(name)
+            label = "bodesign lifecycle" if name == COMPANION_SKILL else name
+            size = _human_size(len(skill_shipping.pack_skill_targz(name)))
+            out.append((f"{name}.tar.gz", label, size))
+    except skill_shipping.SkillShippingError:
+        # The landing page is cosmetic; the parity gate in run_http is what makes
+        # a broken declaration fatal. Degrading here would hide nothing.
+        pass
     d = _assets_dir() / "skills"
-    if not d.is_dir():
-        return []
-    files = sorted(d.glob("*.tar.gz"), key=lambda p: (p.name != "bodesign.tar.gz", not p.name.startswith("bodesign-eda"), p.name))
-    out = []
-    for p in files:
-        if p.name == "bodesign.tar.gz":
-            label = "bodesign lifecycle"
-        elif p.name.startswith("bodesign-eda"):
-            label = "EDA bundle"
-        else:
-            label = p.name[:-len(".tar.gz")]
-        out.append((p.name, label, _human_size(p.stat().st_size)))
+    if d.is_dir():
+        for p in sorted(d.glob("*.tar.gz"), key=lambda p: (not p.name.startswith("bodesign-eda"), p.name)):
+            if p.name[:-len(".tar.gz")] in live:
+                continue
+            label = "EDA bundle" if p.name.startswith("bodesign-eda") else p.name[:-len(".tar.gz")]
+            out.append((p.name, label, _human_size(p.stat().st_size)))
     return out
 
 
@@ -2712,6 +2733,15 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
     from starlette.responses import FileResponse, JSONResponse, Response
     from starlette.routing import Mount, Route
 
+    # R9.11.1 startup gate (BR_20260730). The two halves of the skill-shipping
+    # contract (mcp.json.skillPaths locally, GET /skills remotely) must describe
+    # the SAME tree. Assert it before binding: a server that boots green while
+    # serving a companion nobody declared — or declaring one nobody serves — is
+    # the MCPSTD_SKILL_HALF_SHIPPED shape, and it stayed invisible for 7 weeks
+    # precisely because nothing checked at startup. Raises → the process dies
+    # loudly rather than half-shipping (天條 1: fail fast, no silent fallback).
+    skill_shipping.assert_skill_source_parity(COMPANION_SKILL)
+
     server = build_server()
     session_manager = StreamableHTTPSessionManager(app=server, event_store=None, json_response=False, stateless=False)
 
@@ -2731,18 +2761,34 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         return JSONResponse(_health_payload())
 
     async def skills_index(request: Request) -> Response:
-        # R8.2 / R9.2 — list the companion skill bundles this service ships so a
-        # non-opencode host can discover + download them via /skills/<name>.
-        skills_dir = (_assets_dir() / "skills")
-        items: list[dict] = []
-        if skills_dir.is_dir():
-            for f in sorted(skills_dir.glob("*.tar.gz")):
-                items.append({"name": f.name,
-                              "skill": f.name[:-len(".tar.gz")],
-                              "bytes": f.stat().st_size,
-                              "url": f"/skills/{f.name}"})
+        # R8.2 / R9.2 — the remote half of the skill-shipping contract. `skills`
+        # carries BARE names (R9.9.1) drawn from the tree mcp.json.skillPaths
+        # declares, so a tolerant consumer (R9.8) that appends `.zip` lands on a
+        # route that exists. BR_20260730: this used to advertise the FILENAMES of
+        # pre-frozen tarballs, which made every conformant client dial
+        # `<file>.tar.gz.zip` -> 404 while this endpoint answered 200.
+        #
+        # `bundles` is deliberately a SEPARATE key: the 12 vendored EDA companion
+        # archives have no source tree in this repo, so they can never satisfy the
+        # R9.11 parity requirement. Listing them as R9 skills would advertise names
+        # whose provenance we cannot assert. Extra keys are explicitly welcome
+        # (R9.9.4) — a generic consumer reads `skills` and ignores the rest.
+        try:
+            items = skill_shipping.list_shippable_skills()
+        except skill_shipping.SkillShippingError as exc:
+            return JSONResponse({"error": exc.code, "message": exc.message},
+                                status_code=exc.status)
+        bundles: list[dict] = []
+        assets = _assets_dir() / "skills"
+        served = {s["name"] for s in items}
+        if assets.is_dir():
+            for f in sorted(assets.glob("*.tar.gz")):
+                if f.name[:-len(".tar.gz")] in served:
+                    continue  # served live from source; the frozen copy is retired
+                bundles.append({"file": f.name, "bytes": f.stat().st_size,
+                                "url": f"/skills/{f.name}"})
         return JSONResponse({"service": SERVER_NAME, "count": len(items), "skills": items,
-                             "manifest": "/skills/MANIFEST.md"})
+                             "bundles": bundles, "manifest": "/skills/MANIFEST.md"})
 
     async def invoke(request: Request) -> Response:
         # Internal worker entrypoint: the core forwards a tool call here. Runs the
@@ -2758,7 +2804,43 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                         headers={"Cache-Control": "no-store"})
 
     async def skill_download(request: Request) -> Response:
+        # R9.2 mandates `GET /skills/<name>.zip`. The suffix belongs to the
+        # ENDPOINT, not to the skill's name, so it is stripped here to recover the
+        # bare name and the archive is built on the fly from the declared tree
+        # (R9.11.3 — by construction the served bytes and the declared source are
+        # the same thing; there is no second artifact left to go stale).
+        #
+        # `.tar.gz` stays reachable for the landing-page links published since
+        # 2026-06-07, but for a DECLARED skill it is now projected from that same
+        # tree — the format can no longer encode a content difference. Only the
+        # vendored EDA bundles (no in-repo source) still stream a static file.
         name = request.path_params["name"]
+
+        async def _packed(bare: str, fmt: str) -> Response:
+            packer = (skill_shipping.pack_skill_zip if fmt == "zip"
+                      else skill_shipping.pack_skill_targz)
+            media = "application/zip" if fmt == "zip" else "application/gzip"
+            suffix = ".zip" if fmt == "zip" else ".tar.gz"
+            blob = await asyncio.to_thread(packer, bare)
+            return Response(blob, media_type=media, headers={
+                "Content-Disposition": f'attachment; filename="{bare}{suffix}"',
+                "Cache-Control": "no-store",
+            })
+
+        try:
+            if name.endswith(".zip"):
+                return await _packed(name[:-len(".zip")], "zip")
+            if name.endswith(".tar.gz"):
+                bare = name[:-len(".tar.gz")]
+                if bare in {s["name"] for s in skill_shipping.list_shippable_skills()}:
+                    return await _packed(bare, "targz")
+        except skill_shipping.SkillShippingError as exc:
+            # Typed + honest: a 404 says "no such skill", never a 200 holding an
+            # empty archive (R9.6.2 — the two must stay distinguishable).
+            return JSONResponse({"error": exc.code, "message": exc.message},
+                                status_code=exc.status)
+
+        # Static assets: MANIFEST.md and the vendored EDA companion bundles.
         root = (_assets_dir() / "skills").resolve()
         try:
             target = (root / name).resolve()

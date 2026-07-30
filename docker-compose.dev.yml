@@ -16,11 +16,15 @@ services:
     volumes:
       - "./packages:/app/packages:ro"
       - "./services:/app/services:ro"
-      # R15 self-describing guide (plans/mcp_r15-self-describing-guide): the image
-      # COPYs skills/bodesign/doctrine.md, but the raw skills/ tree is NOT bind-
-      # mounted in dev, so shadow-mount just the doctrine one-source too — else
-      # server.py _load_doctrine() FAILS LOUD at import (as designed) on restart.
-      - "./skills/bodesign/doctrine.md:/app/skills/bodesign/doctrine.md:ro"
+      # R9 skill-shipping (BR_20260730) + R15 self-describing guide. BOTH halves of
+      # the R9 contract read these: `mcp.json` holds the skillPaths declaration and
+      # `skills/` is the tree it declares, which GET /skills packs on the fly.
+      # run_http asserts their parity before binding and REFUSES TO START if either
+      # is absent — so in dev, where the mounts shadow the image, both must be
+      # mounted or every restart dies at the gate (correctly). This supersedes the
+      # old single-file doctrine.md mount, and still satisfies _load_doctrine().
+      - "./mcp.json:/app/mcp.json:ro"
+      - "./skills:/app/skills:ro"
       # Dev: a host work dir the container can read/write, so you can drive real
       # project folders through the MCP tools (pass paths under /work). Set
       # BODESIGN_WORK_DIR to your projects dir (default: ./.work in the repo).
@@ -36,11 +40,14 @@ services:
     volumes:
       - "./packages:/app/packages:ro"
       - "./services:/app/services:ro"
-      - "./skills/bodesign/doctrine.md:/app/skills/bodesign/doctrine.md:ro"
+      # Workers run run_http too, so the same R9 parity gate applies (see above).
+      - "./mcp.json:/app/mcp.json:ro"
+      - "./skills:/app/skills:ro"
       - "./experiments:/work/experiments"
   bodesign-me:
     volumes:
       - "./packages:/app/packages:ro"
       - "./services:/app/services:ro"
-      - "./skills/bodesign/doctrine.md:/app/skills/bodesign/doctrine.md:ro"
+      - "./mcp.json:/app/mcp.json:ro"
+      - "./skills:/app/skills:ro"
       - "./experiments:/work/experiments"

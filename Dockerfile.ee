@@ -46,21 +46,29 @@ RUN pip install --no-cache-dir uv \
 COPY packages /app/packages
 COPY services /app/services
 
-# R15 usage-doctrine one-source (matches monolith Dockerfile). server.py
-# _load_doctrine() FAILS LOUD at import if missing/empty (天條 11), so a
-# doctrine-less worker image is never silently produced. Path matches
-# _DOCTRINE_PATH = <app>/skills/bodesign/doctrine.md.
-COPY skills/bodesign/doctrine.md /app/skills/bodesign/doctrine.md
+# R9 skill-shipping BOTH halves from ONE source + R15 usage-doctrine one-source
+# (matches monolith Dockerfile — keep the four in sync). This worker also runs
+# run_http, whose startup parity gate (assert_skill_source_parity) reads mcp.json
+# and the tree it declares and REFUSES TO BIND if they disagree (BR_20260730).
+# This COPY also satisfies _DOCTRINE_PATH = <app>/skills/bodesign/doctrine.md,
+# which _load_doctrine() FAILS LOUD on if missing/empty (天條 11).
+COPY mcp.json /app/mcp.json
+COPY skills /app/skills
 
 # Bundle the analyzer engine SCRIPTS (kicad/spice/emc) the EE-group C06 verification
 # tools resolve via resolve_skill(). This worker already ships kicad-cli + ngspice;
 # these are the engine scripts that drive them. Without them, simulate / analyze_emc /
-# analyze_thermal return `skipped-no-skills`. Source = the cleaned tarballs (NOT the
-# raw skills/ tree). Build FAILS LOUD if any scripts/ dir is missing. Mirrors the
-# monolith Dockerfile — keep the two in sync.
+# analyze_thermal return `skipped-no-skills`.
+#
+# kicad comes from the in-repo tree (the same source /skills serves, and fresher
+# than the retired tarball: 78 files vs 50). spice + emc have NO in-repo source —
+# they are vendored EDA companions — so they still come from their tarballs; that
+# asymmetry is deliberate and is why those two are NOT advertised as R9 skills.
+# Build FAILS LOUD if any scripts/ dir is missing. Mirrors the monolith Dockerfile
+# — keep the two in sync.
 RUN set -eu; \
-    mkdir -p /opt/bodesign-engines; \
-    tar xzf /app/services/mcp/assets/skills/bodesign.tar.gz -C /opt/bodesign-engines bodesign/engines/kicad; \
+    mkdir -p /opt/bodesign-engines/bodesign/engines; \
+    cp -r /app/skills/bodesign/engines/kicad /opt/bodesign-engines/bodesign/engines/kicad; \
     tar xzf /app/services/mcp/assets/skills/spice.tar.gz    -C /opt/bodesign-engines spice; \
     tar xzf /app/services/mcp/assets/skills/emc.tar.gz      -C /opt/bodesign-engines emc; \
     test -d /opt/bodesign-engines/bodesign/engines/kicad/scripts; \

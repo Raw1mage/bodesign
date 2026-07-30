@@ -4,6 +4,19 @@ All notable changes to bodesign are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the source of truth for design
 rationale is the plan-builder specs under `specs/`.
 
+## [未發布] — 2026-07-30
+
+### Fixed
+- **R9 skill-shipping 遠端半合規（BR_20260730，外部 fleet 稽核 file、bodesign 自行 own fix）**：
+  - `GET /skills` 先前廣告的是**檔名**（`bodesign.tar.gz`）而非 skill **名稱**，且只服務 `.tar.gz`。合規 client 依 R9.2 取 `name` 後附加 `.zip`，必然拼出 `bodesign.tar.gz.zip` → 404；14 個 companion 對遠端 client 全數不可取，而 `GET /skills` 仍回 200、manifest 看起來健康（靜態閘查不出，撥號才抓得到）。
+  - **根因比症狀更深**：服務來源 `services/mcp/assets/skills/` 與 `mcp.json skillPaths` 宣告的 repo `skills/` 是兩棵樹，且**已經漂移**——被服務的 `bodesign.tar.gz` 是 2026-06-10 手工凍結快照，缺 `doctrine.md`（R15 single-source）與整個 `scripts/`（含 `gate.py`，~52 個 landing verb 唯一入口），另含 2 條 R9.7.1 明文禁止的 symlink。
+  - 修法為結構性而非表面：新增 `services/mcp/skill_shipping.py`，archive 一律**從宣告來源即時打包**（R9.11.3 by-construction），不再有第二份會腐爛的 artifact。listing 改回 bare name；新增 `GET /skills/<name>.zip`；`.tar.gz` 保留但同樣投影自同一棵樹，格式不再能編碼內容差異。
+  - `run_http` 綁 socket **前**執行 `assert_skill_source_parity()`，宣告與服務不一致就讓 process 死掉（R9.11.1）——半殘服務不得靜默啟動成功（天條 1）。
+  - Producer 衛生：無絕對路徑／`..`／symlink，排除 dotfile 與 `__pycache__`，member mtime 固定使 archive byte-reproducible；未知名回 typed 404 而非 200 空 archive（R9.6.2）。私有 product-board vault symlink（`openmv`/`thesmart_products`）在打包與 image 兩層都排除。
+  - 四個 Dockerfile 改 `COPY mcp.json` + `COPY skills`（取代原本只 COPY 單一 `doctrine.md`），dev overlay 同步掛載；新增 `.dockerignore`。kicad 引擎抽取改自 in-repo 樹（78 檔，較退役 tarball 的 50 檔新）。已退役 `assets/skills/bodesign.tar.gz`。
+  - 13 個 vendored EDA companion **無 in-repo 來源**，無法滿足 R9.11 parity，故改列於獨立的 `bundles` 鍵，不冒充 R9 skill。
+  - 驗證：`tests/test_skill_shipping.py` 23/23（含 traversal 負向與 accepting control、parity 負向控制）；live UDS 撥號 `.zip` 200/有效 zip/169 members、含先前遺失的 `doctrine.md`+`scripts/gate.py`，5 種 traversal/錯誤形狀全 404，`.tar.gz`+MANIFEST back-compat 未破。
+
 ## [未發布] — 2026-07-11
 
 ### Added

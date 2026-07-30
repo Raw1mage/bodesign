@@ -1,0 +1,40 @@
+# Build-context exclusions. NOTE: this file was introduced with BR_20260730,
+# when the Dockerfiles started `COPY skills /app/skills` (the R9.1 declared tree)
+# instead of a single doctrine.md. COPY brings the tree in VERBATIM — including
+# things git never tracked — so the exclusions git already enforces must be
+# restated here or they leak into published images.
+#
+# Deliberately minimal: only artifacts that are regenerable, private, or unusable
+# inside a container. Anything the server reads at runtime MUST NOT be listed.
+
+# skills/bodesign/.gitignore marks these the maintainer's product-board vault:
+# "NEVER distribute: these point at the maintainer's product board data
+# (customer/product names)". They are dangling symlinks in a checkout, so a COPY
+# would ship broken links pointing at host paths that do not exist in the image.
+# skill_shipping.py also excludes them from every archive it builds; this is the
+# same rule applied one layer down, at the image boundary.
+skills/bodesign/openmv
+skills/bodesign/thesmart_products
+
+# Sibling-skill pointers that only resolve in a ~/.claude/skills INSTALL layout
+# (engines/emc -> ../../emc). They dangle in a plain checkout and would dangle in
+# the image too. The container resolves these engines via BODESIGN_EMC_SKILL /
+# BODESIGN_*_SKILL under /opt/bodesign-engines instead, so shipping broken links
+# adds only noise. skill_shipping excludes them from archives for the same reason.
+skills/bodesign/engines/emc
+skills/bodesign/engines/datasheets
+
+# Regenerable byte-code / per-run analysis artifacts (mirrors the same skill
+# .gitignore, and the exclusions skill_shipping._EXCLUDED_DIRS applies).
+**/__pycache__
+**/*.pyc
+**/analysis
+
+# Local runtime + VCS state: never part of an image.
+.git
+.run
+.logs
+.venv
+.pytest_cache
+.artifacts
+.work

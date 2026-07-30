@@ -27,7 +27,8 @@ front forwards a non-local tool to its worker or reports it unavailable.
 | `GET /files/{token}/blob/{rel}` | R2.1 | download a produced file (results list `{rel, url}`) |
 | `GET /tools`, `GET /tools/{name}` | R8.1 | authoritative, current tool schemas |
 | `GET /health` (`/healthz` alias) | R8.3 | liveness/readiness |
-| `GET /skills`, `GET /skills/{name}` | R8.2 / R9.2 | companion-skill list + bundle download |
+| `GET /skills` | R8.2 / R9.2 | companion-skill list — `skills[].name` is a **bare name**, `bundles[]` holds the vendored EDA archives |
+| `GET /skills/{name}.zip` | R9.2 | download a declared skill, packed live from `mcp.json skillPaths` (`.tar.gz` also served, same tree) |
 | `Mount /mcp` | R1 | MCP Streamable HTTP |
 
 Path args resolve **inside** the token's `doc_dir` when a `token` is passed

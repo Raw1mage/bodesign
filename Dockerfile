@@ -61,25 +61,37 @@ RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt
 COPY packages /app/packages
 COPY services /app/services
 
-# R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-3/DD-7): the
-# usage-doctrine one-source that the bodesign_init tool + prompts/get entry both
-# project. The raw skills/ tree is deliberately NOT bundled (only scrubbed engine
-# tarballs above), so COPY this ONE file explicitly. server.py _load_doctrine()
-# FAILS LOUD at import if it is missing/empty, so a doctrine-less image is never
-# silently produced. Path matches _DOCTRINE_PATH = <app>/skills/bodesign/doctrine.md.
-COPY skills/bodesign/doctrine.md /app/skills/bodesign/doctrine.md
+# R9 skill-shipping contract, BOTH halves from ONE source (BR_20260730).
+# `mcp.json` carries the R9.1 declaration (`skillPaths`) and `skills/` is the tree
+# it declares; the R9.2 remote half builds its archives from that same tree at
+# request time. Both MUST be in the image: server.py asserts their parity at
+# startup (assert_skill_source_parity) and REFUSES TO BIND otherwise, so a
+# half-shipping image cannot boot green.
+#
+# This supersedes the previous single-file `COPY skills/bodesign/doctrine.md`.
+# That line existed because the raw tree was deliberately not bundled — a choice
+# that made the served companion a hand-frozen tarball which then drifted 7 weeks
+# out of date (losing doctrine.md and the whole scripts/ dir) with nothing able to
+# notice. Shipping the declared tree removes the second artifact entirely.
+# _DOCTRINE_PATH = <app>/skills/bodesign/doctrine.md is satisfied by this COPY.
+COPY mcp.json /app/mcp.json
+COPY skills /app/skills
 
 # Bundle the analyzer engine SCRIPTS (kicad/spice/emc) the C06 verification tools
 # resolve via resolve_skill(). The image already ships the BINARIES (kicad-cli /
 # ngspice); these are the engine scripts that drive them. Without them,
 # simulate / analyze_emc / analyze_thermal return `skipped-no-skills` and C06
-# SPICE/EMC/thermal can never run. Source = the cleaned, distribution-ready
-# tarballs (NOT the raw skills/ tree, which is incomplete + unscrubbed). Only the
-# engine subtrees are extracted. Build FAILS LOUD if any scripts/ dir is missing,
-# so a silently-broken image is never produced.
+# SPICE/EMC/thermal can never run.
+#
+# kicad comes from the in-repo tree (the same source /skills serves, and fresher
+# than the retired tarball: 78 files vs 50). spice + emc have NO in-repo source —
+# they are vendored EDA companions — so they still come from their tarballs; that
+# asymmetry is deliberate and is why those two are NOT advertised as R9 skills.
+# Build FAILS LOUD if any scripts/ dir is missing, so a silently-broken image is
+# never produced.
 RUN set -eu; \
-    mkdir -p /opt/bodesign-engines; \
-    tar xzf /app/services/mcp/assets/skills/bodesign.tar.gz -C /opt/bodesign-engines bodesign/engines/kicad; \
+    mkdir -p /opt/bodesign-engines/bodesign/engines; \
+    cp -r /app/skills/bodesign/engines/kicad /opt/bodesign-engines/bodesign/engines/kicad; \
     tar xzf /app/services/mcp/assets/skills/spice.tar.gz    -C /opt/bodesign-engines spice; \
     tar xzf /app/services/mcp/assets/skills/emc.tar.gz      -C /opt/bodesign-engines emc; \
     test -d /opt/bodesign-engines/bodesign/engines/kicad/scripts; \

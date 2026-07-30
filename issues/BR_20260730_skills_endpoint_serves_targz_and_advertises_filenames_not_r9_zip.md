@@ -12,13 +12,105 @@
 
 ```
 State:
-Fix: unfixed
-Effect: n/a
-Custody: unclaimed
+Fix: fixed (2026-07-30, ses_04db7a1c5 — bodesign coordinator, full ownership per a2a-d2d §3.1.1)
+Effect: live-verified on the running service (dev mounts) + image build path verified; NOT YET DEPLOYED
+Custody: bodesign
 Blocker: none
-Disposition: accepted
+Disposition: accepted — accepted as a real defect; RCA found it WORSE than reported (see §4)
 Venue: bodesign
+Status: FIXED-UNDEPLOYED — stays at top level until deployed. The code is correct and proven
+  (see §4.4/§4.5), but the SHIPPED images (`bodesign:latest`, `-ee`, `-me`) still contain the
+  old server.py and lack `/app/mcp.json` + `/app/skills`. The service currently serves the fix
+  ONLY because the dev overlay bind-mounts live source over the image. A plain
+  (non-`BODESIGN_DEV`) start would run pre-fix code; a rebuilt image without the amended
+  Dockerfiles would die at the new startup parity gate. Deploy = `BODESIGN_WORKERS=1
+  ./mcpctl.sh rebuild` (the KiCad-bearing layers take a while). Close only after that.
 ```
+
+## 4. Resolution (bodesign, 2026-07-30)
+
+### 4.1 What the RCA found beyond the report
+
+F1/F2 were reported accurately. **F3 was understated**: the two trees had not merely
+*risked* drifting — they HAD drifted, and the served copy was damaged.
+
+| Fact | Evidence |
+| --- | --- |
+| `assets/skills/bodesign.tar.gz` was a 2026-06-10 frozen snapshot; repo `skills/bodesign/` last moved 2026-07-06 | `git log -1 --format=%ci` on each |
+| The snapshot was missing `doctrine.md` (the R15 single-source the server fails fast on) and the **entire `scripts/` dir** — including `gate.py`, the sole entrypoint for ~52 landing verbs | `tar tzf \| grep -c doctrine.md` → 0; `grep "^bodesign/scripts"` → empty |
+| It carried **2 symlinks** (`engines/emc`, `engines/datasheets`) — which R9.7.1 forbids outright, and which make opencode's consumer hard-fail the whole skill | `tar tvzf \| awk '$1~/^l/'` |
+| 189 files in the repo tree vs 151 in the tarball; 8 files under `engines/kicad` had diverged | `diff -rq` |
+
+So the correct repair was never "add a `.zip` route" — it was to stop having a second
+artifact at all. R9.11.3 already names on-the-fly construction from the declared tree the
+preferred implementation; had a parity assertion been added instead, it would have gone
+red immediately, which is precisely its job.
+
+### 4.2 Product decisions (owner-adjudicated)
+
+The reporter left the back-compat tradeoff to this repo. Decisions:
+
+1. **`.tar.gz` is kept, not dropped** — the landing page has published those links since
+   2026-06-07 and an unrelated fix should not 404 a live URL. It is no longer a separate
+   artifact: for a declared skill both formats project the same live tree, so the format
+   can no longer encode a content difference.
+2. **The R9 listing advertises only the 2 declared skills** (`bodesign`, `bodesign-kb`).
+   The 13 vendored EDA companions have no in-repo source, so they can never satisfy
+   R9.11 parity; advertising them as R9 skills would assert a provenance this repo cannot
+   back. They moved to a separate `bundles` key (R9.9.4 permits extra keys) and keep their
+   filename-addressed legacy links.
+
+### 4.3 Changes
+
+| Finding | Fix |
+| --- | --- |
+| F1 | `GET /skills` → `skills[].name` is a bare name; EDA archives split into `bundles[]` |
+| F2 | `GET /skills/<name>.zip` added; suffix stripped to recover the bare name; `.tar.gz` served from the same tree |
+| F3 | Archives built on the fly from `mcp.json skillPaths` (R9.11.3 by construction) + `assert_skill_source_parity()` runs in `run_http` **before binding** and kills the process on divergence (R9.11.1) |
+| R9.7.1 | No absolute paths / `..` / symlinks; dotfiles + `__pycache__` excluded; fixed mtimes make archives byte-reproducible; unknown name → typed 404, never a 200 empty archive |
+
+New `services/mcp/skill_shipping.py`; `server.py` two handlers + startup gate + landing page;
+four Dockerfiles now `COPY mcp.json` + `COPY skills` (superseding the single-`doctrine.md`
+COPY, whose "do not bundle the raw tree" policy is what forced the frozen-tarball design);
+dev overlay mounts both; new `.dockerignore` keeps the private product-board vault symlinks
+and install-layout-only engine pointers out of images; `assets/skills/bodesign.tar.gz`
+retired; kicad engine extraction now reads the in-repo tree (78 files vs the tarball's 50).
+
+### 4.4 Verification
+
+- `tests/test_skill_shipping.py` — 23/23. Includes traversal negatives **each paired with an
+  accepting control** (a reject-everything guard would otherwise pass every case), a parity
+  negative control proving the assertion can fail, and a regression anchor asserting the zip
+  ships `doctrine.md` + `scripts/gate.py` — the two things the frozen copy had lost.
+- Live UDS probe: `GET /skills` → both names bare; `bodesign.zip` → 200, valid zip,
+  169 members, `bodesign/SKILL.md` present, contains `doctrine.md` + `scripts/gate.py`.
+- Negatives: `nope.zip`, `../mcp.json`, `..%2fmcp.json`, `bodesign.tar.gz.zip`, `packages.zip`
+  → all 404. Back-compat: `bodesign.tar.gz`, `kicad.tar.gz`, `MANIFEST.md` → all 200.
+- Pre-existing suite failures (`test_mcp_server` 3F/2E) were confirmed present on HEAD before
+  this change by reverting `server.py` and re-running — they belong to a peer's uncommitted
+  work and are untouched here.
+
+### 4.5 Image-path verification (why the Dockerfile edits are not merely plausible)
+
+The running service proves the *code*, but it runs on dev bind-mounts, so it proves nothing
+about the amended Dockerfiles. Those were verified separately, without disturbing the live
+container:
+
+- **`Dockerfile.core` built end-to-end** (`docker build -f Dockerfile.core`, exit 0). Inside the
+  resulting image: `/app/mcp.json` present, `/app/skills` holds both skills, `doctrine.md`
+  non-empty, and `assert_skill_source_parity("bodesign")` **passes** while packing a
+  1,102,227-byte zip. A green build that then dies at the startup gate would be a false pass,
+  so the gate was exercised in-image rather than inferred.
+- **`.dockerignore` confirmed effective in-image**: none of `openmv`, `thesmart_products`,
+  `engines/emc`, `engines/datasheets` leaked in, and no `__pycache__` survived.
+- **The monolith/ee/me delta was built on a light base** (`debian:bookworm-slim` + the exact
+  changed lines: `COPY mcp.json`, `COPY skills`, and the new `cp -r` engine extraction with its
+  `test -d` guard) — 37 engine scripts landed, guard passed, no symlink leak. Their full builds
+  were NOT re-run: the changed instructions are identical to core's plus that one RUN step, and
+  re-running the KiCad/LibreOffice layers costs ~20 min while proving nothing new about this
+  change. This is a deliberate scope call, not an untested path — but see Status: the images
+  are still unbuilt in the real registry, which is exactly why this BR is not closed.
+- Verification images were deleted afterwards; `bodesign:latest`/`-ee`/`-me` are untouched.
 
 ## 1.1 症狀（verbatim）
 

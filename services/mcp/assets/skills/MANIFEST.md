@@ -1,17 +1,37 @@
 # bodesign skill downloads
 
-The **bodesign** MCP server publishes two skill layers:
+The **bodesign** MCP server publishes two skill layers, and they are served by two
+different mechanisms — the distinction matters when you automate a download.
 
-- `bodesign.tar.gz` — the canonical C00–C07 lifecycle skill for the bodesign workflow.
-- `bodesign-eda-skills-bundle.tar.gz` — companion EDA skills for analysis, docs,
-  simulation, sourcing, and fabrication.
+**1. Declared skills — built live, always current.** `bodesign` (the canonical
+C00–C07 lifecycle skill) and `bodesign-kb` (the refs-derived client contract) are
+packed ON DEMAND from the repo tree `mcp.json skillPaths` declares. Enumerate and
+fetch them through the MCP-Integration-Standard R9 endpoints:
 
-Both are reviewed and cleaned for distribution (no secrets — all distributor API
+```
+GET /skills                 -> {"skills":[{"name":"bodesign", ...}], "bundles":[...]}
+GET /skills/<name>.zip      -> the archive        <- `.zip` is the ENDPOINT's suffix
+GET /skills/<name>.tar.gz   -> same tree, gzip    <- convenience, same bytes
+```
+
+The listed `name` is a **bare skill name**, never a filename — append `.zip`
+yourself. (Before 2026-07-30 this listing advertised filenames and served only
+`.tar.gz` from a hand-frozen snapshot; a conformant client dialled
+`bodesign.tar.gz.zip` and got a 404 while the snapshot silently rotted 7 weeks out
+of date. Both halves are now one source, asserted at startup.)
+
+**2. Vendored EDA companion bundles — static files.** The 13 archives listed under
+`bundles` (`bodesign-eda-skills-bundle.tar.gz` and the per-skill tarballs) have no
+source tree in this repo, so they cannot be rebuilt on demand and are NOT
+advertised as R9 skills. Fetch them by filename: `GET /skills/<file>.tar.gz`.
+
+All are reviewed and cleaned for distribution (no secrets — all distributor API
 keys are read from environment variables; no `__pycache__`/personal paths/internal
-ticket refs).
+ticket refs; no symlinks).
 
 > **`kicad` and `kidoc` are folded into the unified `bodesign` skill** (as
-> `engines/kicad` and `engines/kidoc`). Prefer installing `bodesign.tar.gz`: it
+> `engines/kicad` and `engines/kidoc`). Prefer installing the live `bodesign`
+> skill (`GET /skills/bodesign.zip`): it
 > carries the C00–C07 workflow, drives this MCP's `bodesign_*` generation tools,
 > and the MCP's verification tools resolve its analyzer via `BODESIGN_KICAD_SKILL`
 > (`~/.claude/skills/bodesign/engines/kicad` on a host install). The bodesign
@@ -27,11 +47,19 @@ These are Claude **skills**. Place each skill directory under your skill locatio
 (default `~/.claude/skills/`):
 
 ```
-tar -xzf bodesign.tar.gz -C ~/.claude/skills/
+# declared skills — always current, fetched by BARE NAME + the endpoint's suffix
+curl -fO http://<host>:8077/skills/bodesign.zip && unzip -d ~/.claude/skills/ bodesign.zip
+curl -fO http://<host>:8077/skills/bodesign-kb.zip && unzip -d ~/.claude/skills/ bodesign-kb.zip
+
+# vendored EDA bundles — fetched by FILENAME
+curl -fO http://<host>:8077/skills/bodesign-eda-skills-bundle.tar.gz
 tar -xzf bodesign-eda-skills-bundle.tar.gz -C ~/.claude/skills/
-# or a single skill:
+# or a single one:
 tar -xzf kicad.tar.gz -C ~/.claude/skills/
 ```
+
+Archives wrap their contents in a `<name>/` directory, so extracting straight into
+your skills dir lands `~/.claude/skills/bodesign/SKILL.md`.
 
 No install script is bundled by design — extract where your skill manager expects them.
 
