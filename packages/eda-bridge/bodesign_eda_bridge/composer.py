@@ -21,6 +21,7 @@ Spec shape:
     }
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -311,6 +312,86 @@ class SymbolLoadError(RuntimeError):
             f"compose refuses to emit a schematic with pinless active-IC empty boxes "
             f"(No-silent-fallback). See symbol_load_failures for per-ref reason + "
             f"the symbol libraries actually present on the search path."
+        )
+
+
+class EmptySpecError(ValueError):
+    """BR_20260730b N2: the spec declares no components — refuse the empty deliverable.
+
+    A spec whose `components` key is missing or empty produced a 213-byte
+    schematic with zero symbols, which FOUR gates then independently blessed:
+    the draftsman gate PASSed (rects=0 — nothing cannot overlap), ERC reported 0
+    violations (nothing cannot be miswired), validation said "validated", and the
+    call returned ok:true. Each gate was internally correct and collectively they
+    certified nothing, because they all answered questions about a drawing that
+    does not exist.
+
+    The recorded trigger was `{"__spec_file__": "/path/spec.json"}` — a caller
+    reasonably guessing that `spec` accepts a file reference, since the MCP
+    schema declares only {"type": "object"}. So this error prints the keys it
+    RECEIVED beside the keys compose actually reads: the fault is always a
+    key-name mismatch, and showing both sides answers it in one line rather
+    than sending the caller into composer source.
+    """
+
+    #: spec keys compose_schematic actually consumes. This tuple is a hand-copy of
+    #: the real spec.get()/spec[...] call sites, so an AST-derived test asserts it
+    #: both ways (nothing read-but-unadvertised, nothing advertised-but-ignored).
+    #: It earned that test immediately: the first version of this tuple omitted
+    #: l6_avoidance, because the grep used to enumerate the keys was written
+    #: [a-z_]* and silently skipped the one key containing a digit — the same
+    #: duplicate-fact drift (V4-c) that this list represents.
+    KNOWN_KEYS = ("components", "nets", "nc", "all_label", "l6_avoidance")
+
+    def __init__(self, spec: dict):
+        got = sorted(spec) if isinstance(spec, dict) else []
+        self.spec_keys = got
+        unknown = [k for k in got if k not in self.KNOWN_KEYS]
+        detail = "spec is empty (no keys at all)" if not got else f"spec keys received: {got}"
+        hint = (
+            f" None of {unknown} is a key compose reads — pass the spec CONTENT "
+            f"inline, not a reference to it." if unknown else ""
+        )
+        super().__init__(
+            "COMPOSE_EMPTY_SPEC: spec declares no components, so the schematic "
+            f"would be empty. {detail}; compose reads "
+            f"{list(self.KNOWN_KEYS)}.{hint} Refusing rather than emitting a "
+            "symbol-less sheet: an empty drawing passes EVERY downstream gate "
+            "(0 overlaps, 0 ERC violations, status=validated, ok:true) because "
+            "each one is asking about a drawing that is not there — four green "
+            "lights over nothing."
+        )
+
+
+class SymbolDirsEncodingError(TypeError):
+    """BR_20260730b N1: `symbol_dirs` arrived as a JSON-ENCODED list, not a path.
+
+    An MCP client filling an argument whose inputSchema declares NO type may
+    serialise an array to text, so `["/work/symbols"]` reaches compose as the
+    string '["/work/symbols"]'. Nothing downstream can tell that apart from a
+    directory name: the str branch of the symbol_dirs merge wraps it in a list,
+    every custom library fails to resolve, and only the KiCad stdlib still
+    loads. The result LOOKS mostly healthy (stock passives place, nets count),
+    which is why a whole compose run can be read as "my symbols are broken"
+    when the real fault is one argument's type at the facade boundary.
+
+    Raised instead of silently decoding: auto-decoding would be a fallback that
+    repairs the caller's bug invisibly and would hide the schema defect that
+    produced it (No-silent-fallback 天條). The message carries BOTH the raw
+    string and the decoded list so the caller can see exactly what to pass.
+    """
+
+    def __init__(self, raw: str, decoded: list):
+        self.raw = raw
+        self.decoded = decoded
+        super().__init__(
+            f"symbol_dirs is a JSON-encoded list, not a directory: {raw!r}. "
+            f"It decodes to {decoded!r} — pass THAT as a real array (or a single "
+            f"bare string for one dir), not as text. A JSON-text 'path' can never "
+            f"exist, so every custom symbol library would fail to resolve while "
+            f"the KiCad stdlib still loaded, making the run look partly healthy. "
+            f"If you are calling through the MCP facade, this usually means the "
+            f"tool's inputSchema did not declare symbol_dirs as an array."
         )
 
 
@@ -1667,6 +1748,27 @@ def compose_schematic(
     # shadowing), DEFAULT_SYMBOL_DIR always appended as a fallback, order-preserving
     # dedup. This is the single caller chokepoint (MCP facade + direct-Python +
     # worker callers all pass through here), so the merge lives ONLY here.
+    #
+    # BR_20260730b N1: a str that is really a JSON-ENCODED LIST is NOT a directory.
+    # An MCP client filling an argument whose inputSchema declares no type (the
+    # facade had `"symbol_dirs": {}`) may serialise the array to text, so
+    # ["/work/symbols"] arrives as the 17-char string '["/work/symbols"]'. That
+    # string is not a path, will never exist, and the isinstance(str) branch below
+    # would happily wrap it in a list — every custom symbol then fails to resolve
+    # while stdlib parts still load, so compose looks 90% healthy. Detect the
+    # encoding here (the one chokepoint every caller passes through) and fail loud
+    # with the decoded value, instead of reporting it downstream as "library not
+    # found in ['[\"/work/symbols\"]']" — an error that blames the callee's disk
+    # for the caller's arg type. Deliberately narrow: only a string whose FIRST
+    # non-space char is '[' is treated as encoded, so a real directory named
+    # "[weird]" is not hijacked (it would have to be valid JSON yielding a list).
+    if isinstance(symbol_dirs, str) and symbol_dirs.lstrip()[:1] == "[":
+        try:
+            _decoded = json.loads(symbol_dirs)
+        except (ValueError, TypeError):
+            _decoded = None
+        if isinstance(_decoded, list):
+            raise SymbolDirsEncodingError(symbol_dirs, _decoded)
     if isinstance(symbol_dirs, (str, Path)):
         _user_dirs = [symbol_dirs]
     elif symbol_dirs is None:
@@ -1678,6 +1780,36 @@ def compose_schematic(
         if _d and str(_d) not in {str(x) for x in _merged_dirs}:
             _merged_dirs.append(_d)
     symbol_dirs = _merged_dirs
+
+    # BR_20260730b N2: a spec carrying NO components is refused here, before any
+    # gate can bless it.
+    #
+    # The sibling guard further down catches "declared components, but every one
+    # was skipped". This is the OTHER half: components never declared at all. It
+    # was missing, so `spec.get("components", [])` returned [] and compose emitted
+    # a 213-byte schematic holding zero symbols — and then FOUR independent gates
+    # each truthfully reported success on it: the draftsman gate PASSed
+    # (intra_overlap=0 label_overlap=0 rects=0 — nothing cannot overlap), ERC found
+    # 0 violations (nothing cannot be miswired), validation status="validated",
+    # and the call returned ok:true placed:0 nets:0. Four green lights over an
+    # empty deliverable, because every gate answered a question about a drawing
+    # that does not exist.
+    #
+    # The observed trigger was a caller passing {"__spec_file__": "/path/spec.json"}
+    # — reasonably expecting `spec` to accept a file reference, since its schema
+    # says only {"type": "object"}. No key matched, so the spec was silently an
+    # empty design. Hence the error names the keys actually RECEIVED next to the
+    # ones this function reads: the whole failure is a key-name mismatch, and
+    # printing both sides makes that visible in one line instead of sending the
+    # caller to read composer source (which is what actually happened).
+    #
+    # No legitimate caller composes an empty schematic: with nothing to place,
+    # every downstream artefact (netlist, ERC report, PDF) is vacuous. Callers
+    # that legitimately hold an empty component list (the analyzer/detector
+    # scripts that build {"components": []} as an accumulator) never reach
+    # compose with it — they populate it first.
+    if not spec.get("components"):
+        raise EmptySpecError(spec)
 
     raw_components = spec.get("components", [])
     raw_nets = spec.get("nets", [])

@@ -469,7 +469,16 @@ def _h_prd_bom_crosscheck(a: dict) -> Any:
 
 def _h_check_c03(a: dict) -> Any:
     from bodesign_workflow_core import check_c03
+    # netlist_path / covers_boards MUST be forwarded: BR_20260730 F2 added R5
+    # (BOM<->netlist) and R6 (pin polarity) to the function but never exposed them
+    # here, so the whole rule pair was unreachable through the facade — every MCP
+    # caller silently got netlist_crosscheck={"status":"not_run"} and could read a
+    # PASS as "every part is drawn". That is the SAME defect class this BR opened
+    # with (§3: a gate that cannot execute where the caller stands), one layer over:
+    # §3 was import-reachability, this is facade-reachability.
     return asdict(check_c03(a["bom_csv"], pin_allocation_csv=a.get("pin_allocation_csv"),
+                            netlist_path=a.get("netlist_path"),
+                            covers_boards=a.get("covers_boards"),
                             frozen_pad_counts=a.get("frozen_pad_counts"),
                             out_dir=a.get("out_dir")))
 
@@ -1107,7 +1116,9 @@ TOOLS: list[dict] = [
     {"name": "bodesign_compose_schematic", "handler": _h_compose,
      "description": "Compose a schematic from a design spec (components + REF.PIN nets); place + emit + kicad-cli validate. style='netlist' (default, unchanged) uses a naive index grid + global labels (back-compat). style='draftsman' (opt-in) does subsystem-clustered deterministic force-directed placement + drawn wires + sheet-fit for engineer-readable schematics. connection_style overrides the style-derived default when given ('label' global labels; 'wire' orthogonal wires). Components may carry group (subsystem cluster) and x/y (caller-supplied placement). measure_ink=true (draftsman only) renders + measures ink%/content-fill% (toolchain-gated).",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "spec": {"type": "object"},
-                "symbol_dirs": {}, "validate": {"type": "boolean"}, "style": {"type": "string", "enum": ["netlist", "draftsman"]},
+                "symbol_dirs": {"type": "array", "items": _STR,
+                                 "description": "custom KiCad symbol .kicad_sym parent dir(s), as an ARRAY of paths. The KiCad standard library is ALWAYS merged in downstream (BR_20260723), so listing a custom dir never costs you stock passives. A single bare path STRING is still accepted at runtime (back-compat) — the schema is deliberately NARROWER than the runtime. BR_20260730b N1+§P: this argument first declared no type at all, then an anyOf union; BOTH shapes make an MCP client serialise the array to TEXT, so '[\"/work/symbols\"]' arrives as a 'directory' that can never exist and every custom symbol silently fails to resolve while stdlib parts still load. Only a SINGLE-type array declaration transports a real list (proven A/B: covers_boards, a plain array, survives the same request in which an anyOf argument is stringified). compose raises SymbolDirsEncodingError on a JSON-encoded string rather than treating it as a path."},
+                "validate": {"type": "boolean"}, "style": {"type": "string", "enum": ["netlist", "draftsman"]},
                 "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"},
                 "fidelity": {"type": "boolean", "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."}}, "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
@@ -1140,7 +1151,12 @@ TOOLS: list[dict] = [
      "schema": {"type": "object", "properties": {"manifest_path": _STR, "netlist_path": _STR, "out_dir": _STR}, "required": ["manifest_path", "netlist_path"]}},
     {"name": "bodesign_check_c03", "handler": _h_check_c03,
      "description": "C03→C04 STAGE-ENTRY gate (BR_20260707): deterministic machine check that C03 (EE) delivery is complete BEFORE C04 layout may start — the entry counterpart to check_c04's output gate. Reads the BOM csv (+ optional Pin_Allocation.csv SSOT + frozen_pad_counts) and HARD-FAILS (gate=FAIL, refuse C04 entry) on: R1 BOM schema lint (column-count/quoting breakage, bad status enum, duplicate (board,ref)); R2 readiness (any draft/blocked row; a finalized row whose mpn carries TBC/TBD/UNDECIDED); R3 drawability (every row needs a symbol-source marker: official|vendor+LCSC|manual|N-A); R4 SSOT crosscheck (active parts U/J/Y/SW must appear in Pin_Allocation.csv — catches the U4 wireless-scheme conflict class; J_* pad counts must match frozen_pad_counts when provided). stock=0 is a non-blocking warn. Fail-fast on absent/empty inputs (BOM_MISSING/BOM_EMPTY/PIN_ALLOC_MISSING). Gate values NEVER relaxed to pass (check_c04 floating-PSRAM false-pass lesson). Pure python, runs in core.",
-     "schema": {"type": "object", "properties": {"bom_csv": _STR, "pin_allocation_csv": _STR, "frozen_pad_counts": {"type": "object", "description": "{ref: expected_pad_count} for J_* freeze crosscheck"}, "out_dir": _STR}, "required": ["bom_csv"]}},
+     "schema": {"type": "object", "properties": {"bom_csv": _STR, "pin_allocation_csv": _STR,
+                "netlist_path": {"type": "array", "items": _STR,
+                                  "description": "KiCad .net export(s) covering the schematic(s) this BOM is drawn in, as an ARRAY of paths. A single bare path STRING is still accepted at runtime (back-compat) — the schema is deliberately NARROWER than the runtime, because declaring the union is what BREAKS multi-value calls: an anyOf argument gets serialised to TEXT by MCP clients, so ['a.net','b.net'] arrives as one impossible path and R5/R6 die on NETLIST_MISSING (BR_20260730b §P; proven by A/B in ONE request — covers_boards, a plain array, survived while this argument did not). ENABLES R5 (every BOM row must exist as a schematic symbol) and R6 (BOM pin-spec vs wiring polarity). WITHOUT it both rules are skipped and the report carries netlist_crosscheck.status='not_run': a gate=PASS then does NOT mean every part is drawn, it means nobody looked (BR_20260730 F2 — a verdict must carry the scope that produced it)."},
+                "covers_boards": {"type": "array", "items": _STR,
+                                   "description": "which `board` column values the supplied netlists actually cover, e.g. ['PRODUCT','CORE']. A product BOM spans every board while one .net covers one schematic, so rows on a board with NO netlist have no baseline and are reported under rows_unassessable_board_not_captured rather than as findings. Omit and coverage is INFERRED from which refs resolved — an inference that cannot tell 'no netlist covers this board' from 'every row on it is undrawn', so the report always states which mechanism was used (board_coverage_basis). Declaring it NARROWS the exempt set but can never WIDEN it past what was observed: a board these netlists actually draw stays assessable even if you omit it here, and the contradiction is reported under board_coverage_conflicts (BR_20260730b §Q — otherwise this argument is a mute button that turns the gate green)."},
+                "frozen_pad_counts": {"type": "object", "description": "{ref: expected_pad_count} for J_* freeze crosscheck"}, "out_dir": _STR}, "required": ["bom_csv"]}},
     {"name": "bodesign_render_companion", "handler": _h_companion,
      "description": "Render a readable companion (pdf/png) for a non-readable engineering file (.kicad_sch/.kicad_pcb/gerber).",
      "schema": {"type": "object", "properties": {"path": _STR, "out_dir": _STR}, "required": ["path", "out_dir"]}},

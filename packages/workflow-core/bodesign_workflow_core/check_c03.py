@@ -307,7 +307,70 @@ def _is_aggregate_ref(ref: str) -> bool:
     return any(mk in ref for mk in _AGGREGATE_MARKERS)
 
 
-def _check_netlist(rows: list[dict], netlist_paths: list[str]) -> tuple[list[RowFinding], dict]:
+def _netlist_part_text(path: str) -> dict[str, str]:
+    """{ref: searchable text} per netlist component (value + footprint + fields).
+
+    Used to answer "is this BOM part drawn under a DIFFERENT refdes?" — see
+    _check_netlist's refdes-divergence classification. Matching on part identity
+    (mpn) rather than refdes is the only way to tell "never drawn" apart from
+    "drawn, but the schematic and the BOM disagree on what to call it".
+    """
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    out: dict[str, str] = {}
+    for m in re.finditer(r'\(\s*comp\s+\(\s*ref\s+"?([^\s")]+)"?\)(.{0,800}?)'
+                         r'(?=\(\s*comp\s+\(\s*ref\s|\Z)', text, re.S):
+        out[m.group(1).strip()] = m.group(2)
+    return out
+
+
+#: An mpn fragment shorter than this is too generic to identify a part by
+#: (e.g. "C", "10uF"), so a match on it would be coincidence, not evidence.
+_MPN_MIN_MATCH = 5
+
+
+def _find_by_mpn(row: dict, mpn_name: str | None,
+                 part_text: dict[str, str]) -> tuple[str, str] | None:
+    """Is this BOM row's part drawn under some OTHER refdes? -> (that_ref, basis).
+
+    Answers the question that separates "never drawn" from "drawn under a name the
+    BOM does not use". Matching is on the mpn, because that is what identifies a
+    physical part independently of what either document calls it.
+
+    Conservative by construction — a FALSE divergence claim is worse than missing
+    one, because it tells the caller a part exists when it may not:
+      - needs an mpn of at least _MPN_MIN_MATCH chars (a 1-2 char mpn matches
+        everything), and the mpn must not be a placeholder token;
+      - the mpn must appear in the netlist component's own text (value / footprint
+        / fields), not merely share a prefix;
+      - the longest mpn stem is tried first so "nRF7002-QFAA-R" prefers the exact
+        part over a family-wide "nRF7002" hit;
+      - returns None on ambiguity (2+ candidate refs), because a guess between two
+        parts is exactly the kind of confident-but-wrong output this repo lints for.
+    """
+    if not mpn_name:
+        return None
+    mpn = _norm(row.get(mpn_name, ""))
+    if len(mpn) < _MPN_MIN_MATCH or any(tok in mpn for tok in _FORBIDDEN_MPN):
+        return None
+    # Progressively shorter stems: full mpn first, then drop trailing -SUFFIXes.
+    stems = [mpn]
+    parts = mpn.split("-")
+    for cut in range(len(parts) - 1, 0, -1):
+        stem = "-".join(parts[:cut])
+        if len(stem) >= _MPN_MIN_MATCH:
+            stems.append(stem)
+    for stem in stems:
+        hits = [ref for ref, text in part_text.items() if stem in _norm(text)]
+        if len(hits) == 1:
+            return hits[0], f"mpn {stem!r}"
+        if len(hits) > 1:
+            return None  # ambiguous: refuse to name one
+    return None
+
+
+def _check_netlist(rows: list[dict], netlist_paths: list[str],
+                   mpn_name: str | None = None,
+                   covers_boards: list[str] | None = None) -> tuple[list[RowFinding], dict]:
     """Every BOM row that should exist as a schematic symbol must appear in one of
     the supplied netlists.
 
@@ -327,12 +390,129 @@ def _check_netlist(rows: list[dict], netlist_paths: list[str]) -> tuple[list[Row
     """
     covered: set[str] = set()
     scopes: list[str] = []
+    part_text: dict[str, str] = {}
     for np_ in netlist_paths:
         covered |= _netlist_refs(np_)
         scopes.append(_netlist_scope(np_))
+        if mpn_name:
+            part_text.update(_netlist_part_text(np_))
+
+    def _assessable(r: dict) -> bool:
+        ref = r.get("_ref", "")
+        if not ref or _is_aggregate_ref(ref):
+            return False
+        if ref.upper().startswith(_NONELECTRICAL_PREFIXES):
+            return False
+        return _norm(r.get("qty", "")) not in ("0", "0.0")
+
+    # Per-board coverage is computed FIRST, because whether a missing row is
+    # actionable depends on whether its board was captured at all.
+    #
+    # Alias hits are resolved in this SAME pass and cached for the row loop below.
+    # Computing them twice would be the duplicate-fact shape (V4-c): two copies of
+    # "is this part drawn?" that drift apart under edits — which is precisely how
+    # board-level and row-level evidence came to disagree in the first place.
+    per_board: dict[str, dict] = {}
+    alias_by_ref: dict[str, tuple] = {}
+    for r in rows:
+        if not _assessable(r):
+            continue
+        ref = r.get("_ref", "")
+        board = r.get("_board", "") or "<unset>"
+        b = per_board.setdefault(board, {"rows": 0, "drawn": 0,
+                                         "drawn_as_other_refdes": 0, "missing": []})
+        b["rows"] += 1
+        if ref in covered:
+            b["drawn"] += 1
+            continue
+        # Drawn under a DIFFERENT refdes still means this board was captured. The
+        # real CORE board is exactly this case: all four of its parts are drawn as
+        # JSA/JSB/UW1/UB1, so a refdes-literal count reports drawn=0 and the board
+        # looks untouched while being fully captured in fact.
+        alias = _find_by_mpn(r, mpn_name, part_text) if mpn_name else None
+        if alias:
+            alias_by_ref[ref] = alias
+            b["drawn_as_other_refdes"] += 1
+        else:
+            b["missing"].append(ref)
+    uncaptured = sorted(b for b, v in per_board.items()
+                        if v["rows"] and not v["drawn"] and not v["drawn_as_other_refdes"])
+
+    # Which boards do the supplied netlists actually cover? This decides whether a
+    # missing row is an actionable gap or has no baseline to be judged against, so
+    # HOW it was decided is reported alongside the verdict (the `basis` discipline
+    # from BR_20260729 §C).
+    #
+    # `drawn > 0` is only an INFERENCE, and a genuinely ambiguous one: a board with
+    # zero drawn refs is indistinguishable from a board whose every row is undrawn.
+    # A 6-board product BOM checked against 2 netlists has 5 boards with no possible
+    # baseline (fix = capture those boards, not this BOM), while a single-row BOM
+    # whose one row is missing looks structurally identical and IS a real gap. That
+    # ambiguity lives in the inputs, so no cleverness here resolves it — only the
+    # caller knows. `covers_boards` lets them say, and the report always states
+    # which mechanism was used so an inferred exemption can never be mistaken for a
+    # declared one.
+    # A board counts as OBSERVED when its parts appear in the netlists at all —
+    # under their own refdes OR under a diverged one. Counting only refdes-literal
+    # hits would call the real CORE board "never captured" while all four of its
+    # parts sit in the netlist as JSA/JSB/UW1/UB1.
+    observed = {b for b, v in per_board.items()
+                if v["drawn"] or v["drawn_as_other_refdes"]}
+    coverage_conflicts: list[dict] = []
+    if covers_boards is not None:
+        declared = {b.strip() for b in covers_boards if b.strip()}
+        unknown = sorted(declared - set(per_board))
+        # BR_20260730b §Q: a DECLARED scope may never exempt a board the netlists
+        # were OBSERVED to draw. Trusting the declaration alone hands the caller a
+        # mute button: on the real inputs, narrowing covers_boards to ['PRODUCT']
+        # moved every undrawn CORE row into rows_unassessable and flipped the gate
+        # to PASS — while CORE was sitting right there in the netlist at drawn=2.
+        # That inverts the ordering rule this function already follows one level
+        # down (mpn match before board exemption, see (1) below): POSITIVE evidence
+        # outranks ABSENCE of evidence, and `drawn > 0` is positive evidence.
+        #
+        # Declaration and observation disagreeing is itself a fact worth a human,
+        # not something to silently resolve either way — so the board is withheld
+        # from the exemption set AND the contradiction is reported.
+        for b in sorted(observed - declared):
+            v = per_board[b]
+            seen = v["drawn"] + v["drawn_as_other_refdes"]
+            coverage_conflicts.append({
+                "board": b,
+                "declared_covered": False,
+                "observed_drawn": v["drawn"],
+                "observed_drawn_as_other_refdes": v["drawn_as_other_refdes"],
+                "rows": v["rows"],
+                "detail": f"covers_boards omits {b!r}, but the supplied netlist(s) "
+                          f"draw {seen} of its {v['rows']} rows "
+                          f"({v['drawn']} by refdes, {v['drawn_as_other_refdes']} under "
+                          f"a diverged refdes) — its undrawn rows are NOT exempt. Either "
+                          f"the declaration is stale or these refs belong to another "
+                          f"board; reconcile before trusting this gate.",
+            })
+        captured = declared | observed
+        coverage_basis = "declared" if not coverage_conflicts else "declared_with_observed_conflict"
+    else:
+        unknown = []
+        captured = observed
+        coverage_basis = "inferred_from_drawn_refs"
+
+    # An exemption is only granted when SOME board was actually matched. If the
+    # netlists resolve nothing in this BOM, the comparison itself is broken — wrong
+    # file, wrong project, or nothing captured yet — and every row must stay a
+    # finding. Without this, passing an unrelated netlist would exempt the entire
+    # BOM and turn the gate green: a demotion rule that can silence itself is a
+    # false-green generator, the exact shape this gate exists to prevent.
+    #
+    # It is also what separates the two structurally identical cases: a 1-row BOM
+    # whose only row is undrawn (nothing covered → real gap) from a 6-board BOM
+    # where 2 boards are covered and 5 have no baseline (→ unassessable).
+    grant_exemptions = bool(captured)
 
     findings: list[RowFinding] = []
     exempt: dict[str, list[str]] = {"qty_zero": [], "aggregate": [], "non_electrical": []}
+    unassessable: dict[str, list[str]] = {}
+    divergent: list[dict] = []
     checked = 0
     for r in rows:
         ref = r.get("_ref", "")
@@ -345,37 +525,42 @@ def _check_netlist(rows: list[dict], netlist_paths: list[str]) -> tuple[list[Row
         if ref.upper().startswith(_NONELECTRICAL_PREFIXES):
             exempt["non_electrical"].append(ref)
             continue
-        qty = _norm(r.get("qty", ""))
-        if qty in ("0", "0.0"):
+        if _norm(r.get("qty", "")) in ("0", "0.0"):
             exempt["qty_zero"].append(ref)
             continue
         checked += 1
-        if ref not in covered:
-            findings.append(RowFinding(board, ref, "R5_NETLIST",
-                                       "BOM row has no matching component in the "
-                                       f"supplied netlist(s) [{', '.join(scopes)}] — "
-                                       "declared in BOM but never drawn"))
-
-    # Per-board coverage. A flat list of N missing refs hides the one distinction a
-    # caller must act on: "this board has NO schematic at all" (fix = capture the
-    # board) versus "this board is captured but this part is missing" (fix = add the
-    # symbol). Measured on the real aiguard inputs the flat list was 20 rows, while
-    # the actionable summary is "3 boards uncaptured + 15 parts missing from captured
-    # boards". Same discipline as reporting the basis alongside the verdict.
-    per_board: dict[str, dict] = {}
-    for r in rows:
-        ref, board = r.get("_ref", ""), r.get("_board", "") or "<unset>"
-        if not ref or _is_aggregate_ref(ref) or ref.upper().startswith(_NONELECTRICAL_PREFIXES):
-            continue
-        if _norm(r.get("qty", "")) in ("0", "0.0"):
-            continue
-        b = per_board.setdefault(board, {"rows": 0, "drawn": 0, "missing": []})
-        b["rows"] += 1
         if ref in covered:
-            b["drawn"] += 1
-        else:
-            b["missing"].append(ref)
-    uncaptured = sorted(b for b, v in per_board.items() if v["rows"] and v["drawn"] == 0)
+            continue
+
+        # (1) Is this part drawn under a DIFFERENT refdes? Checked FIRST, because an
+        # mpn match is POSITIVE evidence that the part exists in the schematic, while
+        # board-coverage is only the ABSENCE of evidence. Ordering the exemption
+        # first would swallow every divergence on a board whose refdes all diverge
+        # (exactly the CORE case: J_X1/J_X2/U4A/U4B are drawn as JSA/JSB/UW1/UB1, so
+        # CORE looks "uncaptured" by refdes while being fully captured in fact).
+        alias = alias_by_ref.get(ref)
+        if not alias and grant_exemptions and (board or "<unset>") not in captured:
+            # (2) Nothing matched, and no netlist covers this board -> no baseline.
+            unassessable.setdefault(board or "<unset>", []).append(ref)
+            continue
+
+        if alias:
+            divergent.append({"board": board, "bom_ref": ref,
+                              "netlist_ref": alias[0], "matched_on": alias[1]})
+            findings.append(RowFinding(
+                board, ref, "R5_REFDES_DIVERGENCE",
+                f"drawn in the schematic as {alias[0]!r} (matched on {alias[1]}), "
+                f"not as {ref!r} — the part EXISTS; the BOM and the schematic "
+                f"disagree on its refdes. Fix by reconciling the two names, NOT by "
+                f"drawing it again. {alias[0]!r} appears in no BOM row."))
+            continue
+
+        # (3) Board captured, no part-identity match anywhere: genuinely undrawn.
+        findings.append(RowFinding(board, ref, "R5_NETLIST",
+                                   "BOM row has no matching component in the "
+                                   f"supplied netlist(s) [{', '.join(scopes)}] — "
+                                   "its board IS captured, so this part is "
+                                   "declared in the BOM but never drawn"))
 
     report = {
         "status": "run",
@@ -386,11 +571,37 @@ def _check_netlist(rows: list[dict], netlist_paths: list[str]) -> tuple[list[Row
         "exempted": {k: sorted(v) for k, v in exempt.items() if v},
         "netlist_refs_without_bom_row": sorted(covered - {r.get("_ref", "") for r in rows}),
         "per_board": {b: {"rows": v["rows"], "drawn": v["drawn"],
+                          "drawn_as_other_refdes": v["drawn_as_other_refdes"],
                           "missing": sorted(v["missing"])}
                       for b, v in sorted(per_board.items())},
         # Boards with zero drawn refs: their schematic was never captured at all.
         # Distinct from a per-part omission and fixed differently.
         "boards_not_captured": uncaptured,
+        # BR_20260730 round=8: rows on a board NO supplied netlist covers. There is
+        # no baseline to compare them against, so they are NOT findings — same rule
+        # as consumer_fork_drift's forks_unassessable: a gap in the REFERENCE is not
+        # a defect in the thing being checked. Reported (never dropped) so "not
+        # assessed" can never be read as "assessed, clean".
+        "rows_unassessable_board_not_captured":
+            {b: sorted(v) for b, v in sorted(unassessable.items())},
+        # HOW the covered-board set was decided. "inferred_from_drawn_refs" cannot
+        # tell "no netlist covers this board" from "every row on it is undrawn";
+        # pass covers_boards= to make it authoritative.
+        "board_coverage_basis": coverage_basis,
+        "boards_covered": sorted(captured),
+        # False when the netlists matched NO board here: no row is exempt, because a
+        # comparison that resolves nothing is broken rather than out of scope.
+        "exemptions_granted": grant_exemptions,
+        # Declared board names matching no BOM row: a typo in covers_boards would
+        # otherwise silently exempt nothing while looking accepted.
+        "boards_declared_not_in_bom": unknown,
+        # BR_20260730b §Q: boards the caller declared as NOT covered which the
+        # netlists nevertheless draw. Their rows stay assessable (observation beats
+        # declaration); the contradiction is surfaced for a human to reconcile
+        # rather than silently resolved in either direction.
+        "board_coverage_conflicts": coverage_conflicts,
+        # Parts that ARE drawn, under a refdes the BOM does not use.
+        "refdes_divergences": divergent,
     }
     return findings, report
 
@@ -539,6 +750,7 @@ def _check_ssot(active_rows: list[dict], pin_alloc_refs: set[str]) -> list[RowFi
 
 def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
               netlist_path: str | list[str] | None = None,
+              covers_boards: list[str] | None = None,
               frozen_pad_counts: dict | None = None,
               out_dir: str | None = None) -> CheckC03Result:
     """C03→C04 stage-entry gate. Deterministic; missing inputs raise, blocking
@@ -552,6 +764,16 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
     NOT supplied the result carries netlist_crosscheck={"status": "not_run", ...}
     and gate=PASS must NOT be read as "every BOM row is drawn" — the gate simply
     never looked (BR_20260730; a verdict must carry the scope that produced it).
+
+    covers_boards: which `board` values the supplied netlists actually cover, e.g.
+    ["PRODUCT", "CORE"]. A product BOM spans every board while one netlist covers
+    one schematic, so rows on a board with no netlist have NO baseline to be judged
+    against and are reported under netlist_crosscheck.
+    rows_unassessable_board_not_captured instead of as findings. Omit it and
+    coverage is INFERRED from which refs resolved — an inference that cannot tell
+    "no netlist covers this board" from "every row on it is undrawn", so the report
+    always states which mechanism was used (board_coverage_basis). Declaring it
+    makes the scope authoritative (BR_20260730 round=8).
     """
     if not os.path.isfile(bom_csv):
         raise ValueError(f"BOM_MISSING: {bom_csv} not found — run C03 BOM export first.")
@@ -644,7 +866,8 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
         missing = [x for x in paths if not os.path.isfile(x)]
         if missing:
             raise ValueError(f"NETLIST_MISSING: {', '.join(missing)} not found.")
-        nl_findings, netlist_report = _check_netlist(dict_rows, paths)
+        nl_findings, netlist_report = _check_netlist(dict_rows, paths, mpn_name,
+                                                     covers_boards)
         findings += nl_findings
         pol_findings, polarity_report = _check_pin_polarity(dict_rows, paths, value_name)
         findings += pol_findings

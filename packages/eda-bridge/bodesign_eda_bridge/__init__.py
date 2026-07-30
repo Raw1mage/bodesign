@@ -31,8 +31,14 @@ from .kicad_emit import (
 )
 from .fidelity import FidelityError, FidelityReport, verify_partition_fidelity
 from .render_qa import TextQAReport, qa_svg_text
-from .block_drafter import PinoutBlock, draw_block
-from .block_qa import BlockQAVerdict, qa_block, qa_loop
+# block_drafter / block_qa are LAZY (PEP 562, see __getattr__ at the bottom):
+# they import kiutils, which the schematic/routing side of this package does not
+# need. Importing them eagerly made `from bodesign_eda_bridge import
+# compose_schematic` fail with ModuleNotFoundError: kiutils on any host without
+# the drafting extras — composer.py itself imports only stdlib. That is the same
+# defect BR_20260730 F1 fixed in workflow-core (a stdlib-only gate made
+# unreachable by a sibling's heavy dependency), found here because the N1/N2
+# tests below could not import composer on a bare host.
 from .kicad_symbol import KiCadSymbolEmitResult, KiCadSymbolPin, emit_kicad_symbol, emit_kicad_symbol_library_from_pin_table
 from .bom_export import BomResult, export_bom, export_netlist
 from .component_fetch import fetch_component, fetch_components, search_components
@@ -171,3 +177,41 @@ __all__ = [
     "qa_block",
     "qa_loop",
 ]
+
+# ---------------------------------------------------------------------------
+# Lazy attribute resolution (PEP 562) for the kiutils-dependent drafting side.
+#
+# BR_20260730b: `composer` and the routing/gate modules import only stdlib, but
+# an eager `from .block_drafter import ...` at module scope made the WHOLE
+# package unimportable without kiutils. A caller asking for compose_schematic
+# paid for a dependency it never used — the F1 shape (BR_20260730), one package
+# over.
+#
+# Deliberately NOT a try/except ImportError that degrades to None: a missing
+# name must still raise, and asking for draw_block without kiutils must still
+# report the real ModuleNotFoundError. This defers the import, it does not
+# swallow it — no silent fallback.
+_LAZY_SUBMODULE_ATTRS = {
+    "PinoutBlock": ".block_drafter",
+    "draw_block": ".block_drafter",
+    "BlockQAVerdict": ".block_qa",
+    "qa_block": ".block_qa",
+    "qa_loop": ".block_qa",
+}
+
+
+def __getattr__(name: str):
+    module = _LAZY_SUBMODULE_ATTRS.get(name)
+    if module is None:
+        # Preserve normal semantics: a genuinely unknown attribute is an
+        # AttributeError, not a confusing ImportError from a guessed module.
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from importlib import import_module
+
+    value = getattr(import_module(module, __name__), name)
+    globals()[name] = value  # resolve once; subsequent access is a plain lookup
+    return value
+
+
+def __dir__() -> list:
+    return sorted(set(globals()) | set(_LAZY_SUBMODULE_ATTRS))

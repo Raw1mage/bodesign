@@ -23,12 +23,35 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 MCPCTL = REPO / "mcpctl.sh"
 
+# Fixtures mimic `ps -eo pid,stat,etimes,args --no-headers` — the exact column
+# set busy_report asks for. TestPsFixturesMatchTheScript below asserts that
+# correspondence, because a fixture is a hand-copy of the script's ps spec: when
+# the STAT column was added for zombie detection, these fixtures still carried
+# the old 3-column shape, awk silently read etimes as STAT and args as etimes,
+# and six tests failed with confusing rc mismatches instead of "your fixture is
+# the wrong shape". Same V4-c duplicate-fact defect this repo lints for.
+#
 # What a busy ee worker looks like: the server at pid 1 plus a long-running route.
-PS_BUSY = "    1 3600 python /app/services/mcp/server.py --tools ee\n  402 1800 java -jar /opt/freerouting.jar -de board.dsn -do out.ses -mp 40"
+PS_BUSY = "    1 Ssl  3600 python /app/services/mcp/server.py --tools ee\n  402 Sl   1800 java -jar /opt/freerouting.jar -de board.dsn -do out.ses -mp 40"
 # Idle: only the server itself. Its age is irrelevant — it is not "work".
-PS_IDLE = "    1 3600 python /app/services/mcp/server.py --tools ee"
+PS_IDLE = "    1 Ssl  3600 python /app/services/mcp/server.py --tools ee"
 # A just-started helper: younger than the threshold, not worth blocking on.
-PS_YOUNG = "    1 3600 python /app/services/mcp/server.py --tools ee\n  402    3 sh -c echo hello"
+PS_YOUNG = "    1 Ssl  3600 python /app/services/mcp/server.py --tools ee\n  402 S       3 sh -c echo hello"
+# BR_20260730b §M: xvfb-run leaks a defunct Xvfb per freerouting run. These are
+# ALREADY DEAD — no CPU, no memory, nothing a restart could destroy — but their
+# etimes keeps climbing, so the original gate read three 12-hour-old corpses as
+# live work and refused every restart forever.
+PS_ZOMBIE = (
+    "    1 Ssl  3600 python /app/services/mcp/server.py --tools ee\n"
+    "  399 Z   43512 [Xvfb] <defunct>\n"
+    " 3322 Z   40797 [Xvfb] <defunct>"
+)
+# A zombie does not launder a real job sitting next to it.
+PS_ZOMBIE_PLUS_LIVE = (
+    "    1 Ssl  3600 python /app/services/mcp/server.py --tools ee\n"
+    "  399 Z   43512 [Xvfb] <defunct>\n"
+    "  402 Sl   1800 java -jar /opt/freerouting.jar -de board.dsn -do out.ses -mp 40"
+)
 
 
 class _Harness:
@@ -206,6 +229,121 @@ class TestBusyGate(unittest.TestCase):
                 self.assertFalse(h.compose_ran)
                 h.close()
                 self._h = None
+
+
+class TestZombiesAreNotWork(unittest.TestCase):
+    """BR_20260730b §M — a defunct process must not hold the gate shut forever.
+
+    xvfb-run leaks one defunct Xvfb per freerouting run. A zombie has already
+    exited: no CPU, no memory, nothing a restart could destroy. But its etimes
+    keeps climbing, so the age-based gate read three 12-hour-old corpses as live
+    work and refused every restart INDEFINITELY — with no run to protect.
+
+    That inverts the gate's own contract, and its failure mode was worse than
+    the inconvenience: the only way out is BODESIGN_FORCE=1, so a permanently
+    stuck gate trains the operator to reach for the override reflexively — the
+    guard teaches people to disarm it. These tests pin both directions.
+    """
+
+    def tearDown(self) -> None:
+        h = getattr(self, "_h", None)
+        if h is not None:
+            h.close()
+
+    def _harness(self, *a, **kw) -> _Harness:
+        self._h = _Harness(*a, **kw)
+        return self._h
+
+    def test_zombies_alone_do_not_block_a_restart(self):
+        h = self._harness(PS_ZOMBIE)
+        r = h.run("restart")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(
+            h.compose_ran,
+            "a container holding only defunct processes is idle — blocking it "
+            "means the gate can never reopen without BODESIGN_FORCE=1",
+        )
+
+    def test_busy_still_reports_zombies_so_a_leak_stays_visible(self):
+        # Filtering them out silently would hide the fact that xvfb-run is not
+        # reaping its children — a real defect worth seeing, just not one that
+        # should block a restart. Report, do not block.
+        h = self._harness(PS_ZOMBIE)
+        r = h.run("busy")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("ZOMBIE", r.stdout)
+        self.assertIn("399", r.stdout, "a reported zombie must name its pid")
+        self.assertNotIn("\tBUSY\t", r.stdout, "a corpse must not be labelled BUSY")
+
+    def test_a_zombie_does_not_launder_a_live_job_beside_it(self):
+        # THE reverse-discrimination test for this fix. If the zombie rule were
+        # written as "any zombie present => idle", this passes a restart straight
+        # through a running 165-minute route. The classification must be
+        # per-process, not per-container.
+        h = self._harness(PS_ZOMBIE_PLUS_LIVE)
+        r = h.run("restart")
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertFalse(h.compose_ran)
+        self.assertIn("freerouting", r.stderr, "the live job must still be named")
+
+    def test_the_refusal_text_explains_the_zombie_class(self):
+        # A caller who sees ZOMBIE rows from `busy` and then a refusal needs to
+        # know which rows caused it.
+        h = self._harness(PS_ZOMBIE_PLUS_LIVE)
+        r = h.run("restart")
+        self.assertIn("ZOMBIE", r.stderr)
+        self.assertIn("NEVER blocks", r.stderr)
+
+
+class TestPsFixturesMatchTheScript(unittest.TestCase):
+    """The fixtures above are a hand-copy of the script's `ps -eo` column spec.
+
+    That duplication is the V4-c defect this repo lints for: when STAT was added
+    for zombie detection, the fixtures still carried the old 3-column shape, awk
+    read etimes as STAT and args as etimes, and six tests failed with confusing
+    rc mismatches rather than "your fixture has the wrong number of columns".
+    Derive the expected shape from the script instead of trusting the copy.
+    """
+
+    def test_fixture_columns_match_the_ps_spec_the_script_asks_for(self):
+        import re
+
+        src = MCPCTL.read_text()
+        m = re.search(r"ps -eo ([a-z,]+) --no-headers", src)
+        self.assertIsNotNone(m, "could not find the ps spec in mcpctl.sh")
+        cols = m.group(1).split(",")
+        self.assertEqual(
+            cols[:3],
+            ["pid", "stat", "etimes"],
+            "busy_report's awk indexes $1=pid $2=stat $3=etimes; if the script's "
+            "column order changed, every fixture below is now misaligned",
+        )
+        # Every fixture line must carry at least as many fields as the script
+        # asks for, or awk silently shifts columns.
+        for name, fixture in (
+            ("PS_BUSY", PS_BUSY),
+            ("PS_IDLE", PS_IDLE),
+            ("PS_YOUNG", PS_YOUNG),
+            ("PS_ZOMBIE", PS_ZOMBIE),
+            ("PS_ZOMBIE_PLUS_LIVE", PS_ZOMBIE_PLUS_LIVE),
+        ):
+            for line in fixture.splitlines():
+                with self.subTest(fixture=name, line=line):
+                    fields = line.split()
+                    self.assertGreaterEqual(
+                        len(fields), len(cols),
+                        f"{name} row has {len(fields)} fields but the script asks "
+                        f"for {len(cols)} ({m.group(1)}) — awk will misread it",
+                    )
+                    self.assertRegex(
+                        fields[1], r"^[A-Za-z<>+sl]+$",
+                        f"{name} field 2 must be a ps STAT code (script column "
+                        f"order: {m.group(1)})",
+                    )
+                    self.assertRegex(
+                        fields[2], r"^\d+$",
+                        f"{name} field 3 must be etimes seconds",
+                    )
 
 
 class TestGateIsWiredToEveryDestructiveAction(unittest.TestCase):

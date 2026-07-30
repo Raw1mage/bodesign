@@ -12,7 +12,7 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
 
 判準句（review 時問這一句就夠）：
 
-> **如果呼叫端只讀 `ok` 或只讀一個計數就會得出錯誤結論，這個 API 就違反本 invariant。**
+> **若呼叫端只讀 `ok` 或只讀一個計數就會得出錯誤結論，這個 API 就違反本 invariant。**
 
 `no-silent-fallback` 管的是「缺輸入時不要猜」；本 control 管的是「處理過程掉東西時不要裝沒事」。
 兩者是同一種誠實的兩面，但**測試覆蓋率高完全擋不住後者**——2026-07-29 一輪 C04 交付連續撞出
@@ -43,6 +43,8 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
 | **V4-c 事實雙重記錄** | 同一個事實被記在**權威來源**與**手抄副本**兩處，而沒有任何機制強迫兩者一致 | §A/§I `_need_pcbnew()` vs `_EE_GROUP_TOOLS` |
 | **V5 判決未帶產生它的預算** | 回傳值**完全誠實**，但它是 (標的, 呼叫端給的預算) 的函數，而讀起來像只是標的的屬性 | §J `autoroute` 不 echo `-mp` |
 | **V6 判決依賴未檢驗的前提** | 判決的算式默認了一個實際可檢查的前提，而工具既不查也不說 | §K escape gate 乘 `len(signal_layers)` 卻未查 router 開不開得了 via |
+| **V11 修復複製了缺陷** | 修法本身落入它要修的同一類型，於是錯誤訊息變成**無法遵從的命令** | §P `anyOf` 本身即 stringify 觸發條件 |
+| **V12 呼叫端可控的靜音鈕** | 降級/豁免機制讓被檢查方能把**已觀測到**的問題宣告成不被檢查 | §Q `covers_boards` 寫窄 → `PASS blocking=0` |
 
 **V4/V4-b 與 V1–V3 的關鍵差異（勿混淆，修法不同）**：V1–V3 是**假綠**（靜默成功，違反天條）；
 V4/V4-b 是**假紅**（gate 大聲失敗且訊息精確，*沒有*違反 no-silent-fallback，壞的是餵給它的量測）。
@@ -224,6 +226,296 @@ pin 4 被接到 `GND`、三個陽極失去供電，**LED 永遠不亮**。而 `J
 正解是只認**不可能是命名風格差異**的那一類矛盾：GND ↔ power 的極性反轉（R6）。
 positional 對齊（第 N 個 token = pin N）是必要假設，但 token 數與實際 pin 數不符時**報 unaligned 而非硬對**。
 
+#### V7 的收尾：喊狼的另一半在「基準的缺口」，不在「被檢物的缺陷」
+
+上面說「先修可達性與假紅，再談詞彙收斂」。可達性修完、假紅從 82 降到 1 之後，
+**同一個 gate 又從另一個方向開始喊狼**——這次不是實作缺陷，而是**比對基準本身不完整**。
+
+R5（BOM↔netlist）對真實多板產品輸出 11 筆 blocking，其中 **0 筆可行動**：一份產品 BOM 涵蓋 6 塊板，
+而一份 `.net` 只涵蓋一張 schematic，那 5 塊外接模組板的 schematic **根本還沒開始畫**。
+
+> **判別句**：一個 finding 被報出來之前先問——
+> **「我有沒有可以拿來比對的基準？」** 沒有基準時報出的不是缺陷，是**我這邊的覆蓋缺口**。
+
+這與 `consumer_fork_drift` 的 `forks_unassessable` 是同一條規則的兩個實例：
+「**沒有屬於該函式的 sentinel** 是我的表缺口，不是對方的缺陷」＝「**沒有覆蓋該板的 netlist** 是基準缺口，
+不是 BOM 的缺陷」。兩者的正解都是移進 coverage 欄位、**照實回報但不計入 finding**。
+
+但降級規則有一個**必須擋住的自我沉默路徑**：
+
+> **一個能讓自己閉嘴的降級規則，就是一台假綠產生器。**
+> 若「未覆蓋就豁免」無條件成立，那麼**傳一份完全無關的 netlist**（解析不到任何一塊板）
+> 會讓整份 BOM 全數豁免、gate 直接變綠。
+
+所以豁免只在**至少有一塊板真的被匹配到**時才發放（`exemptions_granted`）。
+這同時解決了兩個結構上完全相同的案例：單列 BOM 且該列未畫（零覆蓋 → 真缺口）
+vs 6 板 BOM 有 2 板被覆蓋（→ 其餘無基準）。
+
+**還有一個推論限度必須誠實標記。** 「這塊板有沒有被覆蓋」原本是從「有幾個 ref 解析到」**推論**的，
+而那個推論**無法分辨**「沒有 netlist 覆蓋這塊板」與「有覆蓋但這塊板每一列都真的沒畫」——
+**歧義存在於輸入本身，再聰明的推論都解不開，只有呼叫端知道**。正解是兩件事一起做：
+給呼叫端一個 `covers_boards` 明示參數，**並且永遠回報判定基準**
+（`board_coverage_basis: "declared" | "inferred_from_drawn_refs"`）——
+這正是 §C `basis` 的手法：**判決要帶著產生它的量測基準**，推論出的豁免不得與宣告的豁免混為一談。
+
+#### 同一輪的反向教訓：訊息措辭讓一個真 finding 被讀成 by-design
+
+那 11 筆裡 coordinator 斷言「每一筆都是設計上正確不在 netlist 裡」。**其中兩筆不是。**
+
+```
+BOM U4A (nRF7002-QFAA-R)  ←→ netlist UW1 (value "nRF7002 WiFi")
+BOM U4B (MDBT53-P1M)      ←→ netlist UB1 (value "MDBT53-P1M BLE")
+UW1 / UB1 出現在 BOM 的筆數：0
+```
+
+那兩顆料**確實被畫了**，只是 schematic 與 BOM 對它叫什麼名字**不一致**——這是真實的文件分歧，
+而 R5 的訊息寫「declared in BOM but **never drawn**」。
+
+> **finding 是對的，措辭把讀者送去做錯的修復。** 「never drawn」指向「去把它畫出來」，
+> 而正解是「去把兩份文件的命名對齊」。呼叫端讀到「沒畫」但自知那顆料畫了，
+> 於是把整條 finding 歸類成 gate 誤報——**一個歸因錯誤的正確 finding，會被當成假紅丟掉**。
+
+修法是分出獨立的 `R5_REFDES_DIVERGENCE`，並在 detail 裡指名它被畫成什麼 refdes、比對依據是什麼。
+判定改用 **mpn（料號）** 而非 refdes，因為 mpn 才是跨文件識別「同一顆實體零件」的依據。
+
+**分類順序是這裡最容易寫錯的一行**：mpn 命中是**正面證據**（這顆料存在於 schematic），
+而 board 未覆蓋只是**證據不存在**。
+
+> **正面證據必須優先於證據不存在。**
+
+把豁免排在前面，會讓「一塊板上每個 refdes 都分歧」的情況整批消失——
+那正是 CORE 的實況（`J_X1`/`J_X2`/`U4A`/`U4B` 被畫成 `JSA`/`JSB`/`UW1`/`UB1`，
+於是 CORE **按 refdes 看起來完全未 capture**，事實上它被畫得很完整）。
+
+mpn 比對必須保守，因為**假的 divergence 宣告比漏報更糟**——它告訴呼叫端某顆料存在，而它可能不存在：
+mpn 長度下限（1–2 字元的 mpn 命中一切）、排除 placeholder token、由長到短試 stem
+（`nRF7002-QFAA-R` 優先於家族級 `nRF7002`）、**候選 ≥2 筆時回 None 而不猜**。
+
+### V8：呼叫端傳了一個參數，被接成另一個型別
+
+V1–V7 都假設「參數本身抵達了，只是處理有損」。V8 在更前面一層：**參數在跨越介面時被重新編碼，
+而接收端把編碼後的形狀當成一個合法值。**
+
+實例（BR_20260730b N1）。MCP facade 的 `bodesign_compose_schematic` schema 把 `symbol_dirs`
+宣告成 **`{}`（完全無型別）**，於是某些 MCP client 會把陣列序列化成文字：
+
+```
+呼叫端傳:  symbol_dirs = ["/work/experiments/symbols"]        ← JSON 陣列
+composer 收到: '["/work/experiments/symbols"]'                 ← 17 字元的字串
+            → isinstance(symbol_dirs, str) 為真
+            → _user_dirs = [那個字串]                        ← 一個永不存在的「路徑」
+            → 9 個自訂 symbol 全部載不到，KiCad stdlib 照樣載入
+```
+
+**決定性證據是同一次呼叫內的不對稱**：`spec` 宣告 `{"type": "object"}` → 真 dict 抵達、components
+正確解析；`symbol_dirs` 宣告 `{}` → 被 stringify。**同一 client、同一 transport、同一 request，
+宣告型別的存活、未宣告的被序列化。** 兩元素探針把機制釘死：`["/a", "/b"]` 變成一個含 JSON 文字的
+「單一路徑」，而非兩條路徑。
+
+為什麼它比一般型別錯誤難抓：
+
+1. **殘存的部分成功掩護了它。** stdlib 元件照樣載入、`nets` 照樣算、`placed` 是正整數。
+   回傳讀起來像「大致健康，只是我的自訂 symbol 有問題」。
+2. **錯誤訊息把歸因指向錯的層。** 下游誠實回報
+   `library 'buck_3v3.kicad_sym' not found in: ['["/work/.../symbols"]', '/usr/share/kicad/symbols']`
+   ——真相（那個「路徑」是一段 JSON 文字）**已經印在畫面上**，但沒人會往「上游多編碼」讀，
+   它讀起來是「被呼叫方的磁碟上沒有這個檔」。呼叫端因此花了一整輪相信自己的 symbol library 壞了。
+3. **fail-loud 攔對了，卻攔在錯的層。** 同一路徑上的 `SymbolLoadError`（BR_20260723d）確實擋住了
+   交付，這是正面案例——但它把**上游的型別錯誤**報成**下游的 symbol 找不到**。
+
+> **fail-loud 只保證「不會靜默交付錯的東西」，不保證「歸因指向真正的那一層」。**
+> 一個攔在下游的 loud error，會把呼叫端送去修一個沒壞的東西。
+
+**判別句**：
+
+> 對每一個跨介面參數問：**它的型別在介面契約上被宣告了嗎？**
+> 沒宣告 → 它可能以任何形狀抵達，而你的 `isinstance` 分支會替它選一個。
+
+修法有兩半，缺一不可：
+
+- **接收端**（`composer.py`）：偵測「首字元是 `[` 且 JSON 解析出 list」的字串 → 拋
+  `SymbolDirsEncodingError`，訊息同時帶 raw 與 decoded。**刻意不自動解碼**——自動解碼會
+  無聲修好呼叫端的 bug，連帶掩蓋產生它的 schema 缺陷（那才是新增 fallback）。
+- **產生端**（`server.py` schema）：宣告 `anyOf: [array<string>, string]`。
+  沒有這一半，呼叫端得到 loud error 卻**仍然無法發出正確呼叫**——這是 §J 的教訓：
+  **schema 是 MCP 呼叫端在呼叫當下唯一看得到的文件**，Python docstring 對它不存在。
+
+偵測器必須窄：只認「首字元 `[`」+「JSON 合法」+「解出 list」。反向鑑別力測試鎖住四種必須放行的
+輸入——真陣列、裸路徑字串、**目錄名以 `[` 開頭的真路徑**、以及 `'{"a": 1}'`（是 JSON 但不是 list，
+不屬本缺陷、不得報成本缺陷）。
+
+### V9：每一個 gate 都誠實回綠，而交付物是空的
+
+V8 是「參數被接錯」，V9 是**輸入根本沒有內容，而所有 gate 都對「沒有內容」給出正面判決**。
+
+實例（BR_20260730b N2）。一份沒有 `components` 的 spec 讓 compose 產出 **213 bytes、0 個 symbol**
+的空白 `.kicad_sch`，然後**四個獨立的 gate 各自誠實地放行**：
+
+| gate | 回報 | 為什麼它是對的 |
+|---|---|---|
+| draftsman gate | `PASS intra_overlap=0 label_overlap=0 rects=0` | 沒有東西**不可能**重疊 |
+| ERC | `erc_violations=0 erc_errors=0` | 沒有東西**不可能**接錯 |
+| validation | `status="validated"` | 檔案結構合法 |
+| 呼叫回傳 | `ok:true placed:0 nets:0` | 沒有任何一步失敗 |
+
+**四個綠燈，每一個都內部正確，合起來什麼都沒保證**——因為它們全部在回答「這張圖有沒有問題」，
+而那張圖不存在。這與 V7 同源（gate 回答的不是你問的那個問題），但成因在**輸入的空集合**而非
+gate 的實作範圍：`0 violations` 同時是「這張圖沒問題」與「沒有圖」的正確答案，**呼叫端無法從
+判決本身分辨這兩者**。
+
+觸發它的是一個合理的猜測：呼叫端傳了 `{"__spec_file__": "/work/spec.json"}`，因為 `spec` 的 schema
+只寫 `{"type": "object"}`——沒有任何線索說明它要的是**內容**而非**檔案參照**。沒有 key 命中，
+spec 就靜默成了一份空設計。（又是 §J：schema 是唯一的文件。）
+
+> **判別句**：對每一個「零違規／零 finding」的判決問——
+> **「被檢查的東西是不是空的？」** 空集合對幾乎所有謂詞都真，所以
+> **「檢查通過」與「沒有東西可檢查」必須在回傳裡可分辨**。
+
+修法：在**任何 gate 有機會祝福它之前**拒絕（`EmptySpecError`）。三個設計決定：
+
+1. **錯誤訊息同時列出「收到的 key」與「compose 實際讀的 key」**——這個缺陷的本質永遠是
+   key 名不匹配，把兩邊並排就在一行內回答完，而不是把呼叫端送去讀 composer 原始碼（實際發生過）。
+2. **明說「為什麼你剛才看到的綠燈沒有幫上你」**。碰到這個錯誤的人剛看過 `ok:true` 與 `PASS`；
+   訊息若不解釋那些綠燈，讀起來像在跟他觀察到的事實矛盾。
+3. **`KNOWN_KEYS` 那份清單自帶 AST 對照測試**——它是 `spec.get(...)` 呼叫點的手抄副本，
+   正是 V4-c。雙向斷言（讀了卻沒宣告 / 宣告了卻沒讀）**當場就抓到我自己漏了 `l6_avoidance`**：
+   我最初盤查用的 grep pattern 寫成 `[a-z_]*`（**不含數字**），把唯一帶數字的 key 靜默漏掉。
+
+> 這是第六次「驗證工具靜默偏窄」，而這次是**寫 KB 的人自己**在寫這一節時犯的。
+> 那條測試不是形式主義——它是唯一發現這個漏抄的東西。
+
+### V10（ops 層）：gate 把「已經死掉」讀成「正在工作」
+
+§L 的 busy gate 上線後，實測到它自己的反向缺陷，形狀與它在防的東西對稱。
+
+`guard_busy` 用「process 年齡 > 30s」判定忙碌。`xvfb-run` 每跑一次 freerouting 就漏一個
+**defunct（zombie）** Xvfb，而 **zombie 的 `etimes` 會一直累加**：
+
+```
+bodesign-...-ee-1  BUSY  399  43495s  [Xvfb] <defunct>     ← 12 小時前就死了
+bodesign-...-ee-1  BUSY  3322 40780s  [Xvfb] <defunct>
+bodesign-...-ee-1  BUSY  14303 23208s [Xvfb] <defunct>
+容器 CPU 0.16%，無 java、無 freerouting
+```
+
+三具 12 小時的屍體讓 gate **無限期**拒絕每一次 restart，而沒有任何運算需要保護。
+zombie 已經 exit：不佔 CPU、不佔記憶體、不持有 fd，**restart 不可能摧毀一個已經死掉的 process**。
+
+這**反轉了 gate 自己的契約**，而它的失敗模式比「不方便」嚴重得多：唯一的出路是
+`BODESIGN_FORCE=1`，所以一個永久卡住的 gate **會訓練操作者反射性地繞過它**——
+
+> **守衛的失敗模式若是「永遠拒絕」，它就在教人拆掉自己。**
+> 一個會誤擋到讓人習慣性 force 的 gate，比沒有 gate 更危險：force 的那一天，
+> 它剛好真的在保護一個 165 分鐘的運算。
+
+注意這**不是**放寬 fail-safe 姿態。§L 的「UNKNOWN 一律擋」仍然成立，因為那條的依據是
+**代價不對稱**（誤擋損失一次等待，誤放損失 165 分鐘運算）。而 zombie 沒有這個不對稱——
+**已經沒有運算可以損失了**。fail-safe 的正確方向來自代價結構，不是「一律選擇拒絕」。
+
+修法：
+
+- `ps` 加 `stat` 欄，`STAT` 以 `Z` 開頭者分類為 `ZOMBIE`，**per-process 判定而非 per-container**。
+- `guard_busy` 改讀 `blocking_report`（排除 ZOMBIE），`busy` 仍**顯示** ZOMBIE 列——
+  **靜默過濾掉它們會隱藏 `xvfb-run` 沒有 reap 子行程這個真缺陷**。報告，但不阻擋。
+- 關鍵反向鑑別力測試：**一具 zombie 旁邊坐著一個真 job 時，仍必須擋**。
+  若規則寫成「有 zombie ⇒ 容器閒置」，restart 就會直接穿透一個正在跑的 165 分鐘 route。
+
+順帶記一筆同族的 V4-c：測試 fixture 是 `ps -eo` 欄位規格的**手抄副本**。加上 `stat` 欄後，
+fixture 仍是舊的 3 欄，awk 把 `etimes` 讀成 `STAT`、`args` 讀成 `etimes`，於是 6 條測試以
+令人困惑的 rc 不符失敗，而不是說「你的 fixture 欄數錯了」。已加一條從腳本 regex 推導欄序的測試。
+
+### V11：修復本身複製了它要修的缺陷（schema 的形狀改變傳輸型別）
+
+V8 的結論是「參數沒宣告型別 → 被 stringify」，修法是宣告 `anyOf: [array, string]`。
+**那個修法自己就是同一個缺陷。**
+
+實例（BR_20260730b §P）。同一次 tool call、同一個 client、兩個陣列參數，命運相反：
+
+| 參數 | schema | 抵達形狀 |
+|---|---|---|
+| `covers_boards` | `{"type":"array"}` | 真 `list` ✓ |
+| `netlist_path` | `anyOf[array, string]` | `'["a.net","b.net"]'` 字串 ✗ |
+| `spec` | `{"type":"object"}` | 真 `dict` ✓ |
+| `symbol_dirs` | `{}` | 字串 ✗ |
+
+四列一起讀才看得出真規律：**不是「沒宣告型別」，而是「沒宣告一個單一確定的型別」**。
+`{}` 與 `anyOf` 在這條 transport 上同類。V8 只看了前兩列就下結論，樣本不足。
+
+後果比「少修一個地方」嚴重：
+
+> **呼叫端拿到了 loud typed error，卻無法遵從它。**
+> 錯誤訊息說「pass THAT as a real array」，而它的 client 對 union 參數就是會 stringify。
+> 單一值還能用裸字串繞，多值**無路可走**。
+
+一個只能報錯、不能被遵從的 typed error，對呼叫端而言與 silent failure 的差別只在於它知道自己卡住了。
+而這句警告**就寫在 V8 自己的修法里**（「沒有產生端那一半，呼叫端得到 loud error 卻仍然無法發出正確呼叫」）——
+知道那句話並不阻止我實作出它描述的情境。
+
+> **§J：schema 是呼叫端唯一看得到的文件。V11 是它的下一層：**
+> **schema 的形狀會改變參數的傳輸型別，不只是描述它。**
+
+**判別句**：
+
+> 對每一個跨介面的 array/object 參數問：**它的 schema 是不是一個單一、確定的型別？**
+> union（`anyOf`/`oneOf`）與空 schema 一樣不算宣告。
+
+修法：**schema 比 runtime 窄，不是反過來**。宣告單一 `{"type":"array"}`，runtime 仍接受裸字串。
+description 必須寫明「這裡比 runtime 窄是故意的、因為 union 發不出去」——否則下一個讀者會把它當 bug 把 union 加回來。
+
+**守衛必須編碼 transport 事實，不是 schema 合法性**：`anyOf` 在 JSON Schema 裡完全合法，
+**純靜態形狀檢查永遠抓不到 V11**。規則只能是「任何包含 array 的 union 都是缺陷」，
+且從**全檔掃描**而非寫死已知的兩個參數名（寫死即 V4-c；這兩個偏差本來就是一次發現一個）。
+
+### V12：呼叫端可控的靜音鈕（宣告的缺席蓋過觀測到的存在）
+
+V12 是降級規則自己長出的後門：**一個為了消除噹狼而加的豁免機制，把「要不要檢查」的決定權交給了被檢查方。**
+
+實例（BR_20260730b §Q）。round=8 為了讓多板 BOM 不永遠紅，加了 `covers_boards`
+讓呼叫端宣告哪些板真的有 netlist 覆蓋。同一份 netlist、CORE 實測 `drawn=2`：
+
+```
+covers_boards 省略（inferred）    → FAIL  9 blocking
+covers_boards ["PRODUCT","CORE"] → FAIL  9 blocking
+covers_boards ["PRODUCT"]        → PASS  0 blocking   ← 假綠
+```
+
+它反轉了同一個函式在**下一層**已經遵守的排序規則（mpn 命中排在 board 豁免之前）：
+
+> **正面證據優先於證據不存在。**
+> `drawn > 0` 是觀測到的存在；「宣告沒覆蓋」只是證據的缺席。
+> 讓後者贏，就是讓呼叫端用一個字串關掉一條規則。
+
+而且這個靜音鈕比已知的那個更好用：round=8 已經擋住「傳無關 netlist」（`exemptions_granted=False`），
+卻漏了「傳對 netlist、但把 scope 寫窄」。**堵住一個自我静音路徑不代表堵住了同類的其他路徑。**
+
+**判別句**：
+
+> 對每一個「降級 / 豁免 / 縮小範圍」參數問：
+> **呼叫端能不能用它把一個已經被觀測到的問題變成不被檢查？**
+> 能 → 它是靜音鈕，不是 scope 宣告。
+
+修法：**宣告只能 WIDEN、永遠不能 SHRINK 到觀測以下**。
+
+```
+captured = declared | observed    # 宣告可讓零目擊的板變可評估（原本的目的）
+                                  # 但不能讓已目擊的板變不可評估
+```
+
+矛盾不静默向任一邊解決，而是進 `board_coverage_conflicts` +
+`board_coverage_basis="declared_with_observed_conflict"`。理由：宣告與觀測對不上，
+可能是宣告過時、也可能是那些識別碼屬於別的板——**這是要人裁決的事，不是可以靜默採信任一邊的事**。
+
+**修 V12 時自曝的子形態：同一原則只套到一半層**。第一版寫成
+`observed = {b for b, v in per_board.items() if v["drawn"]}`，自己的新測試馬上紅——
+真實的 CORE **四筆全是 mpn 別名命中**（`U4A→UW1`），字面 `drawn=0`，
+看起來「未捕獲」實則已被完整畫了。**我在 row 層認別名為正面證據，board 層卻不認。**
+
+> 一條原則只套在想得到的那一層，另一層就是它的反例。
+> **實作一條 ordering rule 時，要問「這個判斷在幾個層級發生」。**
+
+修正後 `per_board` 多了 `drawn_as_other_refdes`，且別名解析在**同一 pass** 完成並快取給 row 迴圈——
+算兩次就是 V4-c，**而那正是 board 層與 row 層一開始會不一致的成因**。
+
 ## 正確樣態（positive pattern，KB 只有反例不夠）
 
 - **`plane_layers_applied: [{spec, layer, net, type}]`**（`routing.py net2pcb_board`）——
@@ -314,7 +606,7 @@ consumer 抓到自己的錯，靠的是「這與我剛才實測成功的 `route_
 `tests/test_mcpctl_busy_gate.py::test_an_unprobeable_container_blocks_rather_than_reads_as_idle`。
 
 **門檻本身是取捨，而取捨值必須在回傳裡可見。** busy gate 用 30 秒界定「長跑」，所以它**擋不住短命
-而不可中斷的工作**（例如剛啟動 5 秒的 `pour_planes`）。**刻意不降低門檻**：門檻越低，對正常呼叫的
+而不可中斷的工作**（以剛啟動 5 秒的 `pour_planes` 為例）。**刻意不降低門檻**：門檻越低，對正常呼叫的
 誤擋越多，而誤擋一個進行中的互動式工作階段比偶爾殺掉一個 5 秒運算更糟。這是取捨，不是疏漏——
 但因此 `BUSY 402 1282s` **必須帶著秒數**，呼叫端才能自己判斷 30 秒門檻對它的工作夠不夠用，
 而不是拿到一個不帶依據的 busy/idle 布林。**任何門檻型判決都適用這條：門檻值本身就是 V5 說的

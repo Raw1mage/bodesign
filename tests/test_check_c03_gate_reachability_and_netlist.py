@@ -413,7 +413,9 @@ class NetlistCrosscheckTests(unittest.TestCase):
             ])
             nc = check_c03(b, netlist_path=_net(tmp)).netlist_crosscheck
             self.assertEqual(nc["boards_not_captured"], ["DEV"])
-            self.assertEqual(nc["per_board"]["PRODUCT"], {"rows": 1, "drawn": 1, "missing": []})
+            self.assertEqual(nc["per_board"]["PRODUCT"],
+                             {"rows": 1, "drawn": 1, "drawn_as_other_refdes": 0,
+                              "missing": []})
             self.assertEqual(nc["per_board"]["DEV"]["drawn"], 0)
 
     def test_named_but_absent_netlist_raises(self):
@@ -536,6 +538,460 @@ class WiringGuardTests(unittest.TestCase):
         fn = next(n for n in ast.parse(src).body
                   if isinstance(n, ast.FunctionDef) and n.name == "check_c03")
         self.assertIn("netlist_path", [a.arg for a in fn.args.kwonlyargs])
+
+
+_SERVER_PY = Path(__file__).parent.parent / "services" / "mcp" / "server.py"
+
+
+class FacadeReachabilityTests(unittest.TestCase):
+    """Every check_c03 parameter must be reachable THROUGH THE MCP FACADE.
+
+    §3 of this BR is about a gate that cannot execute where the caller stands. That
+    defect recurred one layer over, in the code fixing it: F2 added `netlist_path`
+    (R5) and R6 to the function, and round=8 added `covers_boards`, but neither was
+    added to the facade's inputSchema or forwarded by `_h_check_c03`. So R5/R6 were
+    UNREACHABLE for every MCP caller — they silently received
+    netlist_crosscheck.status='not_run' and could read a PASS as "every part is
+    drawn". The behavioural tests above all call the Python function directly, so
+    they were green throughout; only a caller going through the facade would have
+    noticed, and the reporter happened to be invoking the function directly.
+
+    Derived from check_c03's own signature rather than a hand-written list of
+    parameter names, because such a list is the V4-c duplicate-fact shape: it is a
+    copy of the signature and would drift from it exactly as _EE_GROUP_TOOLS did
+    (twice). A new parameter added tomorrow fails this test until it is exposed.
+    """
+
+    def _params(self) -> list[str]:
+        src = (_MOD_DIR / "check_c03.py").read_text(encoding="utf-8")
+        fn = next(n for n in ast.parse(src).body
+                  if isinstance(n, ast.FunctionDef) and n.name == "check_c03")
+        return [a.arg for a in fn.args.args] + [a.arg for a in fn.args.kwonlyargs]
+
+    def _facade(self) -> tuple[str, str]:
+        """(schema_properties_fragment, handler_source) for bodesign_check_c03."""
+        src = _SERVER_PY.read_text(encoding="utf-8")
+        i = src.find('"name": "bodesign_check_c03"')
+        self.assertNotEqual(i, -1, "bodesign_check_c03 is not registered in server.py")
+        entry = src[i:i + 6000]
+        m = re.search(r'"schema":\s*\{"type": "object", "properties": \{(.*?)\},\s*"required"',
+                      entry, re.S)
+        self.assertIsNotNone(m, "could not locate the tool's schema properties")
+        h_start = src.find("def _h_check_c03")
+        self.assertNotEqual(h_start, -1, "_h_check_c03 handler not found")
+        h_end = src.find("\ndef ", h_start + 1)
+        return m.group(1), src[h_start:h_end]
+
+    def test_the_signature_scan_actually_finds_parameters(self):
+        # Reverse discrimination for the scan itself: if the AST walk returned an
+        # empty list, every assertion below would pass vacuously forever — the
+        # zero-discriminating-power failure this BR family exists to eliminate.
+        params = self._params()
+        self.assertIn("bom_csv", params)
+        self.assertIn("netlist_path", params)
+        self.assertGreaterEqual(len(params), 5, f"suspiciously few params: {params}")
+
+    def test_every_parameter_is_declared_in_the_facade_schema(self):
+        props, _ = self._facade()
+        missing = [p for p in self._params() if f'"{p}"' not in props]
+        self.assertEqual(
+            missing, [],
+            f"check_c03 accepts {missing} but the MCP inputSchema does not declare "
+            f"them — an MCP caller cannot discover or pass them, so those rules are "
+            f"unreachable through the facade (BR_20260730 §3, one layer over). The "
+            f"inputSchema is the ONLY documentation an MCP caller sees at call time.",
+        )
+
+    def test_every_parameter_is_forwarded_by_the_handler(self):
+        # A schema entry with no forwarding is worse than an absent one: the caller
+        # passes the argument, the call succeeds, and the argument is discarded.
+        _, handler = self._facade()
+        missing = [p for p in self._params() if p not in handler]
+        self.assertEqual(
+            missing, [],
+            f"_h_check_c03 does not forward {missing} — a caller passing them would "
+            f"get a successful call in which the argument was silently dropped",
+        )
+
+    def test_the_schema_says_what_omitting_netlist_path_costs(self):
+        # Declaring the parameter is not enough: a caller who does not know that
+        # omitting it SKIPS R5/R6 will read gate=PASS as "every part is drawn".
+        props, _ = self._facade()
+        m = re.search(r'"netlist_path":.*?"description":\s*"(.*?[^\\])"', props, re.S)
+        self.assertIsNotNone(m, "netlist_path carries no description")
+        desc = m.group(1)
+        self.assertIn("not_run", desc,
+                      "the description must name the status a caller gets without it")
+        self.assertIn("R5", desc)
+
+
+# ── round=8: a multi-board BOM must not be permanently red ───────────────
+
+_MULTIBOARD_HDR = "board,ref,value,mpn,qty,status,deck_status\n"
+
+# Two netlists' worth of coverage in one file: PRODUCT is fully captured, CORE is
+# captured but has a part drawn under a different refdes, and the *_MODULE boards
+# are not covered at all (their schematics do not exist yet).
+_MULTIBOARD_NET = """\
+(export (version "E")
+  (design (source "/work/probe/product.kicad_sch"))
+  (components
+    (comp (ref "J_MIC") (value "FPC 4P"))
+    (comp (ref "U1") (value "SoC"))
+    (comp (ref "UW1") (value "nRF7002 WiFi") (footprint "QFN:nRF7002-QFAA-R")))
+  (nets
+    (net (code "1") (name "SYS") (class "Default")
+      (node (ref "U1") (pin "A1") (pintype "power_in")))))
+"""
+
+
+def _mb_bom(tmp: str, rows: list[str]) -> str:
+    return _write(tmp, "mb.csv", _MULTIBOARD_HDR + "".join(r + "\n" for r in rows))
+
+
+def _mb_net(tmp: str) -> str:
+    return _write(tmp, "mb.net", _MULTIBOARD_NET)
+
+
+_MB_ROWS = [
+    'PRODUCT,U1,SoC,STM32N657,1,finalized,symbol=official',
+    'PRODUCT,J_MIC,"FPC 4P(PDM_CLK/PDM_DATA/3V3/GND)",generic,1,design-ready,symbol=official',
+    'CORE,U4A,Wi-Fi companion,nRF7002-QFAA-R,1,finalized,symbol=official',
+    'MIC_MODULE,MIC1,PDM mic,MP23DB01HP,1,design-ready,symbol=official',
+    'LED_MODULE,D1,RGB LED,XL-1615RGBC,1,design-ready,symbol=official',
+]
+
+
+class MultiBoardCoverageTests(unittest.TestCase):
+    """round=8 — R5 must not cry wolf over boards no netlist covers.
+
+    A product BOM spans every board; one netlist covers ONE schematic. On the real
+    aiguard inputs R5 reported 11 blocking rows of which 0 were actionable, because
+    5 boards (the external modules) have no schematic yet. A gate that is
+    permanently red teaches its reader to skip it — and then the one real J_MIC gap
+    goes unseen too. Same rule as consumer_fork_drift's forks_unassessable: a gap in
+    the REFERENCE is not a defect in the thing being checked.
+    """
+
+    def _run(self, tmp: str, rows: list[str] | None = None, **kw):
+        return check_c03(_mb_bom(tmp, rows or _MB_ROWS),
+                         netlist_path=_mb_net(tmp), **kw)
+
+    def test_rows_on_an_uncovered_board_are_not_findings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self._run(tmp)
+            refs = [f.ref for f in res.blocking]
+            self.assertNotIn("MIC1", refs, "MIC_MODULE has no netlist — nothing to compare against")
+            self.assertNotIn("D1", refs, "LED_MODULE has no netlist — nothing to compare against")
+
+    def test_they_are_reported_rather_than_dropped(self):
+        # "Not assessed" must never be indistinguishable from "assessed, clean".
+        with tempfile.TemporaryDirectory() as tmp:
+            nc = self._run(tmp).netlist_crosscheck
+            un = nc["rows_unassessable_board_not_captured"]
+            self.assertEqual(sorted(un), ["LED_MODULE", "MIC_MODULE"])
+            self.assertEqual(un["MIC_MODULE"], ["MIC1"])
+
+    def test_a_real_gap_on_a_COVERED_board_still_blocks(self):
+        # THE reverse-discrimination test. If the demotion were written as "missing
+        # => unassessable", every real omission would vanish with the noise.
+        rows = _MB_ROWS + ['PRODUCT,J_GHOST,"FPC 4P",generic,1,design-ready,symbol=official']
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self._run(tmp, rows)
+            self.assertIn("J_GHOST", [f.ref for f in res.blocking],
+                          "PRODUCT IS covered, so an undrawn part there is a real gap")
+            self.assertEqual(res.gate, "FAIL")
+
+    def test_the_report_states_how_coverage_was_decided(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nc = self._run(tmp).netlist_crosscheck
+            self.assertEqual(nc["board_coverage_basis"], "inferred_from_drawn_refs")
+            self.assertIn("PRODUCT", nc["boards_covered"])
+
+    def test_covers_boards_makes_coverage_authoritative(self):
+        # Inference cannot tell "no netlist covers this board" from "every row on it
+        # is undrawn"; the caller can. Declaring it must override the guess.
+        #
+        # §Q narrowed what a declaration can do: it may only WIDEN the assessable
+        # set (make a zero-sighting board assessable), never SHRINK it below what
+        # was observed. So the discriminating case is a board with NO sighting at
+        # all — LED_MODULE. Declaring it covered turns its rows into real gaps;
+        # omitting it leaves them unassessable.
+        #
+        # (A CORE row cannot serve here any more: CORE is observed via U4A -> UW1,
+        # so under §Q it stays assessable whatever the declaration says. That is
+        # tested directly in DeclaredCoverageMustNotOutrankObservationTests.)
+        with tempfile.TemporaryDirectory() as tmp:
+            declared = self._run(tmp, covers_boards=["PRODUCT", "CORE", "LED_MODULE"])
+            self.assertEqual(declared.netlist_crosscheck["board_coverage_basis"],
+                             "declared")
+            self.assertIn("D1", [f.ref for f in declared.blocking],
+                          "LED_MODULE declared covered -> its undrawn part is a real gap")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            omitted = self._run(tmp, covers_boards=["PRODUCT", "CORE"])
+            nc = omitted.netlist_crosscheck
+            self.assertNotIn("D1", [f.ref for f in omitted.blocking])
+            self.assertIn("D1",
+                          nc["rows_unassessable_board_not_captured"].get("LED_MODULE", []),
+                          "LED_MODULE not declared and drawn nowhere -> no baseline")
+
+    def test_positive_mpn_evidence_outranks_declared_coverage(self):
+        # A part whose mpn IS in a netlist is drawn, whatever the declared scope says.
+        # Absence of coverage is absence of EVIDENCE; an mpn hit is evidence. Letting
+        # the exemption win would hide a real BOM/schematic disagreement behind a
+        # scope declaration.
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self._run(tmp, covers_boards=["PRODUCT"])
+            codes = {f.ref: f.code for f in res.blocking}
+            self.assertEqual(codes.get("U4A"), "R5_REFDES_DIVERGENCE",
+                             "U4A is drawn as UW1; a scope declaration must not erase that")
+
+    def test_a_typo_in_covers_boards_is_reported(self):
+        # Otherwise a misspelt board name silently exempts nothing while looking
+        # accepted — the caller would believe they had scoped the check.
+        with tempfile.TemporaryDirectory() as tmp:
+            nc = self._run(tmp, covers_boards=["PRODUKT"]).netlist_crosscheck
+            self.assertEqual(nc["boards_declared_not_in_bom"], ["PRODUKT"])
+
+    def test_a_netlist_matching_NOTHING_exempts_nothing(self):
+        # A demotion rule that can silence itself is a false-green generator: pass
+        # an unrelated netlist and the whole BOM would be "out of scope", gate PASS.
+        with tempfile.TemporaryDirectory() as tmp:
+            unrelated = _write(tmp, "other.net",
+                              '(export (version "E")\n  (components\n'
+                              '    (comp (ref "ZZ99") (value "nothing"))))\n')
+            res = check_c03(_mb_bom(tmp, _MB_ROWS), netlist_path=unrelated)
+            nc = res.netlist_crosscheck
+            self.assertFalse(nc["exemptions_granted"],
+                             "a comparison that resolves no board is BROKEN, not out of scope")
+            self.assertEqual(res.gate, "FAIL")
+            self.assertEqual(nc["rows_unassessable_board_not_captured"], {})
+
+
+class RefdesDivergenceTests(unittest.TestCase):
+    """round=8 — "drawn under another name" is not "never drawn".
+
+    The reporter asserted all 11 findings were parts correctly absent from the
+    netlists. Two were not: the BOM's U4A/U4B (nRF7002-QFAA-R / MDBT53-P1M) ARE
+    drawn, as UW1/UB1, and those refdes appear in no BOM row. R5's message said
+    "never drawn", which is what made a real BOM/schematic disagreement read as
+    by-design — the finding was right and its wording sent the reader away.
+    """
+
+    def test_a_part_drawn_under_another_refdes_is_classified_separately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, _MB_ROWS), netlist_path=_mb_net(tmp))
+            codes = {f.ref: f.code for f in res.blocking}
+            self.assertEqual(codes.get("U4A"), "R5_REFDES_DIVERGENCE",
+                             "U4A's mpn is drawn as UW1 — the part exists")
+
+    def test_the_finding_names_the_refdes_it_was_found_under(self):
+        # "Missing" sends the reader to draw it again; naming UW1 sends them to
+        # reconcile the two documents, which is the actual fix.
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, _MB_ROWS), netlist_path=_mb_net(tmp))
+            detail = next(f.detail for f in res.blocking if f.ref == "U4A")
+            self.assertIn("UW1", detail)
+            self.assertIn("mpn", detail)
+            self.assertNotIn("never drawn", detail)
+
+    def test_divergences_are_also_structured_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nc = check_c03(_mb_bom(tmp, _MB_ROWS),
+                           netlist_path=_mb_net(tmp)).netlist_crosscheck
+            div = {d["bom_ref"]: d["netlist_ref"] for d in nc["refdes_divergences"]}
+            self.assertEqual(div.get("U4A"), "UW1")
+
+    def test_a_genuinely_undrawn_part_is_still_plain_R5(self):
+        # Reverse discrimination: if everything became a divergence, a real omission
+        # would be reported as "go rename something", which is worse than silence.
+        rows = _MB_ROWS + ['PRODUCT,U7,unique regulator,TPS62826XYZ,1,finalized,symbol=official']
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, rows), netlist_path=_mb_net(tmp))
+            codes = {f.ref: f.code for f in res.blocking}
+            self.assertEqual(codes.get("U7"), "R5_NETLIST")
+
+    def test_a_too_short_or_placeholder_mpn_never_claims_a_divergence(self):
+        # Matching on "C" or "TBD" would hit everything; a FALSE divergence claim is
+        # worse than a missed one because it asserts a part exists when it may not.
+        rows = [
+            'PRODUCT,U1,SoC,STM32N657,1,finalized,symbol=official',
+            'PRODUCT,U8,mystery,TBD,1,design-ready,symbol=official',
+            'PRODUCT,U9,tiny,X1,1,design-ready,symbol=official',
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, rows), netlist_path=_mb_net(tmp))
+            codes = {f.ref: f.code for f in res.blocking}
+            self.assertEqual(codes.get("U8"), "R5_NETLIST", "placeholder mpn must not match")
+            self.assertEqual(codes.get("U9"), "R5_NETLIST", "2-char mpn is not evidence")
+
+
+class DeclaredCoverageMustNotOutrankObservationTests(unittest.TestCase):
+    """§Q — `covers_boards` must never become a mute button.
+
+    round=8 made a DECLARED scope authoritative, which handed the caller a way to
+    turn the gate green: narrow covers_boards to one board and every undrawn row on
+    the others moves into rows_unassessable. Measured on the real inputs,
+    covers_boards=['PRODUCT'] produced gate=PASS blocking=0 while CORE was sitting
+    in that very netlist at drawn=2.
+
+    That inverts the ordering rule this module already applies one level down (an
+    mpn hit is checked BEFORE the board exemption): positive evidence outranks
+    absence of evidence, and `drawn > 0` is positive evidence. So a board the
+    netlists were OBSERVED to draw stays assessable no matter what the declaration
+    says, and the disagreement is reported instead of silently resolved.
+    """
+
+    # PRODUCT fully drawn; CORE drawn=1 of 2 -> CORE is observably captured while
+    # still having a genuinely undrawn row. Declaring only PRODUCT must not exempt it.
+    _ROWS = [
+        'PRODUCT,U1,SoC,STM32N657,1,finalized,symbol=official',
+        'CORE,U4A,Wi-Fi companion,nRF7002-QFAA-R,1,finalized,symbol=official',
+        'CORE,U7X,unique reg,TPS999888XYZ,1,finalized,symbol=official',
+    ]
+
+    def _run(self, tmp: str, **kw):
+        return check_c03(_mb_bom(tmp, self._ROWS), netlist_path=_mb_net(tmp), **kw)
+
+    def test_an_observed_board_is_not_exempt_even_when_undeclared(self):
+        # THE §Q test. Without the fix this row lands in rows_unassessable and the
+        # gate goes PASS.
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self._run(tmp, covers_boards=["PRODUCT"])
+            self.assertIn("U7X", [f.ref for f in res.blocking],
+                          "CORE is drawn in this netlist; declaring it away must not "
+                          "exempt its undrawn rows")
+            self.assertEqual(res.gate, "FAIL")
+            self.assertEqual(
+                res.netlist_crosscheck["rows_unassessable_board_not_captured"], {},
+                "nothing here lacks a baseline")
+
+    def test_the_contradiction_itself_is_reported(self):
+        # Resolving it silently in EITHER direction hides a fact a human must judge:
+        # either the declaration is stale, or those refs belong to another board.
+        with tempfile.TemporaryDirectory() as tmp:
+            nc = self._run(tmp, covers_boards=["PRODUCT"]).netlist_crosscheck
+            conflicts = {c["board"]: c for c in nc["board_coverage_conflicts"]}
+            self.assertIn("CORE", conflicts)
+            c = conflicts["CORE"]
+            # CORE is observed through a DIVERGED refdes here (U4A drawn as UW1),
+            # which is the real aiguard shape — so the conflict must count both
+            # kinds of sighting, not just refdes-literal ones.
+            self.assertGreater(c["observed_drawn"] + c["observed_drawn_as_other_refdes"], 0)
+            self.assertEqual(nc["board_coverage_basis"], "declared_with_observed_conflict",
+                             "the basis must show the declaration was not taken at face value")
+
+    def test_a_truly_uncovered_board_is_still_exempt(self):
+        # Reverse discrimination for the §Q fix: if it were written as "declarations
+        # never exempt anything", round=8's whole point would be undone and a
+        # multi-board BOM would go permanently red again.
+        rows = self._ROWS + ['LED_MODULE,D1,RGB LED,XL-1615RGBC,1,design-ready,symbol=official']
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, rows), netlist_path=_mb_net(tmp),
+                            covers_boards=["PRODUCT", "CORE"])
+            nc = res.netlist_crosscheck
+            self.assertNotIn("D1", [f.ref for f in res.blocking],
+                             "LED_MODULE is drawn nowhere — no baseline, still exempt")
+            self.assertIn("D1", nc["rows_unassessable_board_not_captured"].get("LED_MODULE", []))
+
+    def test_no_conflict_is_reported_when_declaration_matches_observation(self):
+        # The conflict list must not cry wolf on the normal case.
+        with tempfile.TemporaryDirectory() as tmp:
+            nc = self._run(tmp, covers_boards=["PRODUCT", "CORE"]).netlist_crosscheck
+            self.assertEqual(nc["board_coverage_conflicts"], [])
+            self.assertEqual(nc["board_coverage_basis"], "declared")
+
+
+class ArrayArgumentsMustNotBeDeclaredAsUnionsTests(unittest.TestCase):
+    """§P — a union declaration is itself the stringify trigger.
+
+    N1 was diagnosed as "symbol_dirs had no declared type, so the client serialised
+    the array to text". The repair declared anyOf[array, string] — and the client
+    stringifies THAT too. Proven by an A/B inside ONE request: `covers_boards`
+    ({type: array}) arrived as a real list while `netlist_path` (anyOf) arrived as
+    '["a.net","b.net"]' and died on NETLIST_MISSING.
+
+    So the loud typed error from N1 was unobeyable: it demanded a real array from a
+    caller whose transport could not send one. A single-value call could dodge it
+    with a bare string; a multi-value call had no route at all.
+
+    Rule: schema declares the ARRAY only; the runtime stays wider and still accepts
+    a bare string. The schema may be narrower than the runtime, never a union of
+    both. Pure static shape-checking cannot catch this — an anyOf looks perfectly
+    legal — so this guard encodes the transport fact the A/B established.
+    """
+
+    def _tool_entry(self, name: str) -> str:
+        src = _SERVER_PY.read_text(encoding="utf-8")
+        i = src.find(f'"name": "{name}"')
+        self.assertNotEqual(i, -1, f"{name} is not registered in server.py")
+        return src[i:i + 6000]
+
+    def _prop(self, tool: str, prop: str) -> dict:
+        entry = self._tool_entry(tool)
+        m = re.search(rf'"{prop}":\s*(\{{.*?\}}),\n', entry, re.S)
+        self.assertIsNotNone(m, f"{tool}.{prop} schema shape not found")
+        return ast.literal_eval(m.group(1).replace("_STR", '{"type": "string"}'))
+
+    def test_netlist_path_declares_a_plain_array(self):
+        node = self._prop("bodesign_check_c03", "netlist_path")
+        self.assertEqual(node.get("type"), "array")
+        self.assertNotIn("anyOf", node)
+        self.assertEqual(node.get("items"), {"type": "string"})
+
+    def test_symbol_dirs_declares_a_plain_array(self):
+        node = self._prop("bodesign_compose_schematic", "symbol_dirs")
+        self.assertEqual(node.get("type"), "array")
+        self.assertNotIn("anyOf", node)
+
+    def test_no_array_argument_anywhere_is_declared_as_a_union(self):
+        # Derived from the file rather than a hand-listed pair: the two known
+        # offenders were found one at a time, and a third added tomorrow would
+        # reproduce the defect silently. Any union CONTAINING an array is suspect,
+        # because that is precisely the shape that fails to transport.
+        src = _SERVER_PY.read_text(encoding="utf-8")
+        offenders = []
+        for m in re.finditer(r'"(\w+)":\s*\{"anyOf":\s*\[(.*?)\]', src, re.S):
+            if '"type": "array"' in m.group(2):
+                offenders.append(m.group(1))
+        self.assertEqual(
+            offenders, [],
+            f"{offenders} declare an array inside a union. An MCP client serialises "
+            f"such an argument to TEXT, so a multi-value call cannot be made at all "
+            f"while the schema claims it can (BR_20260730b §P). Declare the array "
+            f"alone and keep accepting a bare string at runtime.",
+        )
+
+    def test_the_scan_would_catch_a_reintroduced_union(self):
+        # Reverse discrimination for the scan itself: a regex that matched nothing
+        # would keep this suite green forever after the defect returned.
+        sample = '"foo": {"anyOf": [{"type": "array", "items": _STR}, _STR],'
+        found = [m.group(1) for m in re.finditer(r'"(\w+)":\s*\{"anyOf":\s*\[(.*?)\]', sample, re.S)
+                 if '"type": "array"' in m.group(2)]
+        self.assertEqual(found, ["foo"])
+
+    def test_the_runtime_still_accepts_a_bare_string(self):
+        # The schema narrowing must not break single-value callers: the runtime is
+        # deliberately WIDER than the declaration.
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, _MB_ROWS), netlist_path=_mb_net(tmp))
+            self.assertEqual(res.netlist_crosscheck["status"], "run")
+
+    def test_the_runtime_accepts_a_real_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            res = check_c03(_mb_bom(tmp, _MB_ROWS), netlist_path=[_mb_net(tmp)])
+            self.assertEqual(res.netlist_crosscheck["status"], "run")
+
+    def test_the_schema_description_records_why_the_union_was_removed(self):
+        # Without the reason, the next reader sees a schema NARROWER than the
+        # runtime, calls it a bug, and re-adds the union.
+        for tool, prop in (("bodesign_check_c03", "netlist_path"),
+                           ("bodesign_compose_schematic", "symbol_dirs")):
+            desc = self._prop(tool, prop).get("description", "")
+            self.assertIn("BR_20260730b", desc, f"{tool}.{prop} loses its provenance")
+            self.assertIn("runtime", desc,
+                          f"{tool}.{prop} must say a bare string still works")
 
 
 if __name__ == "__main__":

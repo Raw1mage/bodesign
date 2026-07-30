@@ -70,30 +70,57 @@ BUSY_MIN_SECS="${BODESIGN_BUSY_MIN_SECS:-30}"
 # A container that is absent or stopped is genuinely idle. A container we
 # CANNOT PROBE is NOT idle — an errored probe is reported as UNKNOWN and
 # blocks, because "I could not look" must never be read as "nothing there".
+#
+# ZOMBIES ARE NOT WORK (BR_20260730b §M). A defunct process (ps STAT starting
+# with 'Z') has already exited; it holds no CPU, no memory and no file handles,
+# and survives only as an exit-status row until its parent reaps it. xvfb-run
+# leaks one per freerouting run, so an ee worker accumulates them and — because
+# a zombie's etimes keeps climbing — the original gate read three 12-hour-old
+# corpses as "live work" and refused every restart INDEFINITELY, with no run to
+# protect. That inverts the gate's own contract: it exists to stop a restart
+# from destroying work in flight, and a restart cannot destroy a process that
+# has already died. Left unfixed the only way out is BODESIGN_FORCE=1, which
+# trains the operator to bypass the very guard that is supposed to protect
+# them — so the gate's failure mode was teaching people to disarm it.
+#
+# This is deliberately NOT a relaxation of the fail-safe posture: UNKNOWN still
+# blocks, and any live process still blocks. The asymmetry that justifies the
+# UNKNOWN default (mis-blocking costs a wait, mis-allowing costs 165 minutes of
+# routing) does not apply to a zombie, because there is no computation left to
+# lose. Zombies are still REPORTED (as ZOMBIE rows by `busy`) so a leak stays
+# visible instead of being silently filtered — the count is the signal that
+# xvfb-run is not reaping, which is a real defect worth seeing.
 busy_report() {
   local c state out
   for c in "$CONTAINER" "${PROJECT}-bodesign-me-1" "${PROJECT}-bodesign-ee-1"; do
     state="$(docker inspect "$c" --format '{{.State.Running}}' 2>/dev/null)" || continue
     [ "$state" = "true" ] || continue
-    if ! out="$(docker exec "$c" ps -eo pid,etimes,args --no-headers 2>&1)"; then
+    if ! out="$(docker exec "$c" ps -eo pid,stat,etimes,args --no-headers 2>&1)"; then
       printf '%s\tUNKNOWN\t-\t-\tprobe failed: %s\n' \
         "$c" "$(printf '%s' "$out" | head -1)"
       continue
     fi
     printf '%s\n' "$out" | awk -v c="$c" -v min="$BUSY_MIN_SECS" '
-      { pid=$1; et=$2; $1=""; $2=""; sub(/^[ \t]+/,""); cmd=$0 }
+      { pid=$1; st=$2; et=$3; $1=""; $2=""; $3=""; sub(/^[ \t]+/,""); cmd=$0 }
       pid == 1        { next }   # the MCP server itself is not "work in flight"
       cmd ~ /ps -eo/  { next }   # this very probe
+      st ~ /^Z/       { printf "%s\tZOMBIE\t%s\t%ss\t%s\n", c, pid, et, cmd; next }
       et+0 < min+0    { next }
       { printf "%s\tBUSY\t%s\t%ss\t%s\n", c, pid, et, cmd }
     '
   done
 }
 
+# The blocking subset of busy_report: ZOMBIE rows are informational only.
+# guard_busy consults THIS, so a container holding nothing but corpses is idle.
+blocking_report() {
+  busy_report | awk -F'\t' '$2 != "ZOMBIE"'
+}
+
 # Refuse a destructive lifecycle action while work is in flight.
 guard_busy() {
   local action="$1" report
-  report="$(busy_report)" || true
+  report="$(blocking_report)" || true
   [ -n "$report" ] || return 0
   if [ "${BODESIGN_FORCE:-}" = "1" ]; then
     {
@@ -108,9 +135,11 @@ guard_busy() {
     echo
     printf '%s\n' "$report"
     echo
-    echo "BUSY    = a process older than ${BUSY_MIN_SECS}s that '$action' would kill."
+    echo "BUSY    = a LIVE process older than ${BUSY_MIN_SECS}s that '$action' would kill."
     echo "UNKNOWN = the container could not be probed; treated as busy on purpose,"
     echo "          because a failed look is not evidence of an empty container."
+    echo "ZOMBIE  = already dead (reaped-pending); NEVER blocks — a restart cannot"
+    echo "          destroy a process that has already exited. Shown by 'busy' only."
     echo
     echo "Wait for it, or override with:  BODESIGN_FORCE=1 $0 $action"
   } >&2
@@ -141,10 +170,19 @@ case "${1:-}" in
     # doing it. Exit 0 = idle, 3 = busy or unprobeable. Safe to call from a
     # peer session that shares these workers.
     report="$(busy_report)" || true
-    if [ -z "$report" ]; then
-      echo "idle: no process older than ${BUSY_MIN_SECS}s in the bodesign containers"
-    else
+    blocking="$(blocking_report)" || true
+    if [ -n "$report" ]; then
       printf '%s\n' "$report"
+    fi
+    if [ -z "$blocking" ]; then
+      if [ -n "$report" ]; then
+        echo "idle: the rows above are ZOMBIE (already dead) — they do NOT block a" >&2
+        echo "      restart/rebuild/stop. A non-zero count means xvfb-run is leaking" >&2
+        echo "      children without reaping them; worth fixing, but no work is at risk." >&2
+      else
+        echo "idle: no live process older than ${BUSY_MIN_SECS}s in the bodesign containers"
+      fi
+    else
       exit 3
     fi
     ;;
