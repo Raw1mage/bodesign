@@ -3,7 +3,7 @@
 ## Why
 
 - bodesign 的知識基礎（ragbase KB，`.specbase/ragbase.sqlite`，52+ 筆 evidence-graded PCB 設計知識：IPC 間距/載流表、EMC 去耦準則、DFM 閘、derating gate、failure modes）目前只存在 host-side，唯一讀取路徑是 specbase `gate.ts ragbase_query`（需要 host 檔案系統 + bun）。
-- **bodesign 的用戶——透過 MCP 驅動 `bodesign_*` 工具的 agent（含遠端 TCP :8077 client）——完全查不到這個 KB**。服務要求領域判斷（layout、EMC、derating），卻不供給支撐判斷的領域記憶。
+- **bodesign 的用戶——透過 MCP 驅動 `bodesign_*` 工具的 agent（含經 gateway 連入的遠端 client）——完全查不到這個 KB**。服務要求領域判斷（layout、EMC、derating），卻不供給支撐判斷的領域記憶。
 - 上游標準已就位：mcp-integration-standard **R16 Domain-KB self-shipping**（DD-21，2026-07-11 extend）規定 expert-domain MCP MUST 自帶 in-band queryable domain KB。bodesign 被指定為 R16 reference impl。
 
 ## Original Requirement Wording (Baseline)

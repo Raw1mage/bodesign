@@ -195,7 +195,12 @@ class SkillNameGuardTests(unittest.TestCase):
         # consumer branching on the status line cannot classify that.
         statuses = set()
         for unservable in ("bodesign\x00", "no-such-skill", "bodesign.tar.gz",
-                           "../mcp.json", "packages", "."):
+                           "../mcp.json", "packages", ".",
+                           # Round-2 additions. Each of these is WELL-FORMED by
+                           # `_SAFE_NAME_RE` and fails only at the filesystem, so
+                           # the textual guard above never sees them -- exactly
+                           # the class the first fix missed.
+                           "a" * 256, "a" * 300, "a" * 4096):
             with self.assertRaises(SS.SkillShippingError) as ctx:
                 SS.resolve_skill_dir(unservable)
             statuses.add(ctx.exception.status)
@@ -203,6 +208,56 @@ class SkillNameGuardTests(unittest.TestCase):
                          f"unservable names must speak ONE status, got {sorted(statuses)}")
         # Accepting control: the guard is not simply "reject everything".
         self.assertTrue(SS.resolve_skill_dir("bodesign").is_dir())
+
+    def test_name_longer_than_the_os_limit_is_a_404_not_a_crash(self):
+        # Regression anchor for BR_20260730 round-2 (W1). NAME_MAX is 255 bytes
+        # on Linux, and this defect lives EXACTLY at that seam: 255 was already a
+        # clean 404 (the OS looks it up and says no), while 256 raised a bare
+        # OSError(ENAMETOOLONG) out of the `is_dir()` stat and became a 500.
+        #
+        # The suite passed 24/24 while shipping this because every fixture was a
+        # name a HUMAN would call suspicious -- traversal, NUL, a suffix. None was
+        # merely LONG. The lesson is about fixture selection, not assertions: a
+        # guard is only tested against the shapes someone thought to write down.
+        boundary = {}
+        for length in (254, 255, 256, 300, 4096):
+            with self.assertRaises(SS.SkillShippingError) as ctx:
+                SS.resolve_skill_dir("a" * length)
+            boundary[length] = ctx.exception.status
+        self.assertEqual({254: 404, 255: 404, 256: 404, 300: 404, 4096: 404}, boundary,
+                         "crossing NAME_MAX must not change the status a client sees")
+        # Accepting control -- a plain long-ish name is still rejected for being
+        # unknown, not for being long, and a real name still resolves.
+        self.assertTrue(SS.resolve_skill_dir("bodesign").is_dir())
+
+    def test_static_asset_branch_answers_none_for_every_unservable_name(self):
+        # Coverage for the OTHER `/skills/<name>` branch -- the one that served
+        # BOTH round-1 (403) and round-2 (500) defects while the suite stayed
+        # green. It had zero tests because it was an inline closure inside
+        # `run_http`: constructing it needed starlette + a live app, so nothing
+        # ever did. Extracting the decision to a pure function is what makes
+        # this test possible at all, and that is the actual fix -- an untested
+        # branch holding half the "is this name servable?" decision is how the
+        # two branches drifted into different answers twice in a row.
+        root = REPO_ROOT / "services" / "mcp" / "assets" / "skills"
+        if not root.is_dir():
+            self.skipTest("vendored bundle dir absent in this checkout")
+        root = root.resolve()
+        for unservable in ("../../mcp.json", "..", "nosuch.tar.gz", "bodesign\x00",
+                           "a" * 256, "a" * 300, "a" * 4096, "", ".",
+                           "/etc/passwd", "MANIFEST.md.bak"):
+            with self.subTest(name=unservable[:24]):
+                # `None` (-> 404) for every one, and never a raised exception:
+                # an escaping OSError is exactly what became the round-2 500.
+                self.assertIsNone(SS.resolve_static_asset(root, unservable))
+        # Accepting control -- without it, a function that returned None
+        # unconditionally would pass every assertion above.
+        served = sorted(p.name for p in root.iterdir()
+                        if p.is_file() and (p.name.endswith(".tar.gz")
+                                            or p.name == "MANIFEST.md"))
+        if served:
+            self.assertIsNotNone(SS.resolve_static_asset(root, served[0]),
+                                 "the guard must still serve a real vendored asset")
 
     def test_directory_without_skill_md_is_not_a_skill(self):
         with self.assertRaises(SS.SkillShippingError) as ctx:

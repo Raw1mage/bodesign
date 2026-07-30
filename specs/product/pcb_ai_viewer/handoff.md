@@ -26,11 +26,11 @@ Before extending: `spec.md` (contract), `design.md` (architecture + DD-*), `task
 
 ## Run
 
-**Docker (portable):** `./mcpctl.sh start | status | log | stop` — builds the image (KiCad 9 + LibreOffice + ngspice + toolchain), starts the container with a UDS at `./.run/bodesign.sock` + TCP `:8077`.
+**Docker (portable):** `./mcpctl.sh start | status | log | stop` — builds the image (KiCad 9 + LibreOffice + ngspice + toolchain), starts the container with a UDS at `./.run/bodesign.sock`. TCP `:8077` is bound **inside the container only** and is deliberately not published to the host (BR_20260730d).
 
-**Host:** `pip install -r services/mcp/requirements.txt` then `python services/mcp/server.py --transport http --uds .run/bodesign.sock --port 8077` (or `--transport stdio`). Requires `kicad-cli`, `pcbnew`, `soffice`, `ngspice` on PATH.
+**Host:** `pip install -r services/mcp/requirements.txt` then `python services/mcp/server.py --transport http --uds .run/bodesign.sock` (or `--transport stdio`). Requires `kicad-cli`, `pcbnew`, `soffice`, `ngspice` on PATH. Passing `--port` binds a TCP listener with **no authentication** — only do that behind a gateway that supplies one.
 
-**Connect:** MCP Streamable HTTP at `unix://….sock:/mcp/` (local) or `http://<host>:8077/mcp/` (external); manifest in `mcp.json`; live guide at `/`, tool schemas at `/tools` + `/tools/{name}`.
+**Connect:** MCP Streamable HTTP over the UDS at `unix://….sock:/mcp/`; manifest in `mcp.json`; live guide at `/`, tool schemas at `/tools` + `/tools/{name}`. There is no host-external TCP endpoint: external HTTP is a gateway's job, because the server itself has no turnstile in front of write-capable tools.
 
 ## Test
 

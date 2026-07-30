@@ -12,7 +12,7 @@
 
 #### Scenario: 遠端 agent 查 EMC 準則
 
-- **WHEN** MCP client（TCP :8077）呼叫 `bodesign_kb_query(q="EMC decoupling")`
+- **WHEN** MCP client（透過 `mcp.json` 宣告的 UDS，或 gateway 前置的 HTTP）呼叫 `bodesign_kb_query(q="EMC decoupling")`
 - **THEN** 回傳含 `control.pcb.emc-decoupling-placement` 等既有蒸餾物件的 hits，payload 帶 `matchMode:"fts"`，每筆 hit 帶 confidence 與 source_weight
 
 #### Scenario: 短 CJK 查詢降級自述

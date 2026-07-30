@@ -221,13 +221,28 @@ def resolve_skill_dir(name: str) -> Path:
             404,
         )
     root = skills_root()
-    candidate = (root / name).resolve()
-    if candidate.parent != root or not candidate.is_dir():
-        raise SkillShippingError("SKILL_NOT_FOUND", f"no such skill: {name}", 404)
-    if not (candidate / "SKILL.md").is_file():
+    # Every filesystem probe below is inside the `try`, because a stat can fail
+    # for reasons the textual guard above cannot see. BR_20260730 round-2 (W1):
+    # `_SAFE_NAME_RE` happily matches 300 `a`s -- the name is *well-formed*, it
+    # is merely longer than NAME_MAX (255 bytes on Linux), so `is_dir()` raised
+    # a bare OSError(ENAMETOOLONG) that left this function untyped and surfaced
+    # as a 500. A name the OS cannot even look up is not a server fault and not
+    # a new vocabulary: it is one more name we do not serve, and R9.7.1 pins
+    # that to 404. Note `resolve()` itself is NOT the raiser (it is pure path
+    # arithmetic on a non-strict path) -- the raiser is the stat, which is why
+    # guarding only the resolve would have left this defect alive.
+    try:
+        candidate = (root / name).resolve()
+        if candidate.parent != root or not candidate.is_dir():
+            raise SkillShippingError("SKILL_NOT_FOUND", f"no such skill: {name}", 404)
+        if not (candidate / "SKILL.md").is_file():
+            raise SkillShippingError(
+                "SKILL_NOT_FOUND", f"no such skill: {name} (directory has no SKILL.md)", 404
+            )
+    except OSError as exc:  # ENAMETOOLONG, ELOOP, ENOTDIR, EACCES on a path component
         raise SkillShippingError(
-            "SKILL_NOT_FOUND", f"no such skill: {name} (directory has no SKILL.md)", 404
-        )
+            "SKILL_NOT_FOUND", f"no such skill: {name} ({exc.strerror})", 404
+        ) from exc
     return candidate
 
 
@@ -256,6 +271,42 @@ def pack_skill_zip(name: str) -> bytes:
             info.external_attr = 0o644 << 16
             zf.writestr(info, p.read_bytes())
     return buf.getvalue()
+
+
+def resolve_static_asset(root: Path, name: str) -> Path | None:
+    """The OTHER ``/skills/<name>`` branch: vendored bundles + ``MANIFEST.md``.
+
+    Returns the servable file, or ``None`` meaning "404" — never raises for a
+    hostile or malformed name. It lives here, beside ``resolve_skill_dir``,
+    for one reason: BOTH branches decide the same question ("is this a name I
+    serve?") and BR_20260730 has now twice been a case of the two branches
+    answering it differently.
+
+    Round 1: the dynamic branch said 400 (`SKILL_NAME_INVALID`) where this one
+    said 403 (`path_escape`) and a plain unknown said 404 — one condition, three
+    vocabularies. Round 2: both branches let an over-long name escape as a bare
+    ``OSError`` and become a 500.
+
+    The recurrence is the real finding. The route handler was a closure inside
+    ``run_http``, so nothing could construct it without starlette + a live app,
+    and it carried ZERO test coverage while holding half the decision. Both
+    defects lived in exactly that unlit half. Extracting the decision to a pure
+    function is the structural fix: the branch is now reachable by a plain
+    ``unittest`` with no server, no sockets, and no HTTP client.
+    """
+    try:
+        target = (root / name).resolve()
+        target.relative_to(root)
+        if not target.is_file():
+            return None
+    except (ValueError, OSError):
+        # ValueError: escaped the root. OSError: the OS refused to even look the
+        # name up (ENAMETOOLONG past NAME_MAX, ELOOP, ENOTDIR, a NUL byte). A
+        # name we cannot look up is a name we do not serve — not a server fault.
+        return None
+    if target.name != "MANIFEST.md" and not target.name.endswith(".tar.gz"):
+        return None
+    return target
 
 
 def pack_skill_targz(name: str) -> bytes:

@@ -2849,13 +2849,17 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         # condition. A consumer branches on the status line, and "this is not a
         # thing I serve" is one condition. 403 also leaked a distinction an
         # attacker can probe: it confirmed the name reached the filesystem layer.
-        root = (_assets_dir() / "skills").resolve()
-        try:
-            target = (root / name).resolve()
-            target.relative_to(root)
-        except (ValueError, OSError):
-            return JSONResponse({"error": "not_found"}, status_code=404)
-        if not target.is_file() or not (target.name.endswith(".tar.gz") or target.name == "MANIFEST.md"):
+        # The decision itself lives in `skill_shipping.resolve_static_asset` --
+        # a pure function -- so it is reachable by a plain unittest without a
+        # server. BR_20260730 landed TWO defects in this branch (round 1: 403
+        # where the other branch said 400 and a plain miss said 404; round 2: an
+        # over-long name escaping as a bare OSError -> 500), and both survived a
+        # green suite for the same structural reason: as an inline closure inside
+        # `run_http`, nothing could construct it to test it. This handler is now
+        # only transport; the guard is tested code.
+        target = skill_shipping.resolve_static_asset(
+            (_assets_dir() / "skills").resolve(), name)
+        if target is None:
             return JSONResponse({"error": "not_found"}, status_code=404)
         if target.name == "MANIFEST.md":
             return Response(target.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
