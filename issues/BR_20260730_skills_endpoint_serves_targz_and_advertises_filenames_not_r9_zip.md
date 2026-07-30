@@ -834,3 +834,143 @@ does not stop at the thing it was aimed at.
    it from the live tree or retiring it.
 4. **Startup-only parity** (§9.5 limit) — unchanged.
 5. **BR_20260730d residual**, unchanged (§7.6.2).
+
+---
+
+## 11. Round 6 — the first round that RAN the thing, and what it found
+
+Verdict: **PARTIAL**. Five rounds had checked whether the archive was *correct*.
+Round 6 was the first to ask whether it *works*, by extracting `bodesign.zip`
+into a real skill layout and invoking verbs against a scratch project.
+
+### 11.1 The good news, stated plainly
+
+Four rounds of FAIL make it easy to assume everything is broken. This is the
+first independent confirmation that the shipped artifact is genuinely usable:
+
+| Check | Result |
+|---|---|
+| Skill root | single `bodesign/SKILL.md`, 169 files |
+| Frontmatter | valid YAML, `name` matches the directory |
+| `gate.py --help` / `--list` | exit 0 from the extracted tree |
+| Verb roster | 59 verbs, byte-identical to the in-image copy |
+| `doctrine.md` | 254 lines of real content, not a stub |
+| Verbs executed with `BODESIGN_SRC` set | `package_readiness`, `c04_readiness`, `c06_readiness` all ok; `c00_readiness` correctly errors on an absent artifact |
+
+### 11.2 Y1 — the archive is not self-sufficient, and only the error said so
+
+Reproduced verbatim inside the container:
+
+```
+$ cd <extracted>/bodesign && python3 scripts/gate.py c00_scaffold_prd --arg out_dir=/tmp/x
+{"ok": false, "verb": "c00_scaffold_prd", "error": {
+  "code": "LANDING_PACKAGES_NOT_FOUND",
+  "message": "could not find bodesign packages/ (looked for packages/workflow-core); ...
+              Set BODESIGN_SRC=/path/to/bodesign repo.",
+  "hint": "export BODESIGN_SRC=<bodesign repo root containing packages/*>"}}
+
+$ find <extracted> -path '*packages*' | wc -l
+0
+```
+
+The archive ships the guidance and `scripts/gate.py`, but not the four
+`packages/*` the verbs import. So a bare install can run `--list` — a static
+registry, zero dependencies — and nothing else.
+
+**This is not a bug in the split.** The packages are large and version-coupled
+to the repo; keeping them out is a defensible architecture, and the failure is
+loud and typed rather than silent. What was wrong is *where the requirement was
+written down*: `SKILL.md:248` disclosed `BODESIGN_SRC` for XDG installs, but
+MANIFEST's **Install** section — the thing a person actually follows when
+installing — said "extract where your skill manager expects them" and stopped.
+A reader following it hits an undisclosed hard error on their first real verb.
+
+Fixed by disclosing at the install step (`MANIFEST.md`, new subsection *What the
+installed skill can and cannot do on its own*), with the shape pinned by tests:
+if the archive ever *becomes* self-contained, the disclosure becomes a lie and
+`test_zip_really_omits_the_packages_the_verbs_import` fails, forcing its removal.
+
+### 11.3 Found while reproducing: the docs restated counts that had drifted
+
+Not in the verifier's report; surfaced by checking the claim around the defect.
+
+| Site | Claimed | Live |
+|---|---|---|
+| `SKILL.md:233` | 52 landing verbs | **59** |
+| `SKILL.md:252` | 43 MCP tools | **57** |
+| `README.en.md:76`, `server.py:48` | 52 | **59** |
+
+Replacing 52 with 59 would swap one rotting number for another — a hand-copied
+count *is* a second declaration, which is precisely the failure this BR family
+exists to stop. The prose now points at `gate.py --list` and `/tools`, the
+sources that cannot drift, and a test forbids the pattern from returning.
+
+`README.md`'s 0.2.0 changelog entry keeps its `52`: it records what was true on
+that date. Rewriting it would be falsifying a record, not fixing a claim — the
+same line already drawn for the 2026-06-07 event log in §7.
+
+### 11.4 Defect 2 — the shadow guard capped growth but was blind to shrinkage
+
+`test_composite_bundles_stale_engine_shadow_does_not_grow` asserted `<=` against
+the disclosed drift (12/9, 1/1). But MANIFEST publishes **exact** figures, so a
+deleted live file — or live and composite rotting in lockstep — shrinks the
+measured drift, leaves the published number wrong, and keeps the test green.
+
+Now asserts equality in both directions. The mutation pair is the proof:
+
+```
+delete a live-only engine file  + exact assertion  -> 3 failures
+delete a live-only engine file  + old `<=`         -> 2 failures
+```
+
+That one-failure delta is the blindness, measured rather than argued.
+
+### 11.5 Guards (each reddens when its own fix is reverted)
+
+| Mutation | Result |
+|---|---|
+| strip `BODESIGN_SRC` from the Install section | 1 failure |
+| restore the hand-copied "52 deterministic" | +1 failure |
+| name an error code `gate.py` does not raise | accepting control fires |
+| delete a live-only engine file | exact guard reddens; reverting to `<=` goes green |
+
+45 tests (+4). Zero regressions: failing-name set identical to HEAD (37 both
+sides), compared by name via a copied tree with only the five changed files
+reverted — no `git stash`; the peer's 86 uncommitted changes untouched.
+
+### 11.6 Post-deploy verification (`05afc9d`, three images, no `/app` mount)
+
+| | |
+|---|---|
+| Served MANIFEST | 8824 B; Install section carries `BODESIGN_SRC`, `LANDING_PACKAGES_NOT_FOUND`, `--list` |
+| Shipped `SKILL.md` | **0** hand-copied count patterns |
+| Archive | 169 members, `gate.py` present, `packages/*` = **0** (the disclosure matches the artifact) |
+| `/health` | `tools=57`, `skill_source.bodesign.files=169` |
+| Accepting controls | `bodesign.zip` / `bodesign-kb.zip` / `kicad.tar.gz` / `MANIFEST.md` / `/tools` — all 200 |
+| Unservable regression | 7 shapes incl. NUL and NAME_MAX — status set `{404}` |
+
+### 11.7 What six rounds have shown about the rounds themselves
+
+| Round | What it found | Why the previous round missed it |
+|---|---|---|
+| 1 | one condition, three statuses | untested route closure |
+| 2 | overlong name → 500 | no fixture that was merely *long* |
+| 3 | runtime-generated page still advertised a retired endpoint | grep cannot see a generated artifact |
+| 4 | the original defect alive in the half declared out of scope | a wrong premise survives every test built on it |
+| 5 | a defect *created by* round 4's fix | a change has consequences past the one it targets |
+| 6 | the artifact was never *run* | five rounds inspected; none invoked |
+
+### 11.8 Still open
+
+1. **A seventh verification.** Six rounds, six non-PASS verdicts. Round 6's own
+   declared blind spot is the natural next target: it ran **4** of 59 verbs, and
+   never fed the frontmatter to a real skill loader (no loader in-container).
+2. **Verb-level correctness at large** — 55 verbs are import-clean but unrun. A
+   verb that returns a silently empty or degraded result would pass everything
+   done so far.
+3. **The bare-host scenario** — no round has confirmed end-to-end whether
+   "installed with no bodesign checkout anywhere" is intended to work. §11.2
+   documents the requirement; it does not settle the product question.
+4. **The composite bundle's stale shadow** (§10.3) — bounded, disclosed, now
+   guarded in both directions; still not fixed.
+5. **Startup-only parity** (§9.5) and **BR_20260730d residual** (§7.6.2) — unchanged.
