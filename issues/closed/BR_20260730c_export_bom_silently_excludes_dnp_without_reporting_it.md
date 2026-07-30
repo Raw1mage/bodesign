@@ -1,7 +1,7 @@
 # BR_20260730c — `export_bom` 靜默排除 DNP 料，回傳值無任何欄位反映它
 
-- Status: **CLOSED** — commit（見文末改動集）。實作時**推翻了本 RCA 的兩個前提**、發現**第二條未被記載的靜默排除**，見 §實作發現。
-- Closed: 2026-07-30 by `ses_0c87bab06fferQ0umBs2Nybb5U`
+- Status: **CLOSED** — commit `9e61629`（4 檔，+351/-4）。實作時**推翻了本 RCA 的兩個前提**、發現**第二條未被記載的靜默排除**，見 §實作發現。
+- Closed: 2026-07-30 by `ses_0c87bab06fferQ0umBs2Nybb5U`（歸檔 commit `b7ce0a2`）
 - Filed by: `ses_0c87bab06fferQ0umBs2Nybb5U`（platform owner；在 §O 之後做全 repo facade 可達性盤查時順手發現）
 - Family: `control.quality.no-silent-degradation`（**V5** 判決未帶產生它的預算/基準）
 - Fix venue: `/home/pkcs12/projects/bodesign`
