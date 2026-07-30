@@ -2879,7 +2879,20 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         return Response(_tools_index_html(_lang_of(request)), media_type="text/html; charset=utf-8")
 
     async def tool_detail(request: Request) -> Response:
-        return Response(_tool_detail_html(request.path_params["name"], _lang_of(request)), media_type="text/html; charset=utf-8")
+        # BR_20260730 round 3 (D3). This answered 200 for a tool that does not
+        # exist, while a name containing an encoded `/` answered 404 -- one
+        # condition ("this is not a thing I serve") spoken in two status codes,
+        # the exact defect the /skills routes just spent three rounds removing.
+        # A human reading the page could tell; a client branching on the status
+        # line could not, and would cache an "Unknown tool" page as a real one.
+        #
+        # The page BODY stays: it is genuinely useful to a human who mistyped,
+        # and R9.6.2's principle is about the status being honest, not about
+        # withholding help. Only the status line changes.
+        name = request.path_params["name"]
+        status = 200 if name in TOOLS_BY_NAME else 404
+        return Response(_tool_detail_html(name, _lang_of(request)),
+                        media_type="text/html; charset=utf-8", status_code=status)
 
     async def upload_file(request: Request) -> Response:
         """POST /files — ingest a file tree into a fresh token namespace.
