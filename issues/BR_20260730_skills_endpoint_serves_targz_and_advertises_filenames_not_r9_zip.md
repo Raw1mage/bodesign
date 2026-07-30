@@ -348,11 +348,105 @@ The second gap remains open (see §6).
    (`bodesign%00.zip`, `bodesign%00`, `bodesign.zip%00`, `nosuch.zip`,
    `nosuch`, `..%2f..%2fetc%2fpasswd.zip`, `a%00b.tar.gz`) answer **404**,
    with `bodesign.zip` → 200 and `bodesign.tar.gz` → 200 as accepting controls.
-2. **No HTTP-layer test coverage.** The suite exercises `skill_shipping`
-   functions directly, never the Starlette route, which is precisely why the
-   `server.py` 403 branch was invisible to it. Adding route-level tests needs
-   `httpx` (absent on this host — `starlette.testclient` requires it), so it is
-   a real dependency decision, not a quick add.
-3. **Re-verification after deploy** by a fresh independent verifier — the same
-   discipline that caught D1 should confirm the fix, and my own probe is not
-   sufficient evidence for that (see §5.3).
+2. ~~**No HTTP-layer test coverage.**~~ **DISCHARGED 2026-07-30 — see §7.**
+3. ~~**Re-verification after deploy** by a fresh independent verifier.~~
+   **DONE — round 2 ran and returned verdict=FAIL. See §7.**
+
+## 7. Round-2 external verification (2026-07-30) — verdict FAIL again
+
+The re-verification §6.3 asked for was commissioned (`ses_04c90dec6`, gpt-5.6,
+adversarial brief, read-only). It returned **verdict=FAIL** on the freshly
+deployed state. Both new defects are real; I reproduced each before acting.
+
+### 7.1 W1 — a well-formed name past `NAME_MAX` left as a 500
+
+| Name length | Status before fix |
+| --- | --- |
+| 254, 255 | 404 — correct |
+| 256, 300, 1024, 4096 | **500** |
+
+**The verifier's root cause was close but wrong in a way that matters.** It
+attributed the raise to `Path.resolve()`. A non-strict `resolve()` is pure path
+arithmetic and never touches the filesystem — I confirmed this directly: on the
+assets root, `(root / "a"*300).resolve()` returns cleanly. The actual raiser is
+the **stat that follows**:
+
+- `skill_shipping.resolve_skill_dir` — `candidate.is_dir()`, which had no `try`
+  around it at all;
+- `server.py` static-asset branch — `target.is_file()`, which sat **one line
+  outside** the `try` that guarded the resolve.
+
+Had I patched what was reported, I would have wrapped `resolve()`, seen the
+tests stay green, and shipped the defect a second time. Both stats are now
+inside the guard; `OSError` (ENAMETOOLONG, ELOOP, ENOTDIR) means what any other
+unservable name means: 404.
+
+### 7.2 W5 — the recurrence is the actual finding
+
+Both BR_20260730 defects landed in the **same unlit place**:
+
+| Round | Defect | Location |
+| --- | --- | --- |
+| 1 | 403 where the sibling branch said 400 and a plain miss said 404 | `server.py` static-asset branch |
+| 2 | over-long name escaping as a bare `OSError` → 500 | same branch (and its sibling) |
+
+That branch was an inline closure inside `run_http()`. Nothing could construct
+it without starlette plus a live app, so it carried **zero coverage** while
+holding half the "is this name servable?" decision. Twice the two halves drifted
+into different answers, and twice a green suite said nothing.
+
+So the fix is structural, not another patch: the decision is extracted to
+`skill_shipping.resolve_static_asset()`, a pure function reachable by a plain
+`unittest` — no server, no sockets, no HTTP client, no new dependency. The
+handler is now transport only. This **discharges §6.2**: the gap was never really
+"we lack `httpx`", it was "the decision lives somewhere untestable". Moving the
+decision was cheaper than importing a test client, and it removes the branch
+rather than merely observing it.
+
+### 7.3 W4 — stale host-external TCP claims
+
+BR_20260730d removed the published port; five spec statements still advertised
+`http://<host>:8077/mcp/`. Current-tense claims corrected (`handoff.md`,
+`design.md` DD-10 — with a revision note recording *why*, the `mcp_r16`
+scenarios). The 2026-06-07 event-log entries are **deliberately left alone**:
+they record what was true then, and rewriting them would be falsifying the
+record rather than fixing a claim.
+
+### 7.4 Why the suite passed 24/24 while shipping W1
+
+Not a loose assertion this time — §5.3's `in (400, 404)` was already tightened.
+The gap was **fixture selection**: every hostile name in the suite was one a
+human finds suspicious (traversal, NUL byte, an archive suffix). None was
+merely *long*. A guard is only ever tested against the shapes someone thought
+to write down, and "well-formed but too long for the OS" is not a shape that
+looks like an attack.
+
+Added: a `NAME_MAX` boundary anchor (254/255/256/300/4096 — the seam is exactly
+there, since 255 was already a clean 404) and a case set for the newly-testable
+static-asset branch, each with an accepting control. 26/26.
+
+### 7.5 Verification of the round-2 fix
+
+- Suite: **26/26**; full-suite regression checked by diffing failing-test NAME
+  SETS against a copy of this working tree with only my three files reverted to
+  HEAD (peer's 93 uncommitted changes left intact; no `git stash`, which is a
+  repo-global stack). **Regressions: none.** The 15F/22E are all pre-existing —
+  8 baseline failures even pass on my tree.
+- Deployed: `BODESIGN_WORKERS=1 ./mcpctl.sh rebuild`, all three images rebuilt.
+- Live, inside the container (the host publishes no port): **25 unservable
+  shapes → all 404**, covering the NAME_MAX seam (254/255/256/300/1024/4096, with
+  and without extension), three null-byte placements, traversal/encoded/absolute
+  forms, and case variance. Accepting controls: `bodesign.zip` → 200
+  (1,102,359 B), `bodesign-kb.zip` → 200, `bodesign.tar.gz` → 200,
+  `MANIFEST.md` → 200. Without those four, a route that had simply died would
+  have passed every negative assertion.
+
+### 7.6 What still stands open
+
+1. **A third independent verification.** Round 1 found what my probe could not;
+   round 2 found what round 1 did not. The prior on "this round found
+   everything" should stay low.
+2. **Residual risk carried by BR_20260730d**, unchanged: `/invoke` remains
+   unauthenticated *inside* the compose network by construction, since
+   core→worker forwarding is built on it. Removing the published port changed
+   the reachability boundary, not the authentication posture.
