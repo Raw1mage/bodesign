@@ -13,13 +13,14 @@
 
 ```
 State:
-Fix: none yet
-Effect: live on the running deployment
+Fix: fixed (2026-07-30) — option (a): the published port is gone
+Effect: DEPLOYED and verified — no host listener, LAN unreachable, accepting controls pass
 Custody: bodesign
-Blocker: needs a product decision on the turnstile shape (see §4)
-Disposition: accepted — reproduced from a non-loopback address
+Blocker: none
+Disposition: accepted — reproduced from a non-loopback address before filing
 Venue: bodesign
-Status: OPEN
+Status: FIXED — see §8. Residual documented and ACCEPTED (§8.3), not hidden.
+Closed: 2026-07-30 by ses_04db7a1c5 (bodesign coordinator), on the user's explicit choice of option (a)
 ```
 
 ## 1. Symptom (verbatim, reproduced by the owner)
@@ -129,3 +130,97 @@ Found by an independent adversarial verification of BR_20260730 (session
 verifier flagged it as V8 "self-directed attack", explicitly out of the R9
 scope it was asked to check. Reproduced from a non-loopback address by the
 owner before filing.
+
+---
+
+## 8. Resolution (2026-07-30) — option (a), chosen by the user
+
+The user chose **(a) do not publish the port**. `docker-compose.yml` no longer
+carries a `ports:` entry.
+
+### 8.1 Why (a) is the right call, not merely the cheapest
+
+This compose file's own header has said since 2026-06-07:
+
+> External HTTP, if wanted, is exposed by a gateway in front of this socket
+> **(not a published port here).**
+
+The `ports: ["8077:8077"]` entry contradicted the file's own stated design for
+seven weeks. So (a) is not a new restriction — it is the implementation finally
+catching up to the declared architecture. `mcp.json`'s `url` has always declared
+the UDS as the reachable endpoint, so nothing that follows the manifest loses
+access.
+
+### 8.2 Declaration sync — the part that would otherwise have created a NEW defect
+
+Removing the port while leaving the docs advertising a dialable
+`http://<host>:8077/mcp/` would have reproduced **exactly the defect class of
+the parent BR**: a service whose declaration and behaviour disagree. Eight
+declaration sites were corrected in the same commit:
+
+| File | Was |
+| --- | --- |
+| `docker-compose.yml` | `ports: ["8077:8077"]` |
+| `mcp.json` (`instructions`) | "reachable over … TCP HTTP at `http://<host>:8077/mcp/` (the container publishes both)" |
+| `skills/bodesign/doctrine.md` | "AND TCP `http://<host>:8077/mcp/` … the container publishes both" |
+| `AGENTS.md` | "UDS（本機）+ TCP（`:8077` HTTP `/mcp/`）" |
+| `README.md` | "對外：`http://<host>:8077/mcp/`" (3 sites) |
+| `README.en.md` | "External: `http://<host>:8077/mcp/`" (3 sites) |
+| `services/mcp/README.md` | "container publishes `:8077`" |
+| `services/mcp/assets/skills/MANIFEST.md` | install commands dialing `http://<host>:8077/skills/…` |
+
+MANIFEST.md now uses a `<base>` placeholder for whatever gateway fronts the
+service, and states plainly that there is no `http://<host>:8077` to dial.
+
+### 8.3 Residual risk — ACCEPTED and recorded, not eliminated
+
+**`POST /invoke` is still unauthenticated on the compose network.** Any
+container sharing that network can call it. This is *by construction*: it is
+the core→worker forwarding channel, and `BODESIGN_ME_WORKER_URL` /
+`BODESIGN_EE_WORKER_URL` point at exactly that route on the worker containers.
+
+What (a) changed is the **reachability boundary**, not the authentication
+posture — the exposure went from "every interface on the host, including the
+LAN" to "the private compose network". A real turnstile (option (d), R12.6) is
+the only thing that would close it outright.
+
+This is written down rather than quietly dropped because a future change that
+re-publishes the port — or attaches this service to a shared/external docker
+network — **silently restores the original hole**. Do not re-add `ports:`.
+
+### 8.4 Verification (deployed via `BODESIGN_WORKERS=1 ./mcpctl.sh rebuild`)
+
+Negative — the exposure is closed:
+
+```
+$ docker ps --format '{{.Names}}\t[{{.Ports}}]' | grep bodesign
+bodesign-pkcs12-bodesign-1     []
+bodesign-pkcs12-bodesign-ee-1  []
+bodesign-pkcs12-bodesign-me-1  []
+
+$ ss -ltn | grep :8077                     -> no host listener
+$ POST http://192.168.125.117:8077/invoke  -> 000 (unreachable)
+```
+
+Accepting controls — **the legitimate paths still work.** Without these, "the
+LAN cannot reach it" would be equally satisfied by a service that is simply
+broken:
+
+```
+UDS socket present   : .run/bodesign.sock                 PASS
+health               : {"status":"ok","tools":57}         PASS
+containers           : core / ee / me all healthy         PASS
+core -> ee /healthz  : 200                                PASS
+core -> me /healthz  : 200                                PASS   <- forwarding intact
+```
+
+The last two matter most: `/invoke` exists **for** core→worker forwarding, and
+that is precisely what still works. Only outside reach was removed.
+
+Regression on the parent BR's surface (verified inside the container, since the
+host can no longer dial it):
+
+```
+bodesign.zip -> 200 · bodesign.tar.gz -> 200
+seven unservable shapes -> 404 each
+```

@@ -46,13 +46,17 @@ ticket refs; no symlinks).
 These are Claude **skills**. Place each skill directory under your skill location
 (default `~/.claude/skills/`):
 
+`<base>` below is the HTTP base URL of whatever gateway fronts this service.
+The container does **not** publish a TCP port to the host (BR_20260730d), so
+there is no `http://<host>:8077` to dial directly.
+
 ```
 # declared skills — always current, fetched by BARE NAME + the endpoint's suffix
-curl -fO http://<host>:8077/skills/bodesign.zip && unzip -d ~/.claude/skills/ bodesign.zip
-curl -fO http://<host>:8077/skills/bodesign-kb.zip && unzip -d ~/.claude/skills/ bodesign-kb.zip
+curl -fO <base>/skills/bodesign.zip && unzip -d ~/.claude/skills/ bodesign.zip
+curl -fO <base>/skills/bodesign-kb.zip && unzip -d ~/.claude/skills/ bodesign-kb.zip
 
 # vendored EDA bundles — fetched by FILENAME
-curl -fO http://<host>:8077/skills/bodesign-eda-skills-bundle.tar.gz
+curl -fO <base>/skills/bodesign-eda-skills-bundle.tar.gz
 tar -xzf bodesign-eda-skills-bundle.tar.gz -C ~/.claude/skills/
 # or a single one:
 tar -xzf kicad.tar.gz -C ~/.claude/skills/

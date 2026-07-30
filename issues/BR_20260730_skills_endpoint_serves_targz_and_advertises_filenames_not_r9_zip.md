@@ -340,10 +340,14 @@ The second gap remains open (see §6).
 
 ## 6. Remaining scope (why this stays PARTIAL, not closed)
 
-1. **D1 fix is committed but NOT deployed.** The running containers serve the
-   image built before this fix; `GET /skills/bodesign%00.zip` still answers 400
-   in production until `./mcpctl.sh rebuild` runs. Per §3.5 a FIXED-UNDEPLOYED
-   BR stays at top level.
+1. ~~**D1 fix is committed but NOT deployed.**~~ **DISCHARGED 2026-07-30.**
+   Deployed via `BODESIGN_WORKERS=1 ./mcpctl.sh rebuild` (all three images
+   rebuilt). Verified INSIDE the running container (the host no longer
+   publishes a port, so a host-side probe is no longer even possible — see
+   BR_20260730d): all seven unservable shapes
+   (`bodesign%00.zip`, `bodesign%00`, `bodesign.zip%00`, `nosuch.zip`,
+   `nosuch`, `..%2f..%2fetc%2fpasswd.zip`, `a%00b.tar.gz`) answer **404**,
+   with `bodesign.zip` → 200 and `bodesign.tar.gz` → 200 as accepting controls.
 2. **No HTTP-layer test coverage.** The suite exercises `skill_shipping`
    functions directly, never the Starlette route, which is precisely why the
    `server.py` 403 branch was invisible to it. Adding route-level tests needs

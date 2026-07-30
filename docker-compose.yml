@@ -11,10 +11,26 @@ services:
     image: bodesign:latest
     build:
       context: .
-    # Serve both: UDS (local IPC) + TCP HTTP (external) from one process.
+    # Serve both: UDS (local IPC) + TCP HTTP from one process. The TCP bind is
+    # reachable on the compose network only -- it is deliberately NOT published
+    # to the host (see below).
     command: ["--transport", "http", "--uds", "/run/bodesign/bodesign.sock", "--host", "0.0.0.0", "--port", "8077"]
-    ports:
-      - "8077:8077"
+    #
+    # NO `ports:` BY DESIGN (BR_20260730d, 2026-07-30).
+    #
+    # This file's header has said since 2026-06-07 that external HTTP is exposed
+    # by a gateway in front of the socket, "not a published port here" -- but a
+    # `ports: ["8077:8077"]` entry contradicted that for seven weeks. Publishing
+    # it put `POST /invoke` (an UNAUTHENTICATED direct call into run_tool, added
+    # as an internal core->worker channel in a90c28f) on every interface: a tool
+    # call from any LAN host executed with no credential. That is R12.5 -- a
+    # write-capable shared service MUST sit behind an identity turnstile, and
+    # `auth: {type: none}` is conformant only for a read-only one.
+    #
+    # The host reaches this service over the UDS bind mount below, which is what
+    # mcp.json's `url` declares. If external HTTP is ever wanted, put a gateway
+    # in front of the socket -- do not re-add a published port, which would
+    # restore the same open till.
     volumes:
       # IPC rendezvous: the UDS lives here, host-visible.
       - "./.run:/run/bodesign"

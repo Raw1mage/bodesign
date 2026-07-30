@@ -12,7 +12,9 @@ file surface. Two transports (`--transport`):
 
 - `stdio` (default) — JSON-RPC over stdin/stdout (direct IDE/agent / non-opencode hosts).
 - `http` — MCP Streamable HTTP on `/mcp`, over a `--uds` socket (inward, local)
-  and/or a `--host/--port` TCP bind (outward, cross-host; container publishes `:8077`).
+  and/or a `--host/--port` TCP bind. NOTE: compose binds `:8077` INSIDE the
+  container but does **not** publish it to the host (BR_20260730d) — outward
+  HTTP belongs behind a gateway in front of the socket.
 
 The tool registry (`TOOLS`) maps each MCP tool name onto a bodesign capability
 function; imports are lazy so a missing optional dep fails only that tool.

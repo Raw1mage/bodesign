@@ -43,7 +43,7 @@ Full spec in [`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README
 **Docker (portable, recommended)** — bundles KiCad 9 (`kicad-cli` + `pcbnew`) + LibreOffice + the toolchain:
 
 ```bash
-./mcpctl.sh start     # build image + start container (UDS at ./.run/bodesign.sock + TCP :8077)
+./mcpctl.sh start     # build image + start container (UDS at ./.run/bodesign.sock)
 ./mcpctl.sh status    # health + socket
 ./mcpctl.sh log       # follow logs
 ./mcpctl.sh stop
@@ -59,12 +59,14 @@ python services/mcp/server.py --transport http --uds .run/bodesign.sock --port 8
 
 ## Connect (MCP)
 
-MCP **Streamable HTTP**, served concurrently over UDS (local) and TCP (external):
+MCP **Streamable HTTP**, served over UDS:
 
 - Local: `unix:///…/.run/bodesign.sock:/mcp/`
-- External: `http://<host>:8077/mcp/`
+- External: put a gateway in front of the socket. The container does **not**
+  publish a TCP port to the host (BR_20260730d: publishing it exposed an
+  unauthenticated `POST /invoke` on every interface).
 
-See [`mcp.json`](mcp.json) for the registration manifest. Open `/` (or `http://<host>:8077/`)
+See [`mcp.json`](mcp.json) for the registration manifest. Open `/` over the socket
 for the live, self-documenting guide — install, the file model, the circuit-design workflow,
 and the full tool-call schemas at `/tools` and `/tools/{name}`.
 

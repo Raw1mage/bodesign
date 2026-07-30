@@ -7,7 +7,9 @@
 ## 1. 這個 repo 是什麼
 
 bodesign = 獨立的 **MCP server**，把 C00–C07 硬體設計（PCB）生命週期暴露成 `bodesign_*` 工具。
-- 宿主無關、可獨立對外營運：UDS（本機 `.run/bodesign.sock`）+ TCP（`:8077` HTTP `/mcp/`）。
+- 宿主無關、可獨立對外營運：UDS（本機 `.run/bodesign.sock`）。TCP `:8077` 只綁在容器內、
+  **不對 host publish**（BR_20260730d：publish 會把未認證的 `POST /invoke` 暴露在所有介面上）；
+  對外 HTTP 應由 gateway 擺在 socket 前面。
 - 與配套的 `bodesign` skill（C00-C07 workflow 腦 + kicad/kidoc 引擎）成對；verification 工具會回呼 skill 引擎。
 - 核心哲學：**展示**可靠度（對照已知良品交叉檢核 + KiCad/SPICE/EMC 確定性驗證），而非宣稱。
   LLM 只做上游抽取／裁決，驗證與比對全程不參與。

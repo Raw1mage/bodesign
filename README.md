@@ -70,7 +70,7 @@ _語言：**繁體中文** · [English](./README.en.md)_
 **Docker（可攜，建議）** — 內含 KiCad 9（`kicad-cli` + `pcbnew`）＋ LibreOffice ＋整套工具鏈：
 
 ```bash
-./mcpctl.sh start     # 建置映像＋啟動容器（UDS 於 ./.run/bodesign.sock + TCP :8077）
+./mcpctl.sh start     # 建置映像＋啟動容器（UDS 於 ./.run/bodesign.sock）
 ./mcpctl.sh status    # 健康檢查＋socket
 ./mcpctl.sh log       # 追蹤日誌
 ./mcpctl.sh stop
@@ -86,12 +86,13 @@ python services/mcp/server.py --transport http --uds .run/bodesign.sock --port 8
 
 ## 連線（MCP）
 
-MCP **Streamable HTTP**，由同一個行程同時提供 UDS（本機）與 TCP（對外）：
+MCP **Streamable HTTP**，經 UDS 提供：
 
 - 本機：`unix:///…/.run/bodesign.sock:/mcp/`
-- 對外：`http://<host>:8077/mcp/`
+- 對外：在 socket 前面擺一個 gateway。容器**不對 host publish** TCP port
+  （BR_20260730d：publish 會把未認證的 `POST /invoke` 暴露在所有介面上）。
 
-註冊資訊見 [`mcp.json`](mcp.json)。開啟 `/`（或 `http://<host>:8077/`）即是即時的自我說明指南——
+註冊資訊見 [`mcp.json`](mcp.json)。經 socket 開啟 `/` 即是即時的自我說明指南——
 安裝、檔案模型、電路設計工作流，以及 `/tools`、`/tools/{name}` 的完整 tool-call schema。
 
 ## 檔案模型（兩平面，0.2.0）

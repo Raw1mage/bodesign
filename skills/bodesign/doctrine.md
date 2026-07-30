@@ -127,8 +127,12 @@ source); `mcp.json.skillPaths`, `GET /skills` and `bodesign_init` all name it.
   honesty contract live. This is advisory, not a gate: a bare MCP client with no
   skill mechanism is still correct to drive the tools using this doctrine alone.
 - **Transport is MCP Streamable HTTP over a Unix domain socket** (local
-  `.run/bodesign.sock`) AND TCP `http://<host>:8077/mcp/` (same API; the container
-  publishes both). The container runs in Docker and only sees `.run` / sessions /
+  `.run/bodesign.sock`). The process also binds TCP `:8077` inside the container,
+  but that port is **NOT published to the host** (BR_20260730d): reach the service
+  over the UDS, which is what `mcp.json`'s `url` declares. External HTTP, if ever
+  wanted, belongs behind a gateway in front of the socket -- a published port put
+  an unauthenticated `POST /invoke` on every interface.
+  The container runs in Docker and only sees `.run` / sessions /
   vault — a host path OUTSIDE those mounts is invisible, and readiness tools report
   `root_visible:false` for it. Never read a `readiness_pct: 0` as "deliverables
   missing" without checking `root_visible` first.
