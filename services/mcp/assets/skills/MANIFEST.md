@@ -40,22 +40,39 @@ keys are read from environment variables; no `__pycache__`/personal paths/intern
 ticket refs; no symlinks).
 
 > **`kicad` and `kidoc` are folded into the unified `bodesign` skill** (as
-> `engines/kicad` and `engines/kidoc`). Prefer installing the live `bodesign`
-> skill (`GET /skills/bodesign.zip`): it
-> carries the C00–C07 workflow, drives this MCP's `bodesign_*` generation tools,
-> and the MCP's verification tools resolve its analyzer via `BODESIGN_KICAD_SKILL`
+> `engines/kicad` and `engines/kidoc`), and **are no longer standalone-installable
+> skills.** They are ENGINE TREES: they carry `ENGINE.md`, not `SKILL.md`, so a
+> skill manager that keys on `SKILL.md` will find nothing. Install
+> `bodesign.zip` — it contains both engines at `bodesign/engines/{kicad,kidoc}`.
+> (BR_20260730 round 5, Z2: the frozen copies shipped a `kicad/SKILL.md` that the
+> live tree does not have, so making them current — correctly — also made them
+> non-installable. Both facts were true at once and only one was written down.
+> Synthesizing a `SKILL.md` during projection was rejected: it would manufacture
+> a declaration no source makes, which is the failure this BR family exists to
+> stop. `kicad.tar.gz` / `kidoc.tar.gz` stay reachable — a published URL should
+> not 404 on an unrelated fix — but as engine trees, not as skills.)
+>
+> The MCP's verification tools resolve the analyzer via `BODESIGN_KICAD_SKILL`
 > (`~/.claude/skills/bodesign/engines/kicad` on a host install). The bodesign
 > **container image self-bundles** the kicad/spice/emc analyzer engines (under
 > `/opt/bodesign-engines`) and sets `BODESIGN_KICAD_SKILL` / `BODESIGN_SPICE_SKILL`
 > / `BODESIGN_EMC_SKILL`, so C06 simulate/EMC/thermal run without a host skill
-> install — these tarballs are for host/standalone use. The standalone
-> `kicad.tar.gz` / `kidoc.tar.gz` below remain for legacy/standalone use, and are
-> now projected from those same live `engines/` trees rather than frozen copies.
+> install.
+>
+> **Known stale copy, disclosed rather than hidden:** the composite
+> `bodesign-eda-skills-bundle.tar.gz` still embeds the 2026-06-07 snapshot of
+> `kicad/` and `kidoc/` (12 files behind, 9 byte-differences). It has no in-repo
+> source, so it cannot be projected like the two above. For current engine
+> content use `bodesign.zip`, or `kicad.tar.gz` / `kidoc.tar.gz`, both of which
+> are packed live. A test asserts this shadow set does not GROW.
 
 ## Install
 
-These are Claude **skills**. Place each skill directory under your skill location
-(default `~/.claude/skills/`):
+`bodesign.zip` and `bodesign-kb.zip` are Claude **skills** — extract them under
+your skill location (default `~/.claude/skills/`). The vendored `.tar.gz` bundles
+are a mixed bag: some carry a `SKILL.md` and install the same way, while the
+engine trees (`kicad`, `kidoc`) carry `ENGINE.md` and are NOT installable skills
+(see the note above). Check for a `SKILL.md` before treating an archive as one:
 
 `<base>` below is the HTTP base URL of whatever gateway fronts this service.
 The container does **not** publish a TCP port to the host (BR_20260730d), so
@@ -69,8 +86,11 @@ curl -fO <base>/skills/bodesign-kb.zip && unzip -d ~/.claude/skills/ bodesign-kb
 # vendored EDA bundles — fetched by FILENAME
 curl -fO <base>/skills/bodesign-eda-skills-bundle.tar.gz
 tar -xzf bodesign-eda-skills-bundle.tar.gz -C ~/.claude/skills/
-# or a single one:
-tar -xzf kicad.tar.gz -C ~/.claude/skills/
+
+# engine trees — NOT skills. Packed live from the bodesign skill's engines/.
+# They hold ENGINE.md, not SKILL.md; a skill manager will not see them.
+curl -fO <base>/skills/kicad.tar.gz
+tar -xzf kicad.tar.gz -C /wherever/you/keep/engines
 ```
 
 Archives wrap their contents in a `<name>/` directory, so extracting straight into
@@ -80,17 +100,17 @@ No install script is bundled by design — extract where your skill manager expe
 
 ## Contents
 
-| Skill | Role |
-|---|---|
-| **bodesign** | Canonical C00–C07 hardware product-design lifecycle: PRD → ID → ME → EE → Layout → FW → Verify → MFG. |
-| **kicad** | Schematic/PCB/Gerber analysis — ERC/DRC, netlist, power tree, subcircuit detection, design review. The hub the others feed. |
-| **kidoc** | Engineering doc packages — HDD, CE technical file, ICD, design-review, manufacturing-transfer; schematic/PCB renders + block/power-tree diagrams. |
-| **spice** | ngspice simulation of detected subcircuits (filters, dividers, op-amp gain, LC/crystal). |
-| **emc** | EMC pre-compliance risk analysis (FCC/CISPR) on schematic + PCB. |
-| **datasheets** | Extract pinouts/specs from datasheet PDFs; consumed by the analyzers (import-only modules). |
-| **bom** | BOM orchestrator — coordinates the distributor + fab skills; create/enrich/price/order BOMs. |
-| **digikey / lcsc / element14 / mouser** | Part search, pricing, stock, datasheet download per distributor. |
-| **jlcpcb / pcbway** | Fabrication + assembly: design rules, capabilities, ordering workflow (doc-only). |
+| Name | Installable skill? | Role |
+|---|---|---|
+| **bodesign** | yes (`SKILL.md`) | Canonical C00–C07 hardware product-design lifecycle: PRD → ID → ME → EE → Layout → FW → Verify → MFG. |
+| **kicad** | **no — engine tree** (`ENGINE.md`) | Schematic/PCB/Gerber analysis — ERC/DRC, netlist, power tree, subcircuit detection, design review. The hub the others feed. |
+| **kidoc** | **no — engine tree** (`ENGINE.md`) | Engineering doc packages — HDD, CE technical file, ICD, design-review, manufacturing-transfer; schematic/PCB renders + block/power-tree diagrams. |
+| **spice** | yes (`SKILL.md`) | ngspice simulation of detected subcircuits (filters, dividers, op-amp gain, LC/crystal). |
+| **emc** | yes (`SKILL.md`) | EMC pre-compliance risk analysis (FCC/CISPR) on schematic + PCB. |
+| **datasheets** | yes (`SKILL.md`) | Extract pinouts/specs from datasheet PDFs; consumed by the analyzers (import-only modules). |
+| **bom** | yes (`SKILL.md`) | BOM orchestrator — coordinates the distributor + fab skills; create/enrich/price/order BOMs. |
+| **digikey / lcsc / element14 / mouser** | yes (`SKILL.md`) | Part search, pricing, stock, datasheet download per distributor. |
+| **jlcpcb / pcbway** | yes (`SKILL.md`) | Fabrication + assembly: design rules, capabilities, ordering workflow (doc-only). |
 
 ## Environment variables (sourcing skills)
 

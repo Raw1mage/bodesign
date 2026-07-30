@@ -16,6 +16,7 @@ rejects everything passes every positive test while shipping nothing (R6
 checklist discipline), so each traversal case is paired with an accepting
 control proving a legitimate name still works.
 """
+import hashlib
 import importlib.util
 import io
 import json
@@ -411,6 +412,80 @@ class ArchiveReproducibilityTests(unittest.TestCase):
         with tarfile.open(fileobj=io.BytesIO(SS.pack_skill_targz("bodesign"))) as tf:
             tar_names = {m.name for m in tf.getmembers() if m.isfile()}
         self.assertEqual(zip_names, tar_names)
+
+
+class VendoredBundleClaimTests(unittest.TestCase):
+    """MANIFEST.md's claims about the bundles must be checkable, not prose.
+
+    BR_20260730 round 5 (Z2). Making `kicad`/`kidoc` current (round 4, D4) also
+    made them non-installable: the live `engines/<name>` trees carry `ENGINE.md`,
+    while the frozen copies they replaced carried `SKILL.md`. Both facts were
+    true at once and only one was written down, so MANIFEST kept instructing
+    `tar -xzf kicad.tar.gz -C ~/.claude/skills/` for an archive a skill manager
+    cannot see. These tests bind the documentation to the bytes.
+    """
+
+    def test_projected_engine_trees_carry_engine_md_not_skill_md(self):
+        # The shape MANIFEST now documents. If a future change adds a SKILL.md
+        # to an engine tree, the docs become wrong in the OTHER direction --
+        # this fails then too, which is the point.
+        for bare in ("kicad", "kidoc"):
+            with self.subTest(bundle=bare):
+                with tarfile.open(fileobj=io.BytesIO(SS.pack_engine_targz(bare))) as tf:
+                    names = {m.name for m in tf.getmembers() if m.isfile()}
+                self.assertIn(f"{bare}/ENGINE.md", names)
+                self.assertNotIn(f"{bare}/SKILL.md", names,
+                                 "engine tree gained a SKILL.md; MANIFEST says it has none")
+
+    def test_declared_skills_do_carry_skill_md(self):
+        # Accepting control: without it, a change that stripped SKILL.md from
+        # EVERYTHING would satisfy the assertion above.
+        for item in SS.list_shippable_skills():
+            with self.subTest(skill=item["name"]):
+                with zipfile.ZipFile(io.BytesIO(SS.pack_skill_zip(item["name"]))) as zf:
+                    self.assertIn(f"{item['name']}/SKILL.md", zf.namelist())
+
+    def test_composite_bundles_stale_engine_shadow_does_not_grow(self):
+        # BR_20260730 round 5: the composite `bodesign-eda-skills-bundle.tar.gz`
+        # embeds a THIRD copy of kicad/kidoc, frozen 2026-06-07. It has no
+        # in-repo source so it cannot be projected, and MANIFEST discloses it
+        # rather than hiding it. This test is what makes that disclosure honest:
+        # the shadow may not grow, and if the composite is ever regenerated from
+        # the live tree the drift should go to zero and this test says so.
+        composite = REPO_ROOT / "services" / "mcp" / "assets" / "skills" / \
+            "bodesign-eda-skills-bundle.tar.gz"
+        if not composite.is_file():
+            self.skipTest("composite bundle not present")
+        with tarfile.open(composite) as tf:
+            frozen = {m.name: hashlib.sha256(tf.extractfile(m).read()).hexdigest()
+                      for m in tf.getmembers() if m.isfile()}
+        engines_root = SS.skills_root() / "bodesign" / "engines"
+        drift = {}
+        for bare in ("kicad", "kidoc"):
+            live_dir = engines_root / bare
+            if not live_dir.is_dir():
+                continue
+            live = {str(f.relative_to(live_dir)): hashlib.sha256(f.read_bytes()).hexdigest()
+                    for f in SS._walk_skill_files(live_dir)}
+            embedded = {k.split("/", 1)[1]: v for k, v in frozen.items()
+                        if k.startswith(f"{bare}/") and "/" in k}
+            if not embedded:
+                continue
+            drift[bare] = {
+                "live_only": len(set(live) - set(embedded)),
+                "differing": len([k for k in set(live) & set(embedded)
+                                  if live[k] != embedded[k]]),
+            }
+        # Ceilings are the measured state at the time of disclosure. Growth means
+        # the shadow is rotting FURTHER while the docs claim a known, bounded gap.
+        ceilings = {"kicad": (12, 9), "kidoc": (1, 1)}
+        for bare, seen in drift.items():
+            with self.subTest(bundle=bare):
+                max_only, max_diff = ceilings[bare]
+                self.assertLessEqual(seen["live_only"], max_only,
+                                     f"{bare} shadow grew: MANIFEST discloses {max_only} live-only")
+                self.assertLessEqual(seen["differing"], max_diff,
+                                     f"{bare} shadow grew: MANIFEST discloses {max_diff} differing")
 
 
 class SkillSourceParityTests(unittest.TestCase):
