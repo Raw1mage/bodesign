@@ -44,7 +44,7 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 | 7 | Netlist status | `Netlist_Status.md` | required **iff** a full netlist is not recoverable |
 | 8 | Mechanical bridge | `Mechanical_Constraint_Export.json` | `approval=false` |
 | 9 | PRD-BOM crosscheck report | `prd_bom_crosscheck.report.json` | `gate: PASS` required; report absent = gate **not run** (never presume PASS) — § 3b |
-| 10 | C03 stage-entry gate report | `check_c03.report.json` | `gate: PASS` required — BOM schema/readiness/drawability/SSOT crosscheck before C04 entry (`bodesign_check_c03`); absent = **not run** — § 3c |
+| 10 | C03 stage-entry gate report | `check_c03.report.json` | `gate: PASS` required — R1 schema / R2 readiness / R3 symbol-source **claim** / R4 SSOT / R5 BOM↔netlist / R6 pin-spec polarity (`bodesign_check_c03`); absent = **not run** — § 3c |
 
 **Self-verify:** run `analyze_schematic.py` and clear (or explicitly justify) every `high` finding —
 no open DS-001 / SS-001 / PP-001 / RS-002. There is **no `c03_readiness` verb**; the analyzer's gate
@@ -227,8 +227,19 @@ R4 的 BOM↔SSOT 衝突（U4 wireless-scheme 的類別：BOM 提了一顆 pin a
 
 **提出任何 BOM 行之前，必讀（缺一即不得宣稱 BOM ready）：**
 
-1. `Pin_Allocation.csv`（本階段 pin 分配 SSOT）——每一個 active ref（`U*` / `J*` / `Y*` /
-   `SW*`）是否已在此登錄；BOM 若引入 SSOT 沒有的 active 件 = 衝突，不是新增。
+1. `Pin_Allocation.csv`（本階段 pin 分配 SSOT）——確認 BOM 的 active 件（`U*` / `J*` /
+   `Y*` / `SW*`）都在 pin 分配裡有著落；BOM 若引入 pin 分配沒有涵蓋的 active 件 = 衝突，
+   不是新增。
+   > **schema 裁決（BR_20260730）**：本檔的權威形狀由交付物表第 6 項定義——
+   > **ball → GPIO → peripheral function 的 pinmap**（見上表與 §「Deliverables」的
+   > `exported` 註記）。它**沒有 ref 欄**，這是設計如此，不是缺漏。fleet 內 4 份
+   > `Pin_Allocation.csv` 全部遵守這個形狀。
+   > 因此 `check_c03` 的 R4 **ref 級**比對只在檔案另外帶有 `ref`/`refdes`/`component`
+   > 欄位時才適用；ball/peripheral 形狀的檔案會回報
+   > `ssot_crosscheck.status = "not_run"` 並列出未被驗證的 active ref，**而不是**把
+   > 每一個 active 件都報成衝突（修前實測：26 個 active 件全部被誤報為
+   > 「BOM↔SSOT conflict — owner must reconcile」，讀起來像 26 件真實待裁決事項）。
+   > 本條的「必讀」義務是**人工前置**，不因 R4 不適用而免除。
 2. `Interface_Definitions.md` + C01 連接器/外部埠清單——確認接口方案（有線 vs 無線、
    哪顆 PHY/無線模組）在 BOM 與 pinmap 之間**單一**、不並存兩套。
 3. `main_components_structured.json`（C00 role 封套 SSOT）——候選件落在 role 的 `patterns`
@@ -240,7 +251,8 @@ R4 的 BOM↔SSOT 衝突（U4 wireless-scheme 的類別：BOM 提了一顆 pin a
 
 ```md
 ## SSOT 衝突自查 (C03 BOM ready 前置)
-- Pin_Allocation 對照: <PASS | CONFLICT: ref 清單> — 每個 active BOM ref 是否在 Pin_Allocation.csv
+- Pin_Allocation 對照: <PASS | CONFLICT: ref 清單 | N/A: pinmap 無 ref 欄（R4 not_run）> — 每個 active BOM 件是否在 pin 分配裡有著落
+- BOM↔netlist 對照 (R5): <PASS | CONFLICT: ref 清單 | NOT_RUN: 未提供 netlist> — BOM 每一行是否真的被畫進 schematic（**與 R3 不同**：R3 只看那行有沒有宣告 symbol 來源）
 - 接口方案單一性: <PASS | CONFLICT: 說明> — 有線/無線、PHY/模組是否僅一套 (U4-class 檢查)
 - Role 封套 (C00): <PASS | OUT-OF-ENVELOPE: role→substitute + 是否已 approvals[]>
 - 連接器 pad 凍結: <PASS | N/A | MISMATCH: ref 期望 vs 實際>
@@ -445,10 +457,20 @@ C03 is genuinely complete when:
 - `bodesign_prd_bom_crosscheck` has run against the exported netlist and reports `gate: PASS`
   (every `main_components_structured.json` role `present` or non-blocking `substituted` — § 3b).
   A missing report means the gate **has not run**: say so explicitly; never presume PASS.
-- `bodesign_check_c03` (C03→C04 stage-entry gate) has run against the exported BOM (+ `Pin_Allocation.csv`
-  and any `frozen_pad_counts`) and reports `gate: PASS` — no R1 schema / R2 readiness / R3 drawability /
-  R4 SSOT blocker (§ 3c). A missing `check_c03.report.json` means the entry gate **has not run**: say so;
+- `bodesign_check_c03` (C03→C04 stage-entry gate) has run against the exported BOM (+ `Pin_Allocation.csv`,
+  the schematic `.net` export(s) via `netlist_path`, and any `frozen_pad_counts`) and reports `gate: PASS`
+  — no R1 schema / R2 readiness / R3 symbol-source-claim / R4 SSOT / R5 BOM↔netlist / R6 pin-polarity
+  blocker (§ 3c). A missing `check_c03.report.json` means the entry gate **has not run**: say so;
   never presume PASS. This gate is deliverable-completeness; § 3b is PRD-role fulfilment — both must PASS.
+- **Read the per-check status, not only `gate`** (BR_20260730). Each crosscheck reports its own basis, and
+  a `PASS` earned without an input is not the same claim as a `PASS` earned with it:
+  - `netlist_crosscheck.status` — `not_run` means **no BOM row was checked against any schematic**; a
+    `gate: PASS` alongside it does NOT mean every part is drawn. Also read `boards_not_captured`
+    (a board with zero drawn refs needs its schematic captured — a different fix from adding one symbol).
+  - `pin_polarity.status` / `refs_checked` — a `run` with an empty `refs_checked` examined nothing.
+  - `ssot_crosscheck.status` — `not_run` + `active_parts_unverified` lists what R4 could not verify.
+  - **R3 vs R5 are not interchangeable**: R3 asserts the row *claims* a symbol source; R5 asserts the
+    symbol was *actually drawn*. R3 passing alone never means the part exists in the schematic.
 - `Mechanical_Constraint_Export.json` is produced with `approval=false`.
 - If a full netlist is not recoverable, `Netlist_Status.md` documents the source-data limit.
 - **Schematic fidelity gate PASS** (when the schematic is engine-composed): `compose_schematic(..., fidelity=True)` returns `fidelity.ok` / diff 0/0 — the emitted net partition matches the spec. ERC passing is NOT sufficient; it is blind to collinear-wire net FUSION. A connector-dense sheet with no fidelity check is `draft`.

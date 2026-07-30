@@ -21,13 +21,30 @@ Hard-fail conditions (BR acceptance criteria R1–R4):
                          (official | vendor+LCSC id | manual | N-A)
   R4 SSOT crosscheck   — active BOM parts vs Pin_Allocation.csv agree (no
                          wireless/interface-scheme conflict); J_* pad counts match
-                         a frozen tally when provided
+                         a frozen tally when provided. Ref-level matching requires a
+                         ref-bearing column in the pinmap; a ball/peripheral-oriented
+                         pinmap (the shape the deliverable table specifies) reports
+                         ssot_crosscheck.status="not_run" instead of flagging every
+                         active part.
+  R5 BOM<->netlist     — every BOM row that should exist as a schematic symbol is
+                         present in the supplied netlist(s). Requires netlist_path;
+                         when absent the report says netlist_crosscheck.status=
+                         "not_run" rather than letting PASS imply it was checked.
+                         NOTE R3 vs R5: R3 checks the row CLAIMS a symbol source;
+                         R5 checks the symbol was actually DRAWN. R3 alone passing
+                         never means the part exists in the schematic.
+  R6 pin-spec polarity — a BOM row's parenthesised pin spec, e.g. "FPC 4P(R/G/B/GND)",
+                         must not contradict the netlist on ground-vs-supply. Such a
+                         mismatch is electrically LEGAL (a connector pin on GND is a
+                         valid net), so ERC/DRC pass while the board cannot work.
+                         Requires netlist_path; reports not_run otherwise.
 Warn (non-blocking): stock=0, mechanical MPN TBC — procurement notes.
 
 Error codes:
   BOM_MISSING          bom csv absent
   BOM_EMPTY            zero data rows
   PIN_ALLOC_MISSING    pin-allocation csv named but absent
+  NETLIST_MISSING      netlist path named but absent
 """
 from __future__ import annotations
 
@@ -43,15 +60,73 @@ REPORT_SCHEMA = "bodesign.c03.stage_entry_gate.v1"
 REPORT_FILENAME = "check_c03.report.json"
 
 # Allowed BOM row lifecycle states.
-_STATUS_ENUM = {"finalized", "draft", "blocked", "proposed", "alternate"}
+# BR_20260730 F3: "design-ready" is ADMITTED as a first-class state. It was already
+# in production use (21 rows of the aiguard C03 BOM) and a consumer-side gate
+# treated it as passing, while this gate rejected it as an unknown status — the two
+# gates returned opposite verdicts on the same file with neither reporting a
+# conflict. Admitting it (rather than forcing a rename) is the honest resolution:
+# the state has a real, distinct meaning below `finalized` — see _READY_STATUS.
+_STATUS_ENUM = {"finalized", "design-ready", "draft", "blocked", "proposed", "alternate"}
+# States that clear the C04-entry readiness bar.
+#   finalized    — part fully specified, mpn committed, ready to order
+#   design-ready — electrically/mechanically decided and drawable, mpn may still be
+#                  generic (owner-decided interface, vendor selection deferred).
+#                  Sufficient for LAYOUT entry; NOT sufficient for procurement.
+_READY_STATUS = {"finalized", "design-ready"}
 # States that block C04 entry outright.
 _BLOCKING_STATUS = {"draft", "blocked"}
 # Placeholder tokens forbidden in a finalized part's mpn (case-insensitive).
 _FORBIDDEN_MPN = ("tbc", "tbd", "undecided", "todo", "xxx", "???")
 # Recognised symbol-source markers (R3 drawability).
 _SYMBOL_SOURCES = ("official", "vendor", "lcsc", "manual", "n-a", "n/a")
+# A bare LCSC part number is itself vendor-fetchable symbol evidence, and is
+# STRICTER than the bare literal "lcsc" already accepted above (an id can be
+# resolved; the word cannot). Accepting it is therefore not a relaxation — it
+# closes a third vocabulary divergence with the consumer-side gate, which has
+# always accepted this form (check_bom.py R4). Requires >=5 digits so a value
+# like "C1" is not mistaken for a part number.
+_LCSC_ID = re.compile(r"\bC\d{5,}\b", re.I)
+# Column aliases carrying the R3 symbol-source evidence. `deck_status` is the name
+# actually used by the c03-ee GUIDE and by every product BOM; omitting it meant
+# _col_index returned None -> symbol_name None -> EVERY row failed R3. A gate that
+# fails all rows has the same discriminating power as one that passes all rows:
+# none. "I could not find the column" was being reported as "the column is empty"
+# (BR_20260730; same shape as the mcpctl busy-probe UNKNOWN lesson).
+_SYMBOL_COLUMNS = ("symbol_source", "symbol", "sym_source", "drawability", "deck_status")
 # Reference prefixes considered "active" for the SSOT crosscheck (drive interfaces).
 _ACTIVE_PREFIXES = ("U", "J", "Y", "SW")
+
+# ── R5 (BOM <-> netlist) scope machinery ────────────────────────────────────
+# A netlist covers ONE schematic sheet-set; a product BOM covers the whole product
+# across several boards and several modules. A naive set-difference between the two
+# is therefore NOT a defect detector — measured on the real aiguard inputs it
+# yields 33 findings of which 2 are genuine. R5 must state the basis of its own
+# verdict rather than pretend the two sets are comparable (V5/V6 discipline).
+#
+# Refs legitimately absent from an EE netlist:
+_NONELECTRICAL_PREFIXES = ("LENS", "ANT")   # optics / passive radiator: no symbol
+# Aggregate BOM rows (e.g. "C*/R*") stand for a class, not one placed part.
+_AGGREGATE_MARKERS = ("*", "?")
+
+# ── R6 (pin-spec polarity) ──────────────────────────────────────────────────
+# BOM rows for connectors carry a parenthesised pin spec, e.g.
+#   "FPC 4P 1.0mm(R/G/B/GND)".
+# That text READS like a comment but is used downstream as the wiring spec: a
+# schematic-capture agent wires pin N to whatever token N says. When the spec is
+# wrong the resulting netlist is *electrically legal* — a connector pin tied to GND
+# is a perfectly valid net — so ERC/DRC pass and the defect is functional only
+# (BR_20260730 round=2: J_LED specced "(R/G/B/GND)" against a common-ANODE LED;
+# pin 4 was wired to GND, the anodes lost their supply, the LED could never light,
+# and every connectivity check was green).
+#
+# R6 checks only the one class of mismatch that is unambiguous and cannot be a
+# naming-style difference: a GROUND/SUPPLY polarity inversion. Exact token-to-net
+# matching was tried and rejected — the corrected spec "+3V3 common-anode" does not
+# string-equal its net "+3V3_PB", so exact matching would flag the *right* answer.
+# A check that flags correct work is worse than no check.
+_GND_TOKENS = ("gnd", "vss", "agnd", "dgnd", "ground", "0v", "vee")
+_PWR_PREFIXES = ("+", "vdd", "vcc", "vbat", "vbus", "vin", "vout", "vsys", "vdda")
+_PWR_PATTERN = re.compile(r"^\+|\b\d+v\d*\b|\bv(dd|cc|bat|bus|in|out|sys)\b")
 
 
 @dataclass
@@ -71,6 +146,15 @@ class CheckC03Result:
     bom_rows: int = 0
     active_parts: int = 0
     ssot_checked: bool = False
+    # BR_20260730 F2: always present. {"status": "not_run", ...} when no netlist was
+    # supplied, so a caller can never mistake "never checked" for "checked, clean".
+    netlist_crosscheck: dict = field(default_factory=lambda: {"status": "not_run"})
+    # BR_20260730 R6: same not_run discipline — a caller must never read a clean
+    # gate as "the pin specs were checked" when no netlist was supplied.
+    pin_polarity: dict = field(default_factory=lambda: {"status": "not_run"})
+    # BR_20260730: `ssot_checked` alone could not distinguish "crosschecked, clean"
+    # from "could not crosscheck at all". This carries the basis of that verdict.
+    ssot_crosscheck: dict = field(default_factory=lambda: {"status": "not_run"})
 
 
 # ── CSV loading (quoting-破損 surfaces as a schema finding, not a crash) ─────
@@ -83,6 +167,13 @@ def _read_csv_rows(path: str) -> tuple[list[str], list[list[str]]]:
     text = Path(path).read_text(encoding="utf-8-sig")
     reader = csv.reader(io.StringIO(text))
     rows = [r for r in reader if r and any(c.strip() for c in r)]
+    # BR_20260730: '#' section banners are a documented BOM convention (every
+    # product BOM groups rows by module with them). Keeping them made each one
+    # surface as R1_SCHEMA "likely CSV quoting breakage" — 28 findings on the real
+    # aiguard BOM, every one a misdiagnosis pointing the caller at a quoting bug
+    # that does not exist. Drop them BEFORE the column-count check so R1 reports
+    # only genuine schema damage.
+    rows = [r for r in rows if not r[0].lstrip().startswith("#")]
     if not rows:
         return [], []
     return rows[0], rows[1:]
@@ -143,32 +234,291 @@ def _check_readiness(rows: list[dict], status_i_name: str, mpn_i_name: str) -> l
             if any(tok in mpn for tok in _FORBIDDEN_MPN):
                 findings.append(RowFinding(board, ref, "R2_READINESS",
                                            f"finalized row mpn carries placeholder ({r.get(mpn_i_name)!r})"))
+        # BR_20260730 F3: a `design-ready` row is allowed a generic/deferred mpn
+        # (that is precisely what distinguishes it from `finalized`), so the
+        # placeholder check above deliberately does NOT apply to it. It is
+        # sufficient for C04 layout entry and insufficient for procurement; the
+        # procurement gate is a separate check, not this one.
     return findings
 
 
 def _check_drawability(rows: list[dict], symbol_i_name: str | None) -> list[RowFinding]:
+    """R3 — every row must CLAIM a symbol source.
+
+    Scope (BR_20260730 F5): this asserts the BOM row carries symbol-source
+    *evidence*, i.e. it claims to be drawable. It does NOT verify the symbol was
+    actually placed in the schematic — that is R5's job (BOM<->netlist). Do not
+    read a passing R3 as "the part is drawn"; it means "the row says where its
+    symbol comes from".
+    """
     findings: list[RowFinding] = []
+    if symbol_i_name is None:
+        # BR_20260730: NO symbol column at all. Report this ONCE as a schema-level
+        # blocker instead of blaming all N rows for an empty value we never read.
+        # "I could not find the column" is not "the column is empty" — the former
+        # is a gate-input defect, the latter a BOM-content defect, and conflating
+        # them made the gate fail every row of a BOM whose evidence column simply
+        # had a different (documented) name.
+        return [RowFinding("", "<schema>", "R3_DRAWABILITY",
+                           "no symbol-source column found in BOM header "
+                           f"(looked for: {', '.join(_SYMBOL_COLUMNS)}) — "
+                           "cannot assess drawability for any row")]
     for r in rows:
         board, ref = r.get("_board", ""), r.get("_ref", "")
-        marker = _norm(r.get(symbol_i_name, "")) if symbol_i_name else ""
-        if not marker or not any(s in marker for s in _SYMBOL_SOURCES):
-            findings.append(RowFinding(board, ref, "R3_DRAWABILITY",
-                                       "no symbol source marker "
-                                       "(official | vendor+LCSC | manual | N-A)"))
+        raw = (r.get(symbol_i_name) or "").strip()
+        marker = _norm(raw)
+        if any(s in marker for s in _SYMBOL_SOURCES) or _LCSC_ID.search(raw):
+            continue
+        # Distinguish "declared nothing" from "declared, but the origin class is not
+        # one we recognise". Both stay BLOCKING — the vocabulary is deliberately not
+        # widened to make a row pass — but the caller needs to know which edit fixes
+        # it: add a declaration, versus name the origin class of an existing one.
+        # (Reporting both as "no symbol source marker" sent a caller looking for a
+        # missing field that was in fact present.)
+        if "symbol=" in marker:
+            declared = raw.split("symbol=", 1)[1][:60]
+            detail = ("symbol source declared but its origin class is unrecognised "
+                      f"(found: {declared!r}); name one of "
+                      "official | vendor+LCSC | manual | N-A")
+        else:
+            detail = ("no symbol source marker "
+                      "(official | vendor+LCSC | manual | N-A)")
+        findings.append(RowFinding(board, ref, "R3_DRAWABILITY", detail))
     return findings
 
 
-def _load_pin_alloc_refs(path: str) -> set[str]:
-    """Refs present in the Pin_Allocation.csv SSOT (component/ref column)."""
+# ── R5: BOM <-> netlist ref consistency (BR_20260730 F2) ────────────────────
+
+def _netlist_refs(path: str) -> set[str]:
+    """Component refs declared in a KiCad netlist: `(comp (ref "U1")`."""
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    return {m.group(1).strip()
+            for m in re.finditer(r'\(\s*comp\s+\(\s*ref\s+"?([^\s")]+)"?', text)}
+
+
+def _netlist_scope(path: str) -> str:
+    """The schematic this netlist was exported from (its own `(source ...)`)."""
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    m = re.search(r'\(\s*source\s+"([^"]+)"', text)
+    return os.path.basename(m.group(1)) if m else "unknown"
+
+
+def _is_aggregate_ref(ref: str) -> bool:
+    return any(mk in ref for mk in _AGGREGATE_MARKERS)
+
+
+def _check_netlist(rows: list[dict], netlist_paths: list[str]) -> tuple[list[RowFinding], dict]:
+    """Every BOM row that should exist as a schematic symbol must appear in one of
+    the supplied netlists.
+
+    Deliberately ONE-directional, against the original proposal. A netlist covers
+    one schematic sheet-set; a product BOM covers a whole product across boards and
+    modules, and legitimately rolls passives up into aggregate rows ("C*/R*").
+    Measured on the real aiguard inputs, a symmetric set-difference reports 33
+    findings of which 2 are real — a gate that cries wolf 31 times gets ignored,
+    which is worse than no gate. The reverse direction (netlist ref with no BOM
+    row) is reported as a WARNING with its count, never as a blocker, so the
+    information is available without drowning the real signal.
+
+    Exemptions are explicit, never silent:
+      - qty == 0            -> a functional alternate, not placed
+      - aggregate ref       -> stands for a class ("C*/R*"), not one part
+      - non-electrical      -> LENS / ANT: no schematic symbol by nature
+    """
+    covered: set[str] = set()
+    scopes: list[str] = []
+    for np_ in netlist_paths:
+        covered |= _netlist_refs(np_)
+        scopes.append(_netlist_scope(np_))
+
+    findings: list[RowFinding] = []
+    exempt: dict[str, list[str]] = {"qty_zero": [], "aggregate": [], "non_electrical": []}
+    checked = 0
+    for r in rows:
+        ref = r.get("_ref", "")
+        board = r.get("_board", "")
+        if not ref:
+            continue
+        if _is_aggregate_ref(ref):
+            exempt["aggregate"].append(ref)
+            continue
+        if ref.upper().startswith(_NONELECTRICAL_PREFIXES):
+            exempt["non_electrical"].append(ref)
+            continue
+        qty = _norm(r.get("qty", ""))
+        if qty in ("0", "0.0"):
+            exempt["qty_zero"].append(ref)
+            continue
+        checked += 1
+        if ref not in covered:
+            findings.append(RowFinding(board, ref, "R5_NETLIST",
+                                       "BOM row has no matching component in the "
+                                       f"supplied netlist(s) [{', '.join(scopes)}] — "
+                                       "declared in BOM but never drawn"))
+
+    # Per-board coverage. A flat list of N missing refs hides the one distinction a
+    # caller must act on: "this board has NO schematic at all" (fix = capture the
+    # board) versus "this board is captured but this part is missing" (fix = add the
+    # symbol). Measured on the real aiguard inputs the flat list was 20 rows, while
+    # the actionable summary is "3 boards uncaptured + 15 parts missing from captured
+    # boards". Same discipline as reporting the basis alongside the verdict.
+    per_board: dict[str, dict] = {}
+    for r in rows:
+        ref, board = r.get("_ref", ""), r.get("_board", "") or "<unset>"
+        if not ref or _is_aggregate_ref(ref) or ref.upper().startswith(_NONELECTRICAL_PREFIXES):
+            continue
+        if _norm(r.get("qty", "")) in ("0", "0.0"):
+            continue
+        b = per_board.setdefault(board, {"rows": 0, "drawn": 0, "missing": []})
+        b["rows"] += 1
+        if ref in covered:
+            b["drawn"] += 1
+        else:
+            b["missing"].append(ref)
+    uncaptured = sorted(b for b, v in per_board.items() if v["rows"] and v["drawn"] == 0)
+
+    report = {
+        "status": "run",
+        "netlists": [os.path.basename(x) for x in netlist_paths],
+        "netlist_scopes": scopes,
+        "netlist_refs": len(covered),
+        "bom_rows_checked": checked,
+        "exempted": {k: sorted(v) for k, v in exempt.items() if v},
+        "netlist_refs_without_bom_row": sorted(covered - {r.get("_ref", "") for r in rows}),
+        "per_board": {b: {"rows": v["rows"], "drawn": v["drawn"],
+                          "missing": sorted(v["missing"])}
+                      for b, v in sorted(per_board.items())},
+        # Boards with zero drawn refs: their schematic was never captured at all.
+        # Distinct from a per-part omission and fixed differently.
+        "boards_not_captured": uncaptured,
+    }
+    return findings, report
+
+
+def _netlist_pin_nets(paths: list[str]) -> dict[str, dict[str, str]]:
+    """{ref: {pin: net_name}} across all supplied netlists."""
+    out: dict[str, dict[str, str]] = {}
+    net_re = re.compile(r'\(\s*net\s+\(\s*code\s+"[^"]*"\s*\)\s*\(\s*name\s+"([^"]+)"')
+    node_re = re.compile(r'\(\s*node\s+\(\s*ref\s+"([^"]+)"\s*\)\s*\(\s*pin\s+"([^"]+)"')
+    for path in paths:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        # Walk sequentially: every node belongs to the most recent net header.
+        pos, current = 0, None
+        for m in re.finditer(r'\(\s*net\s+\(\s*code|\(\s*node\s+\(\s*ref', text):
+            chunk = text[m.start():m.start() + 400]
+            nm = net_re.match(chunk)
+            if nm:
+                current = nm.group(1)
+                continue
+            nd = node_re.match(chunk)
+            if nd and current:
+                out.setdefault(nd.group(1), {})[nd.group(2)] = current
+    return out
+
+
+def _pin_spec_tokens(value: str) -> list[str] | None:
+    """Positional pin tokens from a BOM value's trailing "(a/b/c)" spec."""
+    m = re.search(r"\(([^()]*/[^()]*)\)\s*$", value.strip())
+    if not m:
+        return None
+    toks = [t.strip() for t in m.group(1).split("/")]
+    return toks if all(toks) else None
+
+
+def _polarity_of(name: str) -> str | None:
+    """'gnd' | 'power' | None for a token or net name."""
+    n = _norm(name)
+    if not n:
+        return None
+    head = re.split(r"[\s,;]", n)[0]
+    if any(head == g or head.startswith(g + "_") or head.endswith("_" + g)
+           for g in _GND_TOKENS) or head in _GND_TOKENS:
+        return "gnd"
+    if _PWR_PATTERN.search(head) or head.startswith(_PWR_PREFIXES):
+        return "power"
+    return None
+
+
+def _check_pin_polarity(rows: list[dict], netlist_paths: list[str],
+                        value_col: str | None) -> tuple[list[RowFinding], dict]:
+    """R6 — a BOM pin spec must not contradict the netlist on ground vs supply.
+
+    Positional alignment (token N == pin N) is the same assumption a capture agent
+    makes when reading the spec, so it is the assumption worth checking. When the
+    token count does not match the ref's pin count in the netlist the alignment is
+    unknown: report `unaligned` and check nothing, rather than guess an offset and
+    emit findings from a wrong premise.
+    """
+    if value_col is None:
+        return [], {"status": "not_run", "reason": "no value/description column in BOM header"}
+    pin_nets = _netlist_pin_nets(netlist_paths)
+    findings: list[RowFinding] = []
+    checked: list[str] = []
+    unaligned: list[dict] = []
+    no_spec = 0
+    for r in rows:
+        ref = r.get("_ref", "")
+        board = r.get("_board", "")
+        if not ref or ref not in pin_nets:
+            continue                      # absence is R5's finding, not R6's
+        toks = _pin_spec_tokens(r.get(value_col, "") or "")
+        if toks is None:
+            no_spec += 1
+            continue
+        nets = pin_nets[ref]
+        if len(toks) != len(nets):
+            unaligned.append({"ref": ref, "spec_tokens": len(toks), "netlist_pins": len(nets)})
+            continue
+        checked.append(ref)
+        for i, tok in enumerate(toks, start=1):
+            net = nets.get(str(i))
+            if net is None:
+                continue
+            want, got = _polarity_of(tok), _polarity_of(net)
+            if want and got and want != got:
+                findings.append(RowFinding(
+                    board, ref, "R6_PIN_POLARITY",
+                    f"pin {i}: BOM spec says {tok!r} ({want}) but netlist wires it to "
+                    f"{net!r} ({got}) — electrically legal, so ERC/DRC cannot catch "
+                    "this; one of the two is wrong"))
+    report = {
+        "status": "run",
+        "refs_checked": sorted(checked),
+        "rows_without_pin_spec": no_spec,
+        # Reported, never silently dropped: an unaligned row was NOT checked.
+        "unaligned": unaligned,
+    }
+    return findings, report
+
+
+def _load_pin_alloc_refs(path: str) -> tuple[set[str] | None, list[str]]:
+    """Refs in the Pin_Allocation SSOT, plus its header.
+
+    Returns (None, header) when the file carries NO ref-bearing column. That is a
+    distinct outcome from "a ref column exists and is empty", and the caller MUST
+    keep them apart: returning an empty set for both made every active BOM part
+    look absent from the SSOT (26/26 on the real aiguard inputs, each reported as
+    "BOM<->SSOT conflict — owner must reconcile"). "I could not find the column"
+    is not "these parts are missing" (BR_20260730; same shape as R3's missing
+    symbol column and the mcpctl busy-probe UNKNOWN rule).
+
+    Note the artifact contract: the c03-ee GUIDE deliverable table (:43, :340, :374
+    — the last marked `exported`, "ball->GPIO->function") defines Pin_Allocation.csv
+    as a ball/peripheral-oriented pinmap, which has no ref column by design. Only
+    the §3c prose (:230, :243) assumes a ref list. All four Pin_Allocation.csv files
+    in the fleet follow the deliverable table. So a missing ref column is the NORMAL
+    case for a conforming file, not a schema violation — hence not_run rather than
+    a blocking finding.
+    """
     header, raw = _read_csv_rows(path)
     ci = _col_index(header, "ref", "refdes", "component", "reference")
-    refs: set[str] = set()
     if ci is None:
-        return refs
+        return None, header
+    refs: set[str] = set()
     for row in raw:
         if ci < len(row) and row[ci].strip():
             refs.add(row[ci].strip())
-    return refs
+    return refs, header
 
 
 def _check_ssot(active_rows: list[dict], pin_alloc_refs: set[str]) -> list[RowFinding]:
@@ -188,6 +538,7 @@ def _check_ssot(active_rows: list[dict], pin_alloc_refs: set[str]) -> list[RowFi
 # ── top level ───────────────────────────────────────────────────────────────
 
 def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
+              netlist_path: str | list[str] | None = None,
               frozen_pad_counts: dict | None = None,
               out_dir: str | None = None) -> CheckC03Result:
     """C03→C04 stage-entry gate. Deterministic; missing inputs raise, blocking
@@ -195,6 +546,12 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
 
     frozen_pad_counts: optional {ref: expected_pad_count}; when a BOM row for that
     ref carries a pad-count column, a mismatch is a R4_SSOT blocker (J_* freeze).
+
+    netlist_path: one path, or a list of paths, to KiCad `.net` exports covering
+    the schematic(s) this BOM is drawn in. Enables R5 (BOM<->netlist). When it is
+    NOT supplied the result carries netlist_crosscheck={"status": "not_run", ...}
+    and gate=PASS must NOT be read as "every BOM row is drawn" — the gate simply
+    never looked (BR_20260730; a verdict must carry the scope that produced it).
     """
     if not os.path.isfile(bom_csv):
         raise ValueError(f"BOM_MISSING: {bom_csv} not found — run C03 BOM export first.")
@@ -206,9 +563,10 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
     ref_i = _col_index(header, "ref", "refdes", "reference")
     status_i = _col_index(header, "status", "state")
     mpn_i = _col_index(header, "mpn", "manufacturer_part_number", "part_number")
-    symbol_i = _col_index(header, "symbol_source", "symbol", "sym_source", "drawability")
+    symbol_i = _col_index(header, *_SYMBOL_COLUMNS)
     pad_i = _col_index(header, "pad_count", "pads", "pad_qty")
     stock_i = _col_index(header, "stock", "in_stock")
+    value_i = _col_index(header, "value", "description", "desc", "part_value")
 
     findings: list[RowFinding] = []
     # R1 schema (uses raw rows for column-count breakage)
@@ -228,6 +586,7 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
     status_name = header[status_i] if status_i is not None else "status"
     mpn_name = header[mpn_i] if mpn_i is not None else "mpn"
     symbol_name = header[symbol_i] if symbol_i is not None else None
+    value_name = header[value_i] if value_i is not None else None
 
     findings += _check_readiness(dict_rows, status_name, mpn_name)
     findings += _check_drawability(dict_rows, symbol_name)
@@ -236,12 +595,59 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
                    if r.get("_ref", "").upper().startswith(_ACTIVE_PREFIXES)]
 
     ssot_checked = False
+    ssot_report: dict = {
+        "status": "not_run",
+        "reason": "pin_allocation_csv not supplied — active BOM parts were NOT "
+                  "checked against the pin allocation",
+    }
     if pin_allocation_csv:
         if not os.path.isfile(pin_allocation_csv):
             raise ValueError(f"PIN_ALLOC_MISSING: {pin_allocation_csv} not found.")
-        pin_refs = _load_pin_alloc_refs(pin_allocation_csv)
-        findings += _check_ssot(active_rows, pin_refs)
-        ssot_checked = True
+        pin_refs, pin_header = _load_pin_alloc_refs(pin_allocation_csv)
+        if pin_refs is None:
+            # Ref-level crosscheck is not applicable to this (contract-conforming)
+            # pinmap schema. Say so; do NOT convert inapplicability into 26 findings.
+            ssot_report = {
+                "status": "not_run",
+                "reason": "Pin_Allocation.csv has no ref-bearing column "
+                          f"(header: {pin_header}) — it is a ball/peripheral pinmap "
+                          "per the c03-ee deliverable table, so ref-level BOM<->SSOT "
+                          "crosscheck does not apply; NO active part was verified "
+                          "against the pin allocation",
+                "pin_alloc_header": pin_header,
+                "active_parts_unverified": sorted(r.get("_ref", "") for r in active_rows),
+            }
+        else:
+            findings += _check_ssot(active_rows, pin_refs)
+            ssot_report = {
+                "status": "run",
+                "pin_alloc_refs": len(pin_refs),
+                "active_parts_checked": len(active_rows),
+            }
+            ssot_checked = True
+
+    # R5 BOM<->netlist (BR_20260730 F2). Absence of netlist_path is reported as
+    # not_run, never silently folded into a PASS.
+    if netlist_path is None:
+        netlist_report: dict = {
+            "status": "not_run",
+            "reason": "netlist_path not supplied — BOM rows were NOT checked against "
+                      "any schematic; a PASS here does not mean every part is drawn",
+        }
+        polarity_report: dict = {
+            "status": "not_run",
+            "reason": "netlist_path not supplied — BOM pin specs were NOT checked "
+                      "against the wiring; a PASS here does not mean they agree",
+        }
+    else:
+        paths = [netlist_path] if isinstance(netlist_path, str) else list(netlist_path)
+        missing = [x for x in paths if not os.path.isfile(x)]
+        if missing:
+            raise ValueError(f"NETLIST_MISSING: {', '.join(missing)} not found.")
+        nl_findings, netlist_report = _check_netlist(dict_rows, paths)
+        findings += nl_findings
+        pol_findings, polarity_report = _check_pin_polarity(dict_rows, paths, value_name)
+        findings += pol_findings
 
     # frozen pad-count crosscheck (J_* freeze)
     if frozen_pad_counts and pad_i is not None:
@@ -266,6 +672,17 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
             if sv in ("0", "0.0", "out", "oos"):
                 warnings.append(f"{r.get('_ref','?')}: stock=0 (procurement warn)")
 
+    # Reverse direction (netlist ref with no BOM row) is information, not a verdict:
+    # a netlist covering more than this BOM's scope is normal. Surfaced as a counted
+    # warning so it is visible without swamping the real R5 signal.
+    orphan = netlist_report.get("netlist_refs_without_bom_row") or []
+    if orphan:
+        warnings.append(
+            f"{len(orphan)} netlist component(s) have no BOM row "
+            f"(informational; netlist scope may exceed this BOM): "
+            + ", ".join(orphan[:12]) + (" …" if len(orphan) > 12 else "")
+        )
+
     result = CheckC03Result(
         schema=REPORT_SCHEMA,
         gate="FAIL" if findings else "PASS",
@@ -274,6 +691,9 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
         bom_rows=len(dict_rows),
         active_parts=len(active_rows),
         ssot_checked=ssot_checked,
+        netlist_crosscheck=netlist_report,
+        pin_polarity=polarity_report,
+        ssot_crosscheck=ssot_report,
     )
 
     if out_dir is not None:

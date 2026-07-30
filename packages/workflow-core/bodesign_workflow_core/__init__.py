@@ -77,12 +77,56 @@ from .validation_evidence import (
     ValidationFinding,
     wrap_validation_evidence,
 )
-from .checkers import (
-    CheckerError,
-    check_board_edge_keepout,
-    check_decoupling_pdn,
-    guard_tier,
-)
+# BR_20260730 F1: `.checkers` is NOT eagerly imported.
+# checkers/registry.py -> copper_clearance.py needs `bodesign_design_ir` (PCB IR,
+# only present in the ee worker). Importing it here made every symbol in this
+# package — including the pure-python, zero-dependency CSV gates like check_c03 —
+# unreachable from a consumer repo that has no ee environment. A consumer facing
+# `ModuleNotFoundError: bodesign_design_ir` on `from bodesign_workflow_core import
+# check_c03` hand-writes its own gate instead (that fork then drifts and issues
+# verdicts contradicting this package's). The capability existed; it was
+# unreachable from where the caller actually stood.
+# Resolved lazily via module __getattr__ (PEP 562) so `from bodesign_workflow_core
+# import CheckerError` still works unchanged for callers that DO have the ee deps,
+# and fails with the real ModuleNotFoundError only when a checker is actually used.
+# name -> submodule that owns it. Every entry here is a symbol whose defining
+# submodule imports an EXTERNAL bodesign_* package at module level, so importing
+# it eagerly would drag that dependency into every consumer of this package.
+# Derived from an audit of all eager submodules (BR_20260730): exactly two
+# offenders exist — `checkers` (bodesign_design_ir, bodesign_gerber_core via
+# copper_clearance) and `package_readiness` (bodesign_reverse_core).
+# tests/test_workflow_core_reachability.py re-derives that audit from source and
+# fails if a THIRD eager offender appears, so this map cannot silently go stale.
+_LAZY_EXTERNAL_DEP_EXPORTS = {
+    "CheckerError": "checkers",
+    "check_board_edge_keepout": "checkers",
+    "check_decoupling_pdn": "checkers",
+    "guard_tier": "checkers",
+    "DeliverableStatus": "package_readiness",
+    "PackageReadiness": "package_readiness",
+    "assess_package_readiness": "package_readiness",
+    "render_readiness_markdown": "package_readiness",
+}
+
+
+def __getattr__(name: str):
+    """PEP 562 lazy resolution for exports whose module needs an ee-only package.
+
+    BR_20260730 F1. Resolution is deferred, NOT suppressed: a caller that actually
+    uses one of these still gets the real ModuleNotFoundError, naming the missing
+    package. This is removal of an unnecessary eager coupling, not a fallback.
+    """
+    owner = _LAZY_EXTERNAL_DEP_EXPORTS.get(name)
+    if owner is not None:
+        import importlib
+
+        mod = importlib.import_module(f".{owner}", __name__)
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_EXTERNAL_DEP_EXPORTS))
 from .root_cause import (
     ROOT_CAUSE_SCHEMA,
     RootCauseError,
@@ -124,12 +168,10 @@ from .evidence_sourcing import (
     extract_part_candidates,
     scan_corpus_for_part,
 )
-from .package_readiness import (
-    DeliverableStatus,
-    PackageReadiness,
-    assess_package_readiness,
-    render_readiness_markdown,
-)
+# BR_20260730 F1 (2nd eager offender): package_readiness.py:18 imports
+# `bodesign_reverse_core` at module level, so eager-importing it here re-broke the
+# consumer-reachability this fix exists to restore. Same lazy treatment as
+# `.checkers` above — see _LAZY_EXTERNAL_DEP_EXPORTS.
 from .feasibility import (
     FeasibilityVerdict,
     classify_product_feasibility,

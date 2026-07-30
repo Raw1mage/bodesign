@@ -148,6 +148,82 @@ Default netclass 只授權 0.6mm via，而 ball pitch 是 0.5mm——**相鄰 vi
 進一步的紀律：偵測到違規也**不得自動「修好」**（不改使用者規則、也不偷改 via 尺寸）——那是 fallback；
 正解是列出衝突、預告 DRC 筆數、把決定還給呼叫端。
 
+### V7：gate 回答的不是呼叫端問的那個問題
+
+V1–V6 都假設「gate 本身是對的，只是資訊有損」。V7 在更前面一層：**呼叫端信任一個判決在回答問題 Q，
+而它的實作回答的是更窄的 Q'。** 兩者在正常情況下讀起來一樣，只在 Q\Q' 那塊差異上默默放行。
+
+實例（BR_20260730 §1）：`check_c03` 的 docstring 自述 "C03→C04 stage-entry readiness gate"，
+GUIDE 對外寫 "BOM schema/readiness/**drawability**/SSOT crosscheck"。呼叫端讀到 drawability
+合理推論「可繪已驗證」。實作的 R3 只檢查 **BOM 那一列有沒有寫 symbol 來源字串**，
+從不檢查那個 symbol 是否真的被畫進 schematic——`check_c03` 的簽章根本沒有 netlist 參數。
+於是手改 BOM 新增 `J_MIC` / `J_LED` 兩個連接器、schematic 完全沒動，gate 照樣 PASS 放行進 C04。
+
+**「宣稱可繪」被當成「已繪」。** 修法不是改 R3（它問的問題本身是合理的），而是**補上真正回答 Q 的
+那條規則**（R5 BOM↔netlist ref 一致性），並在文件上把 Q 與 Q' 明確分開：
+
+> R3 檢查那一列**宣稱**了 symbol 來源；R5 檢查那個 symbol **真的被畫**了。R3 單獨通過永不代表元件存在。
+
+**判別句**：
+
+> 讀 gate 的**名字與文件**寫下它承諾回答的問題，再讀它的**簽章**——
+> 它拿得到回答那個問題所需的輸入嗎？拿不到，就是 V7。
+
+`check_c03(bom_csv, pin_allocation_csv, frozen_pad_counts, out_dir)` 沒有 netlist 參數，
+所以它**在結構上不可能**回答「BOM 每一行都畫出來了嗎」。這個判別不需要讀實作，看簽章就成立。
+
+#### V7 的兩個衍生陣形（都在同一個 gate 裡實測到）
+
+**(a) 零鑑別力的假紅——「我找不到要檢查的欄位」被回報成「那裡沒東西」。**
+R3 的欄位別名是 `(symbol_source, symbol, sym_source, drawability)`，而每一份產品 BOM 與 c03-ee GUIDE
+實際用的欄名是 `deck_status`。`_col_index` 回 `None` → `symbol_name=None` → `marker=""` →
+**34 列全部 fail R3**。同型的孿生：`_load_pin_alloc_refs` 對「沒有 ref 欄」與「ref 欄是空的」都回空集合，
+於是 **26 個 active 件全部**被報成 `BOM↔SSOT conflict — owner must reconcile`，讀起來像 26 件真實待裁決。
+
+> **全紅與全綠的鑑別力相同：零。** 一個 gate 若對每一列都給同一個答案，它就沒有在檢查任何東西。
+> 「我看不到」必須與「那裡沒東西」分開回報——前者是 gate 的輸入缺陷，後者是被檢物的內容缺陷，修法不同。
+
+修法：欄位缺席時報**一筆** schema 級 finding（不冤枉 N 列）；不適用時報 `status: "not_run"` 並列出
+**未被驗證**的清單（`active_parts_unverified`），而不是把「不適用」轉成 N 個 finding。
+
+**(b) 診斷歸因錯誤——把合法慣例報成不存在的 bug。**
+`_read_csv_rows` 不跳過 `#` 開頭行，而每份產品 BOM 都用 `# ==== CORE STAMP MODULE ====` 分隔模組。
+28 個 banner 每一個都變成 `R1_SCHEMA: likely CSV quoting breakage`——**28 筆全是誤診，
+把呼叫端指向一個不存在的 quoting bug**。
+
+**這兩個衍生陣形合起來就是 fork 的成因。** 平台 gate 對真實 BOM 輸出 82 筆 blocking，其中 **81 筆是
+gate 自身缺陷產生的噪音**（48 個 R1 + 33 個假紅 R3）。呼叫端於是手寫了一份自己的 gate——那不是紀律問題，
+是**對一個不可用工具的合理反應**。V7 的完整因果鏈：
+
+```
+gate 回答錯問題 + 對真實輸入噴 81 筆假 finding
+  → 呼叫端無法使用 → 手寫替代品
+  → 兩份 gate 詞彙分歧（design-ready / 裸 LCSC id）
+  → 對同一份檔案給相反判決，兩邊各自自洽、無人報錯   ← §D 的同型，只是升到工具層
+```
+
+**所以 V7 的修復順序有依賴方向**：先修可達性與假紅（讓工具真的能用），再談詞彙收斂。
+反過來做，呼叫端會第三次 fork。
+
+#### 一個相鄰但不同的陣形：兩邊一致地都錯
+
+BOM 寫錯 pin 定義 → 施工者**忠實照 BOM** 施工 → netlist 與 BOM **一致地都錯**。
+一致性檢查（R5）在這一刻**完全通過**，而且**原則上抓不到**——它檢查的正是「兩者是否一致」。
+拿這種案例當一致性檢查的正向測試，會得到 PASS，然後那條測試就變成一個假綠斷言。
+
+實例（BR_20260730 round=2）：`J_LED` 的 BOM 規格寫 `(R/G/B/GND)`，而 LED 是**共陽**；
+pin 4 被接到 `GND`、三個陽極失去供電，**LED 永遠不亮**。而 `J_LED.4 ∈ GND` 電氣上完全合法，
+**ERC/DRC 全綠**。
+
+要抓到它必須引入**第三個來源**（此處：那個自由文字 pin 規格本身，對上 netlist 的實際極性），
+且判準必須挑得住「正確答案的措辭差異」——修正後的 `(K_R/K_G/K_B/+3V3 common-anode)` 與其 net
+`+3V3_PB` **字面不相等**，逐 token 精確比對會 flag 正確答案。
+
+> **一個會 flag 正確答案的檢查，比沒有檢查更糟**——它會被關掉，連帶關掉它本來能抓的真缺陷。
+
+正解是只認**不可能是命名風格差異**的那一類矛盾：GND ↔ power 的極性反轉（R6）。
+positional 對齊（第 N 個 token = pin N）是必要假設，但 token 數與實際 pin 數不符時**報 unaligned 而非硬對**。
+
 ## 正確樣態（positive pattern，KB 只有反例不夠）
 
 - **`plane_layers_applied: [{spec, layer, net, type}]`**（`routing.py net2pcb_board`）——
