@@ -476,16 +476,24 @@ class VendoredBundleClaimTests(unittest.TestCase):
                 "differing": len([k for k in set(live) & set(embedded)
                                   if live[k] != embedded[k]]),
             }
-        # Ceilings are the measured state at the time of disclosure. Growth means
-        # the shadow is rotting FURTHER while the docs claim a known, bounded gap.
-        ceilings = {"kicad": (12, 9), "kidoc": (1, 1)}
+        # MANIFEST discloses EXACT numbers, so the guard is exact in both
+        # directions (BR_20260730 round 6, Defect 2: the original `<=` capped
+        # growth only. A deleted live file, or live+composite rotting in
+        # lockstep, shrinks the count and leaves the published figure wrong
+        # while the test stays green -- a disclosure that silently stops
+        # matching is the failure this BR family is about, not a smaller one).
+        disclosed = {"kicad": (12, 9), "kidoc": (1, 1)}
         for bare, seen in drift.items():
             with self.subTest(bundle=bare):
-                max_only, max_diff = ceilings[bare]
-                self.assertLessEqual(seen["live_only"], max_only,
-                                     f"{bare} shadow grew: MANIFEST discloses {max_only} live-only")
-                self.assertLessEqual(seen["differing"], max_diff,
-                                     f"{bare} shadow grew: MANIFEST discloses {max_diff} differing")
+                want_only, want_diff = disclosed[bare]
+                self.assertEqual(want_only, seen["live_only"],
+                                 f"{bare} shadow drift moved: MANIFEST discloses "
+                                 f"{want_only} live-only, measured {seen['live_only']}. "
+                                 f"Update the MANIFEST figure -- in EITHER direction.")
+                self.assertEqual(want_diff, seen["differing"],
+                                 f"{bare} shadow drift moved: MANIFEST discloses "
+                                 f"{want_diff} byte-differences, measured "
+                                 f"{seen['differing']}. Update the MANIFEST figure.")
 
 
 class SkillSourceParityTests(unittest.TestCase):
@@ -581,6 +589,72 @@ class SkillSourceParityTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError) as ctx:
                         mod.assert_skill_source_parity("bodesign")
                     self.assertIn("parity violation", str(ctx.exception))
+
+class ShippedSkillSelfContainmentTests(unittest.TestCase):
+    """BR_20260730 round 6, Y1 — the archive is not self-sufficient, and that
+    fact must live at the install step, not only in the error you hit later.
+
+    The shipped skill carries `scripts/gate.py` but NOT the `packages/*` the
+    verbs import, so a bare install can `--list` and nothing else. That is a
+    legitimate architecture (the packages are large and version-coupled to the
+    repo); what was NOT legitimate was MANIFEST's Install section telling you to
+    extract and go, with no mention of `BODESIGN_SRC`. These tests pin the
+    shape so the disclosure cannot silently stop matching the artifact.
+    """
+
+    MANIFEST = REPO_ROOT / "services" / "mcp" / "assets" / "skills" / "MANIFEST.md"
+
+    def test_zip_really_omits_the_packages_the_verbs_import(self):
+        # If this ever fails, the archive became self-contained -- good news,
+        # but then the MANIFEST disclosure below is now a lie and must go.
+        names = zipfile.ZipFile(io.BytesIO(SS.pack_skill_zip("bodesign"))).namelist()
+        self.assertTrue(any(n.endswith("scripts/gate.py") for n in names),
+                        "gate.py missing: the landing plane has no entrypoint at all")
+        for pkg in ("workflow-core", "component-kb", "eda-bridge", "reverse-core"):
+            self.assertFalse([n for n in names if f"packages/{pkg}" in n],
+                             f"archive now ships packages/{pkg}; MANIFEST's "
+                             f"BODESIGN_SRC disclosure is stale and must be removed")
+
+    def test_manifest_discloses_the_dependency_at_install_time(self):
+        text = self.MANIFEST.read_text(encoding="utf-8")
+        install = text.split("## Install", 1)
+        self.assertEqual(2, len(install), "MANIFEST lost its Install section")
+        body = install[1].split("## Contents", 1)[0]
+        for token in ("BODESIGN_SRC", "LANDING_PACKAGES_NOT_FOUND", "--list"):
+            self.assertIn(token, body,
+                          f"Install section no longer discloses {token!r}: a reader "
+                          f"following it would extract, run a verb, and hit an "
+                          f"undisclosed hard error (round 6, Y1)")
+
+    def test_the_disclosed_error_code_is_the_one_gate_actually_raises(self):
+        # Accepting control for the assertion above: naming a code that gate.py
+        # does not emit would satisfy a substring check while misleading a reader.
+        gate = (REPO_ROOT / "skills" / "bodesign" / "scripts" / "gate.py") \
+            .read_text(encoding="utf-8")
+        self.assertIn("LANDING_PACKAGES_NOT_FOUND", gate)
+        self.assertIn("BODESIGN_SRC", gate)
+
+    def test_docs_do_not_restate_a_hand_copied_verb_count(self):
+        # Round 6 found SKILL.md claiming 52 landing verbs and 43 MCP tools while
+        # the live values were 59 and 57. A number copied out of its source is a
+        # second declaration, which is the exact failure mode of this BR family.
+        # README.md's 0.2.0 changelog entry is exempt: it records what was true
+        # on that date, and rewriting history is not the same as fixing a claim.
+        import re
+        for rel in ("skills/bodesign/SKILL.md",
+                    "README.en.md",
+                    "services/mcp/server.py",
+                    "services/mcp/assets/skills/MANIFEST.md"):
+            with self.subTest(doc=rel):
+                text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+                hits = re.findall(r"~?\d+\s+(?:deterministic|landing)\b"
+                                  r"|\b\d+\s+total;\s*`/tools`", text)
+                self.assertEqual([], hits,
+                                 f"{rel} restates a verb/tool count: {hits}. Point at "
+                                 f"`gate.py --list` / `/tools` instead -- they cannot drift.")
+
+
+class ManifestDeclarationTests(unittest.TestCase):
 
     def test_manifest_declaration_matches_the_repo_layout(self):
         manifest = json.loads((REPO_ROOT / "mcp.json").read_text(encoding="utf-8"))

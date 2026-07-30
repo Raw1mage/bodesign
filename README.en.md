@@ -73,7 +73,7 @@ and the full tool-call schemas at `/tools` and `/tools/{name}`.
 
 ## File model (two planes, 0.2.0)
 
-**Landing plane (agent-local, zero token round-trip)** — the 52 deterministic, repo-local verbs
+**Landing plane (agent-local, zero token round-trip)** — the deterministic, repo-local verbs
 (C00–C06 scaffold/readiness/emitters, the orchestration spine, pure functions) are **no longer MCP
 tools**; the agent runs them directly on the host under its own identity:
 

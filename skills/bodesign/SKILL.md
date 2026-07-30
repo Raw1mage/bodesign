@@ -230,12 +230,14 @@ explicit approval — mirror that here.
 
 The tool surface is split into two planes. Route by plane, not by habit:
 
-- **Landing plane — run locally via `gate.py`, zero token round-trip.** The **52 deterministic,
-  repo-local verbs** (C00 + C01 full families, C02 analysis-only, C03 emitters, C04–C06
-  scaffold/readiness, the 14 orchestration-spine verbs, read/gate verbs — `ingest_project` /
-  `package_readiness` / `datasheet_lookup` / `spec_check` / `rca_spec_audit` — and pure functions —
-  `plan_design_intent` / `evidence_manifest` / `pin_allocation` / `reference_crosscheck` /
-  `impedance_solve`) are **no longer MCP tools**. Run them agent-local against the client project
+- **Landing plane — run locally via `gate.py`.** The deterministic, repo-local verbs (C00 + C01
+  full families, C02 analysis-only, C03 emitters, C04–C06 scaffold/readiness, the orchestration
+  spine, read/gate verbs — `ingest_project` / `package_readiness` / `datasheet_lookup` /
+  `spec_check` / `rca_spec_audit` — and pure functions — `plan_design_intent` /
+  `evidence_manifest` / `pin_allocation` / `reference_crosscheck` / `impedance_solve`) are **no
+  longer MCP tools**. `gate.py --list` is the authoritative count and roster; this document
+  deliberately does not restate a number, because a hand-copied count is exactly the kind of
+  second declaration that drifts (BR_20260730). Run them agent-local against the client project
   folder:
 
   ```bash
@@ -249,7 +251,7 @@ The tool surface is split into two planes. Route by plane, not by habit:
   `BODESIGN_SRC=<bodesign repo>` explicitly. Heavy names are hard-guarded: a blacklisted verb
   returns `VERB_NOT_LANDING` naming the container tool to use instead.
 
-- **Compute plane — container MCP tools (43 total; `/tools` is authoritative).** Heavy toolchain
+- **Compute plane — container MCP tools (`/tools` and `/health.tools` are authoritative).** Heavy toolchain
   work stays server-side: the C04 layout/routing family, `emit_symbol` / `compose_schematic` /
   `emit_layout` / `emit_fab`, `simulate` / `analyze_emc` / `analyze_thermal` /
   `spice_model_card`, the render family, C02 exports (STL/STEP/SKP) / render / `voice_to_design` /

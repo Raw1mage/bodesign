@@ -45,7 +45,7 @@ INSTRUCTIONS = (
     "spice_model_card, c01_generate_concept_image, MCP delegation (mcp_call), the token file API "
     "(stage_dir), and the deliverable-cache lifecycle (cache_provision/export/close). "
     "GET /tools and /tools/{name} for the authoritative, current schemas.\n\n"
-    "2) LANDING VERBS (NOT MCP tools — run them on the HOST): the ~52 deterministic project-folder "
+    "2) LANDING VERBS (NOT MCP tools — run them on the HOST): the deterministic project-folder "
     "verbs — C00 PRD family, C01 ID family, C02 analysis, C03 emitters, C04/C05/C06 "
     "scaffold+readiness, the whole orchestration spine, ingest_project/package_readiness/datasheet "
     "gates, and pure functions (impedance_solve, pin_allocation, reference_crosscheck, "

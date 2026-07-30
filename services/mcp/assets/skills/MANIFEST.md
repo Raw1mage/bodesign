@@ -98,6 +98,32 @@ your skills dir lands `~/.claude/skills/bodesign/SKILL.md`.
 
 No install script is bundled by design — extract where your skill manager expects them.
 
+### What the installed skill can and cannot do on its own
+
+`bodesign.zip` ships the guidance (`SKILL.md`, `doctrine.md`, the stage guides) and
+the landing dispatcher (`scripts/gate.py`). It does **not** ship the Python packages
+the verbs execute — `packages/workflow-core`, `packages/component-kb`,
+`packages/eda-bridge`, `packages/reverse-core` live in the bodesign repo, not in the
+archive. So from a bare install:
+
+```
+python3 gate.py --list          # works — static registry, 0 dependencies
+python3 gate.py <verb> ...      # LANDING_PACKAGES_NOT_FOUND unless BODESIGN_SRC is set
+```
+
+To actually execute a verb you need a bodesign checkout and both of:
+
+```
+BODESIGN_SRC=/path/to/bodesign-repo \
+  python3 ~/.claude/skills/bodesign/scripts/gate.py <verb> --repo /abs/project
+```
+
+The error is typed and names the fix (`LANDING_PACKAGES_NOT_FOUND`, with a hint
+carrying `BODESIGN_SRC`), so this fails loudly rather than degrading — but the
+requirement belongs here, at the install step, not only in the error you hit
+afterwards (BR_20260730 round 6, Y1). If you want the verbs without a checkout,
+use the container's compute-plane MCP tools instead; they carry their own packages.
+
 ## Contents
 
 | Name | Installable skill? | Role |
