@@ -12,19 +12,31 @@
 
 ```
 State:
-Fix: PARTIAL (2026-07-30, ses_04db7a1c5 — bodesign coordinator, full ownership per a2a-d2d §3.1.1)
-Effect: F1/F2/F3 deployed and live-verified against the built image (no dev mounts) — see §4.6
-        D1 (status-code uniformity) fixed in the tree but NOT yet deployed — see §5
+Fix: PARTIAL (2026-07-31, ses_04db7a1c5 — bodesign coordinator, full ownership per a2a-d2d §3.1.1)
+Effect: ALL fixes through round 7 are deployed and live-verified against the built image
+        (d01d10e, three images, no /app bind mounts) — see §12.6.
+        Nothing is fixed-but-undeployed.
 Custody: bodesign
 Blocker: none
 Disposition: accepted — accepted as a real defect; RCA found it WORSE than reported (see §4)
 Venue: bodesign
-Status: REOPENED -> PARTIAL. Was CLOSED 2026-07-30 on my own live probe; an INDEPENDENT
-  adversarial verification (ses_04d725f79, gpt-5.6, commissioned by this session) returned
-  verdict=FAIL and found a real defect my probe had missed. The close was premature and is
-  withdrawn. See §5 for what the external eye caught that my own verification structurally
-  could not.
+Status: PARTIAL — deliberately NOT closed. Seven independent adversarial verification
+  rounds, seven non-PASS verdicts; every round found something the previous one could not
+  see, and twice (§10, §12.4) a round's own FIX created the defect the next round found.
+  The original R9.2 deviation (F1/F2/F3) is fixed, deployed and repeatedly re-verified.
+  What keeps this open is scoped remainder, not doubt about the shipped fix:
+    - ~29 of 59 landing verbs have never been invoked; the stateful C00->C01
+      orchestration loop is unexercised end-to-end (§12.7.1)
+    - no round has performed a live skill() load through the daemon's directory
+      scan — only opencode's parser+schema in isolation (§12.7.3)
+    - the composite bundle's stale kicad/kidoc shadow is bounded, disclosed and
+      guarded in both directions, but not eliminated (§10.3)
+    - source parity is asserted at startup only, not continuously (§9.5)
+  Two findings were split out rather than folded in: BR_20260730d (unauthenticated
+  /invoke, CLOSED) and a pin_allocation silent-empty shape that deserves its own BR
+  (§12.7.2).
 Reopened: 2026-07-30 by ses_04db7a1c5 (bodesign coordinator), on external verdict=FAIL
+Last verified: 2026-07-31 (round 7, d01d10e deployed + live-probed; see §12.6)
 ```
 
 ## 4. Resolution (bodesign, 2026-07-30)
@@ -974,3 +986,136 @@ reverted — no `git stash`; the peer's 86 uncommitted changes untouched.
 4. **The composite bundle's stale shadow** (§10.3) — bounded, disclosed, now
    guarded in both directions; still not fixed.
 5. **Startup-only parity** (§9.5) and **BR_20260730d residual** (§7.6.2) — unchanged.
+
+---
+
+## 12. Round 7 — two omitted declarations, one of them inside the fix for the last one
+
+Verdict: **PARTIAL**. Round 7 drove ~30 of the 59 verbs against a real
+`BODESIGN_SRC`, ran opencode's actual `gray-matter` parser against the shipped
+frontmatter, and fact-checked §11's new disclosure line by line.
+
+### 12.1 What it cleared
+
+| Target | Result |
+|---|---|
+| Z2 — real skill-loader acceptance | **PASS** — shipped `SKILL.md` parses under opencode's own `gray-matter`; `name`/`description` satisfy `Info.pick({name,description})`; name matches dir |
+| Z3 — §11's install disclosure | **PASS** — every factual claim verified: 164/169 members with zero `packages/`, `--list` works zero-dep, bare verb → `LANDING_PACKAGES_NOT_FOUND`, and the four named packages are exactly the gate's import roots |
+| Z1 — ~30 verbs driven | no crashes, **no silent-empty successes** — empty results carry honest `status:"missing"` / `"source_blocked"` / `error_code` |
+
+The Z1 result matters most: this BR family is about something claiming success
+while shipping nothing, and 30 verbs' worth of evidence says the landing plane
+does not do that.
+
+### 12.2 D1 — `--repo` is required by every verb and declared by none
+
+```
+$ BODESIGN_SRC=/app python3 <skill>/scripts/gate.py impedance_solve \
+    --json '{"stackup":{"layers":[]},"targets":[]}'
+{"ok": false, "error": {"code":"VERB_ARGS_INVALID",
+                        "message":"--repo <absolute project dir> is required"}}
+
+$ ... --list | jq '.result.verbs[] | select(.verb=="impedance_solve").required_args'
+["stackup","targets"]          # both satisfied above
+```
+
+`gate.py:764` enforces `--repo` unconditionally, before any per-verb check, but
+it appears in no verb's `required_args`. So a caller reads the roster, satisfies
+every argument it lists, and still fails. **16 verbs need neither `folder` nor
+`out_dir`** and are hit hardest — `impedance_solve`, `pin_allocation`,
+`plan_design_intent`, `agent_registry`, `rca_spec_audit`, `c02_plan_intent`,
+`reference_crosscheck`, `evidence_manifest` among them.
+
+Same shape as §11.2: a declaration that omits a requirement. Fixed by stating it
+once in `--list` as `always_required`, not by injecting it into 59 arg lists —
+it is a property of the CLI, not of any verb's signature. **CLI behaviour is
+unchanged**; existing callers keep working.
+
+One claim in the report I did **not** sustain: the traceback visible when
+`--repo` is supplied is stderr noise around a properly typed
+`VERB_RUNTIME_ERROR` envelope on stdout, exit 0. Not a defect.
+
+### 12.3 D2 — the guard I added last round was green for the wrong reason
+
+§11's count guard matched only the two literal phrasings that happened to exist
+in the tree:
+
+```
+'the 52 deterministic verbs'  -> ['52 deterministic']   caught
+'the 52 repo-local verbs'     -> []                     MISSED
+'57 MCP tools'                -> []                     MISSED
+'43 container tools'          -> []                     MISSED
+'52 verbs'                    -> []                     MISSED
+```
+
+I wrote it against the two strings I had just removed, so it could only ever
+re-catch those two. It now matches on **shape** — a number qualifying a
+verb/tool noun — with two documented exclusions: HTTP status codes ("answered
+200 for a tool that does not exist") and identifier tails ("Bucket-2 verbs",
+"R17.2 tools").
+
+**Broadening it immediately caught a real one the narrow version had hidden**:
+`README.en.md:89` still said "the container's 43 MCP tools". Round 6 fixed that
+file's `52` and left its `43` standing — and the guard I wrote in the same
+commit was structurally incapable of seeing it.
+
+### 12.4 The part worth recording: I repeated the family defect inside the fix for it
+
+My first D2 fix added a capability test that ran the pattern over synthetic
+strings — and kept its **own copy** of the regex. Mutation test:
+
+```
+narrow the LIVE guard back to the round-6 form   ->  47 tests, all green
+```
+
+The capability test was proving *its duplicate* worked. A second declaration of
+the very rule this BR family exists to stop, written into the fix for a second
+declaration. Pattern and exclusions now live in one module-level
+`count_restatements()` that both callers use; narrowing it now reddens 5 tests.
+
+This is the second time in this BR that a fix created the defect the next check
+found (§10 was the first). The mechanism is not carelessness — it is that a fix
+is written while looking at the thing being fixed, so its own shape goes
+unexamined.
+
+### 12.5 Guards (each reverts to red)
+
+| Mutation | Result |
+|---|---|
+| drop `always_required` from `--list` | 1 failure |
+| narrow the **shared** pattern to the round-6 form | 5 failures |
+| delete the status-code exclusion (over-broad guard) | 2 failures |
+| restore `README.en.md`'s "43 MCP tools" | 1 failure |
+
+47 tests (+2). Zero regressions: failing-name set identical to HEAD (37 both
+sides), compared by name via a copied tree with only the three changed files
+reverted — no `git stash`; the peer's uncommitted changes untouched.
+
+### 12.6 Post-deploy verification (`d01d10e`, three images, no `/app` mount)
+
+| | |
+|---|---|
+| Shipped `--list` | keys `[always_required, count, not_landing, verbs]`; `--repo` disclosed; count 59 |
+| Shipped `SKILL.md` | **0** count restatements under the broadened pattern |
+| Served MANIFEST | **0** restatements; §11's three install tokens still present |
+| Accepting controls | `bodesign.zip` / `bodesign-kb.zip` / `kicad.tar.gz` / `MANIFEST.md` / `/tools` — all 200 |
+| Unservable regression | 7 shapes incl. NUL and NAME_MAX — status set `{404}` |
+
+### 12.7 Still open
+
+1. **~29 verbs remain uninvoked** — the C01 answer-state mutators and the C00
+   orchestration tick/dispatch spine were never driven end-to-end. Nothing
+   crashed on the paths hit, but the stateful loop is unexercised.
+2. **A silent-empty shape outside this BR's scope**: `pin_allocation` given a
+   malformed net (`{"name","pin"}` instead of `{"nodes":["REF.PIN"]}`) returns
+   `ok:true` with `net_count:0` and no signal. Correctly shaped input works.
+   This is the exact failure shape this BR family is about, in a different
+   surface — worth its own BR rather than folding in here.
+3. **Round 7's own blind spot**: it ran opencode's parser and schema in
+   isolation, not a live `skill()` load through the daemon's directory scan.
+4. **A possible committed-tree inconsistency** it flagged and did not chase: a
+   `_vendor_sym_scale` ImportError when running from a `git archive HEAD` tree,
+   while the working tree and container are fine. Out of scope here; needs its
+   own look.
+5. **The composite bundle's stale shadow** (§10.3), **startup-only parity**
+   (§9.5), **BR_20260730d residual** (§7.6.2) — unchanged.
