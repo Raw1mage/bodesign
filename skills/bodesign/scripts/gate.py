@@ -739,6 +739,22 @@ def _list_envelope():
     ]
     return {"ok": True, "verb": "--list",
             "result": {"count": len(verbs), "verbs": verbs,
+                       # BR_20260730 round 7: `--repo` is enforced for EVERY verb
+                       # (_build_args, unconditionally, before per-verb checks),
+                       # but it never appears in any `required_args` -- so a caller
+                       # reading this roster alone satisfies the listed args and
+                       # still gets VERB_ARGS_INVALID. A roster that omits a
+                       # universal requirement is an incomplete declaration, which
+                       # is what this BR family is about. Stated once, here, rather
+                       # than injected into all 59 arg lists: it is a property of
+                       # the CLI, not of any verb's signature.
+                       "always_required": {
+                           "--repo": "absolute path to an EXISTING project directory; "
+                                     "required for every verb including pure functions "
+                                     "(it seeds folder/out_dir defaults and resolves "
+                                     "relative path args). Not listed per-verb because "
+                                     "it is a CLI-level requirement, not a verb argument."
+                       },
                        "not_landing": dict(sorted(NOT_LANDING.items()))}}
 
 

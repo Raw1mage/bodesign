@@ -86,7 +86,8 @@ Calling a landed name as an MCP tool returns a typed `TOOL_LANDED` error carryin
 gate.py command.
 
 **Compute plane (container token file model, docxmcp-style)** — heavy-toolchain work (pcbnew /
-kicad-cli / ngspice / rendering / 3D) stays in the container's 43 MCP tools. bodesign ships **no
+kicad-cli / ngspice / rendering / 3D) stays in the container's MCP tools (`/tools` is the
+authoritative roster). bodesign ships **no
 working data**: upload a project tree as a tarball → a **token**; pass the token to any tool (path
 args resolve inside the token's `doc_dir`); download produced files by token. Server-side session
 data is TTL-garbage-collected. Tools also accept plain host paths for local use.

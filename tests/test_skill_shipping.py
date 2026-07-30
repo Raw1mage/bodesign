@@ -20,12 +20,39 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import tarfile
 import unittest
 import zipfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# BR_20260730 round 7 -- ONE definition, used both by the guard that scans the
+# docs and by the test that proves the guard can see a rephrasing. The first
+# attempt kept a second copy inside the capability test, so narrowing the live
+# guard left every test green: a second declaration of the very rule this BR
+# family exists to stop, inside the fix for it.
+_COUNT_RESTATEMENT = re.compile(
+    # (?<![\w.-]) keeps the digit from being the tail of an identifier:
+    # "Bucket-2 verbs" and "R17.2 tools" name a bucket and a spec clause,
+    # not a roster size.
+    r"~?(?<![\w.-])\d+\b(?:\s+[\w-]+){0,3}?\s+"
+    r"(?:verbs?|tools?|deterministic)\b", re.IGNORECASE)
+
+# Two exclusions, each for a reason -- not to make the guard quiet.
+# 1. HTTP status codes: prose about this BR family says "answered 200 for a
+#    tool that does not exist". That 200 is a status, not a roster size.
+# 2. A sentence naming the authoritative source in the same breath is saying
+#    WHERE the number comes from rather than restating it.
+_COUNT_STATUS_CODE = re.compile(r"^(?:200|301|307|400|403|404|409|500)\b")
+
+
+def count_restatements(text: str) -> list[str]:
+    """Every hand-copied verb/tool count in `text`. Empty list == clean."""
+    return [h for h in _COUNT_RESTATEMENT.findall(text)
+            if not _COUNT_STATUS_CODE.match(h)
+            and "--list" not in h and "/tools" not in h]
 _SPEC = importlib.util.spec_from_file_location(
     "bodesign_skill_shipping_under_test", REPO_ROOT / "services" / "mcp" / "skill_shipping.py")
 SS = importlib.util.module_from_spec(_SPEC)
@@ -647,11 +674,71 @@ class ShippedSkillSelfContainmentTests(unittest.TestCase):
                     "services/mcp/assets/skills/MANIFEST.md"):
             with self.subTest(doc=rel):
                 text = (REPO_ROOT / rel).read_text(encoding="utf-8")
-                hits = re.findall(r"~?\d+\s+(?:deterministic|landing)\b"
-                                  r"|\b\d+\s+total;\s*`/tools`", text)
+                hits = count_restatements(text)
                 self.assertEqual([], hits,
                                  f"{rel} restates a verb/tool count: {hits}. Point at "
                                  f"`gate.py --list` / `/tools` instead -- they cannot drift.")
+
+
+    def test_the_count_guard_is_not_blind_to_a_rephrasing(self):
+        # BR_20260730 round 7, Defect 2: the first version of the guard above
+        # matched only the two literal phrasings that happened to exist in the
+        # tree, so it would have passed on "52 verbs" or "57 MCP tools" -- a
+        # guard that is green for the wrong reason. This pins the CAPABILITY,
+        # not just today's tree: run the guard's own pattern over synthetic
+        # strings, so a future narrowing of the regex is caught here rather
+        # than by the next verifier.
+        # Calls the SAME helper the live guard calls -- deliberately NOT a local
+        # copy of the pattern. Round 7's first attempt kept a copy here, so
+        # narrowing the real guard left this green: the test proved its own
+        # duplicate worked, which is precisely the second-declaration failure
+        # this BR family is about.
+        flags = count_restatements
+
+        must_catch = ["the 52 deterministic verbs", "the 52 repo-local verbs",
+                      "57 MCP tools", "43 container tools", "52 verbs",
+                      "the container's 43 MCP tools", "~52 landing verbs"]
+        for text in must_catch:
+            with self.subTest(catch=text):
+                self.assertTrue(flags(text),
+                                f"guard is blind to {text!r}: a stale count in this "
+                                f"phrasing would ship silently")
+
+        # Accepting controls: a guard that flags everything is equally useless.
+        must_ignore = ["Bucket-2 verbs moved to the landing plane",
+                       "R17.2 tools whose declared asset paths",
+                       "answered 200 for a tool that does not exist",
+                       "`gate.py --list` is the authoritative roster",
+                       "R9.11.3 by-construction", "the 0.2.0 release"]
+        for text in must_ignore:
+            with self.subTest(ignore=text):
+                self.assertEqual([], flags(text),
+                                 f"guard false-positives on {text!r}")
+
+    def test_list_discloses_the_universally_required_repo_flag(self):
+        # BR_20260730 round 7, Defect 1: `--repo` is enforced for EVERY verb in
+        # _build_args, before any per-verb check, yet appeared in no verb's
+        # `required_args`. A caller reading the roster satisfied every listed
+        # argument and still got VERB_ARGS_INVALID -- a roster that omits a
+        # universal requirement is an incomplete declaration.
+        import subprocess
+        import sys
+        gate = REPO_ROOT / "skills" / "bodesign" / "scripts" / "gate.py"
+        env = {"PATH": "/usr/bin:/bin",
+               "PYTHONPATH": ":".join(str(d) for d in (REPO_ROOT / "packages").iterdir()
+                                      if d.is_dir())}
+        out = subprocess.run([sys.executable, str(gate), "--list"],
+                             capture_output=True, text=True, env=env, timeout=120)
+        self.assertEqual(0, out.returncode, out.stderr[-2000:])
+        result = json.loads(out.stdout)["result"]
+        self.assertIn("always_required", result,
+                      "--list no longer discloses CLI-level requirements")
+        self.assertIn("--repo", result["always_required"])
+
+        # Accepting control: the claim must match the code that enforces it, or
+        # the disclosure is decoration pointing at a flag nobody checks.
+        source = gate.read_text(encoding="utf-8")
+        self.assertIn('"--repo <absolute project dir> is required"', source)
 
 
 class ManifestDeclarationTests(unittest.TestCase):
