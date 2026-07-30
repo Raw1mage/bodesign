@@ -206,11 +206,19 @@ def resolve_skill_dir(name: str) -> Path:
          resolved-but-unrelated dir) from being packaged as a "skill".
     """
     if not _SAFE_NAME_RE.match(name):
+        # R9.7.1 pins the STATUS as well as the shape: an unservable name MUST
+        # answer `404`. The typed code stays `SKILL_NAME_INVALID` so a diagnosing
+        # human still learns *why*, but the status line a conformant consumer
+        # branches on is the same 404 it gets for an unknown-but-well-formed
+        # name. BR_20260730 external verification (V4): this used to answer 400,
+        # so `bodesign%00.zip` and `bodesign.zip` failed in two different
+        # vocabularies -- and a malformed name is not a *protocol* error the
+        # client can fix by retrying differently, it is simply not a skill.
         raise SkillShippingError(
             "SKILL_NAME_INVALID",
             f"{name!r} is not a bare skill name (R9.9.1: no extension, no path "
             f"separator, no `..`).",
-            400,
+            404,
         )
     root = skills_root()
     candidate = (root / name).resolve()

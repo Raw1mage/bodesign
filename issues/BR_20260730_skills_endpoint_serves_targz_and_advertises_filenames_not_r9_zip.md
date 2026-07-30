@@ -12,17 +12,19 @@
 
 ```
 State:
-Fix: fixed (2026-07-30, ses_04db7a1c5 — bodesign coordinator, full ownership per a2a-d2d §3.1.1)
-Effect: DEPLOYED and live-verified against the built image (no dev mounts) — see §4.6
+Fix: PARTIAL (2026-07-30, ses_04db7a1c5 — bodesign coordinator, full ownership per a2a-d2d §3.1.1)
+Effect: F1/F2/F3 deployed and live-verified against the built image (no dev mounts) — see §4.6
+        D1 (status-code uniformity) fixed in the tree but NOT yet deployed — see §5
 Custody: bodesign
 Blocker: none
 Disposition: accepted — accepted as a real defect; RCA found it WORSE than reported (see §4)
 Venue: bodesign
-Status: CLOSED — fixed, deployed, and verified effective. Commit `8f2e91e`; deployed via
-  `BODESIGN_WORKERS=1 ./mcpctl.sh rebuild` (2026-07-30). The earlier FIXED-UNDEPLOYED
-  qualifier is discharged: the running container has NO `/app` bind mounts, so the green
-  probe below is the image's own behaviour, not the dev overlay's.
-Closed: 2026-07-30 by ses_04db7a1c5 (bodesign coordinator)
+Status: REOPENED -> PARTIAL. Was CLOSED 2026-07-30 on my own live probe; an INDEPENDENT
+  adversarial verification (ses_04d725f79, gpt-5.6, commissioned by this session) returned
+  verdict=FAIL and found a real defect my probe had missed. The close was premature and is
+  withdrawn. See §5 for what the external eye caught that my own verification structurally
+  could not.
+Reopened: 2026-07-30 by ses_04db7a1c5 (bodesign coordinator), on external verdict=FAIL
 ```
 
 ## 4. Resolution (bodesign, 2026-07-30)
@@ -236,3 +238,117 @@ if not target.is_file() or not (target.name.endswith(".tar.gz") or target.name =
 - F3：parity 測試證明宣告來源與服務來源一致（或明文記錄兩者的映射關係）
 - 端到端：`McpSkillFetch.materialize` 對本服務回 `kind:"materialized"`
 - 機檢：`McpConformanceProbe.run()`（opencode `76d58bb64`）對 bodesign 的 14 個 `MCPSTD_SKILL_LISTED_NOT_SERVED` 消失
+
+---
+
+## 5. External verification (2026-07-30) — verdict FAIL, close withdrawn
+
+I closed this BR on my own live probe. This session then commissioned an
+**independent adversarial verification** (session `ses_04d725f79`, model
+`codex/gpt-5.6-terra`) with a brief that withheld my conclusions and stated
+explicitly that a FAIL verdict was a valuable result, not a failure.
+
+It returned **`verdict=FAIL`**. V1/V2/V3/V5/V6/V7 PASS; V4 and V8 FAIL.
+
+### 5.1 D1 — malformed names answered in three different vocabularies (MINE)
+
+| Input | Before | After |
+| --- | --- | --- |
+| `GET /skills/bodesign%00.zip` | **400** `SKILL_NAME_INVALID` | 404 |
+| `GET /skills/bodesign%00` | **403** `path_escape` | 404 |
+| `GET /skills/bodesign.zip%00` | **403** `path_escape` | 404 |
+| `GET /skills/nosuch.zip` | 404 | 404 |
+| `GET /skills/bodesign.zip` | 200 | 200 (accepting control) |
+
+The verifier reported only the 400. Verifying its claim myself surfaced **two
+more shapes it had not probed** (the 403s) — which is the point of §3.3: a
+verifier's finding is a lead, not the full extent.
+
+**Why this is a real defect and not pedantry.** R9.7.1 pins the STATUS, not
+just the shape: `GET /skills/<unknown>.zip` MUST return a typed `404`. A
+consumer branches on the status line, and "this is not a thing I serve" is ONE
+condition — it must not be reported in three vocabularies depending on which
+internal layer happened to reject it. The 403 was also an information leak: it
+confirmed the name had reached the filesystem layer, which a 404 does not.
+
+Root cause, both halves mine:
+
+- `skill_shipping.resolve_skill_dir()` raised the `_SAFE_NAME_RE` rejection with
+  status `400`.
+- `server.py` `skill_download()`'s static-asset branch answered `403 path_escape`
+  when `Path.resolve()` raised `OSError` — which a NUL byte does.
+
+**Why my own test suite passed while this was broken.** The traversal test
+asserted `assertIn(status, (400, 404))`. That disjunction *was* the hole: it
+accepted exactly the inconsistency the BR is about. A test whose assertion is
+wide enough to admit the defect is not a test of that property.
+
+Fixed:
+- `services/mcp/skill_shipping.py` — `SKILL_NAME_INVALID` now carries `404`
+  (typed code retained so a human still learns *why*).
+- `services/mcp/server.py` — the static-asset branch's `OSError`/`ValueError`
+  path now answers `404 not_found`, not `403 path_escape`.
+- `tests/test_skill_shipping.py` — the loose `assertIn(..., (400, 404))` is now
+  an exact `assertEqual(404, ...)`, plus a new
+  `test_every_unservable_name_answers_one_status` that asserts the whole SET of
+  unservable names speaks exactly `{404}` (with an accepting control, so a
+  reject-everything guard cannot pass it).
+
+### 5.2 D2 — unauthenticated `POST /invoke` — NOT this BR, and NOT introduced here
+
+The verifier also found that `POST /invoke` executes tools with no auth on a
+`0.0.0.0`-published port. **I reproduced it from the LAN address**, not just
+loopback:
+
+```
+$ curl -s -X POST http://192.168.125.117:8077/invoke \
+    -d '{"name":"bodesign_init","arguments":{}}'
+{"ok":true,"doctrine":"<!--\n  bodesign CANONICAL USAGE DOCTRINE …
+```
+
+This is real and it is more serious than D1. It is **not** part of this BR:
+
+- `git log -S'Route("/invoke"'` → introduced by `a90c28f` (2026-06-07,
+  worker-forwarding), **seven weeks before** this BR's fix commit `8f2e91e`.
+- It appears in `8f2e91e`'s diff only as context (an unchanged `async def
+  invoke` line adjacent to my edit), not as a change.
+- It violates **R12.5** (a write-capable shared service MUST gate calls behind
+  an identity turnstile; `auth:{type:none}` is conformant only for a read-only
+  service), which is a different rule from the R9 skill-shipping contract this
+  BR is about.
+
+Filed separately as `BR_20260730d_invoke_endpoint_unauthenticated_tool_execution.md`.
+Folding a pre-existing auth hole into a skill-shipping BR would hide it behind a
+closed issue.
+
+### 5.3 What this says about my original verification
+
+My live probe was green and it was **honestly** green — every assertion it made
+was true. It was structurally incapable of finding D1 because I probed the
+paths I had designed for, and D1 lives in the disagreement *between* paths.
+That is not a diligence failure that more care would have fixed; it is the
+known limit of self-verification, and it is exactly what an independent
+adversarial eye is for.
+
+Two of my own guards should have caught it and did not:
+
+- the test asserted `in (400, 404)` — wide enough to admit the defect;
+- the tests call `skill_shipping` directly and never traverse the Starlette
+  route, so the 403 branch in `server.py` had **no test coverage at all**.
+
+The second gap remains open (see §6).
+
+## 6. Remaining scope (why this stays PARTIAL, not closed)
+
+1. **D1 fix is committed but NOT deployed.** The running containers serve the
+   image built before this fix; `GET /skills/bodesign%00.zip` still answers 400
+   in production until `./mcpctl.sh rebuild` runs. Per §3.5 a FIXED-UNDEPLOYED
+   BR stays at top level.
+2. **No HTTP-layer test coverage.** The suite exercises `skill_shipping`
+   functions directly, never the Starlette route, which is precisely why the
+   `server.py` 403 branch was invisible to it. Adding route-level tests needs
+   `httpx` (absent on this host — `starlette.testclient` requires it), so it is
+   a real dependency decision, not a quick add.
+3. **Re-verification after deploy** by a fresh independent verifier — the same
+   discipline that caught D1 should confirm the fix, and my own probe is not
+   sufficient evidence for that (see §5.3).

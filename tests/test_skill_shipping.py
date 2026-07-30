@@ -159,13 +159,21 @@ class SkillNameGuardTests(unittest.TestCase):
         self.assertTrue(SS.resolve_skill_dir("bodesign-kb").is_dir())
 
     def test_traversal_shapes_are_rejected(self):
+        # The status is asserted EXACTLY, not as `in (400, 404)`. That disjunction
+        # was the hole: it let a malformed name answer 400 while an unknown name
+        # answered 404, so `bodesign%00.zip` and `nosuch.zip` failed in two
+        # different vocabularies and the test still passed. R9.7.1 pins ONE
+        # status for "not servable" -- external verification of BR_20260730 (V4)
+        # caught this precisely because the assertion was loose enough to hide it.
         for evil in ("../mcp.json", "..", "../../etc/passwd", "a/b",
                      "a\\b", "/etc/passwd", "bodesign/../../mcp.json",
                      "%2e%2e%2fmcp.json", "bodesign\x00", "."):
             with self.subTest(name=evil):
                 with self.assertRaises(SS.SkillShippingError) as ctx:
                     SS.resolve_skill_dir(evil)
-                self.assertIn(ctx.exception.status, (400, 404))
+                self.assertEqual(404, ctx.exception.status,
+                                 f"{evil!r} must be indistinguishable in STATUS from any "
+                                 f"other unservable name (R9.7.1)")
 
     def test_unknown_name_is_a_typed_404_not_an_empty_archive(self):
         # R9.6.2 — "no such skill" and "here is nothing" must stay distinct.
@@ -176,8 +184,25 @@ class SkillNameGuardTests(unittest.TestCase):
 
     def test_archive_suffixed_name_is_rejected(self):
         # The consumer refuses these outright; the producer must not mint them.
-        with self.assertRaises(SS.SkillShippingError):
+        with self.assertRaises(SS.SkillShippingError) as ctx:
             SS.resolve_skill_dir("bodesign.tar.gz")
+        self.assertEqual(404, ctx.exception.status)
+
+    def test_every_unservable_name_answers_one_status(self):
+        # Regression anchor for BR_20260730 V4. The defect was not that any single
+        # name answered wrongly -- each answer was individually defensible -- but
+        # that the SET of rejections spoke three status codes (400/403/404). A
+        # consumer branching on the status line cannot classify that.
+        statuses = set()
+        for unservable in ("bodesign\x00", "no-such-skill", "bodesign.tar.gz",
+                           "../mcp.json", "packages", "."):
+            with self.assertRaises(SS.SkillShippingError) as ctx:
+                SS.resolve_skill_dir(unservable)
+            statuses.add(ctx.exception.status)
+        self.assertEqual({404}, statuses,
+                         f"unservable names must speak ONE status, got {sorted(statuses)}")
+        # Accepting control: the guard is not simply "reject everything".
+        self.assertTrue(SS.resolve_skill_dir("bodesign").is_dir())
 
     def test_directory_without_skill_md_is_not_a_skill(self):
         with self.assertRaises(SS.SkillShippingError) as ctx:

@@ -2841,12 +2841,20 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                                 status_code=exc.status)
 
         # Static assets: MANIFEST.md and the vendored EDA companion bundles.
+        #
+        # Every unservable name leaves by the SAME door (404). BR_20260730 V4:
+        # this branch used to answer 403 `path_escape` for a name the OS refuses
+        # to resolve (a NUL byte raises OSError here), so `bodesign%00.zip` -> 400,
+        # `bodesign%00` -> 403 and `nosuch` -> 404 were three vocabularies for one
+        # condition. A consumer branches on the status line, and "this is not a
+        # thing I serve" is one condition. 403 also leaked a distinction an
+        # attacker can probe: it confirmed the name reached the filesystem layer.
         root = (_assets_dir() / "skills").resolve()
         try:
             target = (root / name).resolve()
             target.relative_to(root)
         except (ValueError, OSError):
-            return JSONResponse({"error": "path_escape"}, status_code=403)
+            return JSONResponse({"error": "not_found"}, status_code=404)
         if not target.is_file() or not (target.name.endswith(".tar.gz") or target.name == "MANIFEST.md"):
             return JSONResponse({"error": "not_found"}, status_code=404)
         if target.name == "MANIFEST.md":
