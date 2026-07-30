@@ -1857,8 +1857,8 @@ I18N = {
                        "<b>Docker（可攜，建議）</b> — 內建 KiCad 9 + LibreOffice + pygerber + mcp SDK："),
     "install_host": ("<b>Host (no Docker)</b> — needs kicad-cli + pcbnew + soffice + ngspice on PATH:",
                      "<b>本機（免 Docker）</b> — 需 PATH 上有 kicad-cli + pcbnew + soffice + ngspice："),
-    "install_register": ("<b>Register in an MCP client</b> (see <code>mcp.json</code>): transport <code>streamable-http</code>, url <code>unix://…/bodesign.sock:/mcp/</code> (local) or <code>http://&lt;host&gt;:{port}/mcp/</code> (TCP).",
-                         "<b>在 MCP client 註冊</b>（見 <code>mcp.json</code>）：transport <code>streamable-http</code>，url <code>unix://…/bodesign.sock:/mcp/</code>（本機）或 <code>http://&lt;host&gt;:{port}/mcp/</code>（TCP）。"),
+    "install_register": ("<b>Register in an MCP client</b> (see <code>mcp.json</code>): transport <code>streamable-http</code>, url <code>unix://…/bodesign.sock:/mcp/</code>. The container does not publish a TCP port; for remote access put a gateway in front of the socket.",
+                         "<b>在 MCP client 註冊</b>（見 <code>mcp.json</code>）：transport <code>streamable-http</code>，url <code>unix://…/bodesign.sock:/mcp/</code>。容器不對外 publish TCP port；遠端存取請在 socket 前面擺 gateway。"),
     "file_body": ("Upload your whole project tree as a tarball → a <b>token</b> whose <code>doc_dir</code> is your tree; pass <code>token</code> to any tool (its path args resolve inside it) and download produced files by token. No host bind mount needed.",
                   "把整個專案樹以 tarball 上傳 → 取得 <b>token</b>（其 <code>doc_dir</code> 即你的樹）；將 <code>token</code> 傳給任何工具（路徑參數在樹內解析），再依 token 下載產物。免主機 bind mount。"),
     "file_stage": ("Or stage inline with the <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.",
@@ -2046,13 +2046,13 @@ def _landing_html(uds_path: str | None = None, tcp_port: int | None = None, lang
 <h2>{L('sec_endpoints')}</h2>
 <div class="card">
 <p>MCP: <code>POST /mcp/</code> · Files: <code>POST /files</code>, <code>GET /files/{{token}}/blob/{{rel}}</code> · Health: <code>GET /healthz</code></p>
-<p><b>Local (UDS):</b> <code>unix://{esc(uds)}:/mcp/</code><br><b>External (TCP):</b> <code>http://&lt;host&gt;:{port}/mcp/</code></p>
+<p><b>Local (UDS):</b> <code>unix://{esc(uds)}:/mcp/</code><br><b>External:</b> put a gateway in front of the socket — the container binds TCP <code>:{port}</code> <i>inside</i> the compose network only and does <b>not</b> publish it to the host (BR_20260730d: publishing it exposed an unauthenticated <code>POST /invoke</code> on every interface).</p>
 </div>
 
 <h2>{L('sec_install')}</h2>
 <div class="card">
 <p>{L('install_docker')}</p>
-<pre>./mcpctl.sh start        # build image + start container (UDS + TCP :{port})
+<pre>./mcpctl.sh start        # build image + start container (UDS only; no published port)
 ./mcpctl.sh status
 ./mcpctl.sh log
 ./mcpctl.sh stop</pre>
@@ -2827,13 +2827,20 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                 "Cache-Control": "no-store",
             })
 
+        # The routing decision (suffix -> format, and the membership gate that
+        # decides whether a `.tar.gz` is a declared skill or a vendored bundle)
+        # lives in `skill_shipping.classify_skill_request` -- a pure function a
+        # plain unittest can call. BR_20260730 round 3 (D4): round 2 extracted
+        # only the static-asset half and declared the structural problem solved,
+        # leaving THIS half in the closure -- the same untestable place that
+        # produced both earlier defects. Half a structural fix leaves the other
+        # half free to drift.
         try:
-            if name.endswith(".zip"):
-                return await _packed(name[:-len(".zip")], "zip")
-            if name.endswith(".tar.gz"):
-                bare = name[:-len(".tar.gz")]
-                if bare in {s["name"] for s in skill_shipping.list_shippable_skills()}:
-                    return await _packed(bare, "targz")
+            action, bare = skill_shipping.classify_skill_request(name)
+            if action == skill_shipping.SERVE_ZIP:
+                return await _packed(bare, "zip")
+            if action == skill_shipping.SERVE_TARGZ:
+                return await _packed(bare, "targz")
         except skill_shipping.SkillShippingError as exc:
             # Typed + honest: a 404 says "no such skill", never a 200 holding an
             # empty archive (R9.6.2 — the two must stay distinguishable).

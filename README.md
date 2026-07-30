@@ -8,7 +8,8 @@ _語言：**繁體中文** · [English](./README.en.md)_
 而非「宣稱」可靠度。
 
 它**與宿主無關、可獨立對外營運**：任何支援 MCP 的客戶端（IDE、agent，或你自己的 HTTP 呼叫端）
-都能透過 Unix socket（本機）或 TCP port（對外）驅動它。**不需要任何宿主外殼或閘道。**
+都能透過 Unix socket 驅動它，**不需要任何宿主外殼**。對外開放時請在 socket 前面擺一個 gateway 提供
+認證——容器本身**不對 host publish** TCP port（BR_20260730d）。
 
 ## 它做什麼
 

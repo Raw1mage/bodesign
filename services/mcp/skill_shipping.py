@@ -239,11 +239,57 @@ def resolve_skill_dir(name: str) -> Path:
             raise SkillShippingError(
                 "SKILL_NOT_FOUND", f"no such skill: {name} (directory has no SKILL.md)", 404
             )
-    except OSError as exc:  # ENAMETOOLONG, ELOOP, ENOTDIR, EACCES on a path component
+    except (OSError, ValueError) as exc:
+        # OSError: ENAMETOOLONG past NAME_MAX, ELOOP, ENOTDIR, EACCES on a
+        # component. ValueError: `resolve()` on a NUL byte. `ValueError` is
+        # caught even though `_SAFE_NAME_RE` above already rejects NUL, because
+        # relying on that would make this function's safety depend on a guard
+        # OUTSIDE it -- a single-guard dependency of exactly the kind
+        # BR_20260730 round 3 flagged. The sibling `resolve_static_asset`
+        # catches both; the two must not drift apart again.
         raise SkillShippingError(
-            "SKILL_NOT_FOUND", f"no such skill: {name} ({exc.strerror})", 404
+            "SKILL_NOT_FOUND", f"no such skill: {name} ({exc})", 404
         ) from exc
     return candidate
+
+
+# What `GET /skills/<name>` should do with a name, as DATA rather than control
+# flow buried in a route closure. Values: the archive format to build, or the
+# static-asset fallback.
+SERVE_ZIP = "zip"
+SERVE_TARGZ = "targz"
+SERVE_STATIC = "static"
+
+
+def classify_skill_request(name: str) -> tuple[str, str]:
+    """Decide what ``GET /skills/<name>`` serves. Pure; no filesystem writes.
+
+    Returns ``(action, bare)`` where action is one of ``SERVE_ZIP`` /
+    ``SERVE_TARGZ`` / ``SERVE_STATIC``. For ``SERVE_STATIC`` the caller hands
+    ``name`` to :func:`resolve_static_asset`; the bare value is unused.
+
+    BR_20260730 round 3 (D4). Round 2 extracted the static-asset half of the
+    servability decision out of the ``run_http`` closure and called the
+    structural problem solved. It was not: the suffix routing and the
+    ``list_shippable_skills()`` membership gate stayed behind, still
+    unconstructible without starlette and a live app, still untested. That is
+    the same condition the round-2 commit message itself named as the root
+    cause of two consecutive defects -- a decision living where no test can
+    reach it. Half a structural fix leaves the half that is left to drift.
+
+    The membership gate is load-bearing, not decoration: a ``.tar.gz`` whose
+    bare name IS declared must be projected from the declared tree (so the
+    format cannot encode a content difference -- the original BR_20260730
+    defect), while a ``.tar.gz`` that is NOT declared is a vendored bundle with
+    no in-repo source and must fall through to the static file.
+    """
+    if name.endswith(".zip"):
+        return SERVE_ZIP, name[: -len(".zip")]
+    if name.endswith(".tar.gz"):
+        bare = name[: -len(".tar.gz")]
+        if bare in {s["name"] for s in list_shippable_skills()}:
+            return SERVE_TARGZ, bare
+    return SERVE_STATIC, name
 
 
 def pack_skill_zip(name: str) -> bytes:

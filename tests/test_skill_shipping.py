@@ -264,6 +264,74 @@ class SkillNameGuardTests(unittest.TestCase):
             SS.resolve_skill_dir("packages")
         self.assertEqual(404, ctx.exception.status)
 
+    def test_resolve_skill_dir_does_not_depend_on_an_outside_guard(self):
+        # BR_20260730 round 3 residual. A NUL byte makes `resolve()` raise
+        # ValueError, not OSError. The function was safe only because
+        # `_SAFE_NAME_RE` rejects NUL a few lines earlier -- i.e. its safety was
+        # borrowed from a guard OUTSIDE the try. That is the single-guard
+        # dependency the sibling `resolve_static_asset` does not have, and
+        # "safe by luck of ordering" is how two guards drift apart. Asserted
+        # directly against the inner path so a future reorder cannot hide it.
+        for pathological in ("bodesign\x00", "\x00", "a\x00b"):
+            with self.subTest(name=repr(pathological)):
+                with self.assertRaises(SS.SkillShippingError) as ctx:
+                    SS.resolve_skill_dir(pathological)
+                self.assertEqual(404, ctx.exception.status)
+        # And the guard proper: catch ValueError even reaching it directly.
+        try:
+            (SS.skills_root() / "x\x00y").resolve()
+        except ValueError:
+            pass  # confirms the raise this test exists to contain
+        except OSError:
+            pass  # some libc/py combos surface it as OSError; either is caught
+        self.assertTrue(SS.resolve_skill_dir("bodesign").is_dir())
+
+
+class SkillRequestClassificationTests(unittest.TestCase):
+    """BR_20260730 round 3 (D4) -- the OTHER half of the servability decision.
+
+    Round 2 extracted the static-asset half out of the ``run_http`` closure and
+    treated the structural problem as solved. The suffix routing and the
+    membership gate stayed behind, still unconstructible without starlette and
+    a live app, still untested -- the exact condition the round-2 commit message
+    named as the root cause of two consecutive defects. These tests exist
+    because that half is now reachable.
+    """
+
+    def test_zip_suffix_routes_to_the_dynamic_packer(self):
+        self.assertEqual((SS.SERVE_ZIP, "bodesign"),
+                         SS.classify_skill_request("bodesign.zip"))
+        # Unknown-but-zip still routes to the packer: the 404 is the packer's
+        # to raise (typed), not a silent fallthrough to the static branch --
+        # otherwise `nosuch.zip` would answer with a bundle-dir miss instead of
+        # a typed SKILL_NOT_FOUND.
+        self.assertEqual((SS.SERVE_ZIP, "nosuch"),
+                         SS.classify_skill_request("nosuch.zip"))
+
+    def test_declared_targz_is_projected_but_vendored_targz_falls_through(self):
+        # This distinction is load-bearing, not cosmetic. A DECLARED name must
+        # be projected from the declared tree so the format cannot encode a
+        # content difference -- that drift was the original BR_20260730 defect
+        # (a 7-week-stale frozen tarball beside a live source tree). A vendored
+        # bundle has no in-repo source, so it must reach the static branch.
+        declared = {s["name"] for s in SS.list_shippable_skills()}
+        self.assertIn("bodesign", declared, "fixture assumption")
+        self.assertEqual((SS.SERVE_TARGZ, "bodesign"),
+                         SS.classify_skill_request("bodesign.tar.gz"))
+        self.assertEqual((SS.SERVE_STATIC, "kicad.tar.gz"),
+                         SS.classify_skill_request("kicad.tar.gz"))
+
+    def test_classification_never_raises_for_a_hostile_name(self):
+        # A raise here would leave as a 500, which is the round-2 defect one
+        # layer up. Every shape must classify into something the caller can
+        # answer 404 with.
+        for hostile in ("../mcp.json", "..", ".", "", "a" * 4096,
+                        "a" * 4096 + ".zip", "bodesign\x00.tar.gz",
+                        "/etc/passwd", ".tar.gz", ".zip"):
+            with self.subTest(name=hostile[:24]):
+                action, _ = SS.classify_skill_request(hostile)
+                self.assertIn(action, (SS.SERVE_ZIP, SS.SERVE_TARGZ, SS.SERVE_STATIC))
+
 
 class SkillSourceParityTests(unittest.TestCase):
     """R9.11.1 — the startup gate that makes a silent drift unsurvivable."""

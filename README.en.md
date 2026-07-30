@@ -9,8 +9,9 @@ schematic → layout → fab — and produces a manufacturer-ready document pack
 rather than asserting it.
 
 It is **host-agnostic and independently operable**: any MCP-capable client (IDE, agent, or
-your own HTTP caller) drives it over a Unix socket (local) or a TCP port (external). No host
-shell or gateway is required.
+your own HTTP caller) drives it over a Unix socket — no host shell required. To expose it
+remotely, put a gateway in front of that socket to supply authentication; the container does
+**not** publish a TCP port to the host (BR_20260730d).
 
 ## What it does
 
