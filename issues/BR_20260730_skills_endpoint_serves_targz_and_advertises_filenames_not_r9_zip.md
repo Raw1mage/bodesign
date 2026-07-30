@@ -443,10 +443,128 @@ static-asset branch, each with an accepting control. 26/26.
 
 ### 7.6 What still stands open
 
-1. **A third independent verification.** Round 1 found what my probe could not;
-   round 2 found what round 1 did not. The prior on "this round found
-   everything" should stay low.
+1. ~~**A third independent verification.**~~ **DONE — round 3 ran and returned
+   verdict=FAIL. See §8.**
 2. **Residual risk carried by BR_20260730d**, unchanged: `/invoke` remains
    unauthenticated *inside* the compose network by construction, since
    core→worker forwarding is built on it. Removing the published port changed
    the reachability boundary, not the authentication posture.
+
+## 8. Round-3 external verification (2026-07-30) — verdict FAIL again
+
+Commissioned per §7.6.1 (`ses_04c786aaa`, gpt-5.6, adversarial, read-only).
+**verdict=FAIL.** Three rounds, three FAILs, three distinct defect classes. Each
+finding reproduced independently before acting.
+
+The round-3 brief was deliberately harder than its predecessors: enumerate a
+wider name space, **independently adjudicate my root-cause claim rather than
+accept it**, hunt for *other* unguarded filesystem calls, and **prove the new
+tests are not theatre by reverting the fix and confirming they go red**.
+
+### 8.1 What it confirmed (worth recording, because it was load-bearing)
+
+- **X2** — my round-2 root-cause correction was independently verified
+  in-container: `resolve()` on a 4096-byte name returns normally; only the stat
+  raises `OSError 36`. So the verifier's own round-2 attribution really was
+  wrong, and patching what round 2 reported would have fixed nothing.
+- **X4** — the tests are not theatre. It did a **surgical** revert in a scratch
+  copy (function kept, guard shape restored) and got 5 errors including the
+  `NAME_MAX` anchor. That is a better proof than my own: my revert would have
+  removed the symbol, which fails for the wrong reason.
+- **X5** — `sha256` of `skill_shipping.py` and `server.py` byte-identical across
+  git HEAD, host worktree and all three containers; no `/app` bind mount.
+
+### 8.2 D1 — the landing page still advertised the retired endpoint
+
+`GET /` rendered `External (TCP): http://<host>:8077/mcp/`
+(`services/mcp/server.py:2049`, plus `install_register` at `:1860` in both
+languages).
+
+**This one is mine and it is the sharpest finding of the three rounds.** Round 2
+corrected EIGHT declaration sites and missed the only one a user actually looks
+at — because it is **generated at runtime**, so it is invisible to a grep of the
+tree. I audited the sources of truth and skipped the artifact. That is precisely
+the defect class this whole BR family is about (a claim that no longer matches
+behaviour), committed *while fixing it*.
+
+### 8.3 D2 — the README contradicted itself
+
+`README.md:11` said "TCP port（對外）… 不需要任何宿主外殼或閘道"; `README.md:92`
+said the container does not publish a TCP port. Same file, opposite claims. Same
+in `README.en.md`. Fixed both.
+
+### 8.4 D4 — the round-2 extraction was HALF DONE
+
+The verifier was right to push here, and this is the most substantive finding.
+
+Round 2 moved the static-asset half of the servability decision out of the
+`run_http` closure and **declared the structural problem solved**. It was not:
+the suffix routing and the `list_shippable_skills()` membership gate stayed
+behind — still unconstructible without starlette and a live app, still zero
+coverage. That is verbatim the condition my own round-2 commit message named as
+the root cause of two consecutive defects.
+
+**Half a structural fix leaves the other half free to drift**, which is exactly
+how rounds 1 and 2 happened. Now in `classify_skill_request()`, pure and tested;
+the closure is transport only. The membership gate is load-bearing — a DECLARED
+`.tar.gz` must project from the declared tree (so the format cannot encode a
+content difference, the *original* BR_20260730 defect) while a vendored bundle
+must fall through to the static file — so the test pins both directions.
+
+### 8.5 D3 — `/tools/<unknown>` answered 200
+
+Reported as "the same defect class one route over", and it was right: an unknown
+tool returned 200 with an "Unknown tool" page while an encoded-slash name
+returned 404 — one condition, two statuses, precisely what R9.7.1 forbids on
+`/skills`. A human reading the page can tell; a client branching on the status
+line cannot. Fixed in its own commit (`ba76fd4`) rather than smuggled into a
+skill-shipping change. The page **body** is kept — the principle is that the
+status be honest, not that help be withheld.
+
+### 8.6 Residual closed: a borrowed guard
+
+`resolve_skill_dir` caught `OSError` but not `ValueError`, which `resolve()`
+raises on a NUL byte. It was safe **only because** `_SAFE_NAME_RE` rejects NUL a
+few lines earlier — safety borrowed from a guard *outside* the try, while the
+sibling function caught both. Safe-by-ordering is how two guards drift apart;
+both now catch both.
+
+### 8.7 Verification
+
+- Suite **30/30**. Regression by diffing failing-test NAME SETS against a copy
+  of this tree with only my three files reverted to HEAD (peer's uncommitted
+  work intact, no `git stash`): **none**.
+- Deployed twice (`BODESIGN_WORKERS=1 ./mcpctl.sh rebuild`), all three images.
+- Live in-container: landing page **0** host-external endpoint claims in both
+  languages; **17** unservable `/skills` shapes → all 404 with **5** accepting
+  controls at 200; `/tools/<unknown>` → 404 with three real tools still 200 and
+  `/`, `/tools`, `/healthz`, `/skills` unaffected.
+- One apparent non-conformance was **run down and dismissed**: `/tools/` → 200
+  is `urllib` following a 307 to the `/tools` index. Confirmed by raw socket;
+  identical for `/skills/`, and identical for real and fake names, so it is no
+  existence oracle.
+
+### 8.8 The pattern across three rounds
+
+| Round | Found | Where it hid |
+| --- | --- | --- |
+| 1 | 403/400/404 for one condition | untested `server.py` closure |
+| 2 | over-long name → 500 | same closure + its sibling; no *long* fixture |
+| 3 | runtime-generated page still advertising a retired endpoint; extraction only half applied | an artifact grep cannot see; the half I declared done |
+
+Each round found what the previous could not, and **none of them was found by
+me**. My own probes were honestly green every time. The recurring shape is not
+carelessness — it is that self-verification tests the paths one designed, and
+every one of these defects lived in a place the design did not look.
+
+### 8.9 What still stands open
+
+1. **A fourth independent verification.** On this evidence the prior that any
+   round is the last one should stay low.
+2. The verifier's own declared blind spots, which I am carrying forward rather
+   than discarding: it probed **statuses, not payloads** (never verified that
+   `bodesign.zip` holds the *current* 169 files — notable, since content drift
+   was the ORIGINAL defect); it used a human-authored probe list, not a fuzzer;
+   it did not measure the cost of rebuilding a ~1.1 MB archive per request; and
+   it verified the deployed artifact, not the build pipeline.
+3. **BR_20260730d residual**, unchanged (§7.6.2).
