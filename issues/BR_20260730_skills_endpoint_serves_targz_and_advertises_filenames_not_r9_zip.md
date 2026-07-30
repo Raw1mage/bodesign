@@ -568,3 +568,140 @@ every one of these defects lived in a place the design did not look.
    it did not measure the cost of rebuilding a ~1.1 MB archive per request; and
    it verified the deployed artifact, not the build pipeline.
 3. **BR_20260730d residual**, unchanged (§7.6.2).
+
+---
+
+## 9. Round 4 — external verification (verdict FAIL), and the half that was never fixed
+
+Verifier: `codex/gpt-5.6-terra`, brief aimed at the blind spot round 3 declared
+honestly — *"I verified statuses, never payloads"* — which happens to be the
+axis of the ORIGINAL defect. Verdict **FAIL**, six defects. I reproduced all six
+myself before touching anything; each fix below carries a guard that was
+mutation-tested to actually go red when the fix is reverted.
+
+### 9.1 D4 — the original defect, alive in the half that was never fixed
+
+This is the finding that matters. The BR opened on a frozen `.tar.gz` served
+beside a source tree that had moved on. That was fixed for the **declared**
+skills. The **vendored** half was left exactly as it was.
+
+Two of the 13 bundles have in-repo sources — `kicad` and `kidoc` were folded
+into the unified skill as `skills/bodesign/engines/{kicad,kidoc}`. What was
+being served:
+
+| bundle | live-only files | byte-differing | frozen |
+| --- | --- | --- | --- |
+| `kicad.tar.gz` | 12 (incl. `ENGINE.md`, `netlist_to_kicad_sch.py`) | 9 | 2026-06-07 |
+| `kidoc.tar.gz` | 1 (`ENGINE.md`) | 1 | 2026-06-07 |
+
+The same shape, the same 7-week staleness, in the same repo, while
+`MANIFEST.md` asserted all 13 bundles *"have no source tree in this repo"* —
+false for exactly these two.
+
+Fix: `resolve_engine_bundle()` discovers a source by walking the declared tree
+(`<skill>/engines/<name>`), never a hardcoded list, and a name that has one is
+projected through the same deterministic packer as the declared skills. Only a
+name with genuinely no source reaches the static branch. The frozen copies are
+unreachable. Accepting control kept: `jlcpcb.tar.gz` (no source) still serves.
+
+### 9.2 D1 — 75 dead links on the only live entry path
+
+`docker-compose.yml` set `BODESIGN_HTTP_BASE: "/bodesign"` unconditionally,
+asserting a prefix-stripping gateway that does not exist on this host. Every
+link the landing page rendered — 75 of them — was answered 404 by the same
+server. Same class as round 3's D1: a **generated** surface, invisible to grep,
+contradicting reality. The declaration is now opt-in, set only where such a
+gateway is actually deployed.
+
+### 9.3 D2 — `.tar.gz` was not byte-reproducible
+
+Every tar member already carried `_FIXED_MTIME`, but `tarfile.open(mode="w:gz")`
+writes the **wall clock** into the gzip wrapper's header. Four requests gave two
+distinct outer sha256 over one identical inner tar. That makes *"did the shipped
+skill change?"* unanswerable by hash for that format — the precise question R9.11
+exists to answer, and a consumer diffing hashes would have learned to ignore the
+signal. Now `gzip.GzipFile(mtime=0)` over a `mode="w"` tar.
+
+### 9.4 D3 — the image is not reproducible from a clean clone
+
+A clean clone at the commit yields 164 shippable files; the running container
+serves 169. The five extra are **untracked working-tree files** swept in by
+`COPY skills` — and they belong to another agent's in-flight work, so silencing
+the difference is not mine to do. What is mine is to stop it being invisible:
+`/health` now publishes `skill_source` (per-skill file count + content digest),
+so two deployments claiming one version while serving different trees differ in
+one observable field.
+
+### 9.5 D5 — the parity gate asserted presence, not parity
+
+Reproduced: a tree holding a single truncated `SKILL.md` — or an outright decoy
+reading *"NOT the real source"* — passed the startup gate and served a 135-byte
+"skill". A gate that cannot fail on an empty entry point is decoration, which is
+the accusation this BR has already levelled at its own tests twice.
+
+Added a substance floor (entry ≥512B, ≥5 files) **with its limit written into
+the docstring rather than implied away**: it proves the tree is structurally
+capable of being what the server claims, *not* that the content is correct, and
+it still runs once before bind. Overclaiming here would repeat the exact error
+the gate was caught making.
+
+### 9.6 D6 — the third recurrence of one structural condition
+
+Round 3 fixed `/tools/<unknown>` to answer 404 — and left the decision inside
+the `run_http` closure. Reverting `else 404` to `else 200` left the entire suite
+green. An unguarded fix, in the same unlit place this BR has now named three
+times as the root cause of every defect it has found. Lifted to module scope
+(`tool_detail_status`) with a guard and an accepting control over all 57 tools.
+
+### 9.7 Verification
+
+- `tests/test_skill_shipping` **38** (+8), `tests/test_mcp_server` +2
+- **Mutation-tested guards** — reverting each fix goes red: D2 (drop `mtime=0`)
+  → 1F, D4 (drop engine routing) → 1F, D5 (zero the floor) → 2F, D6
+  (`return 200`) → 1F. A guard that survives its own fix being undone is not a
+  guard.
+- **Zero regression** — failing-test-NAME-SET diff against a copy of the working
+  tree with only my six files reverted to HEAD: `comm -13` empty, 37 pre-existing
+  failures identical on both sides. Never by counting; never with `git stash`.
+- **Deployed** (`051786c`, three images rebuilt, **no `/app` bind mount** — so
+  what follows is the image's behaviour, not a dev-mount illusion):
+
+| check | result |
+| --- | --- |
+| `.tar.gz` × 4 requests | **one** sha256; gzip header MTIME `0` |
+| landing page | 75 links, **0** prefixed, **0** non-200 |
+| `kicad` / `kidoc` `.tar.gz` | projected: 60 / 71 members, `ENGINE.md` present, MTIME 0 |
+| `jlcpcb.tar.gz` (no source) | 200 — static branch intact |
+| `/health.skill_source` | `bodesign` 169 files `f05a9429…` |
+| `/tools/<unknown>` | 404; 57 real tools + index 200 |
+| 14 unservable shapes | **all 404**; 5 accepting controls 200 |
+| containers | 3 healthy, `Ports=[]` |
+
+### 9.8 The pattern, four rounds in
+
+| Round | Found | Where it hid |
+| --- | --- | --- |
+| 1 | one condition, three statuses | untested `server.py` closure |
+| 2 | over-long name → 500 | same closure; no *long* fixture |
+| 3 | generated page advertising a retired endpoint; extraction half-done | an artifact grep cannot see; the half I declared done |
+| 4 | the original defect alive in the vendored half; a gate that asserts presence; a fix no test guards | **the half nobody thought to look at**, three times over |
+
+Round 4's shape is distinct and worth naming: rounds 1–3 found defects in code I
+had *touched*. Round 4 found the defect I had **decided was out of scope** — the
+vendored bundles were classified as "no source, cannot satisfy parity" in round
+1, and that classification was never re-examined against the filesystem. A wrong
+premise survives every test built on top of it.
+
+### 9.9 Still open
+
+1. **A fifth independent verification.** Four rounds, four FAILs, each finding
+   what the previous could not. The prior that any given round is the last one
+   should stay low.
+2. **The verifier's own declared blind spots**, carried forward rather than
+   discarded — and it named the sharpest one yet: *"I verified content equality,
+   never content correctness. Nobody in four rounds has asserted that the shipped
+   skill actually **works** when installed."* No round has extracted the archive
+   into a real skill layout and run it. That is the next axis.
+3. **Startup-only parity** (§9.5 limit) — a post-boot mutation of a live-bound
+   tree is served unchecked. Closing it needs a build-time content pin.
+4. **BR_20260730d residual**, unchanged (§7.6.2).
