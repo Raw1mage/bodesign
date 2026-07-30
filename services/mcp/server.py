@@ -454,7 +454,16 @@ def _h_analyze_thermal(a: dict) -> Any:
 
 def _h_export_bom(a: dict) -> Any:
     from bodesign_eda_bridge import export_bom
-    return asdict(export_bom(a["schematic_path"], a["out_dir"], group_by=a.get("group_by", "Value"), xlsx=a.get("xlsx", False)))
+    # BR_20260730c: exclude_dnp / include_excluded_from_bom MUST be forwarded.
+    # They decide which parts reach a purchasing document; leaving them
+    # unreachable makes both filters unconditional for every MCP caller (the
+    # §O facade-reachability defect, one tool over).
+    return asdict(export_bom(
+        a["schematic_path"], a["out_dir"],
+        group_by=a.get("group_by", "Value"),
+        exclude_dnp=a.get("exclude_dnp", True),
+        include_excluded_from_bom=a.get("include_excluded_from_bom", False),
+        xlsx=a.get("xlsx", False)))
 
 
 def _h_export_netlist(a: dict) -> Any:
@@ -1141,8 +1150,10 @@ TOOLS: list[dict] = [
      "description": "Thermal hotspot estimate on a schematic + .kicad_pcb (kicad analyze_thermal); per-component temps + thermal score. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "pcb_path": _STR, "out_dir": _STR, "ambient": {"type": "number"}}, "required": ["schematic_path", "pcb_path", "out_dir"]}},
     {"name": "bodesign_export_bom", "handler": _h_export_bom,
-     "description": "Export a grouped Bill of Materials (CSV, qty + MPN, DNP excluded) from a schematic; optional xlsx companion.",
-     "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "group_by": _STR, "xlsx": {"type": "boolean"}}, "required": ["schematic_path", "out_dir"]}},
+     "description": "Export a grouped Bill of Materials (CSV, qty + MPN) from a schematic; optional xlsx companion. TWO filters silently shrink this document unless you change them: DNP symbols are dropped (exclude_dnp, default true) and symbols marked 'Exclude from BOM' are dropped (include_excluded_from_bom, default false). line_count counts only what SURVIVED them, so the result also carries the rules in force plus excluded_dnp/excluded_from_bom naming every omitted refdes, and exclusion_audit ('run' vs 'failed:...') so an empty casualty list can never be mistaken for an unrun check. The downstream reader is purchasing: a part omitted here is a part never ordered while its footprint still sits on the board (BR_20260730c).",
+     "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "group_by": _STR, "xlsx": {"type": "boolean"},
+                "exclude_dnp": {"type": "boolean", "description": "drop Do-Not-Populate symbols (default TRUE). Correct for a clean purchasing BOM, but the omission must stay visible — see excluded_dnp in the result."},
+                "include_excluded_from_bom": {"type": "boolean", "description": "keep symbols marked 'Exclude from BOM' (default FALSE, i.e. they are dropped). This filter is opt-IN to disable, so the default quietly omits them; excluded_from_bom in the result names which."}}, "required": ["schematic_path", "out_dir"]}},
     {"name": "bodesign_export_netlist", "handler": _h_export_netlist,
      "description": "Export a netlist from a schematic via kicad-cli.",
      "schema": {"type": "object", "properties": {"schematic_path": _STR, "out_dir": _STR, "format": _STR}, "required": ["schematic_path", "out_dir"]}},

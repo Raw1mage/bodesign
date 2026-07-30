@@ -1,6 +1,7 @@
 # BR_20260730c — `export_bom` 靜默排除 DNP 料，回傳值無任何欄位反映它
 
-- Status: FILED-UNFIXED（RCA 完成，**未修**；與 BR_20260730b 不同關注點，獨立 file 以免污染該 BR 的 scope）
+- Status: **CLOSED** — commit（見文末改動集）。實作時**推翻了本 RCA 的兩個前提**、發現**第二條未被記載的靜默排除**，見 §實作發現。
+- Closed: 2026-07-30 by `ses_0c87bab06fferQ0umBs2Nybb5U`
 - Filed by: `ses_0c87bab06fferQ0umBs2Nybb5U`（platform owner；在 §O 之後做全 repo facade 可達性盤查時順手發現）
 - Family: `control.quality.no-silent-degradation`（**V5** 判決未帶產生它的預算/基準）
 - Fix venue: `/home/pkcs12/projects/bodesign`
@@ -90,6 +91,88 @@ DNP 的語意本身讓它更危險：DNP 料通常是**刻意不焊但保留 foo
 2. `export_bom` 預設呼叫 → 斷言回傳帶 `exclude_dnp=True` 與非空 `excluded_dnp` 清單，且清單內容與 fixture 的 DNP refs 逐筆相符。
 3. **反向鑑別力**：`exclude_dnp=False` → `excluded_dnp` 必須為空且 `line_count` 增加對應筆數。少了這條，一個恆回空清單的實作會通過上一條。
 4. 無 DNP 料的 schematic → `excluded_dnp` 為空但欄位仍存在（**「沒有東西被排除」與「沒有檢查」必須可分辨**）。
+
+## 實作發現（三條 RCA 推不出來的事）
+
+RCA 只憑讀碼寫成，實作時三條都被實測推翻或補足。**這正是「fix proposal 不等於 fix」的實例**——提案說「取得方式：跑兩次做差集，或解析 schematic。實作前需量測成本」，而真正的答案兩者都不是。
+
+### 1. `${DNP}` 是 kicad-cli 內建欄位替換（RCA 沒看到的第三條路）
+
+`kicad-cli sch export bom --help` 列出 `${DNP}` 與 `${EXCLUDE_FROM_BOM}` 兩個欄位替換。所以不需要解析 schematic，也不需要「跑一次含 DNP 再做集合差」——直接請 kicad-cli 自報每個 refdes 的旗標即可。
+
+### 2. 分組會污染旗標，所以稽核**必須** ungrouped（決定性實測）
+
+這條若沒實測就會寫出一個會誣告零件的實作：
+
+```
+R1 = 10k 正常   R3 = 10k 且 DNP   --group-by Value
+→ "R1,R3","10k","2","DNP"        ← 整組繼承 DNP 旗標
+```
+
+**在分組輸出上做事後過濾，會把已出貨的 `R1` 報成「被排除」**——送人去重複下單一顆本來就在板上的料。故稽核走**獨立的第二次 ungrouped pass**（`--group-by ""` + `--include-excluded-from-bom`，不排除任何東西）。實測成本 **~260ms/次**，對一份採購文件而言，正確點名遠比這個代價值錢。
+
+### 3. 還有**第二條**靜默排除，而它從未被任何地方提過
+
+RCA 只寫了 DNP。實測發現 `in_bom no`（Excluded from BOM）的零件**同樣從預設 BOM 消失**：
+
+```
+R9 標記 in_bom=no  →  預設 export_bom 輸出裡 0 命中
+--include-excluded-from-bom 是 opt-IN（預設關閉）
+```
+
+兩條規則的方向還相反——`--exclude-dnp` 是 opt-out（我們主動加旗標），`--include-excluded-from-bom` 是 opt-in（我們不加，於是預設就在排除）。**後者更隱蔽：它不需要任何人做決定就在濾東西。**
+
+### 4. power symbol 不會污染清單（但這是 kicad-cli 的行為，不是我的保證）
+
+每張 schematic 都有一堆 `#PWR`/`#FLG`，全部 `in_bom=no`。若它們進入 `excluded_from_bom`，真實板上的清單會是幾十個 power flag 埋著一顆真正被省略的料——**一份沒人讀的清單就是 cry-wolf**。實測 kicad-cli 9.0.9 在 exclude-from-BOM 階段**之前**就濾掉 power symbol，故清單乾淨。已用測試釘住：這是上游行為，未來版本若改變，我要立刻知道。
+
+---
+
+## Reporter 提供的 fleet 事實（我讀碼推不出來的那塊）
+
+BR filed 時我寫「對 DNP 在此 fleet 的採購語意沒把握」。reporter（`ses_073a93d09ffeRTpR9TwIdofhb3`）round=15 給了答案，而它**推翻了本 BR §症狀 的隱含前提**：
+
+> 這個 fleet 的「不上件」根本不走 schematic 的 `dnp` 屬性，走的是 BOM 的 `qty=0` + `block` 文字。
+
+實測：`03.aiguard` 全域 `dnp` 屬性 **0 個**、`export_bom` 呼叫 **0 處**；唯一的「不上件」料 `MIC1_ALT` 是 `qty=0`，且**在 schematic 裡完全不存在**（generator 沒畫它）——不是 §症狀 說的「有 footprint、有 pad、只是不上件」。
+
+**這對修法有一個具體後果**：在他們的真實輸入上，`excluded_dnp` 永遠是空的，**而空是正確答案**。所以 Validation plan 第 4 條（「沒有東西被排除」必須與「沒有檢查」可分辨）不是邊角案例，**是他們唯一會走到的路徑**。若只實作前三條，那條路徑會零覆蓋。`exclusion_audit` 欄位正是為此而存在，並已有專屬測試。
+
+### 交叉引用：`qty_zero` 豁免遮住了另一個維度的分歧（不在本 BR scope）
+
+reporter 同時指出一個**我不主張現在修**的觀察，但值得記：
+
+兩套「不上件」編碼並存——schematic 的 `dnp` 屬性 vs BOM 的 `qty=0`——而沒有任何 gate 對照它們。`check_c03` R5 的 `exempted: {qty_zero: [MIC1_ALT]}` 豁免**發得完全正確**（qty=0 的料本來就不該要求它被畫），但那個正確的豁免恰好把兩套編碼的分歧吸收掉了。
+
+> 這是本家族唯一「豁免正確、但豁免本身遮住了另一個維度的分歧」的實例。
+> 不同於 §Q（豁免發錯、可控靜音），這個豁免發對了，遮住的是**別的東西**。
+
+修它需要 fleet 級「不上件語意 SSOT」裁決（該用 `dnp` 屬性還是 `qty=0`），那是產品決定，不是平台能裁的。reporter 已在 aiguard 側記為待裁項。
+
+---
+
+## 修法（已實作）
+
+| 項 | 內容 |
+|---|---|
+| echo 規則 | `exclude_dnp` / `include_excluded_from_bom` 回傳實際生效值 |
+| 點名傷亡 | `excluded_dnp` / `excluded_from_bom` 列出每個被移除的 refdes |
+| 可分辨「沒排除」與「沒檢查」 | `exclusion_audit`：`"run"` / `"failed:<reason>"`。稽核失敗時**不回空清單**，改發 loud warning 說「UNKNOWN, not empty」 |
+| 只報本次真的排除的 | `exclude_dnp=False` 時 `excluded_dnp` 為空——否則就是對「要求保留這些料」的呼叫端謊報 |
+| warning 帶計數脈絡 | `line_count=N counts only what survived` 與傷亡清單並列 |
+| facade | schema 暴露兩個參數 + handler 轉發（**§O 同族：不轉發等於兩條過濾規則對每個 MCP 呼叫端都是無條件的**） |
+
+## 驗證
+
+| 項 | 結果 |
+|---|---|
+| `tests/test_bom_export.py` | **14/14**（原 3 + 新 11） |
+| `test_compose_facade_arg_encoding` + `test_check_c03_...` | 86/86 |
+| `test_mcp_server` | 5 筆與已坐實 HEAD 基線同名同數 |
+| 部署 | pid1 `04:42:10Z` > 最後 mtime `04:41:26Z` |
+| facade 真 client 三態 | 預設 → `excluded_dnp=['R3']` / `excluded_from_bom=['R9']` / `audit=run`；兩參數皆反轉 → `line_count` 2→3、兩清單皆空、零 warning |
+
+測試含四條反向鑑別力：fixture 本身真的被 kicad-cli 過濾、關閉規則後不得謊報、稽核失敗不得讀成乾淨、power symbol 不得污染清單。
 
 ## Source evidence
 
