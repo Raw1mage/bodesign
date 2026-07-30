@@ -1,6 +1,7 @@
 # BR_20260730 — 平台 gate 在 consumer 端不可執行 → 逼出產品 repo fork；且 BOM↔netlist 一致性無 gate 覆蓋
 
-- Status: **PARTIAL** — F1–F5 + R6 已 commit `5817c87`，reporter 已依 §7.2 金標準逐條自驗通過（round=6）。**不歸檔 `closed/`**：同家族的 N1/N2（compose facade 參數編碼 / 空 spec 四閘齊綠）在同一 fix surface 上尚未 commit，見 `BR_20260730b`。兩者一起收才算閉環。
+- Status: **CLOSED** — F1–F5 + R6 commit `5817c87`（reporter round=6 依 §7.2 金標準逐條自驗）；同 fix surface 的 N1/N2/§M/§N/§O/§P/§Q commit `1884668`（reporter round=11 + round=13 兩輪 facade 真 client 自驗全通過）。兩者同時閉環。
+- Closed: 2026-07-30 by `ses_0c87bab06fferQ0umBs2Nybb5U`
 - Filed by: aiguard consumer session `ses_073a93d09ffeRTpR9TwIdofhb3`（**consumer 只提報證據，不擁有修復**，依 a2a-d2d-protocol §3.1.1）
 - Owner: `ses_0c87bab06fferQ0umBs2Nybb5U` (bodesign platform coordinator) — 繼承 BR_20260729 家族 owner
 - Family: `control.quality.no-silent-degradation`（BR_20260729 §A–§L 的延續；本件為 **V7 候選變體**）

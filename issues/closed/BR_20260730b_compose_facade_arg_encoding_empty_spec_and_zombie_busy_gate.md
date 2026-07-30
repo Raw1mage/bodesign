@@ -1,11 +1,12 @@
 # BR_20260730b — compose facade 參數被多編碼 / 空 spec 四閘齊綠 / busy gate 被 zombie 永久卡住
 
-- Status: FIXED-UNVERIFIED（全部落地平台側，**未 commit**；等 reporter 依 §7 自驗；未經對方驗證故不歸檔 `closed/`）
+- Status: **CLOSED** — commit `1884668`（全 12 檔）。reporter 分兩輪走 facade 真 client 自驗全通過：round=11 驗 N1/N2/round=8/金標準/豁免閘，round=13 驗 §P/§Q/金標準並授權 commit。
+- Closed: 2026-07-30 by `ses_0c87bab06fferQ0umBs2Nybb5U`（dispatcher 自驗通過且已生效，無 scoped 殘留）
 - Filed by: `ses_0c87bab06fferQ0umBs2Nybb5U`（platform owner；N1/N2 由 aiguard consumer session `ses_073a93d09ffeRTpR9TwIdofhb3` 提報證據，§M 與 lazy-import 為 owner 自行發現）
 - Owner: `ses_0c87bab06fferQ0umBs2Nybb5U`
-- Family: `control.quality.no-silent-degradation`（BR_20260729 §A–§L + BR_20260730 F1–F5/R6 的延續；本件貢獻 **V8 / V9 / V10** 三個變體）
+- Family: `control.quality.no-silent-degradation`（BR_20260729 §A–§L + BR_20260730 F1–F5/R6 的延續；本件貢獻 **V8 / V9 / V10 / V11 / V12** 五個變體）
 - Fix venue: `/home/pkcs12/projects/bodesign`
-- Relates: `BR_20260730`（同一 fix surface，故該 BR 標 PARTIAL 暫不歸檔，兩者一起收才算閉環）
+- Relates: `BR_20260730`（同一 fix surface，兩者同時歸檔）、`BR_20260730c`（`export_bom` 静默排除 DNP，**跨關注點獨立 file、未修**，留頂層）
 
 ---
 
@@ -420,6 +421,24 @@ worktree 隔離一度失敗，原因無關：HEAD 的 tests 引用 `_vendor_sym_
 3. **`gen_product.py` 在 host 跑不動是 by-design**（reporter 自己劃的界，正確）：`gen_product.py:25` 硬寫 `FB = "/work/aiguard/..."`，本來就設計在容器內跑。與 §N（宣稱零依賴卻不零依賴）是兩件事。
 4. **`_is_active_ic` 的 >2 pin 門檻本輪不改**（見 N1 末段）。
 5. **`experiments/aiguard_c03_compose/` 不清**——probeA/probeB 是 N1/N2 的最小重現，owner 明示保留。
+
+---
+
+## 收尾註記：`drawn_as_other_refdes` 已失去真實資料覆蓋（reporter round=13 報）
+
+§Q 的 board 層別名解析是因為真實 CORE 四筆全靠 mpn 別名命中（字面 `drawn=0`）才被發現的。但 reporter 在 round=11 依 DD-21 把 BOM 改名（`U4A→UW1` 等）之後：
+
+```
+改名前 CORE: drawn=0   drawn_as_other_refdes=4   ← 別名路徑被真實資料走到
+改名後 CORE: drawn=11  drawn_as_other_refdes=0   ← 不再被走到
+```
+
+**這不是缺陷**——別名解析本來就該在兩份文件命名分歧時才啟用，而分歧已被修掉。但值得記一筆：
+
+> 它是本線上唯一「因為下游把問題修好而失去真實輸入」的機制。
+> 往後若有人重構那段，**真實資料不會替他報警**——合成 fixture（`_MULTIBOARD_NET` 的 `UW1` + `_MB_ROWS` 的 `U4A`）是它唯一的守衛。
+
+順帶：這也讓 round=12 把 `test_covers_boards_makes_coverage_authoritative` 改用 `LED_MODULE` 變得更必要——CORE 現在連字面都命中，拿它當「零目擊板」會是第二次前提錯誤。
 
 ---
 
