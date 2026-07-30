@@ -13,18 +13,16 @@
 ```
 State:
 Fix: fixed (2026-07-30, ses_04db7a1c5 — bodesign coordinator, full ownership per a2a-d2d §3.1.1)
-Effect: live-verified on the running service (dev mounts) + image build path verified; NOT YET DEPLOYED
+Effect: DEPLOYED and live-verified against the built image (no dev mounts) — see §4.6
 Custody: bodesign
 Blocker: none
 Disposition: accepted — accepted as a real defect; RCA found it WORSE than reported (see §4)
 Venue: bodesign
-Status: FIXED-UNDEPLOYED — stays at top level until deployed. The code is correct and proven
-  (see §4.4/§4.5), but the SHIPPED images (`bodesign:latest`, `-ee`, `-me`) still contain the
-  old server.py and lack `/app/mcp.json` + `/app/skills`. The service currently serves the fix
-  ONLY because the dev overlay bind-mounts live source over the image. A plain
-  (non-`BODESIGN_DEV`) start would run pre-fix code; a rebuilt image without the amended
-  Dockerfiles would die at the new startup parity gate. Deploy = `BODESIGN_WORKERS=1
-  ./mcpctl.sh rebuild` (the KiCad-bearing layers take a while). Close only after that.
+Status: CLOSED — fixed, deployed, and verified effective. Commit `8f2e91e`; deployed via
+  `BODESIGN_WORKERS=1 ./mcpctl.sh rebuild` (2026-07-30). The earlier FIXED-UNDEPLOYED
+  qualifier is discharged: the running container has NO `/app` bind mounts, so the green
+  probe below is the image's own behaviour, not the dev overlay's.
+Closed: 2026-07-30 by ses_04db7a1c5 (bodesign coordinator)
 ```
 
 ## 4. Resolution (bodesign, 2026-07-30)
@@ -111,6 +109,30 @@ container:
   change. This is a deliberate scope call, not an untested path — but see Status: the images
   are still unbuilt in the real registry, which is exactly why this BR is not closed.
 - Verification images were deleted afterwards; `bodesign:latest`/`-ee`/`-me` are untouched.
+
+### 4.6 Post-deployment verification (the one that actually settles it)
+
+Deployed 2026-07-30 with `BODESIGN_WORKERS=1 ./mcpctl.sh rebuild` (all three images rebuilt,
+exit 0). Crucially this was run **without** `BODESIGN_DEV`, so the container has no `/app`
+bind mounts — confirmed by `docker inspect`. Everything below is therefore the **image's**
+behaviour; a green result under dev mounts would have proven nothing about what ships.
+
+| Check | Result |
+| --- | --- |
+| Startup parity gate at boot | passed (no violation in logs) |
+| `/app/mcp.json` + `/app/skills` in image | present (`bodesign`, `bodesign-kb`) |
+| `GET /skills` | `skills:[bodesign, bodesign-kb]` (bare), `bundles:13` |
+| `GET /skills/bodesign.zip` | 200 · 1,102,227 B · valid zip · 169 members · `bodesign/SKILL.md` present |
+| Content the frozen copy had lost | `bodesign/doctrine.md` + `bodesign/scripts/gate.py` both present |
+| Symlinks in archive (R9.7.1) | **0** |
+| Negatives | `nope.zip`, `../mcp.json`, `..%2fmcp.json`, `bodesign.tar.gz.zip`, `packages.zip` → all 404 |
+| Back-compat | `bodesign.tar.gz`, `kicad.tar.gz`, `MANIFEST.md` → all 200 |
+| C06 engine regression (ee worker) | kicad=37, spice=11, emc=4 scripts — intact after the extraction source changed |
+
+Note the fourth row against §1.2: the reporter's consumer failed on
+`bodesign-eda-skills-bundle.tar.gz.zip`. That exact shape now returns 404 **because nothing
+advertises it any more** — the bare names are what the listing serves, so a tolerant reader
+appending `.zip` lands on a route that exists.
 
 ## 1.1 症狀（verbatim）
 
