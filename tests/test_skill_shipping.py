@@ -37,8 +37,12 @@ _COUNT_RESTATEMENT = re.compile(
     # (?<![\w.-]) keeps the digit from being the tail of an identifier:
     # "Bucket-2 verbs" and "R17.2 tools" name a bucket and a spec clause,
     # not a roster size.
+    # ROSTER NOUNS ONLY. `deterministic` was here until round 8 and is an
+    # ADJECTIVE, not a thing you can have N of: it matched "ran 300
+    # deterministic tests", "2015 deterministic build" (a YEAR). A guard that
+    # flags a year is a guard someone will silence.
     r"~?(?<![\w.-])\d+\b(?:\s+[\w-]+){0,3}?\s+"
-    r"(?:verbs?|tools?|deterministic)\b", re.IGNORECASE)
+    r"(?:verbs?|tools?)\b", re.IGNORECASE)
 
 # Two exclusions, each for a reason -- not to make the guard quiet.
 # 1. HTTP status codes: prose about this BR family says "answered 200 for a
@@ -709,7 +713,14 @@ class ShippedSkillSelfContainmentTests(unittest.TestCase):
                        "R17.2 tools whose declared asset paths",
                        "answered 200 for a tool that does not exist",
                        "`gate.py --list` is the authoritative roster",
-                       "R9.11.3 by-construction", "the 0.2.0 release"]
+                       "R9.11.3 by-construction", "the 0.2.0 release",
+                       # Round 8, Defect 1: `deterministic` was a match target
+                       # until now, so these three read as roster restatements.
+                       # A test count and a build year are not rosters, and a
+                       # guard that cries about a year gets switched off.
+                       "ran 300 deterministic tests",
+                       "2015 deterministic build",
+                       "sympy has been deterministic since 2015"]
         for text in must_ignore:
             with self.subTest(ignore=text):
                 self.assertEqual([], flags(text),
