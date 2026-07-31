@@ -20,23 +20,34 @@ Custody: bodesign
 Blocker: none
 Disposition: accepted — accepted as a real defect; RCA found it WORSE than reported (see §4)
 Venue: bodesign
-Status: PARTIAL — deliberately NOT closed. Seven independent adversarial verification
-  rounds, seven non-PASS verdicts; every round found something the previous one could not
-  see, and twice (§10, §12.4) a round's own FIX created the defect the next round found.
+Status: PARTIAL — deliberately NOT closed. Eight independent adversarial verification
+  rounds, eight non-PASS verdicts (rounds 1-4 FAIL, 5-8 PARTIAL); every round found
+  something the previous one could not see, and twice (§10, §12.4) a round's own FIX
+  created the defect the next round found.
   The original R9.2 deviation (F1/F2/F3) is fixed, deployed and repeatedly re-verified.
   What keeps this open is scoped remainder, not doubt about the shipped fix:
-    - ~29 of 59 landing verbs have never been invoked; the stateful C00->C01
-      orchestration loop is unexercised end-to-end (§12.7.1)
+    - ~29 of 59 landing verbs have never been invoked -- NARROWED by round 8:
+      the stateful C00->C01 spine IS now driven end to end with verified on-disk
+      persistence (§13.1); what remains unexercised is C02-C06's own mutate-loops
+      and five of the six evidence adapters (§13.5)
     - no round has performed a live skill() load through the daemon's directory
       scan — only opencode's parser+schema in isolation (§12.7.3)
     - the composite bundle's stale kicad/kidoc shadow is bounded, disclosed and
       guarded in both directions, but not eliminated (§10.3)
     - source parity is asserted at startup only, not continuously (§9.5)
   Two findings were split out rather than folded in: BR_20260730d (unauthenticated
-  /invoke, CLOSED) and a pin_allocation silent-empty shape that deserves its own BR
-  (§12.7.2).
+  /invoke, CLOSED) and BR_20260731 (vacuous pass on empty input, OPEN — the
+  pin_allocation shape of §12.7.2, widened on investigation to two GATES).
+  Round 8 (§13) is the first non-FAIL verdict in eight rounds: it drove the
+  stateful C00->C01 loop end to end with on-disk persistence and found no
+  silent-empty successes, closing the largest remainder item. Its one defect was
+  in a development-time guard, not the shipped surface. Still PARTIAL: the
+  clean-index skill() load was correctly refused rather than faked (§13.2), and
+  round 8's own blind spots (§13.5) are real.
 Reopened: 2026-07-30 by ses_04db7a1c5 (bodesign coordinator), on external verdict=FAIL
-Last verified: 2026-07-31 (round 7, d01d10e deployed + live-probed; see §12.6)
+Last verified: 2026-07-31 (round 8, 9c42322; guard-only fix, not deployed and
+  does not need to be -- no Dockerfile has `COPY tests`. The shipped surface
+  remains d01d10e, deployed and live-probed; see §12.6, §13)
 ```
 
 ## 4. Resolution (bodesign, 2026-07-30)
@@ -1119,3 +1130,130 @@ reverted — no `git stash`; the peer's uncommitted changes untouched.
    own look.
 5. **The composite bundle's stale shadow** (§10.3), **startup-only parity**
    (§9.5), **BR_20260730d residual** (§7.6.2) — unchanged.
+
+## 13. Round 8 — the first non-FAIL, and a guard that would have been switched off
+
+Verdict: **PARTIAL** — eight rounds, and the first one that did not find a
+correctness defect in the shipped surface. Round 8's brief targeted round 7's
+two declared blind spots: the ~29 never-invoked verbs (including the stateful
+C00→C01 loop) and a live skill-loader load.
+
+### 13.1 Y1 — the stateful loop, driven end to end
+
+The largest remaining unknown in this BR is now closed. Round 8 built a real
+project folder and drove the full spine:
+
+```
+c00_scaffold_prd → c00_update_answers → c00_readiness → dispatch_work_packet
+→ return_blocker → list_blockers → ingest_blocker → wrap_validation_evidence
+→ return_evidence → list_evidence_returns → ingest_evidence
+→ c00_orchestration_tick
+```
+
+Every `ok:true` carried real content and **persisted to disk** — the
+`_orchestration/` spine (`work_packets/`, `blockers/`, `evidence_returns/`,
+`log.jsonl`) was verified by `find`, not by trusting the envelope. Every
+`ok:false` was a typed refusal that named the valid vocabulary: an invalid
+severity listed the four allowed values, an unknown evidence adapter listed the
+six registered ones, an unrecognised answer key came back in `not_found:[...]`.
+
+**No silent-empty successes.** Three apparent ones were reproduced and cleared —
+each was the verifier's own malformed input being correctly reported. That
+distinction is the whole point: `not_found:["product_name"]` is the verb telling
+you it did nothing and why, which is the opposite of the failure shape this BR
+family exists to catch.
+
+Worth stating plainly because seven prior rounds have not been able to: the
+orchestration spine does not lie about what it did.
+
+### 13.2 Y2 — the loader check that was correctly refused
+
+Round 8 could **not** do a clean install of the shipped zip, and said so rather
+than substituting a weaker check and calling it done. `bodesign` is already
+installed at `~/.local/share/opencode/skills/bodesign` as a live projection
+(`.capability-installed.json` records `sourceRepoPath` pointing at this repo),
+so installing the artifact under test would have perturbed the user's live
+environment.
+
+What it established without touching anything:
+
+| | |
+|---|---|
+| loader discovery | the skill IS indexed by the real loader — capability manifest present, `sourceHash`/`projectionHash` recorded |
+| shipped ≡ installed | 169 shipped files equal the installed tracked tree |
+| the differences | installed-only = `__pycache__`/dotfiles (correctly excluded by the packer); shipped-only = the peer's 5 uncommitted `schemdraw_templates/*.py` |
+| frontmatter | valid `name:` in the shipped `SKILL.md` |
+
+This is the honest half of Y2, and it is labelled PARTIAL rather than PASS. The
+blind spot survives: **no round has loaded the shipped artifact into a clean
+index.** It stays in the remainder list.
+
+### 13.3 Y4 — the d01d10e guards are pinned
+
+All three of round 7's fixes were mutation-tested in a scratch copy:
+
+| mutation | result |
+|---|---|
+| drop `always_required` from `--list` | 1 failure |
+| narrow the shared pattern back to round 6's literal form | 6 failures |
+| remove the status-code exclusion | 2 failures |
+
+And the shape round 7 fixed — a capability test keeping a private copy of the
+very pattern it claimed to test — is confirmed gone: the test now calls the same
+`count_restatements()` the live guard calls.
+
+### 13.4 D1 — the guard flagged a year
+
+The one defect, and it is in the guard rather than the product.
+`count_restatements()` matched `deterministic` alongside `verbs?|tools?`:
+
+```
+'ran 300 deterministic tests' → ['300 deterministic']
+'2015 deterministic build'    → ['2015 deterministic']   ← a YEAR
+'cached 42 tools for reuse'   → ['42 tools']
+```
+
+`deterministic` is an **adjective**. You cannot have N of it, so a number near
+it is never a roster size. The other two match targets are nouns and are fine.
+
+Latent, not active: the guard scans four files and all four are clean. But this
+BR family keeps widening scan sets — that is how §11 and §12 both proceeded —
+and the first person to extend it inherits false positives on prose, test counts
+and build years. **A guard that cries about a build year is a guard someone
+switches off**, and then the real drift ships behind the silence. Fixed before
+it earned that reputation.
+
+Fix `9c42322`: drop `deterministic` from the pattern; add the three phrasings as
+accepting controls next to the seven `must_catch` cases the narrowing had to
+preserve. All seven still fire. Mutation-verified: putting `deterministic` back
+reddens 2 tests.
+
+**Not deployed, and does not need to be** — no Dockerfile has `COPY tests`, so
+this changes a development-time guard only. The running images are unaffected.
+
+### 13.5 What round 8 could not do
+
+Stated by the verifier, unprompted:
+
+1. **No clean-index loader load** (§13.2) — the discovery evidence comes from the
+   pre-existing projection, not a fresh install of the artifact under test.
+2. **Verbs driven via `gate.py` inside the container, not via the HTTP MCP tool
+   surface.** A divergence between the two — the exact `_h_*`↔`_v_*` drift shape
+   an earlier round found — would not have been caught by this probing.
+3. **The 37 pre-existing suite failures were taken on the brief's word**, not
+   re-confirmed independently.
+4. Only the C00→C01 slice was driven; C02–C06 refuse cleanly on empty state but
+   were not driven through their own mutate-loops. Five of the six evidence
+   adapters were never wrapped+returned.
+
+### 13.6 Where this leaves the BR
+
+The trend is real and worth naming: rounds 1–4 found defects in shipped
+behaviour, round 5 found a defect created by round 4's fix, round 7 found one
+inside its own previous fix, and round 8 found only an over-broad development
+guard. The product surface has stopped yielding.
+
+It stays **PARTIAL** anyway. Round 8 closed the largest item on the remainder
+list (§13.1) but explicitly did not close the second (§13.2), and its own blind
+spots (§13.5) are honest ones. Closing on a first non-FAIL would be the same
+reasoning that produced the premature close in §7.
