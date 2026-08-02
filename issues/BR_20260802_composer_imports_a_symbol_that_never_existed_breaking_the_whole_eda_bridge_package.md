@@ -206,3 +206,92 @@ bbox 會比實際幾何小——正是 `composer.py:454-456` 的 docstring 警�
 - `packages/eda-bridge/bodesign_eda_bridge/fidelity.py` 是這個 family 的驗收儀器，
   任何動 wire emission 的修復都必須保持保真閘綠。
 - BR_20260731（`b429b06` 已修）——本 BR 由該任務的驗證過程發現。
+
+---
+
+## 更正 — 根因與標題都錯了：那些符號存在過，是 `git reset --hard` 摧毀了它們
+
+**調查者**：`ses_0c87bab06fferQ0umBs2Nybb5U`（BR_20260730 family owner；因 provenance 工作被此缺陷擋住而循線挖掘）
+**日期**：2026-08-02
+**姿態**：非本 family owner，只交證據 + 一份已驗證的復原品；**未 commit 任何 `schematic-engine` fix surface**
+
+### 決定性證據
+
+物件庫裡有一個懸空 blob，內含**完整的舊版 `kicad_emit.py`**：
+
+```
+blob   38af9fe3150f27e284706d66a68ca9d753e0d901   (162258 bytes, 3030 行)
+現況   packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py  (2265 行 @ HEAD)
+```
+
+它定義了 composer 匯入的**全部 18 個符號**，零缺口（AST 逐一比對）：
+
+```
+composer needs: 18   missing from recovered blob: NONE
+  含 _vendor_sym_scale / _native_pitch_and_count / _page_pitch_floor
+```
+
+**已錨定防 gc**：`git update-ref refs/recovered/kicad_emit_full 38af9fe3…`
+（懸空物件會被 `git gc` 永久刪除。這一步是時間敏感的，已完成。）
+
+### 為什麼 `git log -S 'def _vendor_sym_scale'` 回空
+
+因為**未 commit 的工作不會在歷史裡留下任何可搜尋的痕跡**。
+
+原 BR 用該指令的空結果推論「這些符號從未存在」——這正是 `code-thinker §8.1` 的形狀：
+**缺席態與失敗態共用同一個輸出**。「從未寫過」與「寫過但只活在工作區、然後被 `reset --hard`
+清掉」對 `git log -S` 而言完全相同。而本 repo `AGENTS.md §6.1` 記載的事故
+（`BR_20260802_reset_hard_silently_destroyed_uncommitted_work_on_shared_tree`，46 檔未 commit
+修改永久遺失）就發生在同一天、同一棵樹。
+
+`composer.py` 的 import **從來沒有錯**。它引用的定義存在，被丟掉的是定義。
+
+### 修法：完整還原，不是補三個函式
+
+我先試了最小 graft（只移植 5 個符號的傳遞閉包），**它讓事情變得更糟**：
+
+| 版本 | tests | loader errors | 真實失敗 |
+|---|---|---|---|
+| HEAD（現況） | 1400 | 34 | 74 |
+| 最小 graft（5 符號） | 1696 | 6 | **124** |
+| **完整還原**（blob + `resolve_symbol_library`） | **1723** | **2** | **49** |
+
+最小 graft 讓 28 個模組終於能載入，然後它們撞上 `emit_kicad_schematic() got an
+unexpected keyword argument 'clusters'`——因為 **HEAD 的整個 `kicad_emit.py` 就是舊版**，
+不只是缺 5 個符號：
+
+```
+emit_kicad_schematic  HEAD 13 參數 / recovered 15 參數
+  recovered-only: ['clusters', 'l6_avoidance']
+6 個函式本體不同，recovered 版每一個都更大（emit_kicad_schematic 675L → 932L）
+```
+
+### 那 13 筆「只在完整還原出現」的失敗不是回歸
+
+逐一控制組驗證：它們全部落在 **pre-graft 根本沒跑的模組**。
+
+```
+test_composer / test_composer_draftsman / test_dd14_text_graphics_clearance
+test_fidelity_gate / test_kicad_emit / test_layout
+  → 每一個在 before.txt 的 _FailedTest 計數 = 1（整個模組載入失敗，一個測試都沒跑）
+```
+
+一個從未執行過的測試不會「回歸」。真實對比是 **74 → 49**（修好 38 筆，新暴露 13 筆既有失敗）。
+
+### 復原程序（可重跑）
+
+```bash
+git cat-file -p refs/recovered/kicad_emit_full > packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py
+# 然後重新套用 resolve_symbol_library（BR_20260802 provenance 需要它，見該 BR）
+```
+
+### 未做的事（因為這不是我的 fix surface）
+
+- **未 commit `kicad_emit.py`**。完整還原目前只在我的工作區與 `refs/recovered/`。
+- 未裁決 `_symbol_instance_block` 那處差異（HEAD 無 `(justify left)`，recovered 有）——
+  它是唯一「同大小但內容不同」的函式，需要 `schematic-engine` 判斷哪個方向才對。
+- 未碰 `fidelity.py`。
+
+**建議**：本 BR 的標題與 Root Cause 段落應改寫。目前版本會讓下一個 handler 去
+「實作三個從未存在的函式」，而正確動作是**還原一份存在且已驗證的檔案**——
+兩者派出去的是完全不同的工作。
