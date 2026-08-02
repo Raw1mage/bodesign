@@ -847,6 +847,21 @@ def _check_switch_node_shorts(netlist_paths: list[str]) -> tuple[list[RowFinding
                     f"{net!r}. This is electrically legal and ERC-clean, so "
                     f"nothing else will report it — and it shorts a switching "
                     f"output to a regulated rail."))
+    if checked == 0:
+        # The netlist HAS pinfunction data, yet not one pin was identifiable as a
+        # switch or feedback node. Reporting that as a clean "run/0 shorts" makes
+        # "nothing is shorted" and "nothing was examined" the same output -- the
+        # exact conflation this whole rule set exists to remove. A rule that
+        # inspected zero subjects has not run, whatever its loop did.
+        return [], {
+            "status": "not_run",
+            "switch_feedback_pins_checked": 0,
+            "reason": "the netlist carries pinfunction annotations but NONE of them "
+                      "names a switching or feedback node, so zero pins were "
+                      "examined — either no switching regulator is in this netlist, "
+                      "or its pins are annotated with names this rule does not "
+                      "recognise. A PASS here means nothing was looked at.",
+        }
     return findings, {
         "status": "run",
         "switch_feedback_pins_checked": checked,
@@ -1029,11 +1044,37 @@ def _build_not_checked(mandated: dict, switch: dict) -> list[str]:
                       "run: " + str((mandated or {}).get("reason", "no netlist supplied"))
                       + ")")
     else:
+        # An IN-TABLE part that R7 could not resolve is the sharpest miss there is:
+        # the requirement is known, the part is present, and it still went
+        # unverified. Naming it must come BEFORE the out-of-table count, and it
+        # must never be inferable only by cross-reading parts_unresolved -- a
+        # reader who has to correlate two fields to learn what went unchecked is
+        # a reader who will not.
+        unres = (mandated or {}).get("parts_unresolved") or []
+        if unres:
+            named = ", ".join(f"{u.get('ref')} ({u.get('family')})" for u in unres)
+            out.insert(0, f"datasheet_mandated_passives for {len(unres)} part(s) that "
+                          f"ARE in the requirement table but could not be resolved: "
+                          f"{named}. Their datasheet requirement is known and was "
+                          f"still NOT verified — this is not coverage, it is a hole "
+                          f"inside the covered set.")
         not_cov = (mandated or {}).get("parts_not_covered") or []
         if not_cov:
+            actives = [x for x in not_cov
+                       if x.split(":")[0].strip().upper().startswith(_ACTIVE_PREFIXES)]
+            # Passives are counted, not listed: nobody expects a 10k resistor in a
+            # "datasheet-mandated passive" table, so listing them dilutes the line
+            # until the reader skips the whole field -- which would recreate the
+            # unread-green this disclosure exists to prevent. Actives are named,
+            # because an unrecognised IC is exactly what a reader must see.
+            tail = (f" Named actives: {', '.join(actives[:12])}"
+                    + (f" (+{len(actives) - 12} more)" if len(actives) > 12 else "")
+                    ) if actives else ""
             out.append(f"datasheet_mandated_passives for {len(not_cov)} part(s) outside "
-                       f"the requirement table — R7 verified only the families it has "
-                       f"cited entries for; the rest were NOT checked.")
+                       f"the requirement table ({len(actives)} active, "
+                       f"{len(not_cov) - len(actives)} passive) — R7 verified only the "
+                       f"families it has cited entries for; the rest were NOT "
+                       f"checked.{tail}")
     return out
 
 

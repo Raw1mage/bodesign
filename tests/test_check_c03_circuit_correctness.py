@@ -113,6 +113,23 @@ _NO_PINFUNCTION = """(export (version "E")
       (node (ref "U6") (pin "2") (pintype "passive")))))
 """
 
+# pinfunction IS present throughout -- but not one of them names a switching or
+# feedback node. R8's loop therefore completes having examined zero subjects.
+# This is the shape of the real aiguard power-frontend netlist, not a contrivance.
+_NO_SWITCH_PINS = """(export (version "E")
+  (design (source "/work/probe/nosw.kicad_sch"))
+  (components
+    (comp (ref "U1") (value "MCU"))
+    (comp (ref "R1") (value "10k")))
+  (nets
+    (net (code "1") (name "+3V3") (class "Default")
+      (node (ref "U1") (pin "1") (pinfunction "VDD"))
+      (node (ref "R1") (pin "1") (pinfunction "~")))
+    (net (code "2") (name "GND") (class "Default")
+      (node (ref "U1") (pin "2") (pinfunction "VSS"))
+      (node (ref "R1") (pin "2") (pinfunction "~")))))
+"""
+
 
 # ── F1: the scope disclosure ────────────────────────────────────────────────
 
@@ -320,6 +337,134 @@ class SwitchNodeShortTests(unittest.TestCase):
             bom = _bom(tmp, self._BOM)
             res = check_c03.check_c03(bom)
             self.assertEqual(res.switch_node_shorts.get("status"), "not_run")
+
+    def test_zero_examined_pins_is_not_run_even_though_the_loop_completed(self):
+        """pinfunction present, but no pin NAMES a switch/feedback node.
+
+        The loop runs to completion and finds nothing, so the natural report is
+        `run / shorted_to_rail: 0` -- indistinguishable from a board that was
+        examined and is clean. Measured on the real aiguard power-frontend
+        netlist, which is exactly this case.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            bom = _bom(tmp, self._BOM)
+            net = _write(tmp, "nofb.net", _NO_SWITCH_PINS)
+            res = check_c03.check_c03(bom, netlist_path=net)
+            rep = res.switch_node_shorts
+            self.assertEqual(rep.get("status"), "not_run",
+                             "a rule that inspected zero subjects has not run")
+            self.assertEqual(rep.get("switch_feedback_pins_checked"), 0)
+            self.assertIn("nothing was looked at", rep.get("reason", ""))
+
+    def test_mutation_proof_adding_one_switch_pin_flips_it_to_run(self):
+        """Reverse discrimination for the rule above: without this, `not_run`
+        could be hard-coded and nothing would notice."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bom = _bom(tmp, self._BOM)
+            none = _write(tmp, "none.net", _NO_SWITCH_PINS)
+            some = _write(tmp, "some.net", _smps_netlist(shorted=False))
+            self.assertEqual(
+                check_c03.check_c03(bom, netlist_path=none)
+                .switch_node_shorts.get("status"), "not_run")
+            self.assertEqual(
+                check_c03.check_c03(bom, netlist_path=some)
+                .switch_node_shorts.get("status"), "run",
+                "one identifiable switch pin must be enough to make it a real run")
+
+
+# ── F1 follow-up: what the disclosure itself was hiding ───────────────────
+
+class UnresolvedInTablePartsTests(unittest.TestCase):
+    """A part that IS in the requirement table but could not be resolved.
+
+    Measured on the real aiguard inputs: U5/U6 are both in the table, both
+    unresolvable (no pinfunction on their nodes), and `not_checked` said
+    nothing about them -- the disclosure reproduced, one level down, the very
+    conflation it was built to remove.
+    """
+
+    def test_unresolved_in_table_parts_are_named_in_not_checked(self):
+        nc = check_c03._build_not_checked(
+            {"status": "run",
+             "parts_unresolved": [{"ref": "U6", "family": "TPS6282x",
+                                  "reason": "no feedback pin identifiable"}],
+             "parts_not_covered": []},
+            {"status": "run"})
+        joined = " ".join(nc)
+        self.assertIn("U6", joined)
+        self.assertIn("TPS6282x", joined)
+        self.assertIn("hole inside the covered set", joined)
+
+    def test_unresolved_entry_comes_before_the_out_of_table_count(self):
+        """Ordering is the whole point: the known-requirement miss must not sit
+        below a line reporting dozens of parts nobody expected coverage for."""
+        nc = check_c03._build_not_checked(
+            {"status": "run",
+             "parts_unresolved": [{"ref": "U5", "family": "TPS6208x"}],
+             "parts_not_covered": [f"R{i}: RC0402" for i in range(30)]},
+            {"status": "run"})
+        idx_unres = next(i for i, x in enumerate(nc) if "U5" in x)
+        idx_outside = next(i for i, x in enumerate(nc)
+                           if "outside the requirement table" in x)
+        self.assertLess(idx_unres, idx_outside)
+
+    def test_reverse_no_unresolved_parts_adds_no_line(self):
+        """A gate that always says 'something went unverified' says nothing."""
+        nc = check_c03._build_not_checked(
+            {"status": "run", "parts_unresolved": [], "parts_not_covered": []},
+            {"status": "run"})
+        self.assertNotIn("hole inside the covered set", " ".join(nc))
+
+
+class NotCoveredSignalToNoiseTests(unittest.TestCase):
+    """Passives are counted; actives are named.
+
+    On the real aiguard BOM the out-of-table list is 32 parts. Listing all of
+    them makes the line unreadable, and an unread disclosure is the unread
+    green it replaced. But suppressing it entirely would hide an unrecognised
+    IC, which is the one thing a reader must see.
+    """
+
+    def test_active_parts_are_named(self):
+        nc = check_c03._build_not_checked(
+            {"status": "run", "parts_unresolved": [],
+             "parts_not_covered": ["U9: TLV75533PDBVR", "R1: RC0402J103"]},
+            {"status": "run"})
+        joined = " ".join(nc)
+        self.assertIn("U9: TLV75533PDBVR", joined)
+
+    def test_passive_parts_are_counted_not_listed(self):
+        nc = check_c03._build_not_checked(
+            {"status": "run", "parts_unresolved": [],
+             "parts_not_covered": [f"R{i}: RC0402J103" for i in range(40)]},
+            {"status": "run"})
+        line = next(x for x in nc if "outside the requirement table" in x)
+        self.assertIn("40 part(s)", line)
+        self.assertIn("0 active", line)
+        self.assertIn("40 passive", line)
+        self.assertNotIn("RC0402J103", line,
+                         "listing 40 resistors is how a disclosure stops being read")
+
+    def test_the_count_still_states_the_total_so_nothing_is_hidden(self):
+        """Summarising must never become omitting: the total stays exact."""
+        nc = check_c03._build_not_checked(
+            {"status": "run", "parts_unresolved": [],
+             "parts_not_covered": ["U9: LDO"] + [f"C{i}: CC0402" for i in range(31)]},
+            {"status": "run"})
+        line = next(x for x in nc if "outside the requirement table" in x)
+        self.assertIn("32 part(s)", line)
+        self.assertIn("1 active", line)
+        self.assertIn("31 passive", line)
+
+    def test_many_actives_are_truncated_with_an_explicit_remainder(self):
+        """Truncation must announce itself -- a silently cut list is a lie."""
+        nc = check_c03._build_not_checked(
+            {"status": "run", "parts_unresolved": [],
+             "parts_not_covered": [f"U{i}: PART{i}" for i in range(20)]},
+            {"status": "run"})
+        line = next(x for x in nc if "outside the requirement table" in x)
+        self.assertIn("20 active", line)
+        self.assertIn("more", line)
 
 
 if __name__ == "__main__":
