@@ -4,7 +4,65 @@
 - Proposed by: `ses_073a93d09ffeRTpR9TwIdofhb3`(aiguard C04 consumer)
 - Evidence basis: 2026-07-29 一輪 C04 交付中連續撞出的 **4 個同族缺陷**(§B/§C/§D + S2),全部有實測數據
 - Target: bodesign ragbase `control.*` object + `packages/workflow-core/.../checkers/` lint + `skills/bodesign/doctrine.md` 一行
-- Status: OPEN — 待 platform adjudicate 並 ingest
+- Status: **PARTIAL** — 三個交付目標全部落地且 adjudication 已完成；殘留一項，見下方 Remainder
+- Re-verified: 2026-08-02 by ses_04db7a1c5（coordinator）— 留頂層，不歸檔
+
+---
+
+## Remainder（2026-08-02 複驗，這是本 KB 留在頂層的唯一理由）
+
+**已落地、且經覆核不構成殘留的部分**（先講清楚，免得下一個人重查）：
+
+- ragbase object `ragbase/control/no-silent-degradation/README.md` — frontmatter
+  形狀與 sibling `no-silent-fallback/README.md` 一致
+- lint `packages/workflow-core/bodesign_workflow_core/checkers/no_silent_degradation.py`
+  384 行、19 tests green
+- doctrine 一行 `skills/bodesign/doctrine.md:196-200`
+- **L3/L4/L5/L7 不是被靜默丟棄**：`no_silent_degradation.py:40-47` 逐條記載
+  裁決理由（L3/L4 為 T-B stub 並註明為何無法 T-A；L5 明確重分類為
+  「runtime domain 檢查，靜態不可判」，參考實作在 `routing.py:491`；L7 為 advisory），
+  且 L8 是原提案四條之外**新增**的。`specs/architecture.md:66` 有含 before/after
+  計數的完整分層裁決。
+- **§5.3（註冊進 `registry.py`）是有理由的反向裁決**，非未完成：`architecture.md:66`
+  明載「deliberately **not** registered… registering it would require inventing fake
+  `ir_fields`, which is the very fabrication this control forbids.」**這正是 Status
+  原本在等的那個 adjudicate。**
+
+**真正的殘留（一項）**：
+
+> **這條天條的可執行形式，抓不到它自己的活生生反例。**
+
+實測（`include_advisory=True`，三個站點）：
+
+```
+check_file(vault.py)                → L1×2 (lines 90, 94)    T-A 命中: 0
+check_file(reference_crosscheck.py) → L1×2 (lines 148, 155)  T-A 命中: 0
+check_file(pin_allocation.py)       → L1×1 (line 73)         T-A 命中: 0
+```
+
+**控制組（不可省略，否則零命中無法與「呼叫方式錯了」區分）**：
+`tests/test_no_silent_degradation.py::AnchoredToTheRealDefects::test_ta_rules_fire_before_the_fixes`
+**通過** —— T-A 規則在 `1269a20~1` 的真實缺陷上確實會非空、在 HEAD 上乾淨。
+故三個站點的零命中是**真實漏抓**，不是無效呼叫。
+
+補充：那幾個 L1 advisory 命中甚至不在缺陷行上——`BR_20260731` 指的是
+`vault.py:222-252` / `reference_crosscheck.py:45-56` / `pin_allocation.py:51-64`，
+而 L1 落在 90/94、148/155、73。
+
+且 KB object 內也沒有這個形狀的位置：grep
+`ragbase/control/no-silent-degradation/README.md` 找
+`vacuous|空輸入|零筆|20260731|audit_claims|crosscheck_nets` → **零命中**
+（控制組：`grep -c "V7\|V1"` → 25，證明檔案可讀可 grep）。變體家族列到 V12，
+**空輸入讀作通過是第 13 個變體，目前無條目、無規則**（T-A 可行性未裁決——
+而這個模組的整套分層紀律是以實測 signal-to-noise 為依據的，所以這是真的
+adjudication 債，不是漏做）。
+
+**歸屬提醒**：`BR_20260731` 比本提案晚兩天立案且已擁有那三個站點，所以「修那三個站點」
+是它的範圍。本 KB 的殘留只有一句：**lint 不涵蓋這個形狀**。若把本 KB 現在關掉，
+就沒有任何東西在追蹤這件事。
+
+**先修 `BR_20260731`，再回來裁決 V13。** 順序見 `issues/OWNERS.md` 的 fix-order 段。
+
 
 ---
 
