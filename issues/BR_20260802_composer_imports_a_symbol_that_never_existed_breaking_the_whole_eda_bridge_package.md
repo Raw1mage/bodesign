@@ -1,10 +1,11 @@
-# BR_20260802 — `composer.py` import 一個從未存在的符號：`bodesign_eda_bridge` 整個套件無法 import，5 個測試模組在收集期就死
+# BR_20260802 — `composer.py` import 三個從未存在的符號：`bodesign_eda_bridge` 整個套件無法 import，43 個測試模組在收集期就死
 
 - **Status**: OPEN
 - **Owner**: `(default)`
 - **Family**: `schematic-engine`（該 family 目前無 owner，見 `issues/OWNERS.md`）
 - **Filed at**: 2026-08-02（coordinator `ses_04db7a1c5ffelvbxyLP1p6xlRH`；由 BR_20260731 handler 在驗證中發現並回報，coordinator 獨立覆核）
-- **Severity**: real — 一個公開套件的 `import` 直接 `ImportError`；**5 個測試模組因此從未執行過**，且它們回報的是「1 個 error」而不是「N 個測試失敗」
+- **Severity**: real — 一個公開套件的 `import` 直接 `ImportError`；**43 個測試模組因此從未執行過**，且它們回報的是「1 個 error」而不是「N 個測試失敗」
+- **Blast radius 已於 2026-08-02 更正**：初版記載 5 個模組，實測為 **43**（見下方打擊半徑段）。初版只跑了 grep 命中的前幾個，未窮舉。
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/composer.py:36` × `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`
 - **Fix venue**: NEW session (BRNS) rooted in `/home/pkcs12/projects/bodesign`
 - **時區**: Asia/Taipei (UTC+08:00)
@@ -22,6 +23,10 @@ ImportError: cannot import name '_vendor_sym_scale' from 'bodesign_eda_bridge.ki
 控制組：同一棵乾淨樹 `import bodesign_workflow_core` → OK。**確為 HEAD 既有破損。**
 
 ## RCA
+
+**缺的不是一個符號，是三個**：`_vendor_sym_scale`、`_native_pitch_and_count`、`_page_pitch_floor`。
+三者在全 repo **都沒有任何 `def` 站點**（實測，1271 個檔案；控制組：`def emit_kicad_schematic` → 1 命中，
+證明 grep 有鑑別力）。
 
 `_vendor_sym_scale` **從未存在於 `kicad_emit.py`**——不是被刪除，是從未落地：
 
@@ -49,16 +54,30 @@ docstring（`:453`）描述它應該是 emit 端與 placement 端共用的縮放
 
 ## 打擊半徑（實測，非估計）
 
-```
-test_pin_allocation             -> FAILED (errors=1)   ← import 期就死
-test_dd31_pitch_align_main_chip -> FAILED (errors=1)
-test_composer_draftsman         -> FAILED (errors=1)
-test_kicad_emit                 -> FAILED (errors=1)
-test_block_drafter              -> FAILED (errors=1)
+對**所有** grep 命中 `bodesign_eda_bridge` 的 tests/ 模組逐一實跑並依**實際失敗原因**分類
+（非依 `tail -3` 判斷——那個窗口看不到成因）：
 
-CONTROL（不 import eda_bridge）：
-test_vacuous_pass_gates         -> OK
 ```
+DIES_ON_vendor_sym_scale = 43
+PASS                     = 11
+OTHER                    =  0
+
+CONTROL（模組名根本不存在）：
+tests.test_zzz_nonexistent -> FAILED (errors=1)
+```
+
+**那 11 個 PASS 不是反例，是證據**：它們雖然提到 `bodesign_eda_bridge`，但刻意用
+`importlib.util.spec_from_file_location` 直接載入單一 `.py`，繞開破損的套件 `__init__`
+（`tests/test_bga_escape_capacity.py:15` 明文寫出這個理由）。**套件層無任何 import 路徑存活**：
+
+```
+python3 -c "import bodesign_eda_bridge"              -> ImportError
+python3 -c "import bodesign_eda_bridge.pin_allocation" -> 同一個 ImportError
+python3 -c "import bodesign_eda_bridge.kicad_emit"     -> 同一個 ImportError（連受害者自己）
+```
+
+原因：`__init__.py:46` eager `from .composer import ...`，任何 submodule import 都會先跑父套件的
+`__init__`。修好這三個符號可一次解除全部 43 個。
 
 ## 這是哪一種缺陷（為什麼歸在 vacuous-pass 家族）
 
@@ -75,7 +94,16 @@ BR_20260731 的 handler 因此改用 `spec_from_file_location` 直接載入 `pin
 
 ## Fix proposal
 
-**必須先裁決 `_vendor_sym_scale` 的歸屬**，這不是接線問題：
+**必須先裁決三個符號的歸屬**，這不是接線問題。⚠ **只有一個是可從證據推導的**：
+
+| 符號 | 有無測試釘住 | 可否從證據寫出 body |
+|---|---|---|
+| `_vendor_sym_scale(page_scale, native_pitch, page_floor, pin_count) -> float` | `test_dd31` 4 個斷言 | **可以** |
+| `_native_pitch_and_count(lib_id, symbol_dir, cache) -> (float, int)` | 無 | **不可以**——沒有規格說明如何讀 vendor symbol 的原生 pin pitch |
+| `_page_pitch_floor(list[EmitComponent], symbol_dirs) -> float` | 無 | **不可以**——DD-30「無主晶片頁 → 7.62mm」的偵測規則未定義 |
+
+**後兩者若照呼叫端硬猜，就是在為了修 import 而製造一個沒有依據的量測規則。**
+需要先有規格裁決（或找到當初的設計者），不得由 handler 自行發明。
 
 1. **實作它**（若 DD-31 的設計意圖仍成立）——在 `kicad_emit.py` 實作該 helper，
    讓 emit 端 `_place_component` 與 placement 端 `composer._estimate_bbox` 共用同一個縮放
@@ -88,6 +116,31 @@ BR_20260731 的 handler 因此改用 `spec_from_file_location` 直接載入 `pin
 
 3. **（不可接受）** 讓 `composer.py` try/except 吞掉 ImportError 並 fallback——
    違反 no-silent-fallback 天條，且會讓 drift 靜默發生。**明確排除，記錄於此以免下一個人重新考慮。**
+
+⚠ **只修 import 會產生一個比現況更糟的狀態**：`kicad_emit.py:636` 的 emit 端**從未被改造**，
+它今天仍跑 DD-31 之前的舊公式：
+
+```python
+_sym_scale = 1.0 if component.lib_id.partition(":")[0].startswith("u1_") else page_scale
+```
+
+DD-31 的不變式是**兩端呼叫同一個 helper**。若只讓 `composer._estimate_bbox` 拿到縮放而 emit 端沒有，
+bbox 會比實際幾何小——正是 `composer.py:454-456` 的 docstring 警告會造成 under-reservation 與碰撞的那件事。
+**「讓 import 通過」與「修好這個缺陷」不是同一件事**，前者會靜默產出錯誤佈局。
+
+## 第二個缺陷（獨立，需另行裁決）
+
+`plans/eda-bridge_layered-pipeline/tasks.md:76` 把 M7-7.9 標為 `- [x]`，內文寫：
+
+> DD-31 `_sym_scale = max(page_scale, floor/native_pitch)`（`kicad_emit.py:_vendor_sym_scale`/
+> `_adjacent_pitch`/`_native_pitch_and_count`/`_page_pitch_floor`）… **違規=0 PASS**
+
+**它逐字點名了四個不存在的函式，並宣告對它們的稽核通過。** `_adjacent_pitch` 同樣零 `def` 站點。
+產出那份 PASS 的稽核腳本**不可能執行過這條路徑**——因為這條路徑在 `import` 就死。
+`specs/eda-bridge_occupancy-ledger/drafting-rulebook.md:109-111` 也記載了同一個未落地的機制。
+
+這與本 BR 同族但不是它的附帶損害：**一份聲稱驗過的稽核，驗的是不存在的東西**。
+修這張 BR 時必須一併更正該 tasks.md 條目，否則下一個人會拿它當「已完成」的證據。
 
 ## Validation plan
 
