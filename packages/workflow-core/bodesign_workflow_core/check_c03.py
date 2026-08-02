@@ -155,6 +155,18 @@ class CheckC03Result:
     # BR_20260730: `ssot_checked` alone could not distinguish "crosschecked, clean"
     # from "could not crosscheck at all". This carries the basis of that verdict.
     ssot_crosscheck: dict = field(default_factory=lambda: {"status": "not_run"})
+    # BR_20260802 R7/R8: same not_run discipline for the two circuit-correctness
+    # probes. Both need a netlist (R7 also needs an mpn column); absent either,
+    # they say so rather than letting a PASS imply the circuit was examined.
+    mandated_passives: dict = field(default_factory=lambda: {"status": "not_run"})
+    switch_node_shorts: dict = field(default_factory=lambda: {"status": "not_run"})
+    # BR_20260802 F1: ALWAYS non-empty, in both PASS and FAIL. The gate's green
+    # means "the wiring agrees with the paperwork", but it is read as "the circuit
+    # is correct". That gap was never written down, so two board-killing defects
+    # (a switch node shorted to a rail; an absent feedforward cap) passed every
+    # rule AND ERC and were caught by a human happening to read a datasheet.
+    # Rules can never be exhaustive; the list of what was never examined can be.
+    not_checked: list[str] = field(default_factory=list)
 
 
 # ── CSV loading (quoting-破損 surfaces as a schema finding, not a crash) ─────
@@ -702,6 +714,232 @@ def _check_pin_polarity(rows: list[dict], netlist_paths: list[str],
     return findings, report
 
 
+# ── R7 / R8: circuit-correctness probes (BR_20260802) ───────────────────────
+#
+# R1-R6 all answer one question: "does the wiring agree with the paperwork?"
+# None of them answer "is this circuit correct?". Two real defects passed every
+# rule AND ERC on the same board: a switching node shorted to a rail (a legal
+# net, wrong topology) and a missing feedforward capacitor (not a wire at all —
+# an absent part, outside ERC's domain by construction).
+#
+# R7/R8 close those two specific holes. They do NOT turn this into a circuit
+# reviewer, and the load-bearing half of the fix is _build_not_checked(): rules
+# can never be exhaustive, but the list of what was NEVER EXAMINED can be, and
+# it must be printed next to the verdict.
+
+#: pinfunction names identifying a DC-DC switching node — the pin that swings
+#: between VIN and GND at the switching frequency. Tying one to a rail is not a
+#: connectivity error: it is a perfectly legal net that destroys the converter.
+_SWITCH_PIN_FUNCS = ("sw", "sw1", "sw2", "vlx", "lx", "ph", "vlxsmps", "swout")
+
+#: pinfunction names identifying a feedback SENSE pin. A sense input driven by
+#: the rail it is supposed to regulate is the same class of legal-but-fatal.
+_FEEDBACK_PIN_FUNCS = ("fb", "vfb", "vfbsmps", "fbx", "fb1", "fb2")
+
+#: Datasheet-mandated external passives. Every entry cites the datasheet section
+#: it came from — an uncited rule is an opinion, and this gate does not ship
+#: opinions. `fixed_suffixes` names the variants that integrate the divider, for
+#: which an EXTERNAL divider is a defect rather than a requirement.
+_MANDATED_PASSIVES: tuple[dict, ...] = (
+    {
+        "stem": "tps62088",
+        "family": "TPS6208x",
+        "fixed_suffixes": ("12", "18", "33"),
+        "requires": ("fb_divider", "fb_feedforward"),
+        "cite": "TPS62088 datasheet 8.2.2.2 + Table 8-2 — adjustable variant: "
+                "C4 = 120 pF across the upper divider leg at R2 = 100k",
+    },
+    {
+        "stem": "tps62824",
+        "family": "TPS6282x",
+        "fixed_suffixes": (),          # whole series is adjustable
+        "requires": ("fb_divider", "fb_feedforward"),
+        "cite": "TPS62824 datasheet 8.2.2.2 — C3 = 12u/R2; at the recommended "
+                "R2 = 100k a 120 pF feedforward capacitor is used (fixed "
+                "variants integrate it, adjustable ones do not)",
+    },
+)
+
+
+def _netlist_pin_functions(paths: list[str]) -> dict[str, dict[str, str]]:
+    """{ref: {pin: pinfunction}} for the nodes that carry one.
+
+    A pin's FUNCTION is what makes R7/R8 possible at all: it is the only thing
+    in the netlist that says "this pad is a switching node" as opposed to "this
+    pad is number K1". Without it neither rule can run, and both say so rather
+    than guessing a pin number from a package drawing.
+    """
+    out: dict[str, dict[str, str]] = {}
+    # Slice per node rather than one composite regex: a node's attributes are a
+    # variable-length list of (key "value") pairs, and a single pattern that
+    # tries to span them silently matches the empty string when the shape
+    # differs by one paren — i.e. it fails by reporting "no pinfunction here",
+    # which is indistinguishable from a netlist that genuinely has none.
+    ref_re = re.compile(r'\(\s*ref\s+"([^"]+)"', re.I)
+    pin_re = re.compile(r'\(\s*pin\s+"([^"]+)"', re.I)
+    fn_re = re.compile(r'\(\s*pinfunction\s+"([^"]+)"', re.I)
+    for path in paths:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        bounds = [m.start() for m in re.finditer(r'\(\s*node\b', text)]
+        for i, start in enumerate(bounds):
+            end = bounds[i + 1] if i + 1 < len(bounds) else len(text)
+            chunk = text[start:end]
+            rm, pm, fm = ref_re.search(chunk), pin_re.search(chunk), fn_re.search(chunk)
+            if rm and pm and fm:
+                out.setdefault(rm.group(1), {})[pm.group(1)] = fm.group(1)
+    return out
+
+
+def _nets_to_refs(pin_nets: dict[str, dict[str, str]]) -> dict[str, set[str]]:
+    """{net_name: {refs attached to it}} — the inverse of _netlist_pin_nets."""
+    out: dict[str, set[str]] = {}
+    for ref, pins in pin_nets.items():
+        for net in pins.values():
+            out.setdefault(net, set()).add(ref)
+    return out
+
+
+def _fn_matches(fn: str, wanted: tuple[str, ...]) -> bool:
+    """Exact-token match on a pinfunction name.
+
+    Deliberately NOT a substring test: "VSW_SENSE" contains "sw" and a substring
+    rule would flag unrelated pins. A rule that fires on the wrong pin teaches
+    the reader to ignore it, which costs more than the miss.
+    """
+    n = _norm(fn)
+    return n in wanted
+
+
+def _check_switch_node_shorts(netlist_paths: list[str]) -> tuple[list[RowFinding], dict]:
+    """R8 — a switching node or feedback sense pin must not sit on a power rail.
+
+    This is the rule that would have caught VLXSMPS x5 + VFBSMPS merged into the
+    +1V8 rail: ERC saw one ordinary 6-pad net and reported nothing, because
+    nothing about it is electrically illegal. It is only wrong if you know what
+    those pins DO — which is exactly what pinfunction records.
+    """
+    pin_nets = _netlist_pin_nets(netlist_paths)
+    pin_fns = _netlist_pin_functions(netlist_paths)
+    if not pin_fns:
+        return [], {
+            "status": "not_run",
+            "reason": "no pinfunction annotations in the supplied netlist(s) — "
+                      "switching/feedback pins cannot be identified, so a PASS "
+                      "here does NOT mean no switch node is shorted to a rail",
+        }
+    findings: list[RowFinding] = []
+    checked = 0
+    for ref, pins in sorted(pin_fns.items()):
+        for pin, fn in sorted(pins.items()):
+            is_sw = _fn_matches(fn, _SWITCH_PIN_FUNCS)
+            is_fb = _fn_matches(fn, _FEEDBACK_PIN_FUNCS)
+            if not (is_sw or is_fb):
+                continue
+            checked += 1
+            net = (pin_nets.get(ref) or {}).get(pin)
+            if not net:
+                continue
+            if _polarity_of(net) == "power":
+                kind = "switching node" if is_sw else "feedback sense pin"
+                findings.append(RowFinding(
+                    "", ref, "R8_SWITCH_NODE",
+                    f"pin {pin} ({fn}) is a {kind} but sits on power rail "
+                    f"{net!r}. This is electrically legal and ERC-clean, so "
+                    f"nothing else will report it — and it shorts a switching "
+                    f"output to a regulated rail."))
+    return findings, {
+        "status": "run",
+        "switch_feedback_pins_checked": checked,
+        "shorted_to_rail": len(findings),
+        "scope": "pins whose pinfunction names a switch/feedback node; parts "
+                 "without pinfunction annotations are NOT covered",
+    }
+
+
+def _check_mandated_passives(rows: list[dict], netlist_paths: list[str],
+                             mpn_name: str | None) -> tuple[list[RowFinding], dict]:
+    """R7 — are the datasheet-mandated external passives actually on the board?
+
+    The defect this exists for is not a wire: it is an ABSENT COMPONENT, which
+    no connectivity rule can express. Coverage is deliberately narrow (a cited
+    table) and every part outside it is reported by name under
+    `parts_not_covered` — never folded into the green, which would repeat the
+    zero-discrimination failure R4_SSOT already taught us.
+    """
+    if not mpn_name:
+        return [], {
+            "status": "not_run",
+            "reason": "no mpn column in the BOM — parts cannot be identified, so "
+                      "no datasheet requirement can be looked up",
+        }
+    pin_nets = _netlist_pin_nets(netlist_paths)
+    pin_fns = _netlist_pin_functions(netlist_paths)
+    net_refs = _nets_to_refs(pin_nets)
+    findings: list[RowFinding] = []
+    covered: list[dict] = []
+    not_covered: list[str] = []
+    unresolved: list[dict] = []
+
+    for r in rows:
+        mpn = _norm(r.get(mpn_name, ""))
+        ref = r.get("_ref", "")
+        board = r.get("_board", "")
+        if not mpn or any(tok in mpn for tok in _FORBIDDEN_MPN):
+            continue
+        entry = next((e for e in _MANDATED_PASSIVES if e["stem"] in mpn), None)
+        if entry is None:
+            not_covered.append(f"{ref}: {r.get(mpn_name, '').strip()}")
+            continue
+        if any(mpn.startswith(entry["stem"] + sfx) or
+               (entry["stem"] + sfx) in mpn for sfx in entry["fixed_suffixes"]):
+            covered.append({"ref": ref, "family": entry["family"],
+                            "variant": "fixed", "verdict": "no external divider required"})
+            continue
+        fns = pin_fns.get(ref) or {}
+        fb_pin = next((p for p, fn in sorted(fns.items())
+                       if _fn_matches(fn, _FEEDBACK_PIN_FUNCS)), None)
+        if fb_pin is None:
+            unresolved.append({
+                "ref": ref, "family": entry["family"],
+                "reason": "no feedback pin identifiable (component absent from the "
+                          "netlist, or its nodes carry no pinfunction) — its "
+                          "datasheet requirement was NOT verified",
+            })
+            continue
+        fb_net = (pin_nets.get(ref) or {}).get(fb_pin)
+        attached = sorted((net_refs.get(fb_net) or set()) - {ref}) if fb_net else []
+        resistors = [x for x in attached if x.upper().startswith("R")]
+        caps = [x for x in attached if x.upper().startswith("C")]
+        missing: list[str] = []
+        if "fb_divider" in entry["requires"] and len(resistors) < 2:
+            missing.append(f"feedback divider (found {len(resistors)} resistor(s) "
+                           f"on {fb_net!r}, need 2)")
+        if "fb_feedforward" in entry["requires"] and not caps:
+            missing.append(f"feedforward capacitor across the upper divider leg "
+                           f"(found none on {fb_net!r})")
+        if missing:
+            findings.append(RowFinding(
+                board, ref, "R7_MANDATED_PASSIVE",
+                f"{entry['family']} adjustable variant is missing "
+                + "; ".join(missing)
+                + f". Per {entry['cite']}. Absent parts are invisible to ERC and "
+                  f"to every connectivity rule."))
+        covered.append({"ref": ref, "family": entry["family"], "variant": "adjustable",
+                        "fb_net": fb_net, "resistors": resistors, "capacitors": caps,
+                        "verdict": "missing: " + "; ".join(missing) if missing else "ok"})
+
+    return findings, {
+        "status": "run" if (covered or unresolved) else "not_run",
+        "reason": None if (covered or unresolved) else
+                  "no BOM part matched the datasheet requirement table — nothing "
+                  "was verified; this is NOT a clean result",
+        "parts_checked": covered,
+        "parts_unresolved": unresolved,
+        "parts_not_covered": sorted(not_covered),
+        "table_families": [e["family"] for e in _MANDATED_PASSIVES],
+    }
+
+
 def _load_pin_alloc_refs(path: str) -> tuple[set[str] | None, list[str]]:
     """Refs in the Pin_Allocation SSOT, plus its header.
 
@@ -747,6 +985,57 @@ def _check_ssot(active_rows: list[dict], pin_alloc_refs: set[str]) -> list[RowFi
 
 
 # ── top level ───────────────────────────────────────────────────────────────
+
+#: What this gate structurally does NOT examine. Every entry is a class of defect
+#: that is electrically LEGAL and therefore invisible to ERC/DRC as well — i.e.
+#: nothing else in the pipeline reports it either. This list is the honest half
+#: of every verdict: R1-R8 can only ever grow, but the boundary can be stated in
+#: full today. Entries are removed ONLY when a rule genuinely covers them.
+_NOT_CHECKED_BASE: tuple[str, ...] = (
+    "decoupling_adequacy — whether each supply pin has the datasheet's decoupling "
+    "(count, value, placement). A board with zero decoupling caps passes this gate.",
+    "loop_compensation — DC-DC feedback loop stability (phase margin, compensation "
+    "network sizing). Only the PRESENCE of mandated passives is checked (R7), never "
+    "whether their values stabilise the loop.",
+    "sequencing_networks — EN/PG/supervisor power-up ordering topology.",
+    "component_values — whether resistor/capacitor VALUES are correct for the "
+    "circuit. R1-R8 read refdeses and nets; a 10k where 100k belongs passes.",
+    "thermal_and_current — copper/package current capacity, dissipation, derating.",
+    "protection_and_esd — TVS/series/clamp presence on exposed interfaces.",
+    "analog_signal_integrity — filter/reference/impedance correctness on analog nets.",
+)
+
+
+def _build_not_checked(mandated: dict, switch: dict) -> list[str]:
+    """The scope disclosure printed beside every verdict, PASS or FAIL.
+
+    Two entries are conditional because R7/R8 may or may not have run: when they
+    did not, the class they would have covered is still unexamined and must be
+    named here. A caller must never have to reason about which rules ran to know
+    what was checked -- that reasoning is precisely what nobody does.
+    """
+    out = list(_NOT_CHECKED_BASE)
+    if (switch or {}).get("status") != "run":
+        out.insert(0, "topology_plausibility — whether switching/feedback nodes are "
+                      "wired to the right place (R8 did NOT run: "
+                      + str((switch or {}).get("reason", "no netlist supplied")) + ")")
+    else:
+        out.append("topology_plausibility beyond switch/feedback-vs-rail — R8 covers "
+                   "ONLY that one topology error; every other wrong-but-legal "
+                   "connection is unexamined.")
+    if (mandated or {}).get("status") != "run":
+        out.insert(0, "datasheet_mandated_passives — required external parts "
+                      "(compensation/feedforward/load caps) may be absent (R7 did NOT "
+                      "run: " + str((mandated or {}).get("reason", "no netlist supplied"))
+                      + ")")
+    else:
+        not_cov = (mandated or {}).get("parts_not_covered") or []
+        if not_cov:
+            out.append(f"datasheet_mandated_passives for {len(not_cov)} part(s) outside "
+                       f"the requirement table — R7 verified only the families it has "
+                       f"cited entries for; the rest were NOT checked.")
+    return out
+
 
 def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
               netlist_path: str | list[str] | None = None,
@@ -861,6 +1150,21 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
             "reason": "netlist_path not supplied — BOM pin specs were NOT checked "
                       "against the wiring; a PASS here does not mean they agree",
         }
+        # BR_20260802: R7/R8 both read the netlist. Without one they did not run,
+        # and say so — the two defect classes they cover stay unexamined, which
+        # _build_not_checked() then states beside the verdict.
+        mandated_report: dict = {
+            "status": "not_run",
+            "reason": "netlist_path not supplied — datasheet-mandated external "
+                      "passives were NOT checked; a PASS here does not mean the "
+                      "required compensation/feedforward parts exist",
+        }
+        switch_report: dict = {
+            "status": "not_run",
+            "reason": "netlist_path not supplied — switching/feedback nodes were "
+                      "NOT checked against power rails; a PASS here does not mean "
+                      "no switch node is shorted to a rail",
+        }
     else:
         paths = [netlist_path] if isinstance(netlist_path, str) else list(netlist_path)
         missing = [x for x in paths if not os.path.isfile(x)]
@@ -871,6 +1175,10 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
         findings += nl_findings
         pol_findings, polarity_report = _check_pin_polarity(dict_rows, paths, value_name)
         findings += pol_findings
+        mp_findings, mandated_report = _check_mandated_passives(dict_rows, paths, mpn_name)
+        findings += mp_findings
+        sw_findings, switch_report = _check_switch_node_shorts(paths)
+        findings += sw_findings
 
     # frozen pad-count crosscheck (J_* freeze)
     if frozen_pad_counts and pad_i is not None:
@@ -917,6 +1225,9 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
         netlist_crosscheck=netlist_report,
         pin_polarity=polarity_report,
         ssot_crosscheck=ssot_report,
+        mandated_passives=mandated_report,
+        switch_node_shorts=switch_report,
+        not_checked=_build_not_checked(mandated_report, switch_report),
     )
 
     if out_dir is not None:
