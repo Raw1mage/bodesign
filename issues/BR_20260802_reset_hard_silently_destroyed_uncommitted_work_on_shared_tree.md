@@ -13,10 +13,10 @@
 
 ```
 State:
-Fix: none — 損失不可逆；防護未實作
+Fix: none — 損失確定不可逆（回收窗口 2026-08-02 關閉，零回收）；防護未實作
 Effect: damage done, unrecoverable
 Custody: bodesign
-Blocker: 等 peer ses_07c1ad2a4 回覆其 context 是否還持有可重建內容
+Blocker: none — 兩顆 peer 皆已回覆並排除（見 §4.1）；損失確定不可逆
 Disposition: 依使用者裁示歸入 G13-harness-disclosure。§3 說明為何這歸類為揭露缺陷
   而非單純操作錯誤——並且 §3.3 誠實記載其中確實屬於我的判斷失誤的部分。
 Venue: bodesign
@@ -106,7 +106,40 @@ git status --porcelain issues/     → 顯示 4 個 ` M`
 
 **機制層定論**：未 staged 的內容從未 `git add`，因此**從未寫進 object store**。dangling blob 只可能來自曾 staged 或曾 commit 的內容。git 這一側確定不可回收——繼續挖是浪費時間。
 
-**唯一還開著的窗口**：peer `ses_07c1ad2a4` 的 session context 若還持有那些檔案的內容，可以重建。已 `[A2A-URGENT]` 通知（含完整 46 檔清單），標明時間敏感。
+### 4.1 context 回收窗口 — 已關閉，零回收（2026-08-02）
+
+兩顆候選 peer 都已 `[A2A-URGENT]` 通知並回覆。**兩顆都用 git 客觀驗證後排除自己，而非憑記憶回答**——這正是需要的回覆品質。
+
+| session | 領域 | 回覆 | 依據（非記憶） |
+| --- | --- | --- | --- |
+| `ses_07c1ad2a4` | mcp-protocol-surface | **零** | 其改動集（`server.py`/`preflight.py`/`_skill_nudge.py`/`mcp.json`/`doctrine.md`/`test_mcp_r17*`/`architecture.md`）與 46 檔清單**零交集**；對清單代表檔跑 `git status --short` 全空；自身工作全在 `8fd59b0`+`0f71469` 已 commit |
+| `ses_0c8efa1b4` | draftsman/eda-bridge | **零** | 其工作 7/6 全在 `1fe46df`（50 檔）已 commit，commit 後樹乾淨；清單中 `kicad_symbol.py`/`block_drafter.py`/`block_qa.py`/`test_preplace.py`/`plans/eda_draftsman-v2/` 全屬其收尾後（`442b3c6` 之後）的世代，context 裡連二手都沒有；實作當時由 subagent 寫並 commit 落盤，無只存在於對話的片段 |
+
+**兩顆都明確拒絕臆造內容。** `ses_07c1ad2a4` 的原話值得記下：「我不會為了『幫上忙』而臆造內容——那比誠實的『我沒有』更危險，你今天已經被一次過度自信的評估坑過（4→46），不需要我再疊一個。」
+
+**結論：46 個檔案的未 commit 修改確定永久遺失，無任何回收路徑。**
+
+### 4.2 損害清單的正確性證明（邏輯，非抽樣）
+
+兩個 probe commit 是 `--allow-empty`，故 `tree(3e3591d) == tree(1c63caa)`（`git diff --stat` 輸出 0 行，已驗）。
+`git reset --hard` 只重寫**工作區與目標 ref 有差異**的檔案。
+∴ 一個檔案被重寫 ⟺ 它當時 worktree ≠ HEAD ⟺ **它確實帶有未 commit 修改**。
+
+所以 46 這個數字既不高估也不低估——它精確等於「帶有未 commit 修改的已追蹤檔案數」。
+
+### 4.3 下游狀態檢查（committed baseline 未受污染）
+
+三份受損 plan 的 `.state.json` 與 `tasks.md` 已回退到 HEAD 版本，檢查其內部一致性：
+
+| plan | state | history 筆數 | tasks done/open |
+| --- | --- | --- | --- |
+| `eda_draftsman-v2` | implementing | 4 | 9 / 9 |
+| `eda-bridge_occupancy-ledger` | planned | 3 | 0 / 23 |
+| `aiguard_refs-ssot-build` | verified | 5 | 19 / 0 |
+
+三者 state 與 checkbox 分布自洽（`verified` 對應 0 open、`planned` 對應 0 done），**committed baseline 沒有被 reset 弄成不一致狀態**。控制組：未受損的 `eda-bridge_draftsman-series-divider-wireable` 保持 `proposed` + 07-23 mtime。
+
+遺失的是這些 baseline **之上**的未 commit 增量（可能含 task 勾選、state 推進、design 修訂）——其內容不可知。**任何接手這三份 plan 的人必須知道：它們的 on-disk 狀態是 07-04～07-07 的 committed 版本，不保證反映最後一次實際工作。**
 
 ## 5. Fix proposal — 三層，由硬到軟
 
