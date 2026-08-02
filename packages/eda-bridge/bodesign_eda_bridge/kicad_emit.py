@@ -1930,6 +1930,32 @@ def _bbox_overlap(a: tuple[float, float, float, float], b: tuple[float, float, f
 # not merely non-overlapping.
 _CLEARANCE_MM = 1.27  # one grid = minimum breathing room between any two elements
 
+# BR_20260802: float tolerance for the clearance comparison. NOT a tuned value —
+# derived from two measured magnitudes that are 8 orders of magnitude apart:
+#
+#   noise floor   : coordinates here are grid multiples (1.27 mm) accumulated by
+#                   addition, so a nominal gap of exactly one grid lands as
+#                   1.2699999999999818 (worst deviation MEASURED in this defect:
+#                   1.8e-14 mm, which is 0.1 ulp at the largest coordinate the
+#                   emitter handles, ~1189 mm / A0 long edge).
+#   signal floor  : every coordinate written to the .kicad_sch goes through
+#                   round(v, 4) at the finest, so the SMALLEST geometric
+#                   difference the file can even express is 1e-4 mm.
+#
+# 1e-9 sits ~4.7 orders ABOVE the worst float deviation and ~5 orders BELOW the
+# smallest expressible real difference. It can therefore only ever absorb float
+# noise; a genuine clearance violation is at minimum 1e-4 mm and stays visible.
+# Safe to widen up to ~1e-6; DO NOT approach 1e-4 — that is real geometry.
+#
+# Why this mattered: without it, 8 labels whose nominal gaps were IDENTICAL (all
+# exactly one grid) split 5/3 purely on the sign of accumulated float error. The
+# 3 that compared as "not clear" had their anchors pushed 1.57 mm off their pin
+# endpoints, and DD-22/23 forbids a stub wire to carry them back — so they went
+# open-circuit silently. This tolerance removes the coin-flip, but see the parent
+# BR: it does NOT remove the underlying contract conflict (an anchor may still be
+# moved off its pin for other reasons, with the same silent consequence).
+_CLEARANCE_EPS_MM = 1e-9
+
 
 def _bbox_clear(a: tuple[float, float, float, float],
                 b: tuple[float, float, float, float],
@@ -1941,10 +1967,15 @@ def _bbox_clear(a: tuple[float, float, float, float],
     Strict overlap (`_bbox_overlap` True) and edge-touching both return False.
     This is the safety-margin gate; `_bbox_overlap` remains the strict-ink gate
     (byte-stable — existing call sites are untouched).
+
+    The comparison carries `_CLEARANCE_EPS_MM` because a gap of EXACTLY one grid
+    is the common case here, and exact-equality on accumulated floats decides it
+    by rounding error rather than by geometry. See the constant for the derivation.
     """
     gap_x = max(b[0] - a[1], a[0] - b[1])   # +ve => x-gap between them
     gap_y = max(b[2] - a[3], a[2] - b[3])   # +ve => y-gap between them
-    return gap_x >= clearance or gap_y >= clearance
+    thr = clearance - _CLEARANCE_EPS_MM
+    return gap_x >= thr or gap_y >= thr
 
 
 # --- Power symbol emission (industry convention: GND glyph points down, supply
