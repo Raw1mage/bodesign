@@ -4,7 +4,7 @@
 - Severity: **high**（工業製程紀律缺口；aiguard 當日 C04 時間浪費的直接根因）
 - Component: `packages/workflow-core/bodesign_workflow_core/{c04_layout_constraints,check_c03}.py` + `stages/{c03-ee,c04-layout}` GUIDE
 - Reporter: thesmart_products session（aiguard C03/C04）
-- Status: **FIXED-UNCOMMITTED**（2026-08-02，`c03-stage-discipline` handler；未 commit，等派發者驗證）
+- Status: **FIXED-UNDEPLOYED**（2026-08-02，`c03-stage-discipline` handler；commit ff7bbbf 已落地並經派發者覆核。**依賴未解除**：`check_c03` 尚非 landing verb，在它註冊前本閘會擋住所有既有專案，故不進 `issues/closed/`）
 
 ## Symptom
 
