@@ -13,6 +13,9 @@ everything:
 That is unrelated to this BR, so the pin_allocation module is loaded from its file
 directly — an import-erroring test module reports zero failures, which is the exact
 shape this BR exists to eliminate.
+
+`domain_detectors` (the kicad skill engine) is likewise loaded from its file, with its
+sibling script dir on sys.path — it is a skill-side script, not an installed package.
 """
 
 import importlib.util
@@ -25,12 +28,24 @@ from tempfile import TemporaryDirectory
 from bodesign_component_kb import audit_claims
 from bodesign_workflow_core import crosscheck_nets
 
-_PA_PATH = Path(__file__).resolve().parents[1] / "packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py"
+_REPO = Path(__file__).resolve().parents[1]
+
+_PA_PATH = _REPO / "packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py"
 _spec = importlib.util.spec_from_file_location("_br20260731_pin_allocation", _PA_PATH)
 pin_allocation = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = pin_allocation
 _spec.loader.exec_module(pin_allocation)
 build_pin_allocation = pin_allocation.build_pin_allocation
+
+_KICAD_SCRIPTS = _REPO / "skills/bodesign/engines/kicad/scripts"
+if str(_KICAD_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_KICAD_SCRIPTS))
+_dd_spec = importlib.util.spec_from_file_location(
+    "_br20260731_domain_detectors", _KICAD_SCRIPTS / "domain_detectors.py")
+domain_detectors = importlib.util.module_from_spec(_dd_spec)
+sys.modules[_dd_spec.name] = domain_detectors
+_dd_spec.loader.exec_module(domain_detectors)
+check_rf_reference_values = domain_detectors._check_rf_reference_values
 
 
 def _write_vault(root: Path, entries: dict) -> None:
@@ -151,6 +166,54 @@ class PinAllocationVacuousTests(unittest.TestCase):
         self.assertEqual(2, alloc.net_count)
         csv_text = pin_allocation.render_pin_allocation_csv(alloc)
         self.assertIn("U1,1,VIN,yes", csv_text)
+
+
+# `sx127x` family: inductor 2.7-15 nH, capacitor 0.8-10 pF.
+_RF_IC = {"value": "SX1276", "lib_id": "", "description": ""}
+_L_OK = {"ref": "L1", "type": "inductor", "henries": 6.8e-9, "value": "6.8nH"}
+_C_OK = {"ref": "C1", "type": "capacitor", "farads": 2.2e-12, "value": "2.2pF"}
+_L_BAD = {"ref": "L1", "type": "inductor", "henries": 100e-9, "value": "100nH"}
+
+
+class RfReferenceValuesVacuousTests(unittest.TestCase):
+    def test_no_components_omits_the_verdict_key_entirely(self):
+        out = check_rf_reference_values(_RF_IC, [])
+        self.assertEqual("vacuous", out["verdict"])
+        self.assertEqual(0, out["checked_count"])
+        # not a tri-state bool: the key a caller would branch on is ABSENT, so
+        # `if out["values_in_range"]` raises rather than silently reading True.
+        self.assertNotIn("values_in_range", out)
+        self.assertIn("NOT a clean reference-design check", out["advice"])
+
+    def test_all_components_unvalued_is_vacuous_and_names_them(self):
+        out = check_rf_reference_values(
+            _RF_IC, [{"ref": "L1", "type": "inductor"}, {"ref": "C1", "type": "capacitor"}])
+        self.assertEqual("vacuous", out["verdict"])
+        self.assertNotIn("values_in_range", out)
+        self.assertEqual(["L1", "C1"], out["unvalued_components"])
+
+    def test_control_all_in_range_still_reports_values_in_range_true(self):
+        out = check_rf_reference_values(_RF_IC, [_L_OK, _C_OK])
+        self.assertIs(True, out["values_in_range"])
+        self.assertEqual(2, out["checked_count"])
+        self.assertNotIn("verdict", out)
+        self.assertEqual([], out["out_of_range_components"])
+
+    def test_control_out_of_range_still_reports_false(self):
+        out = check_rf_reference_values(_RF_IC, [_L_BAD, _C_OK])
+        self.assertIs(False, out["values_in_range"])
+        self.assertEqual(["L1"], [c["ref"] for c in out["out_of_range_components"]])
+
+    def test_partially_unvalued_still_gives_a_verdict_but_names_the_loss(self):
+        out = check_rf_reference_values(_RF_IC, [_L_OK, {"ref": "C9", "type": "capacitor"}])
+        self.assertIs(True, out["values_in_range"])
+        self.assertEqual(1, out["checked_count"])
+        self.assertEqual(["C9"], out["unvalued_components"])
+        self.assertIn("C9", out["advice"])
+
+    def test_control_unknown_ic_family_still_returns_none(self):
+        self.assertIsNone(
+            check_rf_reference_values({"value": "ATMEGA328", "lib_id": "", "description": ""}, []))
 
 
 if __name__ == "__main__":

@@ -20,21 +20,47 @@ control 自己禁止的捏造。它改由 CI / 開發期直接呼叫（見檔末
     V2 量測降級無標記    — fallback 到語意不同的量測法，回傳不標 basis  （§C）
     V3 狀態不反映降級    — 降級資訊有傳出，但 ok/status 恆為成功        （S2）
     V4 量測基準分散      — 同一物理量多處各自實作，修正只落其中一處     （§E）
+    V13 空輸入讀作通過   — 零筆輸入使閘門回報成功，措辭與真通過無法區分（BR_20260731）
 
 tier 由**實測訊噪比**決定，不是由提案推測決定。對 §B/§C/§D/§E 修復前後的
-routing.py 各掃一次，看每條規則是否「修復前命中、修復後歸零」：
+routing.py 各掃一次（L9 則對 BR_20260731 四個站點的修前 `b429b06^` 與修後各掃
+一次），看每條規則是否「修復前命中、修復後歸零」：
 
     規則  修前  修後   tier
     L2     2     0    T-A   except 只有 pass/log 而函式有回傳值      → V1/V2（§D）
     L6     1     0    T-A   呼叫端傳入的 key 查找失敗即靜默跳過      → V1（§D）
     L8     1     0    T-A   同一量測 API 在 >1 個函式各自實作        → V4（§E）
+    L9     2     0    T-A   累加器導出的裁決，無零長度 guard         → V13（BR_20260731）
     L1    19    19    T-C   迴圈內 continue 未記錄被跳過的元素       → V1
+
+L9 的誤報實測：修後全樹 `packages/` 0、`services/` 0、`skills/` 0。修前 2 筆命中
+（`audit_claims`、`_check_rf_reference_values`）都是真缺陷，無誤報。證據強度與 L6/L8
+（各 1 筆修前命中）同級。
 
 L1 **降為 advisory（預設不輸出，需 include_advisory=True）**：它修復前後都報 19 筆，
 命中的是 `_parse_netlist` 的 regex 不匹配跳過、`via_in_pad` 的 keep-ring 篩選這類
 **正常的 filter 語意**——那些 `continue` 不是在丟棄呼叫端交付的元素，而是在表達
 「這一項本來就不該處理」。AST 分不出「篩掉」與「丟掉」，硬當 T-A 會讓 19 筆雜訊
 淹掉 3 筆真訊號，最後沒人跑這條 lint。誠實標 T-C，勝過假裝它是硬閘。
+
+**L9 的覆蓋範圍（重要，勿讀成「V13 已清乾淨」）**：
+規則名稱刻意叫「**accumulator-derived vacuous verdict**」而不是「V13」或「vacuous
+pass」——因為它只覆蓋 V13 的**一種子形狀**。這樣「L9 零命中」的意思就精確等於它字面的
+意思，而不是一句謊。BR_20260731 的四個站點裡它只抓到 2 個，**recall = 2/4**：
+
+    覆蓋   累加器導出的裁決（空迴圈 → 累加器保持空 → 空性被當成成功）
+           實例：`audit_claims` 的 `not blocking`、
+                 `_check_rf_reference_values` 的 `len(out_of_range) == 0`
+
+    不覆蓋 set 運算導出的裁決 — `crosscheck_nets` 的 `not missing and not extra`，
+           `missing`/`extra` 來自集合差而非迴圈累加，AST 追不到「空輸入 → 空結果」
+           這條因果。
+    不覆蓋 根本沒有裁決欄位的空回傳 — `build_pin_allocation` 修前回一張空表，
+           沒有任何 bool/status 可供比對；「空表是否代表通過」是呼叫端的語意假設，
+           AST 看不到。
+
+兩者都需要語意判斷。**把 recall 寫在這裡而不是留在某次對話裡**，是因為下一個看到
+「L9 = 0」的人必須當場讀到它涵蓋不到什麼。
 
 **誠實未實作**（不假裝覆蓋）：
     L3  expected vs actual 計數      — 需回傳 schema 對照，AST 看不到
@@ -72,8 +98,8 @@ _ADVISORY_RULES = frozenset({"L1"})
 
 @dataclass(frozen=True, slots=True)
 class Finding:
-    rule: str          # L1 | L2 | L6 | L8
-    variant: str       # V1 | V2 | V3 | V4
+    rule: str          # L1 | L2 | L6 | L8 | L9
+    variant: str       # V1 | V2 | V3 | V4 | V13
     path: str
     line: int
     func: str
@@ -139,6 +165,7 @@ class _Visitor(ast.NodeVisitor):
         self._func_stack.append(node.name)
         self._check_L1(node)
         self._check_L2(node)
+        self._check_L9(node)
         self.generic_visit(node)
         self._func_stack.pop()
 
@@ -233,6 +260,75 @@ class _Visitor(ast.NodeVisitor):
                          f"caller supplied but we failed to resolve is silently "
                          f"dropped. Normalise the key or fail loud (BR_20260729 §D)")))
 
+    # -- L9 -----------------------------------------------------------------
+    def _check_L9(self, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        """Accumulator-derived vacuous verdict (BR_20260731).
+
+        Fires when ALL hold:
+          1. a parameter P is iterated (`for x in P`)
+          2. an accumulator A is empty-initialised at function scope
+          3. A is only appended to INSIDE that loop
+          4. a return derives a verdict from A's emptiness (`not A`, `len(A) == 0`)
+          5. there is NO zero-length guard on P anywhere in the function
+
+        Zero iterations therefore leave A empty and the verdict reads as the
+        success value — the same word for "checked and clean" and "nothing was
+        checked". Condition 5 is what a correct fix installs, which is why this
+        rule goes 1->0 across the BR_20260731 fixes rather than staying lit.
+
+        Scope is deliberately narrow — see the module docstring's coverage note:
+        this catches ONE of the three V13 sub-shapes.
+        """
+        params = {a.arg for a in (fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs)}
+        loops = [l for l in ast.walk(fn)
+                 if isinstance(l, (ast.For, ast.AsyncFor))
+                 and isinstance(l.iter, ast.Name) and l.iter.id in params]
+        if not loops:
+            return
+        accumulators = _empty_accumulators(fn)
+        if not accumulators:
+            return
+        appended: set[str] = set()
+        for loop in loops:
+            for node in ast.walk(loop):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in ("append", "extend", "add", "update")
+                        and isinstance(node.func.value, ast.Name)):
+                    appended.add(node.func.value.id)
+        candidates = accumulators & appended
+        if not candidates:
+            return
+        verdict_of: dict[str, int] = {}
+        for ret in ast.walk(fn):
+            if not isinstance(ret, ast.Return) or ret.value is None:
+                continue
+            for node in ast.walk(ret.value):
+                if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)
+                        and isinstance(node.operand, ast.Name)
+                        and node.operand.id in candidates):
+                    verdict_of.setdefault(node.operand.id, ret.lineno)
+                if (isinstance(node, ast.Compare) and isinstance(node.left, ast.Call)
+                        and isinstance(node.left.func, ast.Name)
+                        and node.left.func.id == "len" and node.left.args
+                        and isinstance(node.left.args[0], ast.Name)
+                        and node.left.args[0].id in candidates
+                        and any(isinstance(c, ast.Constant) and c.value == 0
+                                for c in node.comparators)):
+                    verdict_of.setdefault(node.left.args[0].id, ret.lineno)
+        if not verdict_of:
+            return
+        iterated = {l.iter.id for l in loops}  # type: ignore[union-attr]
+        if all(_has_zero_guard(fn, name) for name in iterated):
+            return  # a correct fix installs exactly this guard
+        acc, line = sorted(verdict_of.items())[0]
+        self.findings.append(Finding(
+            rule="L9", variant="V13", path=self.path, line=line, func=fn.name,
+            message=(f"the returned verdict is derived from `{acc}` being empty, but "
+                     f"`{acc}` is only filled inside a loop over {', '.join(sorted(iterated))} "
+                     f"and no zero-length guard exists — a zero-item input yields the "
+                     f"SUCCESS value, so 'checked and clean' and 'nothing was checked' "
+                     f"share one output (BR_20260731)")))
+
     # -- L2 -----------------------------------------------------------------
     def _check_L2(self, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """except body that only passes / only logs, in a value-returning function."""
@@ -255,6 +351,48 @@ class _Visitor(ast.NodeVisitor):
                     message=("`except` swallows the failure (only pass/log) in a "
                              "function that returns a value — the return cannot "
                              "distinguish success from a swallowed failure")))
+
+
+def _empty_accumulators(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Names bound to an empty list/dict/set literal anywhere in `fn`.
+
+    Both `a = []` (Assign) and `a: list[dict] = []` (AnnAssign) count. Recognising
+    only the former is not a narrower rule, it is a broken one: the annotated form
+    is the prevailing style in this repo, so an Assign-only probe returned zero on
+    BOTH sides of the BR_20260731 fixes — a judgement with no discriminating power,
+    which is the very shape this module exists to catch.
+    """
+    out: set[str] = set()
+    for node in ast.walk(fn):
+        targets: list[ast.AST] = []
+        value: ast.AST | None = None
+        if isinstance(node, ast.Assign):
+            targets, value = list(node.targets), node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        if not isinstance(value, (ast.List, ast.Dict, ast.Set)):
+            continue
+        if getattr(value, "elts", None) or getattr(value, "keys", None):
+            continue  # a non-empty literal is not a zero-start accumulator
+        for tgt in targets:
+            if isinstance(tgt, ast.Name):
+                out.add(tgt.id)
+    return out
+
+
+def _has_zero_guard(fn: ast.FunctionDef | ast.AsyncFunctionDef, param: str) -> bool:
+    """True if any `if` in `fn` tests `param` (truthiness or len) — the fix shape."""
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.If):
+            continue
+        for sub in ast.walk(node.test):
+            if isinstance(sub, ast.Name) and sub.id == param:
+                return True
+            if (isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+                    and sub.func.id == "len" and sub.args
+                    and isinstance(sub.args[0], ast.Name) and sub.args[0].id == param):
+                return True
+    return False
 
 
 def _owning_branch(loop: ast.AST, target: ast.Continue) -> list[ast.AST]:

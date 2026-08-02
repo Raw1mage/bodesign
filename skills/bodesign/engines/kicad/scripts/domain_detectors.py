@@ -1294,7 +1294,22 @@ _RF_REFERENCE_DESIGNS: dict[str, dict] = {
 def _check_rf_reference_values(target_comp: dict,
                                matching_components: list[dict],
                                ) -> dict | None:
-    """Check matching component values against known reference designs."""
+    """Check matching component values against known reference designs.
+
+    Returns None when the target IC matches no known reference family (nothing to
+    check against — honestly absent, no verdict attached).
+
+    When a family DOES match but no component value could actually be checked — an
+    empty ``matching_components``, or every entry lacking a henries/farads value —
+    the result carries ``verdict: "vacuous"`` and **omits ``values_in_range``
+    entirely** (BR_20260731). It is deliberately not a tri-state bool: a caller
+    doing ``if check["values_in_range"]`` must not be able to read "nothing was
+    checked" as "checked and in range", and a ``None`` there would instead read as
+    a false out-of-range claim. An absent key can be read as neither.
+
+    Components whose value could not be parsed are reported in ``unvalued_components``
+    rather than silently contributing nothing to the verdict.
+    """
     target_check = (target_comp.get("value", "") + " " +
                     target_comp.get("lib_id", "") + " " +
                     target_comp.get("description", "")).lower()
@@ -1310,11 +1325,15 @@ def _check_rf_reference_values(target_comp: dict,
 
     info = _RF_REFERENCE_DESIGNS[matched_family]
     out_of_range: list[dict] = []
+    unvalued: list[str] = []
+    checked = 0
 
     for mc in matching_components:
         val = mc.get("henries") or mc.get("farads")
         if val is None:
+            unvalued.append(str(mc.get("ref", "<unnamed>")))
             continue
+        checked += 1
         if mc["type"] == "inductor":
             lo, hi = info["inductor_range"]
             if val < lo or val > hi:
@@ -1334,12 +1353,30 @@ def _check_rf_reference_values(target_comp: dict,
                     "expected_range": f"{lo*1e12:.1f}-{hi*1e12:.1f} pF",
                 })
 
-    return {
+    envelope = {
         "target_ic_family": matched_family,
         "frequency_mhz": info["frequency_mhz"],
-        "values_in_range": len(out_of_range) == 0,
+        "checked_count": checked,
         "out_of_range_components": out_of_range,
+        "unvalued_components": unvalued,
     }
+    if checked == 0:
+        envelope["verdict"] = "vacuous"
+        envelope["advice"] = (
+            "No matching-network component value could be checked — this is NOT a clean "
+            "reference-design check. "
+            + (f"{len(unvalued)} component(s) were supplied but none carried a henries/farads "
+               "value; check the value-parsing step."
+               if unvalued else
+               "No matching-network components were supplied at all; check the topology "
+               "detection upstream."))
+        return envelope
+    envelope["values_in_range"] = len(out_of_range) == 0
+    if unvalued:
+        envelope["advice"] = (
+            f"{len(unvalued)} component(s) had no parsable value and are absent from this "
+            f"verdict: {', '.join(unvalued[:6])}{'…' if len(unvalued) > 6 else ''}.")
+    return envelope
 
 
 def detect_rf_matching(ctx: AnalysisContext) -> list[dict]:

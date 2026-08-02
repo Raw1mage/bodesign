@@ -185,6 +185,114 @@ class L8ScatteredMeasurement(unittest.TestCase):
         self.assertNotIn("L8", _rules(_scan(src)))
 
 
+class L9AccumulatorDerivedVacuousVerdict(unittest.TestCase):
+    """BR_20260731: a verdict derived from an accumulator that a zero-item input
+    leaves empty. The rule is named for the sub-shape it detects, NOT for V13 as a
+    whole — see the module docstring's coverage note (recall 2/4).
+    """
+
+    VACUOUS = (
+        "def audit(claims):\n"
+        "    blocking = []\n"
+        "    for c in claims:\n"
+        "        if c.bad:\n"
+        "            blocking.append(c)\n"
+        "    return {'publishable': not blocking}\n"
+    )
+
+    def test_fires_on_the_unguarded_shape(self):
+        self.assertEqual(_rules(_scan(self.VACUOUS)).get("L9"), 1)
+
+    def test_fires_on_len_eq_zero_form(self):
+        src = (
+            "def check(items):\n"
+            "    out_of_range = []\n"
+            "    for it in items:\n"
+            "        if it.bad:\n"
+            "            out_of_range.append(it)\n"
+            "    return {'in_range': len(out_of_range) == 0}\n"
+        )
+        self.assertEqual(_rules(_scan(src)).get("L9"), 1)
+
+    def test_annotated_accumulator_is_recognised(self):
+        # `a: list[dict] = []` is the prevailing style here. A probe that only knew
+        # ast.Assign returned zero on BOTH sides of the real fixes — no
+        # discriminating power, the very shape this module exists to catch.
+        src = (
+            "def audit(claims):\n"
+            "    blocking: list[dict] = []\n"
+            "    for c in claims:\n"
+            "        if c.bad:\n"
+            "            blocking.append(c)\n"
+            "    return {'publishable': not blocking}\n"
+        )
+        self.assertEqual(_rules(_scan(src)).get("L9"), 1)
+
+    def test_silent_once_a_zero_length_guard_exists(self):
+        # exactly the fix shape: the third state is returned before the loop.
+        src = (
+            "def audit(claims):\n"
+            "    blocking = []\n"
+            "    if not claims:\n"
+            "        return {'publishable': None, 'verdict': 'vacuous'}\n"
+            "    for c in claims:\n"
+            "        if c.bad:\n"
+            "            blocking.append(c)\n"
+            "    return {'publishable': not blocking}\n"
+        )
+        self.assertNotIn("L9", _rules(_scan(src)))
+
+    def test_silent_when_the_guard_uses_len(self):
+        src = (
+            "def audit(claims):\n"
+            "    blocking = []\n"
+            "    if len(claims) == 0:\n"
+            "        return {'publishable': None}\n"
+            "    for c in claims:\n"
+            "        if c.bad:\n"
+            "            blocking.append(c)\n"
+            "    return {'publishable': not blocking}\n"
+        )
+        self.assertNotIn("L9", _rules(_scan(src)))
+
+    def test_silent_when_the_verdict_is_not_derived_from_emptiness(self):
+        # returning the accumulator itself is honest: the caller sees the items.
+        src = (
+            "def collect(items):\n"
+            "    out = []\n"
+            "    for it in items:\n"
+            "        out.append(it)\n"
+            "    return out\n"
+        )
+        self.assertNotIn("L9", _rules(_scan(src)))
+
+    def test_silent_when_the_loop_is_not_over_a_parameter(self):
+        # iterating a module constant is not caller-supplied input, so a zero-item
+        # run is a property of this code, not of what the caller handed us.
+        src = (
+            "RULES = ('a', 'b')\n"
+            "def check(x):\n"
+            "    bad = []\n"
+            "    for r in RULES:\n"
+            "        if x.violates(r):\n"
+            "            bad.append(r)\n"
+            "    return {'ok': not bad}\n"
+        )
+        self.assertNotIn("L9", _rules(_scan(src)))
+
+    def test_reported_as_variant_v13(self):
+        f = [g for g in _scan(self.VACUOUS) if g.rule == "L9"][0]
+        self.assertEqual("V13", f.variant)
+        self.assertIn("zero-item input", f.message)
+
+    def test_is_not_advisory(self):
+        # L1 is advisory because 19/19 were noise. L9 measured 0 false positives
+        # across packages/ services/ skills/, so hiding it by default would be
+        # throwing away a zero-noise detector.
+        self.assertNotIn("L9", nsd._ADVISORY_RULES)
+        self.assertIn("L9", _rules(_scan(self.VACUOUS)), "must appear without include_advisory")
+
+
 class L1IsAdvisoryOnly(unittest.TestCase):
     """L1's signal-to-noise did not justify blocking — it must stay opt-in."""
 
@@ -270,6 +378,49 @@ class AnchoredToTheRealDefects(unittest.TestCase):
 
     def test_ta_rules_are_clean_after_the_fixes(self):
         self.assertEqual(_scan(self._at("HEAD")), [])
+
+
+class L9AnchoredToBr20260731(unittest.TestCase):
+    """The same calibration guard, for L9's own tier claim.
+
+    The pre-fix revision is pinned to `b429b06^`, NOT `HEAD^`: by the time L9 was
+    written the fix commit already had a follow-up on top of it, so `HEAD^` still
+    contained the fixes and the control group silently lost its discriminating
+    power (measured: 1 hit instead of 2). Pinning the fix commit is what makes
+    this a control rather than a coincidence.
+    """
+
+    FIX = "b429b06"
+    SITES = (
+        "packages/component-kb/bodesign_component_kb/vault.py",
+        "packages/workflow-core/bodesign_workflow_core/reference_crosscheck.py",
+        "packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py",
+    )
+
+    def _at(self, rev: str, path: str) -> str:
+        proc = subprocess.run(["git", "show", f"{rev}:{path}"],
+                              cwd=_REPO, capture_output=True, text=True)
+        if proc.returncode != 0:
+            self.skipTest(f"{rev}:{path} unavailable (shallow clone?)")
+        return proc.stdout
+
+    def test_l9_fires_on_the_pre_fix_source(self):
+        hits = sum(_rules(_scan(self._at(f"{self.FIX}^", p))).get("L9", 0)
+                   for p in self.SITES)
+        self.assertEqual(1, hits, "pre-fix audit_claims is the L9-detectable site")
+
+    def test_l9_is_clean_on_the_post_fix_source(self):
+        for path in self.SITES:
+            with self.subTest(path=path):
+                src = (_REPO / path).read_text(encoding="utf-8")
+                self.assertNotIn("L9", _rules(_scan(src)))
+
+    def test_the_control_group_is_genuinely_pre_fix(self):
+        # Guards the guard: if a future rebase made `FIX^` already contain the
+        # fixes, the two tests above would pass vacuously (0 == 0 after a rename).
+        for path in self.SITES:
+            with self.subTest(path=path):
+                self.assertNotIn("BR_20260731", self._at(f"{self.FIX}^", path))
 
 
 if __name__ == "__main__":

@@ -45,6 +45,7 @@ locator: issues/KB_20260729_silent_degradation_antipattern_invariant_and_lint.md
 | **V6 判決依賴未檢驗的前提** | 判決的算式默認了一個實際可檢查的前提，而工具既不查也不說 | §K escape gate 乘 `len(signal_layers)` 卻未查 router 開不開得了 via |
 | **V11 修復複製了缺陷** | 修法本身落入它要修的同一類型，於是錯誤訊息變成**無法遵從的命令** | §P `anyOf` 本身即 stringify 觸發條件 |
 | **V12 呼叫端可控的靜音鈕** | 降級/豁免機制讓被檢查方能把**已觀測到**的問題宣告成不被檢查 | §Q `covers_boards` 寫窄 → `PASS blocking=0` |
+| **V13 空輸入讀作通過** | 零筆輸入使閘門回報成功，且**措辭與真通過完全相同** | BR_20260731 `audit_claims([])` → `publishable:true` |
 
 **V4/V4-b 與 V1–V3 的關鍵差異（勿混淆，修法不同）**：V1–V3 是**假綠**（靜默成功，違反天條）；
 V4/V4-b 是**假紅**（gate 大聲失敗且訊息精確，*沒有*違反 no-silent-fallback，壞的是餵給它的量測）。
@@ -516,6 +517,78 @@ captured = declared | observed    # 宣告可讓零目擊的板變可評估（�
 修正後 `per_board` 多了 `drawn_as_other_refdes`，且別名解析在**同一 pass** 完成並快取給 row 迴圈——
 算兩次就是 V4-c，**而那正是 board 層與 row 層一開始會不一致的成因**。
 
+### V13：空輸入讀作通過（一個對空輸入通過的閘，不是比較弱的閘）
+
+V1–V3 是「處理過程掉東西但裝沒事」；V13 是更彻底的一種：**什麼都沒檢查，卿回報了檢查通過的那個詞。**
+
+實例（BR_20260731，四個站點）：
+
+```
+audit_claims([])          → publishable:true  "All asserted specs are datasheet-grounded."
+crosscheck_nets(∅, ∅)     → "matches the reference exactly (0 nets)."
+build_pin_allocation([])  → 一張只有標題列的 CSV，無任何訊號
+values_in_range           → true（空 matching_components）
+```
+
+這四個正是 README 宣稱 bodesign 用來「**展示**而非**宣稱**」可靠度的閘門。而最可能撞上它們的
+呼叫端——**抽取器沒找到東西、netlist parse 出零筆 net**——正是它會遮蔽其失敗的那些。
+
+**判別句**：
+
+> 對每一個回傳裁決的函式問：
+> **令它的輸入集合為空，回傳值跟「真的檢查了且全部通過」區分得出來嗎？**
+> 區分不出來 → V13。
+
+**修法：第三種狀態，不是 raise。** 同 repo 有兩個相反的正確前例，選後者：
+
+```
+solve_impedance({}, [])   → raise ValueError      # 正確，但會損失合法的「真的零筆」情境
+plan_design_intent("")    → needs-clarification    # 該抄的形狀：非 true 非 false，第三態
+```
+
+四個站點分別落成 `verdict:"vacuous"` / `publishable:None` / `vacuous:True`，並在 advice 明寫
+「這不是通過」與**該去查哪一步**。
+
+**`_check_rf_reference_values` 的額外一條：不要把裁決欄位做成三態 bool。**
+`values_in_range` 在 vacuous 時**整個不發**，而不是給 `None`——`None` 會被
+`if check["values_in_range"]` 讀成「超出範圍」（假紅），而欄位缺席兩邊都讀不成。
+
+#### 子形狀三種（lint 只覆蓋第一種）
+
+| 子形狀 | 裁決怎麼來的 | lint |
+|---|---|---|
+| **a. 累加器導出** | 空迴圈 → 累加器保持空 → 空性當成成功（`not blocking`、`len(x)==0`） | **L9 覆蓋** |
+| **b. set 運算導出** | `not missing and not extra`，兩邊都來自集合差 | 不覆蓋 |
+| **c. 根本沒有裁決欄位** | 回一張空表，「空表是否代表通過」是呼叫端的語意假設 | 不覆蓋 |
+
+**lint 規則刻意不叫「V13」，叫「accumulator-derived vacuous verdict」**（L9）——因為它只抓
+得到 a。若規則名叫 V13，那麼「L9 零命中」就會被讀成「V13 已清乾淨」——**而那正是
+V13 本身的形狀**（一個字對兩件事說同一句話）。名稱窄到符合實際覆蓋，零命中才不是一句謊。
+
+recall 實測 = **2/4**（抓到 `audit_claims`、`_check_rf_reference_values`；漏掉
+`crosscheck_nets` 與 `build_pin_allocation`）。這個數字寫進 lint 模組 docstring 而非只存在
+某次對話裡，因為下一個看到「L9 = 0」的人必須當場讀到它涵蓋不到什麼。
+
+#### 驗證這類缺陷時，驗證工具自己最容易變成同一個形狀
+
+修這四個站點的過程中，**驗證手段本身四度出現「回 0 當成通過」**，四次都靠控制組擋下：
+
+| 現象 | 不是零失敗，而是… |
+|---|---|
+| 全套比對 baseline 回 `failing_names=0` 且 exit=1 | `unittest discover` 因 `tests/` 無 `__init__.py` **根本沒啟動** |
+| lint 探針對修前/修後都回 0 | 探針只認 `ast.Assign`，而站點用 `ast.AnnAssign`（`x: list[dict] = []`） |
+| 控制組只命中 1 筆（應為 2） | 拿 `HEAD^` 當修前版，但修復 commit 上面已經又疊了一個 commit |
+| 單類測試回 `errors=1` | 類名打錯（`L6GetWithoutElse` vs `L6SilentKeyLookup`），與真失敗共用同一輸出 |
+
+**這張表自己就是證據**：在修一個「空輸入讀作通過」的缺陷時，我自己的驗證工具四度出現
+同一個形狀。可操作的結論：
+
+> **任何「回空／exit 0 即通過」的判準，使用前先證明它在該失敗時真的會非空／非零。**
+> 具體到控制組：實作一個檢測器時，**先拿已知的真缺陷餵它**；回 0 就代表檢測器壞了，
+> 不代表程式干淨。這條已寫成測試：`L9AnchoredToBr20260731`，其中
+> `test_the_control_group_is_genuinely_pre_fix` 是**守衛那個守衛**的（防止未來某次 rebase
+> 讓控組自己包含了修復，兩條斷言變成 0 == 0 的空轉）。
+
 ## 正確樣態（positive pattern，KB 只有反例不夠）
 
 - **`plane_layers_applied: [{spec, layer, net, type}]`**（`routing.py net2pcb_board`）——
@@ -687,8 +760,13 @@ tier **由實測訊噪比決定**（對 §B–§F 修復前後的 `routing.py` �
 | L2 | 2 | 0 | **T-A** | `except` 只有 pass/log 而函式有回傳值 |
 | L6 | 1 | 0 | **T-A** | 呼叫端傳入的 key 查找失敗即靜默跳過（§D 直接規則） |
 | L8 | 1 | 0 | **T-A** | 同一量測 API 在 >1 個函式各自實作（§E 直接規則） |
+| L9 | 2 | 0 | **T-A** | 累加器導出的裁決，無零長度 guard（V13 子形狀 a，見上） |
 | L1 | 19 | 19 | **T-C** | 迴圈內 `continue` 未記錄被跳過的元素 |
 | L10 | — | — | **設計規則** | 掃描/檢查類工具必須回報實際覆蓋範圍（見下） |
+
+**L9 不降 advisory 的理由**：實測誤報 0（`packages/` 0、`services/` 0、`skills/` 0），
+修前 2 筆命中全是真缺陷。L1 降 T-C 是因為 19/19 全是雜訊；把一個零雜訊偵測器標成
+advisory（預設不輸出）等於把它丟掉。證據強度與 L6/L8（各 1 筆修前命中）同級。
 
 **L1 誠實降為 advisory**（預設不輸出）：它修復前後都報 19 筆，命中的是 regex 不匹配、
 keep-ring 篩選這類**正常 filter 語意**——那些 `continue` 不是在丟棄呼叫端交付的元素，
