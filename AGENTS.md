@@ -107,6 +107,44 @@ git status --porcelain | grep '^ M\|^M \|^MM'
 - 丟棄特定修改 → `git stash push -- <精確 pathspec>`，不要全樹 `--hard`
 - 搬移檔案 → `git mv`（它會在檔案未進版控時報錯，是有用的訊號）
 
+**⭐ 開工前先錨定自己的工作（唯一不依賴任何人記得的防護）**：
+
+```
+git stash create && git update-ref refs/wip/<session-id> <那個 sha>
+```
+
+**`reset --hard` 拿不走一個有 ref 指著的 commit。** 未 `git add` 的內容從未進 object store，
+所以事後任何回收手段（`reflog` / `fsck --lost-found` / `stash list`）都是空的——**錨定必須在事前**。
+
+這條由 `ses_0c87bab06` 在復原 `kicad_emit.py` 時提出並實地驗證
+（`refs/recovered/kicad_emit_full` 保住了 3030 行的完整檔案，否則 `git gc` 會永久刪除它）。
+
+**為什麼是「唯一」**：2026-08-02 實測了三條 pre-reset 護欄，全部失敗——
+
+| 路徑 | 結果 |
+| --- | --- |
+| `git config alias.reset` | **不可行**。控制組決定性：同一份 alias 值掛 `zzprobe`（非內建）正常展開，掛 `reset`（內建）被完全忽略。git 只在找不到內建指令時才查 alias |
+| `reference-transaction` hook | **比不裝更危險**。它在 ref 更新時觸發，而 ref 更新是 `reset --hard` 的**最後**一步——工作區早已被覆寫。treatment 與 control 的檔案內容**完全相同**，而 git 印 `aborted` 且 exit 128。裝上去會讓人把 `aborted` 讀成「工作還在」 |
+| PATH wrapper | 攔得到（四組控制組）但無可行落點：`~/.local/bin` 不在 PATH、`export PATH=` 不跨 tool call 存活、`~/.bashrc` 不被 harness shell source、`/usr/local/bin` 是 root-owned 而本機有 13 個真實使用者 |
+
+前兩者是**防護不存在**，第三個是**打擊面錯配**（為攔 agent 而改全機共用的 git）。
+只有「事前錨定」把防護放在自己手上，不需要攔截任何東西。
+詳見該 BR §5 與 opencode `issues/BR_20260802_denylist_has_no_rule_for_the_one_git_command_that_silently_destroys_peer_work.md`。
+
+**⚠ 快照歧義陷阱（pathspec 陷阱的姊妹條）**：讀一個檔案時，`git show HEAD:<path>`、
+`git cat-file -p <blob>`、直接讀工作區——**三者輸出形狀完全一樣，沒有任何標記說你讀的是哪一份**。
+實錄：值星官 AST 比對 `composer.py` 得到「需要 19 個符號」，據以判定 peer 的「18 個」有誤；
+實際上值星官讀的是 peer **未 commit 的工作區**，peer 的基線是 **HEAD**。兩人都對，讀的不是同一份。
+**跨 session 比對數字前，先聲明「我讀的是哪一個快照」。**
+
+**⚠ `git log -S` 回空 ≠ 從未存在**：在一棵大量工作未 commit 的樹上，
+它的空結果只證明「沒有被 commit 過」。「從未寫過」與「寫過、只活在工作區、然後被 `reset --hard` 清掉」
+對它而言是同一個空結果。任何用它推論「這東西不存在」的結論，
+都該先問一句「有沒有可能它只是沒被 commit」。
+實錄：`issues/BR_20260802_reset_hard_destroyed_kicad_emit_and_the_BR_blamed_the_import_that_was_correct.md`
+——一張 BR 因此把根因寫成「import 了不存在的符號」，派出去的會是「實作三個不存在的函式」，
+而正確工作是「還原一份存在且已驗證的檔案」。
+
 **⚠ pathspec 陷阱**：`git status --porcelain <path>` 與不帶 path 的版本**輸出形狀完全一樣**，
 沒有任何標記說結果被過濾過。**任何帶範圍限定的 `git status` / `grep` / `ls` 結果，
 若要拿去支撐全域結論，必須先重跑一次不帶限定的版本。**
