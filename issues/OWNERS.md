@@ -29,7 +29,7 @@ an existing owner is the default.
 | `mcp-protocol-surface` | `ses_07c1ad2a4ffesVhlKotYBmsZlq` | `services/mcp/server.py` (protocol handler / route / tool registry / `run_tool`), `mcp.json`, `services/mcp/{preflight,_skill_nudge,token_store}.py`, `skills/bodesign/doctrine.md`, 4× Dockerfile + `docker-compose*` | `BR_20260721` ✅closed · `BR_20260723` (stale) |
 | `skill-shipping` | `ses_04db7a1c5ffelvbxyLP1p6xlRH` | `services/mcp/skill_shipping.py`, `server.py` `/skills` routes, 4× Dockerfile, `.dockerignore` | `BR_20260730` (PARTIAL) |
 | `readiness-contract` | **unassigned** | `packages/workflow-core/bodesign_workflow_core/{c01_id_package,c02_me_package,provenance,guide_dod,readiness_common}.py`, `skills/bodesign/scripts/gate.py`, `server.py:1179-1182` | `BR_20260719_c01_readiness_folder_arg_double_prefix` · `BR_20260719_c02_readiness_provenance_root_and_dod_surface` · `BR_20260719_c01_photoreal_render_pathway_adhoc_oauth` |
-| `schematic-engine` | **unassigned** | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` |
+| `schematic-engine` | **unassigned** — `ses_0c8efa1b4` probed · declined, see note | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` |
 | `silent-success` | **unassigned** | `packages/component-kb/bodesign_component_kb/vault.py`, `packages/workflow-core/bodesign_workflow_core/{reference_crosscheck,checkers/no_silent_degradation}.py`, `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py`, `ragbase/control/no-silent-degradation/` | `BR_20260731_vacuous_pass_empty_input_reads_as_verified_in_gates` · `KB_20260729_silent_degradation_antipattern_invariant_and_lint` (stale) |
 | `c03-stage-discipline` | **unassigned** | `skills/bodesign/stages/{c03-ee,c04-layout}/GUIDE.md`, `packages/workflow-core/bodesign_workflow_core/{check_c03,c04_layout_constraints,c04_placement_gate}.py` | `BR_20260707_bom_proposal…` · `BR_20260707_c03_stage_entry_gate…` · `BR_20260707_ccm_workflow_bypasses_webdav_cache…` |
 | `layout-route` | **unassigned** | `packages/eda-bridge/bodesign_eda_bridge/routing.py`, `Dockerfile.ee`, `docker-compose.workers.yml`, `server.py:1334-1385` | `BR_20260729_ee_worker…` (stale) · `BR_20260729_preflight…` (stale) |
@@ -62,6 +62,11 @@ a real edit, this assumption breaks and a single MCP-surface owner must arbitrat
 - **`BR_20260723e` destroys `BR_20260723b`'s evidence.** Both rewrite wire/port
   geometry in `kicad_emit.py`. **Capture 723b's repro before 723e lands**, or you
   will not be able to tell whether 723b was fixed or merely made unreachable.
+  **Upgrade (from the `ses_0c8efa1b4` probe): write that repro as a pytest
+  fixture in `tests/`, not as a hand-run record** — then the dependency is
+  machine-checked instead of being a convention someone has to remember. Same
+  reasoning that produced the fidelity gate: ERC is blind to fusion shorts, so
+  the guard needs an independent acceptance surface.
 - **`c01_double_prefix` before `c02_provenance`.** Same root cause (`one folder
   param carries two incompatible directory bases`). c01 sets the contract; fixing
   c02 alone papers over the shared contract and will conflict.
@@ -97,6 +102,38 @@ signal** — it reads like the present.
 handler round.
 
 ---
+
+## Probe notes
+
+### `schematic-engine` — `ses_0c8efa1b4` declined (2026-08-02)
+
+Probed because its title ("防熔合") names the same defect class as `BR_20260723e`.
+It declined, and **the decline carried information the acceptance would not have**:
+
+- **It was not the author.** The 8.4–8.7 wire-geometry implementation was done by
+  a coding subagent; that session did verification and close-out. `_collinear_overlap`
+  and the jog/split landing choices are second-hand to it.
+- **Zero knowledge of the current fix surface.** `power_endpoints`,
+  `_port_intrusions`, `power_ports`, stub orientation — all post-date its work by
+  17 days. The `BR_20260723*` generation is outside its knowledge boundary.
+- **Its A-grade knowledge is already written down** (spec DD-8..DD-11, CHANGELOG,
+  commit `1fe46df`). Nothing live beyond the record — so a fresh handler reading
+  from spec + the two BRs + the fidelity gate starts no worse, **without the
+  "sounds like it knows" risk**.
+
+It declined to adjudicate the 723e→723b geometry dependency for exactly that
+reason, while backing the *ordering* on independent methodological grounds. That
+is the distinction this registry wants: **it separated what it could vouch for
+from what it would have been guessing at.**
+
+**Consequence for routing:** a title matching a defect class proves the class was
+*handled there*, not that the geometry knowledge is *held there*. Treat title hits
+as candidates to probe, never as owners to assign.
+
+**Open question it raised, unresolved:** if `ses_0716c7745` (schemdraw template
+bank) *removed* the draftsman wire engine rather than adding an alternative,
+`BR_20260723e` may be moot. **Judgement to apply: as long as a `style="draftsman"`
+path is still reachable in the codebase, 723e stands.** Verify before dispatching it.
 
 ## Registry maintenance
 
