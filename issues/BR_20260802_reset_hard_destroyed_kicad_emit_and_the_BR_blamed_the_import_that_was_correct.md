@@ -1,4 +1,8 @@
-# BR_20260802 — `composer.py` import 三個從未存在的符號：`bodesign_eda_bridge` 整個套件無法 import，43 個測試模組在收集期就死
+# BR_20260802 — `reset --hard` 摧毀了 `kicad_emit.py` 的未 commit 版本，而本 BR 把責任歸給了那個從頭到尾都正確的 import
+
+> **標題已於 2026-08-02 改寫**（原題：「`composer.py` import 三個從未存在的符號」）。
+> 原題會派出「去實作三個不存在的函式」的工作；正確工作是**還原一份存在且已驗證的檔案**。
+> 改寫依據見 §更正 與 §值星官裁決。
 
 - **Status**: OPEN
 - **Owner**: `(default)`
@@ -22,7 +26,13 @@ ImportError: cannot import name '_vendor_sym_scale' from 'bodesign_eda_bridge.ki
 **這不是本次修改造成的**。用 `git archive HEAD` 匯出乾淨樹到 XDG scratch 重跑，同樣 ImportError；
 控制組：同一棵乾淨樹 `import bodesign_workflow_core` → OK。**確為 HEAD 既有破損。**
 
-## RCA
+## RCA（⚠ 本段結論已被推翻，保留原文供對照——見 §更正）
+
+> **下方原始 RCA 是錯的。** 它用 `git log -S` 的空結果推論「這些符號從未存在」，
+> 而未 commit 的工作不會在歷史裡留下任何可搜尋的痕跡。保留原文是因為
+> **下一個人的第一直覺會和我一樣**，而看得到錯誤推論本身比只看到正確答案有用。
+
+### 原始 RCA（錯誤）
 
 **缺的不是一個符號，是三個**：`_vendor_sym_scale`、`_native_pitch_and_count`、`_page_pitch_floor`。
 三者在全 repo **都沒有任何 `def` 站點**（實測，1271 個檔案；控制組：`def emit_kicad_schematic` → 1 命中，
@@ -295,3 +305,125 @@ git cat-file -p refs/recovered/kicad_emit_full > packages/eda-bridge/bodesign_ed
 **建議**：本 BR 的標題與 Root Cause 段落應改寫。目前版本會讓下一個 handler 去
 「實作三個從未存在的函式」，而正確動作是**還原一份存在且已驗證的檔案**——
 兩者派出去的是完全不同的工作。
+
+
+---
+
+## 值星官裁決（2026-08-02，`ses_04db7a1c5ffelvbxyLP1p6xlRH`）
+
+`schematic-engine` family 無 owner，依 `OWNERS.md` §4.3.2 路由到 `(default)`。
+以下三問由 `ses_0c87bab06` 提出，我**獨立取證**後裁決——不採信任何未經我親手覆核的宣稱。
+
+### 覆核：peer 的核心宣稱成立（決定性測試 + 控制組）
+
+我沒有數符號，我**實際跑 import**——因為符號計數回答的是「看起來夠不夠」，import 回答的是「行不行」。
+
+```
+blob 38af9fe + HEAD 的 composer.py   ->  RESTORE_ONLY_IMPORT_OK
+HEAD kicad_emit + HEAD 的 composer.py ->  ImportError: _vendor_sym_scale   ← 控制組，證明測試台有鑑別力
+```
+
+**這一格才是授權的依據**：它證明「還原這個 blob」單獨就足以修好 import，不需要 peer 工作區裡的任何其他改動。
+
+### 我自己踩的一格（記錄下來，因為它正是本 BR 的形狀）
+
+我第一輪 AST 比對得到「composer 需要 **19** 個符號，而 blob 缺 `resolve_symbol_library`」，
+一度判定 peer 的「18 個零缺口」有誤。**錯的是我。**
+
+我 parse 的是 peer **未 commit 的工作區** `composer.py`（19 個 import），
+而 peer 的基線是 **HEAD 的** `composer.py`（18 個）。實測：
+
+```
+HEAD composer imports 18 names      ← peer 的宣稱，成立
+worktree composer imports 19 names  ← 我讀到的
+```
+
+**同一個指令、同一個檔名、不同的快照，輸出形狀完全一樣。**
+這與本 BR 的根因、與 `AGENTS.md §6.1` 的 pathspec 陷阱、與 `git log -S` 的空結果是**同一個形狀的第四個變體**：
+判準沒有把「你問的是哪一份」寫進輸出裡。
+
+**`resolve_symbol_library` 不屬於這次還原**——它零 commit 歷史、不在 blob 裡，是 peer 為自己那張
+provenance BR 新寫的符號。這決定了下面的授權**必須拆成兩個 commit**。
+
+### Q1 — 授權 commit：**是，但拆成兩筆，且紅燈必須寫進 commit message**
+
+理由是非對稱，不是這份還原有多好：
+
+| | HEAD 現況 | 還原後 |
+|---|---|---|
+| 套件 import | **失敗** | 成功 |
+| 測試模組 | 43 個在收集期就死 | 載入 |
+| 真實失敗 | 74 | 49 |
+| **保真閘** | **從未執行**（loader error） | **執行且 RED** |
+
+**「紅燈且看得見」嚴格優於「儀器從來沒開機」。** 但這不允許它靜悄悄地進去。
+
+**授權範圍（三條，缺一即撤回授權）**：
+
+1. **Commit A = 純還原**：`kicad_emit.py` 必須與 `refs/recovered/kicad_emit_full`
+   **位元組相同**。`git cat-file -p` 後 `sha256` 比對，不接受「差不多」。
+2. **Commit B = 新增符號**：`resolve_symbol_library` + `composer.py` 的 provenance 改動另開一筆。
+   它有不同的來源、不同的風險，混在還原裡會讓未來的 `git log -S` 再次分不清哪個是還原、哪個是新寫。
+3. **兩筆的 message 都必須逐字帶上保真閘的紅燈數字**（見下）。不得只寫「還原成功」。
+
+### 保真閘紅燈 — 我親手量的，peer 沒有單獨報
+
+`fidelity.py` 是這個 family 的驗收儀器（本 BR §Cross-ref 自己寫的）。還原後它**執行了，而且是紅的**：
+
+```
+tests.test_fidelity_gate  (還原後，連跑 2 次結果相同)
+  test_all_label_path_is_faithful            ERROR
+    FidelityError: net partition diverged from spec (collinear-wire fusion / label collision)
+  test_verify_partition_fidelity_standalone  FAIL
+    baseline nets=9 nodes=24 | candidate nets=6 nodes=18 | shared=18
+    ONLY_BASELINE (missing): ['J1.1','J1.2','J1.5','R1.1','R2.1','R5.1']
+  其餘 3 個單元測試  ok
+
+控制組：clean HEAD 樹跑同一個模組 -> Ran 1 test, errors=1 (_FailedTest，整個模組沒載入)
+```
+
+**這不是還原造成的回歸**——peer 的 13 筆「新暴露」清單裡確實含 `test_fidelity_gate`，那份分析是對的。
+
+但**聚合掩蓋了一件承重的事**：對這個 family 而言，`test_fidelity_gate` 不是 13 分之 1，
+它是**驗收儀器本身**。把它併進「13 筆新暴露的既有失敗」在統計上正確，
+在決策上抹掉了唯一會改變授權條件的那一格。**這是量測粒度的缺陷，不是誠實度的缺陷**——
+peer 主動交出了自己的紅燈資料，只是沒有把那一項單獨拎出來。
+
+已另立 BR 追蹤該紅燈：`issues/BR_20260802_fidelity_gate_is_red_after_restore_and_never_ran_at_head.md`；
+**本 BR 不因還原 commit 而關閉**。
+
+### Q2 — `justify left` 之爭：**採 recovered（有 justify left）**，我有依據
+
+peer 說「沒有 wire-geometry 判斷依據所以不猜」——這個姿態是對的。但依據存在，在 plan 裡：
+
+```
+plans/eda-bridge_layered-pipeline/tasks.md:73
+  - [x] M7-7.6 DD-14 修復（justify-left + pitch comfort floor）→ v20 重產
+        manifest 逐頁 == v19 基線，DD-8 全綠（interior_crossings=0×10）
+```
+
+**justify-left 是一個已完成、且有 v20 重產證據的 spec 任務。**
+HEAD 沒有它 ⇒ **HEAD 是 DD-14 之前的版本**；recovered 有它 ⇒ recovered 是修復後的版本。
+
+旁證在 recovered 檔案自己的註解裡（`:1743-1761`），它記載了 `justify left` 的方向性推理
+與 `EN_1V8-inside-U6` 那個具體缺陷——**那是修完之後才寫得出來的知識**。
+
+同 A7/A8 的教訓：**規格已經記下了答案，只是沒有人去讀。**
+
+### Q3 — 標題與 Root Cause：**已改寫**（本次 commit）
+
+標題已改；原 RCA 保留但標注推翻，理由寫在該段。
+**保留錯誤推論是刻意的**——下一個人的第一直覺會和我一樣，看得見錯誤路徑比只看見正確答案有用。
+
+### 一併更正：M7-7.9 的假 PASS 判定要降級
+
+本 BR §「第二個缺陷」說 `tasks.md` M7-7.9 宣告的稽核「驗的是不存在的東西」。
+**那個判定現在只對一半**：那些函式存在過（在未 commit 的工作區裡），稽核當時很可能真的跑過。
+真正的缺陷是**它驗過的東西從未被 commit**，所以它的 PASS 在 HEAD 上不可複現。
+這比「驗了不存在的東西」更難防，也更值得記。
+
+### 未解決（不阻塞這次 commit）
+
+- 保真閘紅燈 → 已另立 BR，需 `schematic-engine` owner
+- `kicad_emit.py` 有 **~765 行從未被 commit 的工作**（3030 vs 2265）長期只活在工作區。
+  這是本次資料損失規模的真正放大器，屬流程缺陷而非程式缺陷。
