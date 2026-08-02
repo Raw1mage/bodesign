@@ -29,6 +29,12 @@ class RefsGateTests(unittest.TestCase):
         shutil.rmtree(self.work, ignore_errors=True)
 
     def _seed_refs(self, *, with_baseline=True, with_sources=True):
+        """Seed C04's per-stage ``01_refs/`` and return the STAGE dir.
+
+        Note the two callers want different roots: ``ingest_refs`` takes a stage
+        dir (or a direct ``01_refs`` path), while ``require_refs`` takes the
+        PRODUCT ROOT and derives the stage from its ``layer`` argument.
+        """
         refs = self.work / "C04-Layout" / "01_refs"
         refs.mkdir(parents=True, exist_ok=True)
         if with_baseline:
@@ -44,24 +50,25 @@ class RefsGateTests(unittest.TestCase):
 
     # ── require_refs: fail-fast on missing SSOT ─────────────────────────────
     def test_missing_refs_root_raises_typed_error(self):
-        stage = self.work / "C04-Layout"  # no 01_refs at all
+        # require_refs takes the PRODUCT ROOT; it derives <root>/C04-Layout/01_refs
+        # from layer="C04" (the caller never pre-joins the stage folder).
         with self.assertRaises(RefsGateError) as ctx:
-            require_refs(stage, layer="C04")
+            require_refs(self.work, layer="C04")
         self.assertEqual(ctx.exception.code, REFS_SSOT_MISSING)
         self.assertEqual(ctx.exception.detail["layer"], "C04")
         self.assertEqual(ctx.exception.detail["reason"], "root_not_visible")
 
     def test_empty_refs_root_raises_typed_error(self):
-        stage = self._seed_refs(with_sources=False)  # 01_refs exists but empty
+        self._seed_refs(with_sources=False)  # 01_refs exists but empty
         with self.assertRaises(RefsGateError) as ctx:
-            require_refs(stage, layer="C04")
+            require_refs(self.work, layer="C04")
         self.assertEqual(ctx.exception.code, REFS_SSOT_MISSING)
         self.assertEqual(ctx.exception.detail["reason"], "no_sources")
 
     # ── require_refs: pass on populated SSOT ────────────────────────────────
     def test_populated_refs_passes_and_returns_manifest(self):
-        stage = self._seed_refs()
-        manifest = require_refs(stage, layer="C04")
+        self._seed_refs()
+        manifest = require_refs(self.work, layer="C04")
         self.assertTrue(manifest.complete)
         self.assertEqual(manifest.schema, "bodesign.refs.manifest.v1")
         self.assertEqual(len(manifest.sources), 3)

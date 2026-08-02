@@ -78,7 +78,9 @@ class AiguardRefsGateAcceptanceTests(unittest.TestCase):
                 ("01_正式需求書/N6需求說明_優化版v3.pptx", b"PK\x03\x04stub-deck"),
             ],
         )
-        manifest = require_refs(self.proj / "C04-Layout", layer="C04")
+        # require_refs takes the PRODUCT ROOT and derives <root>/C04-Layout/01_refs
+        # from layer="C04"; the caller never pre-joins the stage folder.
+        manifest = require_refs(self.proj, layer="C04")
         self.assertTrue(manifest.complete)
         self.assertTrue(manifest.root_visible)
         # authority order parsed from the deck-derived baseline.
@@ -93,9 +95,9 @@ class AiguardRefsGateAcceptanceTests(unittest.TestCase):
     def test_each_layer_gates_independently(self):
         self._seed_layer("C01-ID", docs=[("C01_物理配置SSOT.md", "x")])
         # C01 passes, C03 (unseeded) blocks — proves per-layer isolation.
-        self.assertTrue(require_refs(self.proj / "C01-ID", layer="C01").complete)
+        self.assertTrue(require_refs(self.proj, layer="C01").complete)
         with self.assertRaises(RefsGateError):
-            require_refs(self.proj / "C03-EE", layer="C03")
+            require_refs(self.proj, layer="C03")
 
 
 if __name__ == "__main__":

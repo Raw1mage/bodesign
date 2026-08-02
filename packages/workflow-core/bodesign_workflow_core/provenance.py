@@ -43,13 +43,13 @@ def make_provenance(kind: str, source: str, detail: str = "") -> dict[str, str]:
     return {"kind": kind, "source": str(source), "detail": str(detail)}
 
 
-def _refs_source_resolves(source: str, folder: Path) -> bool:
+def _refs_source_resolves(source: str, *, stage_dir: Path) -> bool:
     if not source:
         return False
     candidate = Path(source)
     if candidate.is_absolute():
         return False  # refs sources are 01_refs-relative by contract
-    refs_root = (folder / REFS_DIRNAME).resolve()
+    refs_root = (stage_dir / REFS_DIRNAME).resolve()
     try:
         resolved = (refs_root / candidate).resolve(strict=True)
     except OSError:
@@ -62,16 +62,25 @@ def _refs_source_resolves(source: str, folder: Path) -> bool:
 def provenance_gap_for(
     item_name: str,
     provenance: Any,
-    folder: str | Path | None = None,
+    *,
+    stage_dir: str | Path | None = None,
 ) -> dict[str, str] | None:
     """Adjudicate one item's provenance. Returns a gap dict or None (passes).
+
+    ``stage_dir`` is the OWNING STAGE's directory (e.g. ``<product>/C02-ME``),
+    NOT the product root: ``01_refs/`` is a per-stage bucket by the
+    stage-structure contract. It is keyword-only and named for what it is
+    because the bug this fixes (BR_20260719 c02) was exactly a ``Path`` argument
+    whose meaning differed between two code paths while the type stayed the
+    same — a positional ``folder`` let a product root be passed where a stage
+    dir was expected, and nothing could detect it.
 
     Gap reasons (errors.md):
       * provenance_missing        — no/invalid provenance dict (legacy v1)
       * kind_derived              — emitter-inferred, needs owner grounding
       * refs_source_unresolvable  — kind=refs but source does not resolve to a
-        real path INSIDE <folder>/01_refs/ (traversal/symlink escapes rejected).
-        With no folder to resolve against, the claim fails CLOSED (review F3):
+        real path INSIDE <stage_dir>/01_refs/ (traversal/symlink escapes rejected).
+        With no stage_dir to resolve against, the claim fails CLOSED (review F3):
         an unverifiable refs claim never passes the gate.
     """
     if not isinstance(provenance, dict) or provenance.get("kind") not in PROVENANCE_KINDS:
@@ -90,14 +99,14 @@ def provenance_gap_for(
         }
     if kind == KIND_REFS:
         source = str(provenance.get("source") or "")
-        if folder is None:
+        if stage_dir is None:
             return {
                 "item": item_name,
                 "reason": "refs_source_unresolvable",
-                "fix": f"refs provenance ({source!r}) cannot be verified without a package folder; "
-                       "re-run the adjudication with folder= (fail-closed, no weak mode)",
+                "fix": f"refs provenance ({source!r}) cannot be verified without the owning stage dir; "
+                       "re-run the adjudication with stage_dir= (fail-closed, no weak mode)",
             }
-        if not _refs_source_resolves(source, Path(folder)):
+        if not _refs_source_resolves(source, stage_dir=Path(stage_dir)):
             return {
                 "item": item_name,
                 "reason": "refs_source_unresolvable",
@@ -109,12 +118,17 @@ def provenance_gap_for(
 
 def collect_provenance_gaps(
     named_items: list[tuple[str, Any]],
-    folder: str | Path | None = None,
+    *,
+    stage_dir: str | Path | None = None,
 ) -> list[dict[str, str]]:
-    """Adjudicate (item_name, provenance) pairs; return all gaps (never raises)."""
+    """Adjudicate (item_name, provenance) pairs; return all gaps (never raises).
+
+    ``stage_dir`` is the owning stage's directory (see ``provenance_gap_for``);
+    keyword-only so a product root can never be passed positionally in its place.
+    """
     gaps: list[dict[str, str]] = []
     for name, prov in named_items:
-        gap = provenance_gap_for(name, prov, folder)
+        gap = provenance_gap_for(name, prov, stage_dir=stage_dir)
         if gap is not None:
             gaps.append(gap)
     return gaps

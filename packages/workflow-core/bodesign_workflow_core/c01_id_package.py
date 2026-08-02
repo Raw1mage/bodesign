@@ -17,12 +17,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .readiness_common import boundary_next_step, root_guard
+from .readiness_common import boundary_next_step, cross_track_inconsistency, root_guard
 from .guide_dod import guide_compliance_for
 from .provenance import KIND_ANSWER, KIND_DERIVED, KIND_REFS, collect_provenance_gaps, make_provenance
 from .refs_gate import require_refs
 
 
+# WRITE side: where the emitter puts each deliverable. Unchanged (the Rockbox
+# bucket names are the emitter's own contract and several downstream templates
+# name them literally).
 C01_OUTPUTS = {
     "ai_file": Path("C01-ID") / "Ai file" / "Design_Direction.md",
     "cmf": Path("C01-ID") / "CMF" / "CMF_Direction.md",
@@ -30,6 +33,90 @@ C01_OUTPUTS = {
     "constraints": Path("C01-ID") / "Interface_Constraints.json",
     "handoff": Path("C01-ID") / "Handoff_to_ID_Designer.md",
 }
+
+# READ side: where readiness LOOKS for each deliverable, in explicit
+# new-then-legacy order (same discipline as ``resolve_stage_json``). This is NOT
+# a fallback chain that invents data — every candidate is a position the
+# audience-split contract (stage-structure.md, 2026-07-17) has legitimately used,
+# and a miss on all of them is still a hard `missing`.
+#
+# BR_20260719 (c01 double-prefix): readiness resolved ONLY the legacy bucket
+# paths while ``c01.dod.json`` already listed the ``03_output/`` positions, so a
+# compliant package returned `readiness_pct: 0` with every artifact "missing"
+# WHILE `dod_ok: true` — two tracks of the same verb disagreeing about the same
+# files, with no warning. The two lists are kept identical by the drift guard in
+# ``tests/test_readiness_folder_contract.py``
+# (TV4::test_candidate_paths_match_the_dod_manifest), which asserts this table is
+# byte-equal to each deliverable's ``any_of`` in ``templates/c01.dod.json`` — so a
+# future edit to either side alone fails immediately instead of silently
+# re-opening the split.
+C01_OUTPUT_CANDIDATES: dict[str, tuple[Path, ...]] = {
+    "ai_file": (
+        Path("C01-ID") / "03_output" / "Design_Direction.md",
+        Path("C01-ID") / "Design_Direction.md",
+        Path("C01-ID") / "Ai file" / "Design_Direction.md",
+    ),
+    "cmf": (
+        Path("C01-ID") / "03_output" / "CMF_Direction.md",
+        Path("C01-ID") / "CMF_Direction.md",
+        Path("C01-ID") / "CMF" / "CMF_Direction.md",
+    ),
+    "display_uiux": (
+        Path("C01-ID") / "03_output" / "UIUX_Requirements.md",
+        Path("C01-ID") / "UIUX_Requirements.md",
+        Path("C01-ID") / "Display UIUX" / "UIUX_Requirements.md",
+        Path("C01-ID") / "Display UI_UX" / "UIUX_Requirements.md",
+    ),
+    "constraints": (
+        Path("C01-ID") / "03_output" / "Interface_Constraints.json",
+        Path("C01-ID") / "Interface_Constraints.json",
+    ),
+    "handoff": (
+        Path("C01-ID") / "03_output" / "Handoff_to_ID_Designer.md",
+        Path("C01-ID") / "Handoff_to_ID_Designer.md",
+    ),
+}
+
+# The DoD manifest deliverable id backing each readiness key (the cross-track
+# join). Used by the drift guard below.
+C01_KEY_TO_DOD_ID = {
+    "ai_file": "design_direction",
+    "cmf": "cmf_direction",
+    "display_uiux": "uiux_requirements",
+    "constraints": "interface_constraints",
+    "handoff": "handoff",
+}
+
+
+C01_STAGE_DIRNAME = "C01-ID"
+
+
+def _c01_stage_dir(folder: str | Path | None) -> Path | None:
+    """Map a product root to the C01 stage dir (``<product>/C01-ID``).
+
+    ``01_refs/`` is a per-stage bucket (stage-structure.md), while every `folder`
+    argument in this module is the product root. Returns None with no folder so
+    provenance adjudication keeps failing CLOSED.
+    """
+    if folder is None:
+        return None
+    return Path(folder) / C01_STAGE_DIRNAME
+
+
+def _c01_resolve_output(root: Path, key: str) -> tuple[Path, Path]:
+    """Resolve one C01 deliverable to ``(abs_path, rel_path)``.
+
+    Returns the FIRST existing candidate; when none exists, returns the
+    canonical (new-position) candidate so the "create this" next_action names
+    the right target instead of a legacy bucket.
+    """
+    candidates = C01_OUTPUT_CANDIDATES[key]
+    for rel in candidates:
+        path = root / rel
+        if path.exists():
+            return path, rel
+    canonical = candidates[0]
+    return root / canonical, canonical
 
 C01_ANSWER_STATE_REL_PATH = Path("C01-ID") / "03_output" / "answer_state.json"
 C01_ANSWER_STATE_REL_PATH_LEGACY = Path("C01-ID") / "answer_state.json"
@@ -197,6 +284,26 @@ class C01PackageReadiness:
         # derived constraint items can NEVER silently satisfy DoD.
         if self.provenance_gaps:
             out["dod_ok"] = False
+        # Cross-track consistency (BR_20260719 c01, adjudicated 2026-08-02). The
+        # artifact track and the DoD track are two views of ONE filesystem, so a
+        # disagreement means they resolved different paths — never a real verdict.
+        # The candidate table above is kept aligned with the DoD manifest by a
+        # structural drift guard, but that guard only runs in tests; this is the
+        # runtime backstop, so a package that hits the contradiction in the field
+        # says so instead of returning a clean impossible answer.
+        if self.root_visible and "dod_ok" in out and self.artifacts:
+            problem = cross_track_inconsistency(
+                all_missing=all(a.status != "present" for a in self.artifacts),
+                all_present=all(a.status == "present" for a in self.artifacts),
+                dod_ok=bool(out["dod_ok"]),
+                has_blocking_gaps=bool(self.provenance_gaps or self.field_gaps),
+            )
+            if problem is not None:
+                out["track_inconsistency"] = problem
+                out["dod_ok"] = False
+                warnings = list(out.get("warnings") or [])
+                warnings.append(f"readiness track inconsistency: {problem}")
+                out["warnings"] = warnings
         return out
 
 
@@ -462,8 +569,11 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
         )
     artifacts: list[C01PackageArtifact] = []
     present = 0
-    for key, rel_path in C01_OUTPUTS.items():
-        path = root / rel_path
+    for key in C01_OUTPUT_CANDIDATES:
+        # Resolve against the audience-split candidate list, not a single hard-coded
+        # bucket, so the artifact track and the DoD track look at the SAME files
+        # (BR_20260719 c01: they did not, and the verb returned pct=0 + dod_ok=true).
+        path, rel_path = _c01_resolve_output(root, key)
         if not path.exists():
             artifacts.append(C01PackageArtifact(key, str(rel_path), "missing", f"Create `{rel_path}`."))
             continue
@@ -475,7 +585,7 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
             continue
         artifacts.append(C01PackageArtifact(key, str(rel_path), "present"))
         present += 1
-    file_readiness_pct = round(100 * present / len(C01_OUTPUTS))
+    file_readiness_pct = round(100 * present / len(C01_OUTPUT_CANDIDATES))
     pending = [a for a in artifacts if a.status != "present"]
     answer_state_path = _c01_answer_state_path(root)
     field_gaps: list[dict[str, str]] = []
@@ -494,7 +604,7 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
     # provenance against this folder's 01_refs/. Any derived/unattributed/
     # unresolvable item is a named gap; gaps force dod_ok=false in to_dict.
     provenance_gaps: list[dict[str, str]] = []
-    constraints_path = root / C01_OUTPUTS["constraints"]
+    constraints_path, _ = _c01_resolve_output(root, "constraints")
     if constraints_path.exists():
         try:
             cdata = json.loads(constraints_path.read_text(encoding="utf-8"))
@@ -504,7 +614,7 @@ def assess_c01_package_readiness(folder: str | Path) -> C01PackageReadiness:
             provenance_gaps = collect_provenance_gaps(
                 [(str(c.get("name", "?")), c.get("provenance") if isinstance(c, dict) else None)
                  for c in cdata["exposed_components"]],
-                folder=root,
+                stage_dir=_c01_stage_dir(root),
             )
             provenance_gaps.extend(
                 _c01_answer_claim_gaps(root, cdata["exposed_components"]))
@@ -1020,7 +1130,7 @@ def _constraints(m: dict[str, Any], folder: Path | None = None) -> dict[str, Any
         "refs_manifest": m.get("refs_manifest"),
         "provenance_gaps": collect_provenance_gaps(
             [(str(c.get("name", "?")), c.get("provenance")) for c in m["components"]],
-            folder=folder,
+            stage_dir=_c01_stage_dir(folder),
         ),
         "exposed_components": m["components"],
         "downstream_targets": {

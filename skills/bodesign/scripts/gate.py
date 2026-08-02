@@ -202,7 +202,12 @@ VERBS = {
     "c01_emit_uiux_package": (_WC, "emit_c01_uiux_package", ("folder",),
                               "Emit the C01 Display UI/UX draft bucket (wireframes + flow doc)."),
     # C02 analysis-only (4)
-    "c02_readiness": (_WC, "assess_c02_constraint_readiness", (),
+    # `folder` is REQUIRED, not optional: REPO_DEFAULT_KEYS only seeds a key the
+    # verb declares required, so an empty tuple meant `gate.py c02_readiness
+    # --repo <A>` silently passed folder=None. _load_constraints(None) then
+    # returned {} and every constraint read as missing -- byte-identical to a
+    # package that genuinely has none (BR_20260719 c02).
+    "c02_readiness": (_WC, "assess_c02_constraint_readiness", ("folder",),
                       "Assess C02 mechanical/enclosure constraint readiness (no CAD)."),
     "c02_emit_enclosure_package": (_WC, "emit_c02_enclosure_package", ("out_dir",),
                                    "Emit the C02-ME enclosure support package (no CAD/STL/STEP)."),

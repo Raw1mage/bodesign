@@ -17,7 +17,7 @@ from pathlib import Path
 
 from bodesign_reverse_core import ingest_project_folder
 
-from .readiness_common import boundary_next_step, resolve_stage_json, root_guard
+from .readiness_common import STAGE_FOLDER, boundary_next_step, resolve_stage_json, root_guard
 from .guide_dod import assess_guide_dod
 
 
@@ -26,10 +26,11 @@ from .guide_dod import assess_guide_dod
 # cXX_readiness resolves files (root / <STAGE>/<file>). So the roll-up passes the
 # project root for every stage; the only per-stage condition is whether the stage has
 # been started (its folder exists).
-_STAGE_FOLDER = {
-    "c00": "C00-PRD", "c01": "C01-ID", "c02": "C02-ME", "c03": "C03-EE",
-    "c04": "C04-Layout", "c05": "C05-FW", "c06": "C06-Verification", "c07": "C07-MFG",
-}
+#
+# The map itself lives in ``readiness_common`` (single source): the refs gate derives
+# the same stage folders from the same table, and a second private copy here is how
+# the two would drift apart without anything noticing.
+_STAGE_FOLDER = STAGE_FOLDER
 _STAGES = list(_STAGE_FOLDER)
 
 # POC deliverable checklist (electronics-core scope). Each entry:

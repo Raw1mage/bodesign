@@ -27,8 +27,13 @@ C01_CONSTRAINTS_REL = Path("C01-ID") / "Interface_Constraints.json"
 C02_CONSTRAINTS_REL = Path("C02-ME") / "Mechanical_Constraints.json"
 
 
-def _seed_refs(work: Path, name: str = "owner_brief.md") -> None:
-    refs = work / "01_refs"
+def _seed_refs(work: Path, name: str = "owner_brief.md", stage: str = "C01-ID") -> None:
+    """Seed a stage's ``01_refs/`` SSOT.
+
+    ``01_refs/`` is a PER-STAGE bucket (stage-structure.md), so the refs gate
+    resolves ``<product-root>/<STAGE>/01_refs/``. ``work`` is the product root.
+    """
+    refs = work / stage / "01_refs"
     refs.mkdir(parents=True, exist_ok=True)
     (refs / name).write_text("# Owner brief\n\nAuthority source content.\n", encoding="utf-8")
 
@@ -140,7 +145,7 @@ class RefsFirstEmitterTests(unittest.TestCase):
         self.assertEqual("missing", keys["constraint_provenance"].status)
 
     def test_tv5_c02_refs_provenance_clears_blocker(self):
-        _seed_refs(self.work, name="mech_brief.md")
+        _seed_refs(self.work, name="mech_brief.md", stage="C02-ME")
         readiness = assess_c02_constraint_readiness({
             "board_outline": {"width_mm": 80, "height_mm": 50},
             "component_heights": [{"ref": "J1", "height_mm": 8}],
@@ -154,7 +159,7 @@ class RefsFirstEmitterTests(unittest.TestCase):
         self.assertTrue(readiness.can_generate_cad_source)
 
     def test_tv5_c02_emitted_json_carries_provenance_gaps(self):
-        _seed_refs(self.work)
+        _seed_refs(self.work, stage="C02-ME")
         emit_c02_enclosure_package(
             self.work,
             constraints={"board_outline": {"width_mm": 80, "height_mm": 50}},

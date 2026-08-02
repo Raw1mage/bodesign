@@ -18,8 +18,12 @@ PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache"
 
 
 def _seed_refs(folder: Path) -> None:
-    """Minimal 01_refs/ SSOT so the C01 refs-first pre-flight (F7) passes."""
-    refs = folder / "01_refs"
+    """Minimal 01_refs/ SSOT so the C01 refs-first pre-flight (F7) passes.
+
+    ``01_refs/`` is a PER-STAGE bucket (stage-structure.md), so the gate resolves
+    ``<product-root>/<STAGE>/01_refs/``. ``folder`` here is the product root.
+    """
+    refs = folder / "C01-ID" / "01_refs"
     refs.mkdir(parents=True, exist_ok=True)
     (refs / "Reference_Baseline.md").write_text(
         "# Reference Baseline\n\nauthority order: formal deck\n", encoding="utf-8")

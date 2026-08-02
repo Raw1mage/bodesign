@@ -26,8 +26,12 @@ _STEP_CONSTRAINTS = {
 
 
 def _seed_refs(work: Path) -> None:
-    """Minimal 01_refs/ SSOT so the refs-first emit gate passes (DD-7)."""
-    refs = work / "01_refs"
+    """Minimal 01_refs/ SSOT so the refs-first emit gate passes (DD-7).
+
+    ``01_refs/`` is a PER-STAGE bucket (stage-structure.md); ``work`` is the
+    product root, so the SSOT lands under the owning stage.
+    """
+    refs = work / "C02-ME" / "01_refs"
     refs.mkdir(parents=True, exist_ok=True)
     (refs / "owner_brief.md").write_text(
         "# Owner brief\n\nMechanical constraints decomposed from the owner authority source.\n",
@@ -83,8 +87,10 @@ class C02MePackageTests(unittest.TestCase):
         self.assertFalse(readiness.can_create_printable_draft)
 
     def test_reads_constraints_from_c02_folder(self):
+        # exist_ok: the stage dir already holds this stage's 01_refs/ SSOT, which
+        # setUp seeds (01_refs/ is a per-stage bucket, stage-structure.md).
         constraints_dir = self.work / "C02-ME"
-        constraints_dir.mkdir(parents=True)
+        constraints_dir.mkdir(parents=True, exist_ok=True)
         (constraints_dir / "Mechanical_Constraints.json").write_text(json.dumps({
             "board_outline": {"width_mm": 40, "height_mm": 20},
             "component_heights": [{"ref": "J1", "height_mm": 6}],

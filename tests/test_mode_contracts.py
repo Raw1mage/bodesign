@@ -16,8 +16,12 @@ PRIVATE_BASE = Path(os.environ.get("XDG_RUNTIME_DIR") or (Path.home() / ".cache"
 
 
 def _seed_refs(work: Path) -> None:
-    """Minimal 01_refs/ SSOT so the refs-first emit gate passes (DD-7)."""
-    refs = work / "01_refs"
+    """Minimal 01_refs/ SSOT so the refs-first emit gate passes (DD-7).
+
+    ``01_refs/`` is a PER-STAGE bucket (stage-structure.md); ``work`` is the
+    product root, so the SSOT lands under the owning stage.
+    """
+    refs = work / "C01-ID" / "01_refs"
     refs.mkdir(parents=True, exist_ok=True)
     (refs / "owner_brief.md").write_text(
         "# Owner brief\n\nDecomposed from the owner authority source.\n",

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .readiness_common import boundary_next_step, root_guard
+from .guide_dod import guide_compliance_for
 from .provenance import collect_provenance_gaps
 from .refs_gate import require_refs
 
@@ -31,6 +32,12 @@ RECOMMENDED_FOR_USEFUL_DRAFT = (
     "antenna_keepouts",
 )
 
+# The stage folder every C02 rel_path is prefixed with. `folder` arguments in this
+# module are ALWAYS the product root (adjudicated 2026-08-02); the stage dir is
+# derived from it here, in ONE place, so no caller has to pre-join it and no two
+# code paths can disagree about what `folder` meant (BR_20260719 c02).
+C02_STAGE_DIRNAME = "C02-ME"
+
 C02_OUTPUTS = {
     "constraints": Path("C02-ME") / "Mechanical_Constraints.json",
     "assumptions": Path("C02-ME") / "Mechanical_Assumptions.md",
@@ -45,6 +52,17 @@ C02_OUTPUTS = {
     "projection_scad": Path("C02-ME") / "Enclosure_projection.scad",
     "projection_svg": Path("C02-ME") / "Enclosure.svg",
 }
+
+
+def _c02_stage_dir(folder: str | Path | None) -> Path | None:
+    """Map a product root to the C02 stage dir (``<product>/C02-ME``).
+
+    Returns None when there is no folder at all, so provenance adjudication keeps
+    failing CLOSED rather than silently resolving against the process cwd.
+    """
+    if folder is None:
+        return None
+    return Path(folder) / C02_STAGE_DIRNAME
 
 
 @dataclass(slots=True)
@@ -76,9 +94,10 @@ class C02ConstraintReadiness:
     items: list[C02ConstraintItem] = field(default_factory=list)
     root_visible: bool = True
     warnings: list[str] = field(default_factory=list)
+    folder: str | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        d: dict[str, object] = {
             "readiness_level": self.readiness_level,
             "readiness_pct": self.readiness_pct,
             "can_generate_cad_source": self.can_generate_cad_source,
@@ -89,6 +108,21 @@ class C02ConstraintReadiness:
             "warnings": list(self.warnings),
             "items": [item.to_dict() for item in self.items],
         }
+        # BR_20260719 (c02 symptom B): GUIDE c02-me §Self-verify tells the caller to
+        # run c02_readiness and read `dod_ok`, but c02 was the ONLY stage whose
+        # readiness verb never attached it (c01/c04/c05/c06 all do), so following the
+        # GUIDE literally returned nothing. `guide_compliance_for` returns None for an
+        # invisible root or the inline-constraints mode (folder is not a real dir) — in
+        # those cases the keys stay ABSENT rather than defaulting to a reassuring value.
+        gc = guide_compliance_for(self.folder, "c02", root_visible=self.root_visible)
+        if gc is not None:
+            d["guide_compliance"] = gc
+            d["dod_ok"] = bool(gc.get("dod_ok"))
+            # refs-first gate parity with c01: an unresolvable/derived provenance item
+            # can never silently satisfy DoD.
+            if any(item.key == "constraint_provenance" for item in self.items):
+                d["dod_ok"] = False
+        return d
 
 
 @dataclass(slots=True)
@@ -631,6 +665,7 @@ def assess_c02_constraint_readiness(
                 can_generate_cad_source=False, can_place_openings=False,
                 can_create_printable_draft=False, next_step=boundary_next_step(folder),
                 items=[], root_visible=False, warnings=[warning] if warning else [],
+                folder=str(folder),
             )
     data = constraints if constraints is not None else _load_constraints(folder)
     items = [
@@ -648,8 +683,14 @@ def assess_c02_constraint_readiness(
     # no longer reads as owner-grounded.
     prov_map = data.get("provenance") if isinstance(data.get("provenance"), dict) else {}
     present_keys = [item.key for item in items if item.status == "present"]
+    # BR_20260719 (c02): `folder` is the PRODUCT ROOT for every code path in this
+    # verb, so the stage dir is derived here rather than expecting the caller to
+    # pre-join it. Previously the constraints loader read <folder>/C02-ME/... while
+    # provenance resolved <folder>/01_refs/... — no single `folder` value could
+    # satisfy both, so a fully-grounded package always reported refs gaps.
     provenance_gaps = collect_provenance_gaps(
-        [(k, prov_map.get(k)) for k in present_keys], folder=folder)
+        [(k, prov_map.get(k)) for k in present_keys],
+        stage_dir=_c02_stage_dir(folder))
     if provenance_gaps:
         items.append(C02ConstraintItem(
             key="constraint_provenance", status="missing",
@@ -680,6 +721,7 @@ def assess_c02_constraint_readiness(
         can_create_printable_draft=False,
         next_step=next_step,
         items=items,
+        folder=None if folder is None else str(folder),
     )
 
 
@@ -722,7 +764,8 @@ def _normalized_constraints(constraints: dict[str, Any], folder: str | Path | No
     prov_map = constraints.get("provenance") if isinstance(constraints.get("provenance"), dict) else {}
     present_keys = [item.key for item in readiness.items if item.status == "present"]
     provenance_gaps = collect_provenance_gaps(
-        [(k, prov_map.get(k)) for k in present_keys], folder=folder)
+        [(k, prov_map.get(k)) for k in present_keys],
+        stage_dir=_c02_stage_dir(folder))
     pending = [
         {
             "key": item.key,

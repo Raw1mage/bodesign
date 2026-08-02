@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .readiness_common import stage_folder_for
+
 # ── typed error codes (errors.md, BINDING; mirrors plan errors.md) ──────────
 REFS_SSOT_MISSING = "REFS_SSOT_MISSING"
 REFS_ANCHOR_MISSING = "REFS_ANCHOR_MISSING"
@@ -258,14 +260,29 @@ def ingest_refs(refs_root: str | Path) -> RefsManifest:
 def require_refs(folder: str | Path, layer: str) -> RefsManifest:
     """Gate chokepoint: a downstream verb calls this FIRST.
 
+    ``folder`` is the PRODUCT ROOT (the readiness family's single ``folder``
+    contract); ``layer`` is the owning stage label (e.g. ``"C04"``). The stage
+    folder is derived HERE from ``layer`` — the caller never pre-joins it.
+
     Returns the RefsManifest on pass. Raises RefsGateError (fail-fast) when the
     stage's ``01_refs/`` SSOT is missing or empty — the caller MUST NOT proceed
-    to generate anything. ``layer`` is a label (e.g. "C04") carried into the
-    error detail so the surface names the offending stage.
+    to generate anything. ``layer`` is also carried into the error detail so the
+    surface names the offending stage.
 
-    No silent fallback, no default, no auto-mount (repo 天條 1/2).
+    BR_20260719 (refs location, adjudicated 2026-08-02): this used to pass
+    ``folder`` straight through to ``ingest_refs``, so the gate looked for
+    ``<product>/01_refs/`` while ``stage-structure.md`` defines ``01_refs/`` as a
+    PER-STAGE bucket and 8/8 real product tracks place it under the stage. Its own
+    docstring, its error text, and this ``layer`` parameter all said "stage"; only
+    the path it built said otherwise. Every caller was already passing the stage
+    identity — the information was present all along, just never used to build the
+    path. Consequence: the emit gate and the provenance resolver disagreed about
+    where refs live, and no layout satisfied both.
+
+    No silent fallback, no default, no auto-mount (repo 天條 1/2) — an unknown
+    ``layer`` raises rather than resolving to some default folder.
     """
-    manifest = ingest_refs(folder)
+    manifest = ingest_refs(Path(folder) / stage_folder_for(layer))
     if not manifest.root_visible:
         raise RefsGateError(
             REFS_SSOT_MISSING,
