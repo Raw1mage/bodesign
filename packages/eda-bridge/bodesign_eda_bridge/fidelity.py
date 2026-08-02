@@ -36,6 +36,41 @@ class FidelityReport:
     only_baseline: list[str] = field(default_factory=list)  # missing from candidate (had peers)
     only_candidate: list[str] = field(default_factory=list) # extra in candidate
     singleton_only_baseline: list[str] = field(default_factory=list)  # ignored isolated pins
+    singleton_only_candidate: list[str] = field(default_factory=list)  # ditto, candidate side
+    # BR_20260802 (instrument repair): `moved` says a node's partition class
+    # changed but NOT which way, so an OPEN CIRCUIT and a SHORT read identically.
+    # These three refine it by the DIRECTION of the peer-set change, so the gate
+    # can name the mechanism it actually measured instead of asserting one.
+    disconnected: list[str] = field(default_factory=list)  # peers LOST only  -> open circuit
+    fused: list[str] = field(default_factory=list)         # peers GAINED only -> short / fusion
+    regrouped: list[str] = field(default_factory=list)     # lost AND gained   -> re-partition
+
+    def diagnosis(self) -> list[str]:
+        """Mechanism names DERIVED from what was measured — never asserted.
+
+        Returns the mechanisms this report actually evidences, most specific
+        first. An empty list means the partition matched (or the divergence is
+        of a shape this gate cannot name — in which case it says exactly that,
+        rather than naming a mechanism it did not observe).
+        """
+        out: list[str] = []
+        if self.disconnected:
+            out.append(f"open circuit: {len(self.disconnected)} node(s) lost every peer "
+                       f"they share a net with in the spec")
+        if self.fused:
+            out.append(f"net fusion / short: {len(self.fused)} node(s) gained peers "
+                       f"they must not be connected to")
+        if self.regrouped:
+            out.append(f"re-partition: {len(self.regrouped)} node(s) both lost and "
+                       f"gained peers")
+        if self.only_baseline:
+            out.append(f"node absent from candidate: {len(self.only_baseline)} node(s) "
+                       f"the spec declares are not present in the emitted schematic "
+                       f"at all")
+        if self.only_candidate:
+            out.append(f"node absent from spec: {len(self.only_candidate)} node(s) exist "
+                       f"in the emitted schematic but not in the spec")
+        return out
 
     def summary(self) -> str:
         head = (f"baseline nets={self.baseline_nets} nodes={self.baseline_nodes} | "
@@ -46,6 +81,15 @@ class FidelityReport:
                    f"only_baseline={len(self.only_baseline)} "
                    f"only_candidate={len(self.only_candidate)}")
         lines = [head, verdict]
+        if not self.ok:
+            dx = self.diagnosis()
+            if dx:
+                lines.append("  MEASURED MECHANISM:")
+                lines.extend(f"    - {d}" for d in dx)
+            else:
+                # Never silently imply a mechanism we did not observe.
+                lines.append("  MEASURED MECHANISM: none of the known shapes matched "
+                             "— divergence is real but unclassified")
         if self.moved:
             lines.append(f"  MOVED (partition class changed): {self.moved[:40]}")
         if self.only_baseline:
@@ -60,8 +104,15 @@ class FidelityError(RuntimeError):
 
     def __init__(self, report: FidelityReport):
         self.report = report
+        # BR_20260802 (instrument repair): the mechanism named here is DERIVED
+        # from the report, never hardcoded. The previous message asserted
+        # "(collinear-wire fusion / label collision)" for EVERY divergence; two
+        # readers independently went looking for a fusion that was not there,
+        # because the instrument named a cause it had not measured.
+        dx = report.diagnosis()
+        cause = "; ".join(dx) if dx else "mechanism unclassified"
         super().__init__("schematic fidelity gate FAILED — net partition diverged "
-                         "from spec (collinear-wire fusion / label collision):\n"
+                         f"from spec ({cause}):\n"
                          + report.summary())
 
 
@@ -131,6 +182,17 @@ def sch_union_classes(sch_files: list[Path], workdir: Path) -> list[frozenset]:
             continue
         for cls in parse_net_file(out):
             nodes = list(cls)
+            # BR_20260802 (fidelity instrument repair): SEED every node before
+            # unioning. The previous loop only touched nodes[1:], so a SINGLE-node
+            # net (`unconnected-(R1-Pad1)`) never entered `parent` at all and
+            # vanished from the candidate universe entirely. That made
+            # `only_candidate` STRUCTURALLY unable to be non-zero for an
+            # open-circuit pin: the node was not "extra", it was invisible. Two
+            # readers independently mis-diagnosed a broken net as a FUSION because
+            # of exactly this. Seeding is a no-op for multi-node nets (find()
+            # already self-parents them on the first union).
+            for n in nodes:
+                find(n)
             for n in nodes[1:]:
                 union(nodes[0], n)
     comps = defaultdict(set)
@@ -200,15 +262,44 @@ def compare_partitions(expected: dict[str, list[str]],
     # >=1 baseline peer (belonged to a real multi-pin net and vanished).
     only_b = sorted(nd for nd in raw_only_b if len(b_idx.get(nd, {nd})) > 1)
     singleton_only_b = sorted(nd for nd in raw_only_b if len(b_idx.get(nd, {nd})) == 1)
-    only_c = sorted(raw_only_c)
+    # BR_20260802 (instrument repair, symmetry): the SAME exemption on the
+    # candidate side. A candidate node the spec never mentions is only a fidelity
+    # violation if it CONNECTS to something — an isolated pin (e.g. the 34 unused
+    # ways of a 40-pin connector, which kicad-cli emits as `unconnected-(J1-PadN)`)
+    # shares a net with nobody and therefore cannot short anything.
+    #
+    # This asymmetry was invisible until the union-find seeding fix above: before
+    # it, a singleton candidate net could never reach `raw_only_c` at all, so the
+    # missing exemption had nothing to act on. Fixing one defect exposed the other
+    # — they are the same defect seen from the two sides of the comparison.
+    #
+    # Kept VISIBLE (`singleton_only_candidate`), never silently dropped: an
+    # exemption the reader cannot see is indistinguishable from a check that was
+    # never made.
+    only_c = sorted(nd for nd in raw_only_c if len(c_idx.get(nd, {nd})) > 1)
+    singleton_only_c = sorted(nd for nd in raw_only_c if len(c_idx.get(nd, {nd})) == 1)
 
     shared = b_nodes & c_nodes
     moved = []
+    # BR_20260802 (instrument repair): classify each moved node by the DIRECTION
+    # of its peer-set change. `moved` alone cannot tell an open circuit from a
+    # short — both are "partition class changed". Losing peers only == the net was
+    # cut; gaining peers only == two nets were welded together; both == the
+    # partition was reshuffled. The gate must report the one it measured.
+    disconnected, fused, regrouped = [], [], []
     for nd in sorted(shared):
         b_peers = frozenset(x for x in b_idx.get(nd, frozenset({nd})) if x in shared)
         c_peers = frozenset(x for x in c_idx.get(nd, frozenset({nd})) if x in shared)
         if b_peers != c_peers:
             moved.append(nd)
+            lost = b_peers - c_peers
+            gained = c_peers - b_peers
+            if lost and gained:
+                regrouped.append(nd)
+            elif lost:
+                disconnected.append(nd)
+            else:
+                fused.append(nd)
 
     ok = not moved and not only_b and not only_c
     return FidelityReport(
@@ -218,6 +309,8 @@ def compare_partitions(expected: dict[str, list[str]],
         shared=len(shared),
         moved=moved, only_baseline=only_b, only_candidate=only_c,
         singleton_only_baseline=singleton_only_b,
+        singleton_only_candidate=singleton_only_c,
+        disconnected=disconnected, fused=fused, regrouped=regrouped,
     )
 
 
