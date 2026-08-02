@@ -31,6 +31,18 @@ class PinAllocation:
     refs: list[str] = field(default_factory=list)
     net_count: int = 0
     mcu_refs: list[str] = field(default_factory=list)
+    unparsed_nets: list[str] = field(default_factory=list)
+    vacuous: bool = False
+    advice: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "refs": list(self.refs), "net_count": self.net_count,
+            "mcu_refs": list(self.mcu_refs),
+            "unparsed_nets": list(self.unparsed_nets),
+            "unparsed_net_count": len(self.unparsed_nets),
+            "vacuous": self.vacuous, "advice": self.advice,
+        }
 
 
 def _pin_sort_key(pin: str):
@@ -49,18 +61,47 @@ def _iter_nodes(net: dict):
 
 
 def build_pin_allocation(nets: list[dict], mcu_refs: tuple[str, ...] = ()) -> PinAllocation:
+    """Pivot a net list into a per-pin allocation table.
+
+    Nets whose node list is absent or in an unrecognised shape (the contract is
+    ``{"nodes": ["REF.PIN", ...]}``) are reported in ``unparsed_nets`` rather than
+    silently contributing nothing (BR_20260731). When NO row could be derived at all
+    — empty input, or every net unparsed — the result is marked ``vacuous``: an empty
+    allocation table is not evidence that the design has no pins, it is evidence that
+    nothing was understood.
+    """
     mcu = {r.upper() for r in mcu_refs}
     rows: list[PinAllocationRow] = []
-    for net in nets:
+    unparsed: list[str] = []
+    for idx, net in enumerate(nets):
         name = str(net.get("name", "")).strip()
+        before = len(rows)
         for ref, pin in _iter_nodes(net):
             rows.append(PinAllocationRow(ref=ref, pin=pin, net=name, is_mcu=ref.upper() in mcu))
+        if len(rows) == before:
+            unparsed.append(name or f"<unnamed net #{idx}>")
     rows.sort(key=lambda r: (r.ref, _pin_sort_key(r.pin)))
+    vacuous = not rows
+    if vacuous:
+        advice = ("No pin rows could be derived — this is NOT an empty design. "
+                  + (f"{len(unparsed)} net(s) were supplied but none yielded a REF.PIN node; "
+                     "check the net shape (expected {'nodes': ['REF.PIN', ...]})."
+                     if unparsed else
+                     "No nets were supplied at all; check the upstream netlist parse / composer spec."))
+    elif unparsed:
+        advice = (f"{len(unparsed)} net(s) yielded no REF.PIN node and are absent from the table: "
+                  f"{', '.join(unparsed[:6])}{'…' if len(unparsed) > 6 else ''}. "
+                  "Check their shape (expected {'nodes': ['REF.PIN', ...]}).")
+    else:
+        advice = ""
     return PinAllocation(
         rows=rows,
         refs=sorted({r.ref for r in rows}),
         net_count=len({r.net for r in rows}),
         mcu_refs=sorted(mcu),
+        unparsed_nets=unparsed,
+        vacuous=vacuous,
+        advice=advice,
     )
 
 

@@ -690,7 +690,7 @@ def _v_evidence_manifest(a):
 def _v_pin_allocation(a):
     from bodesign_eda_bridge import build_pin_allocation, render_pin_allocation_csv
     alloc = build_pin_allocation(a["nets"], tuple(a.get("mcu_refs", [])))
-    return {"refs": alloc.refs, "net_count": alloc.net_count, "csv": render_pin_allocation_csv(alloc)}
+    return {**alloc.to_dict(), "csv": render_pin_allocation_csv(alloc)}
 
 
 def _v_reference_crosscheck(a):

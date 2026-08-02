@@ -226,9 +226,20 @@ def audit_claims(claims: list[dict], root: str | os.PathLike | None = None,
     Each claim: ``{mpn, field, asserted_value?}``. Blocking when ``absent``/``no-field``/
     ``unverified`` or ``verified`` but the asserted value contradicts the datasheet. Returns
     per-claim verdicts, the blocking subset, and ``publishable`` = no blockers.
+
+    Zero claims is a **third state**, never a pass (BR_20260731): ``verdict="vacuous"``
+    with ``publishable=None``. An empty claim list is indistinguishable from an extraction
+    step that ran and matched nothing, so this gate refuses to certify it — the same
+    principle `plan_design_intent("")` applies by returning ``needs-clarification``.
     """
     verdicts: list[dict] = []
     blocking: list[dict] = []
+    if not claims:
+        return {"publishable": None, "verdict": "vacuous", "claim_count": 0,
+                "blocking_count": 0, "claims": [], "blocking": [],
+                "advice": "No claims were submitted — this is NOT a pass. Nothing was checked "
+                          "against the datasheet cache. Verify the claim-extraction step ran and "
+                          "matched something before treating this RCA as publishable."}
     for c in claims:
         asserted = c.get("asserted_value", c.get("claimed_value"))
         res = spec_check(c["mpn"], c["field"], claimed_value=asserted, root=root, work_dir=work_dir)

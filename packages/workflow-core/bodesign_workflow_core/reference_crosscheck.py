@@ -33,20 +33,36 @@ class ReferenceCheck:
     coverage_pct: int = 0
     verdict: str = ""
     provenance: dict = field(default_factory=dict)
+    vacuous: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
             "label": self.label, "coverage_pct": self.coverage_pct, "verdict": self.verdict,
             "matched": self.matched, "missing": self.missing, "extra": self.extra,
-            "provenance": self.provenance,
+            "provenance": self.provenance, "vacuous": self.vacuous,
         }
 
 
 def crosscheck_nets(generated: set[str], reference: set[str], label: str, provenance: dict | None = None) -> ReferenceCheck:
+    """Compare generated nets against a reference product's nets.
+
+    An empty reference is a **third state**, never a match (BR_20260731): a netlist that
+    failed to parse and a design that genuinely agrees with the reference must not produce
+    the same verdict word. ``vacuous=True`` + a verdict naming the condition; coverage is
+    left at 0 and no "matches"/"covers" wording is emitted. Mirrors the
+    ``XCHK_EMPTY_REFERENCE`` refusal that `crosscheck_diff` already applies one layer up.
+    """
     matched = sorted(generated & reference)
     missing = sorted(reference - generated)
     extra = sorted(generated - reference)
     coverage = round(100 * len(matched) / max(len(reference), 1))
+    if not reference:
+        verdict = (f"no reference nets to compare against ({len(extra)} generated net(s) unchecked) — "
+                   "this is NOT a match; verify the reference net export / netlist parse produced "
+                   "something.")
+        return ReferenceCheck(label=label, matched=[], missing=[], extra=extra,
+                              coverage_pct=0, verdict=verdict, vacuous=True,
+                              provenance=provenance or {})
     if not missing and not extra:
         verdict = f"matches the reference exactly ({len(matched)} nets)."
     elif not missing:
