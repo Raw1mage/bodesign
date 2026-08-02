@@ -462,6 +462,11 @@ C03 is genuinely complete when:
   — no R1 schema / R2 readiness / R3 symbol-source-claim / R4 SSOT / R5 BOM↔netlist / R6 pin-polarity
   blocker (§ 3c). A missing `check_c03.report.json` means the entry gate **has not run**: say so;
   never presume PASS. This gate is deliverable-completeness; § 3b is PRD-role fulfilment — both must PASS.
+- **Write both reports where C04 reads them: pass `out_dir=<project>/C03-EE`.** Since BR_20260707
+  these two are no longer prose C04 is trusted to honour — `assess_c04_layout_readiness` reads them
+  at those exact pinned paths and refuses entry (`blocked_c03_entry_gate_*`) when either is absent,
+  unreadable, `FAIL`, or a PASS whose `netlist_crosscheck` never ran. A gate run without `out_dir`
+  leaves no artifact, and from C04's side that is indistinguishable from never having run it.
 - **Read the per-check status, not only `gate`** (BR_20260730). Each crosscheck reports its own basis, and
   a `PASS` earned without an input is not the same claim as a `PASS` earned with it:
   - `netlist_crosscheck.status` — `not_run` means **no BOM row was checked against any schematic**; a

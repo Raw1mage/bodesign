@@ -83,6 +83,40 @@ From **C03 (EE)** — see `../c03-ee/GUIDE.md`:
   50 Ω SE with DQS↔DQ matching; SDMMC 50 Ω. C04 makes copper meet these; C03 only named them.
 - **`Mechanical_Constraint_Export.json`** — component heights, connector edge openings, heat
   sources, antenna keepouts. Drives placement and the C02 enclosure.
+- **The two signed stage-entry verdicts** — `C03-EE/check_c03.report.json` and
+  `C03-EE/prd_bom_crosscheck.report.json`. These are **entry conditions, not reference material**:
+  `c04_readiness` reads them and refuses layout unless both say `gate: PASS`. See the gate below.
+
+### C03→C04 entry gate (machine-enforced — `assess_c04_layout_readiness`)
+
+Entry is checked in two tiers, because "C03 ran" and "C03's delivery is acceptable" are different
+questions and an existence check standing in an acceptance check's place returns green on a broken
+BOM (BR_20260707):
+
+- **Tier-0 — did C03 run?** `C03-EE/` + a `.net` + `Mechanical_Constraint_Export.json` on disk.
+  Missing → `blocked_upstream_c03_missing`.
+- **Tier-1 — is C03's delivery acceptable?** The two reports above, read at **pinned paths** (never
+  searched for — a search chain is itself a silent fallback). Each distinct inadequacy gets its own
+  status, because each has a different first action:
+
+| `c04_readiness` status | Means | First action |
+|---|---|---|
+| `blocked_c03_entry_gate_not_run` | A report is absent — the gate **never ran**, which is not passing | Run it in C03 (the error names the exact command + expected path) |
+| `blocked_c03_entry_gate_report_unusable` | Report present but corrupt / carries no `gate` field | Re-emit it; a report that cannot be read carries no verdict |
+| `blocked_c03_entry_gate_failed` | `gate: FAIL` | Fix the design/BOM in C03 and re-run. **Never relax the gate to pass** |
+| `blocked_c03_entry_gate_scope_incomplete` | `gate: PASS` but `netlist_crosscheck.status=not_run` | Re-run `check_c03` with `netlist_path=[...]` + `covers_boards=[...]` |
+
+**Why a PASS can still be refused.** `check_c03` states in its own docstring that with no netlist
+supplied, `gate=PASS` *"must NOT be read as 'every BOM row is drawn'"*. C04 placement rests on
+exactly that guarantee, so C04 declines to read **not-checked** as **checked-and-clean**. This is not
+C04 overruling C03 — it is C04 honouring the scope C03 itself declared. `ssot_crosscheck` and
+`pin_polarity` are quality signals rather than preconditions for starting layout: they **warn** (on
+both the blocked and the cleared path) and do not block.
+
+**C04 never re-runs the C03 gates.** Their inputs — which CSV is the BOM, which `.net` covers which
+boards — are knowledge only C03 holds; inferring `covers_boards` here "cannot tell 'no netlist covers
+this board' from 'every row on it is undrawn'". The producer signs, the consumer reads the signature.
+So C03 must pass `out_dir=<project>/C03-EE` when it runs both gates, or C04 entry stays shut.
 
 From **C02 (ME)** — the **board outline** (and mounting-hole positions from the enclosure). If the
 outline is not yet frozen, record it as an `assumption` and say so in `Layout_Constraints.json`.

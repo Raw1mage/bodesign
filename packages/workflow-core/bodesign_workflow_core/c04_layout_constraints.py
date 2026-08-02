@@ -34,6 +34,23 @@ C04_PLACEMENT_OUTPUT = C04_FOLDER / "Placement_Constraints.md"
 _C01_CONSTRAINTS_REL = Path("C01-ID") / "Interface_Constraints.json"
 _C03_FOLDER = Path("C03-EE")
 
+# Tier-1 acceptance inputs. These paths are PINNED, never searched for: a search
+# chain is itself a silent fallback (it would let a report found somewhere else
+# stand in for the one the contract names). C03 writes them by passing
+# `out_dir=<root>/C03-EE` to the two gates.
+_C03_ENTRY_GATE_REPORT = _C03_FOLDER / "check_c03.report.json"
+_C03_PRD_CROSSCHECK_REPORT = _C03_FOLDER / "prd_bom_crosscheck.report.json"
+
+_ENTRY_GATE_REMEDY = (
+    "produce it in C03 with `bodesign_check_c03(bom_csv=<C03-EE>/BOM.csv, "
+    "pin_allocation_csv=<C03-EE>/Pin_Allocation.csv, netlist_path=[<C03-EE>/*.net], "
+    "covers_boards=[<the boards those netlists cover>], out_dir={out_dir})`"
+)
+_PRD_CROSSCHECK_REMEDY = (
+    "produce it in C03 with `bodesign_prd_bom_crosscheck(manifest_path=<C00>/"
+    "main_components_structured.json, netlist_path=<C03-EE>/*.net, out_dir={out_dir})`"
+)
+
 # Feasibility-triage signals bodesign accepts. Anything else is ignored (not guessed).
 _FEASIBILITY_KEYS = {
     "layer_count", "finest_bga_pitch_mm", "hdi_required", "high_speed_nets",
@@ -62,6 +79,7 @@ class C04LayoutReadiness:
     warnings: list[str] = field(default_factory=list)
     upstream: dict[str, Any] = field(default_factory=dict)
     feasibility: dict[str, Any] = field(default_factory=dict)
+    c03_acceptance: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -76,6 +94,12 @@ class C04LayoutReadiness:
             "warnings": list(self.warnings),
             "upstream": dict(self.upstream),
             "upstream_fulfilled": bool(self.upstream.get("fulfilled")) if self.upstream else None,
+            "c03_acceptance": dict(self.c03_acceptance),
+            # Tri-state, never collapsed to a bool: None = tier-1 never reached
+            # (tier-0 already blocked, so the reports were not consulted at all),
+            # which must stay distinguishable from False = consulted and refused.
+            "c03_accepted": (bool(self.c03_acceptance.get("accepted"))
+                             if self.c03_acceptance else None),
             "feasibility": dict(self.feasibility),
             "feasibility_tier": self.feasibility.get("tier") if self.feasibility else None,
             "board_ready": False,
@@ -167,6 +191,170 @@ def _assess_upstream_fulfilment(root: Path) -> dict[str, Any]:
         "c03_mechanical_export_present": mech.exists(),
         "gaps": gaps,
         "fulfilled": not gaps,
+    }
+
+
+def _load_gate_report(path: Path) -> tuple[str, dict[str, Any] | None, str]:
+    """Load a C03 gate report, keeping ABSENT and MALFORMED distinguishable.
+
+    `_load_json` returns None both for "file is not there" and for "file is there
+    but unparseable". Collapsing those two would let a corrupt report read as a
+    gate that merely has not run yet — the same output for a missing thing and a
+    broken thing — and they need different remedies. This reader never merges
+    them, and it refuses to guess a verdict for a payload that carries none.
+    """
+    if not path.exists():
+        return "absent", None, ""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return "malformed", None, f"unreadable ({exc.__class__.__name__})"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return "malformed", None, f"not valid JSON ({exc.msg}, line {exc.lineno})"
+    if not isinstance(data, dict):
+        return "malformed", None, f"top level is {type(data).__name__}, expected an object"
+    gate = data.get("gate")
+    if not isinstance(gate, str):
+        return "malformed", None, "no string `gate` field — not a bodesign gate report"
+    if gate not in ("PASS", "FAIL"):
+        return "malformed", None, f"gate={gate!r} is neither PASS nor FAIL"
+    return "ok", data, ""
+
+
+def _scope_status(report: dict[str, Any], field_name: str) -> str:
+    """Read a sub-scope verdict's own status. A sub-scope block that is missing
+    entirely is treated as `not_run` (never as clean) — an older report that
+    never carried the field genuinely did not check that scope."""
+    block = report.get(field_name)
+    if not isinstance(block, dict):
+        return "not_run"
+    status = block.get("status")
+    return status if isinstance(status, str) else "not_run"
+
+
+def _assess_c03_acceptance(root: Path) -> dict[str, Any]:
+    """Tier-1 cross-stage check: is C03's delivery ACCEPTABLE?
+
+    Tier-0 (`_assess_upstream_fulfilment`) asks whether C03 *ran* — do three files
+    exist. That is necessary and not sufficient: the BR_20260707 symptom class
+    (BOM carrying draft/blocked rows, BOM<->Pin_Allocation conflicts, pad counts
+    not synced to a frozen value) occurs precisely when those files DO exist, so
+    an existence check standing in an acceptance check's position returns
+    `fulfilled: true` and waves it through. This tier reads the verdicts C03
+    already signs and refuses entry on anything but a PASS of adequate scope.
+
+    Producer-signs / consumer-reads (no-silent-fallback): C04 does NOT re-run the
+    C03 gates. Their inputs — which CSV is the BOM, which `.net` files cover which
+    boards — are knowledge only C03 holds; `check_c03`'s own docstring records
+    that inferring `covers_boards` "cannot tell 'no netlist covers this board'
+    from 'every row on it is undrawn'". Re-deriving that here would plant a silent
+    fallback inside the very gate meant to forbid one. So C04 consumes the signed
+    report, or it refuses.
+
+    Scope, not just verdict (BR_20260730 discipline): `check_c03` states in its own
+    docstring that with no netlist supplied `gate=PASS` "must NOT be read as 'every
+    BOM row is drawn'". C04 layout rests on exactly that guarantee, so a PASS whose
+    `netlist_crosscheck` never ran is BLOCKING here. That is not C04 overruling the
+    gate — it is C04 declining to read "not checked" as "checked and clean", which
+    is this BR's whole subject. `ssot_crosscheck` / `pin_polarity` are quality
+    signals rather than load-bearing preconditions, so they warn instead.
+    """
+    gaps: list[str] = []
+    warnings: list[str] = []
+    codes: set[str] = set()
+    reports: dict[str, dict[str, Any]] = {}
+
+    out_dir = str(root / _C03_FOLDER)
+
+    for key, rel, remedy, scope_gated in (
+        ("entry_gate", _C03_ENTRY_GATE_REPORT, _ENTRY_GATE_REMEDY, True),
+        ("prd_bom_crosscheck", _C03_PRD_CROSSCHECK_REPORT, _PRD_CROSSCHECK_REMEDY, False),
+    ):
+        path = root / rel
+        state, payload, detail = _load_gate_report(path)
+        block: dict[str, Any] = {
+            "report": str(rel),
+            "expected_path": str(path),
+            "present": state != "absent",
+            "gate": payload["gate"] if payload else None,
+            "status": "",
+        }
+        if state == "absent":
+            block["status"] = "not_run"
+            codes.add("not_run")
+            gaps.append(
+                f"{rel} missing — the C03 gate has NOT run, which is not the same as "
+                f"passing. Expected at {path}; " + remedy.format(out_dir=out_dir)
+            )
+        elif state == "malformed":
+            block["status"] = "malformed"
+            block["detail"] = detail
+            codes.add("malformed")
+            gaps.append(
+                f"{rel} present but unusable ({detail}) — a report that cannot be read "
+                f"carries no verdict and is never assumed to pass. Re-emit it: "
+                + remedy.format(out_dir=out_dir)
+            )
+        elif payload["gate"] == "FAIL":
+            block["status"] = "failed"
+            blocking = payload.get("blocking")
+            block["blocking_count"] = len(blocking) if isinstance(blocking, list) else None
+            codes.add("failed")
+            gaps.append(
+                f"{rel} reports gate=FAIL"
+                + (f" ({block['blocking_count']} blocking finding(s))"
+                   if block["blocking_count"] else "")
+                + " — C03's own gate rejects this delivery; fix the design/BOM in C03 "
+                  "and re-run it. C04 entry is refused (the gate value is never relaxed)."
+            )
+        else:
+            block["status"] = "pass"
+            if scope_gated:
+                netlist_scope = _scope_status(payload, "netlist_crosscheck")
+                block["netlist_crosscheck_status"] = netlist_scope
+                if netlist_scope == "not_run":
+                    block["status"] = "scope_incomplete"
+                    codes.add("scope_incomplete")
+                    gaps.append(
+                        f"{rel} reports gate=PASS but netlist_crosscheck.status=not_run — "
+                        "the gate never checked that every BOM row is actually drawn into "
+                        "the schematic (its own docstring says such a PASS must NOT be read "
+                        "that way). C04 placement rests on that guarantee, so this is "
+                        "blocking. Re-run the gate supplying netlist_path=[...] and "
+                        "covers_boards=[...]."
+                    )
+                for field_name, label in (("ssot_crosscheck", "BOM<->Pin_Allocation SSOT"),
+                                          ("pin_polarity", "pin-spec polarity")):
+                    sub = _scope_status(payload, field_name)
+                    block[f"{field_name}_status"] = sub
+                    if sub == "not_run":
+                        warnings.append(
+                            f"{rel}: {field_name}.status=not_run — the {label} scope was "
+                            "never checked; this PASS does not cover it (warn, not blocking)"
+                        )
+        reports[key] = block
+
+    # Precedence: something that never ran outranks a failure, which outranks a
+    # pass of insufficient scope — each names a different first action.
+    status_code = None
+    for code, mapped in (
+        ("not_run", "blocked_c03_entry_gate_not_run"),
+        ("malformed", "blocked_c03_entry_gate_report_unusable"),
+        ("failed", "blocked_c03_entry_gate_failed"),
+        ("scope_incomplete", "blocked_c03_entry_gate_scope_incomplete"),
+    ):
+        if code in codes:
+            status_code = mapped
+            break
+
+    return {
+        "reports": reports,
+        "gaps": gaps,
+        "warnings": warnings,
+        "accepted": not gaps,
+        "status_code": status_code,
     }
 
 
@@ -362,6 +550,13 @@ def assess_c04_layout_readiness(
     tier = feasibility.get("tier")
     warnings: list[str] = []
 
+    # Tier-1 acceptance is only consulted once tier-0 holds: with no netlist on disk
+    # there is nothing for a BOM<->netlist verdict to be about, and reporting a
+    # missing report there would bury the real first action (run C03) under a
+    # second-order complaint. Left empty, `c03_accepted` reports None (not reached)
+    # rather than False (reached and refused).
+    acceptance: dict[str, Any] = {}
+
     if not constraints_present:
         status = "missing"
         next_step = "Run bodesign_c04_emit_layout_package with C01/C03 constraints."
@@ -386,6 +581,21 @@ def assess_c04_layout_readiness(
                 "Run C03 electrical design first (compose_schematic → export_netlist) so "
                 f"C00 components are realised, then re-run C04. Upstream gaps: {gap_txt}"
             )
+    elif not (acceptance := _assess_c03_acceptance(root))["accepted"]:
+        # Tier-1: C03 ran, but its own signed verdicts do not clear this delivery for
+        # layout. Each status names a different first action, so they are never merged
+        # into one "blocked" — an absent report (nobody ran the gate), an unusable one,
+        # a FAIL, and a PASS of insufficient scope are four different problems.
+        status = acceptance["status_code"]
+        warnings.append(
+            "C03 ran, but its stage-entry verdicts do not clear this delivery for C04 "
+            "layout. Existence of the C03 files is not acceptance of them."
+        )
+        gap_txt = " | ".join(acceptance["gaps"])
+        next_step = (
+            "Clear the C03 stage-entry gates before starting layout — the gate values "
+            f"are never relaxed to pass (no-silent-fallback). {gap_txt}"
+        )
     elif not present_groups:
         status = "blocked"
         next_step = "No upstream constraints provided — supply C01 interface and C03 mechanical constraints."
@@ -400,6 +610,13 @@ def assess_c04_layout_readiness(
         status = "layout_constraints_drafted"
         next_step = "Hand to the layout engineer for board outline, placement, and stackup decisions."
 
+    # Scope warnings are merged on ONE path, not inside the blocking branch: a
+    # narrowed verdict is exactly as true when entry opens as when it closes, and
+    # attaching them only to the refusal would drop them precisely in the case a
+    # reader acts on ("cleared for layout") — the scope caveat vanishing at the
+    # moment it starts to matter.
+    warnings.extend(acceptance.get("warnings", []))
+
     return C04LayoutReadiness(
         folder=str(root),
         present_groups=present_groups,
@@ -411,4 +628,5 @@ def assess_c04_layout_readiness(
         warnings=warnings,
         upstream=upstream,
         feasibility=feasibility,
+        c03_acceptance=acceptance,
     )
