@@ -139,3 +139,165 @@ FIDELITY FAIL moved=0 only_baseline=6 only_candidate=0
 - 還原**成立**，三條件全過，import 在 HEAD 可用（我親測 `IMPORT_OK`）
 - 保真閘紅燈**確認**、deterministic、與 peer 回報逐字相同
 - 本 BR **維持 OPEN**，需 `schematic-engine` owner
+
+---
+
+## RCA（`ses_0c87bab06fferQ0umBs2Nybb5U`，2026-08-02 · 單張授權、非 family）
+
+授權範圍：RCA 至根因坐實為止。**修法未落地**，未 commit 任何原始碼變更。
+取證全在 `$XDG_RUNTIME_DIR/fidrca`，repo 內 `packages/` `tests/` `services/` 零變更
+（控制組：不帶 pathspec 的 `git status --porcelain` 有 34 筆，帶 pathspec 後只剩 7 筆
+既存 untracked 測試檔，皆非本輪產生）。
+
+### 根因（機制）
+
+**浮點等值比較落在刀鋒上。** 鏈路四段：
+
+```
+_bbox_clear(label_box, graphics_box)                     kicad_emit.py:1933
+  gap_y = 1.2699999999999818   clearance = 1.27          → gap >= clearance  FALSE
+    ↓ 判定「未達淨空」
+_avoid_label_overlap  把 anchor 沿外向量推出一步          kicad_emit.py:2383
+  _L6_AVOID_STEP_MM = _LABEL_CH_MM + _LABEL_VMARGIN_MM = 1.27 + 0.3 = 1.57
+    ↓ label anchor 離開 pin endpoint 1.57 mm
+DD-22/23 契約禁止任何 stub / jog / wire 把它接回去          kicad_emit.py:2340-2356
+    ↓ 沒有導體連接
+KiCad 匯出時該腳成為 unconnected-(Rn-Pad1)                 電氣斷路
+```
+
+**`1.27` 這個數字同時是三個東西**：格點、`_CLEARANCE_MM`（最小淨空）、`_LABEL_CH_MM`
+（文字高）。於是「元件放在格點上、標籤盒高一格」自然產生**恰好等於淨空**的間隙——
+本 fixture 8 個垂直標籤**全部**落在 `gap == clearance` 這個刀鋒上，
+其中 3 個因浮點累積算成 `1.2699999999999818`（差 −1.8e-14）而判偽：
+
+| net | `gap_y` 實際浮點值 | `gap_y − 1.27` | `>= clearance` | 結果 |
+| --- | --- | --- | --- | --- |
+| N4 / N6 / N7 / N8 | `1.2700000000000102` | +1.02e-14 | True | 不動 |
+| N3 | `1.2700000000000031` | +3.11e-15 | True | 不動 |
+| **N1 / N2** | `1.269999999999996` | −4.00e-15 | **False** | **推 1.57mm** |
+| **N5** | `1.2699999999999818` | −1.82e-14 | **False** | **推 1.57mm** |
+
+被推的三個標籤 `R1.1` / `R2.1` / `R5.1` 因此離開腳位，落入
+`unconnected-(R1-Pad1)` / `(R2-Pad1)` / `(R5-Pad1)`。
+
+**這不是「哪些元件比較擠」的問題**——8 個間隙名目上完全相同（都是一格），
+差別只在浮點誤差的正負號。同一份 spec 換個座標順序，中招的會是另外三個。
+
+### 決定性實驗（雙控制組）
+
+```
+A  stock                          → RED   only_baseline=[J1.1 J1.2 J1.5 R1.1 R2.1 R5.1]
+B  _avoid_label_overlap 停用      → GREEN ok=True
+C  還原 stock                     → RED   （同 A，證明 B 的綠來自 patch 而非執行順序）
+
+D  _bbox_clear 改 epsilon 容差     → GREEN ok=True
+D' 負向控制：epsilon 不得使真缺陷失明
+     true gap = 1.27                  stock=True   eps=True
+     true gap = 1.2699999999999818    stock=False  eps=True    ← 只有這格改判
+     true gap = 1.20 / 0.5 / 0.0      stock=False  eps=False   ← 仍正確判紅
+```
+
+### 起點假設的驗證結果：**推翻**
+
+> 起點假設：`only_candidate=0` / `moved=0` ⇒ 整段連接消失，嫌疑在
+> **wire fusion / label collision 把兩條 net 熔成一條**。
+
+**實測是相反的機制。** 匯出的 netlist 逐 net 全文：
+
+```
+N1  ['J1.1']                       ← 只剩連接器側
+N2  ['J1.2']
+N5  ['J1.5']
+N3  ['J1.3','R3.1']                ← 正常的對照
+unconnected-(R1-Pad1)  ['R1.1']    ← 電阻側被踢成孤立節點
+unconnected-(R2-Pad1)  ['R2.1']
+unconnected-(R5-Pad1)  ['R5.1']
+```
+
+**沒有任何兩條 net 被熔在一起。** 節點**全部都被產生了**（`parse_net_file` 宇宙
+24 個節點，與 baseline 相同），是**接線斷掉**，被拆成兩個各自孤立的單節點 net。
+你要求的那個分岔——「節點沒被產生」vs「節點被併進別的 net」——**兩個都不是**，
+是第三種：**節點被產生、但接不上**。
+
+錯誤訊息 `(collinear-wire fusion / label collision)` 是 `FidelityError.__init__` 的
+**硬編字串**（fidelity.py:64），對任何一種偏離都印同一句。它把讀者導向錯的機制。
+—— 這是本 repo 那個形狀的又一例：**訊息文字宣告的病因，與實際判定出的病症無關**。
+
+### 儀器側的第二個缺陷（獨立於上面那個）
+
+`sch_union_classes`（fidelity.py:104）用 union-find 重建 net，**只 union 有第二個節點的
+class**；單節點 net 從不進入 `parent` dict，因此**整個從候選宇宙消失**：
+
+```
+parse_net_file      universe = 24 nodes   R1.1 在裡面（class size 1）
+sch_union_classes   universe = 18 nodes   R1.1 不在
+DROPPED: ['J1.1','J1.2','J1.5','R1.1','R2.1','R5.1']
+```
+
+後果：斷路節點**不是**以「跑到別的 class」被偵測，而是以「從宇宙裡消失」被偵測，
+再由 `compare_partitions` 的 `only_baseline` 撿回來。這條路徑**目前有效**，但它讓
+`only_candidate` 恆為 0——而 `only_candidate=0` 正是誘導出「熔接」假設的那個訊號。
+**儀器的呈現方式，直接導致了對病因的錯誤推論。**
+
+### 量了什麼
+
+- 紅燈在 host（`kicad-cli 9.0.9`）確定性重現，與 BR 記載逐字相同
+- 逐 net 全文 dump（不是 nets 數量差）
+- 每一個垂直標籤的 `label_bbox` vs `graphics_box`，在**決策點**捕捉未捨入浮點
+- `_avoid_label_overlap` 全程 spy：3 次位移，每次 `#placed_hits=0` / `#graphics_hits=1`
+  → 觸發者是 **DD-14 graphics clearance**，不是 label-vs-label
+- 位移後的 anchor 是否被任何 wire endpoint 觸及：**9 條 wire，0 條觸及**
+- `l6_avoidance` 參數是否活的：**死的**。`emit_kicad_schematic(l6_avoidance=)` 的值
+  從未被讀（唯一使用點 kicad_emit.py:1515 硬編 `l6_avoidance=True`）。
+  分離 process + 修正 UUID 正規化後，`False`/`True` 各兩次跑出**同一個 sha256**。
+  ⚠ 我第一次量得到「param IS live」是**偽陽性**：我在同一個 process 連跑四次，
+  `#PWR000n` 是 process-global 計數器，且我的 UUID 正規式漏了 `(path "/uuid")` 形式。
+- 這條路徑在 pre-restore 樹（`2efc3a9~1`）**完全不存在**：`_bbox_clear` / `_CLEARANCE_MM`
+  / `_avoid_label_overlap` / `graphics_boxes` 出現次數皆為 0（控制組：
+  `def emit_kicad_schematic` 為 1，證明我讀到的是同一個檔）
+  → **回答 BR 的問題 1：紅燈是還原「引入」的，不是還原「揭露」的。**
+- `_bbox_clear` 全 repo 只有一個呼叫點（kicad_emit.py:2413）——blast radius 極小
+
+### 沒量什麼（邊界）
+
+- **baseline 是否正確**（BR 問題 2）：未獨立驗證。我只證明 candidate 側斷路，
+  沒有反向確認 `expected_partition_from_nets` 的 9 條 net 本身無誤。
+- **DD-20 對向垂直位移路徑**：本 fixture 的垂直標籤 edge **全部**是 `(0,-1)`，
+  沒有對向配對，`_dd19_dense_column_offsets` 回傳 0 筆。這條路徑**不受
+  `l6_avoidance` 閘控（產品 all-label 頁會走到）**且同樣位移 anchor——
+  **它是否有相同的斷路風險，本輪完全未量測**，不是量了沒事。
+- **真實產品頁**（aiguard C03 等）是否已受害：未量。本 fixture 是合成的。
+- **修法對既有 byte-stable 迴歸基線的影響**：未量（修法未落地）。
+- `test_dd14_text_graphics_clearance.py`（untracked，非本輪產生）本身有 1 個
+  `TypeError: _symbol_geometry() got an unexpected keyword argument 'sides'`
+  的既存錯誤，與本 BR 無關，另計。
+- `kiutils` 缺失（值星官已記載）未處理。
+
+### 修法的形狀（不是修法本身）
+
+三個層次，**由淺到深，需要的原作脈絡遞增**：
+
+1. **止血層（不需原作脈絡）**：`_bbox_clear` 的比較加 epsilon 容差。
+   已驗證能讓保真閘全綠，且負向控制證明它不會讓真缺陷失明（gap 1.2 / 0.5 / 0.0
+   仍正確判紅）。**但這只是把刀鋒往安全側挪一格，沒有拿掉刀鋒。**
+
+2. **結構層（需要「1.27 為何同時是三個常數」的脈絡）**：格點、`_CLEARANCE_MM`、
+   `_LABEL_CH_MM` 共用 `1.27` 是刀鋒的成因。若淨空定義為「> 一格」或標籤盒
+   高度不等於一格，這類等值比較就不會出現。**這是設計取捨，我沒有原作脈絡。**
+
+3. **契約層（需要 DD-22/23 原作決策脈絡）——我認為這才是真缺陷**：
+   > 「為了避開圖形而移動 label anchor」與「anchor 必須落在 pin endpoint 上才有電氣連接」
+   > **是兩個直接衝突的契約**，而 DD-22/23 禁止用 stub wire 調和它們。
+   目前的解法是讓**美觀契約無條件贏**，代價是**靜默斷路**——沒有任何斷言擋住
+   「anchor 被移離 pin endpoint」這件事。epsilon 只是讓這次不觸發，
+   **下一次幾何稍有不同就會再觸發，而且一樣不會有人知道。**
+
+   最小的契約層修法形狀：`_avoid_label_overlap` 位移後，**斷言 anchor 仍在
+   pin endpoint 上，否則 fail-loud**（美觀讓位給電氣，或顯式報錯要求人介入）。
+   這改變的是「衝突時誰讓步」的產品決策，**必須由有 DD-22/23 脈絡的人裁決，不是我**。
+
+### 派工建議
+
+- 層次 1 可由任何人執行（含 mutation proof 已備）
+- 層次 3 需要 `plans/eda-bridge_layered-pipeline/` DD-22/23 的原作者或有該脈絡者
+- **不建議只做層次 1 就關掉這張 BR**——那會把一個契約衝突降級成一次浮點調整
