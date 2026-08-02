@@ -85,7 +85,7 @@ repo 有三個含 python 的頂層目錄（`packages/` / `services/` / `skills/`
 - **分母**：斷言 Coverage 輸出同時含 scanned 與 total，且在有未覆蓋 root 時明確列出。
 - **README 基線同步**：文件記載的數字必須與修復後的預設執行一致，並註明掃描範圍。
 
-## 訊噪比量測（2026-08-02 完成，13/58 樣本，coordinator 覆核）
+## 訊噪比量測——第一輪（13/58 抽樣），已被下方窮舉量測取代
 
 原本此段標為「未確認、修這張 BR 前必須先量測」。已量測，**結果改變了推薦修法**。
 
@@ -136,6 +136,97 @@ except (ValueError, TypeError):
 這比 51 筆 L2 中的多數**更嚴重**（它不只是丟失資訊，是編造一個數值參與 `best_neighbor` 計算，
 會選錯參考層），而 **L2 看不到它**——因為 handler body 既不是 `pass` 也不是 log call。
 **規則的形狀決定了它能看見什麼；擴大掃描範圍不會讓它看見這個。**
+
+## 窮舉量測（2026-08-02，55 個 unique 站點全數人工判讀）
+
+第一輪是 22% 抽樣；本輪把 **55 個 unique 站點全部讀完**（非抽樣），另追 6 個模糊站點的完整 caller 鏈。
+
+```
+TP=26   FP=29   unclassified=0      （unique 站點）
+TP=27   FP=31                        （raw-58 基準）
+精確度 26/55 ≈ 47%
+```
+
+### 一個重要的 dedup 發現：**58 筆 findings ≠ 58 個站點**
+
+```
+raw=58   unique(path,line,rule)=55   dup=3
+```
+
+三筆重複是**嵌套 `def` 導致同一行原始碼被報兩次**（`what_if.py:1205/1211` 同時落在
+`_run_emc_preview` 與 `_run_emc` 底下；`analyze_schematic.py:6468` 同時落在 `analyze_voltage_derating`
+與 `_read_ic_abs_max` 底下）。**任何拿「58」當分母算訊噪比的人都會算錯。**
+
+### 抽樣估計的準確度（及它標錯的那一格）
+
+| | 第一輪抽樣 | 窮舉 |
+|---|---|---|
+| 訊號率 | 6/13 ≈ **46%** | 26/55 ≈ **47%** |
+
+估計得準。**但第一輪標註的「樣本偏誤方向」說反了**——當時寫「真陽性率可能更低，不會更高」，
+實測是微幅**更高**。記下來因為這正是本 BR 在講的事：**一個方向性的保守宣稱，若沒有被量測，
+就只是一個講得很謹慎的猜測。**
+
+### 四筆 fab-safety 類真陽性（coordinator 親手讀原始碼覆核，4/4 成立）
+
+`analyze_pcb.py:713` [L2]：`pad_info["drill"] = float(drill_val)` 失敗則 `pass`——
+**一個 drill 格式損毀的 THT pad，其 dict 與 SMD pad 逐位相同**。下游 fab 匯出讀成表點。
+
+`analyze_pcb.py:1994` [L6]：`t = stackup[k].get("thickness")` 後 `if t is not None:` **無 else**，
+缺層貢獻 0.0 → 那層反而贏得 `if thickness < best_thickness` 而被選為參考平面。
+⚠ 此處與下方「漏網」段的 `:1998` **是同一個 `for` 迴圈裡相鄰的兩個缺陷**：
+`:1994` 是「欄位不存在 → 靈」（L6 看得到），`:1998` 是「欄位壞掉 → 編造 0.2」（L2/L6 都看不到）。
+
+`analyze_pcb.py:4498` [L6]：`required_dia = nc.get('via_diameter')` 無 else，且 `rules_checked`
+**只在違規路徑遞增**→ 未檢查的 net class 被報成「N rules checked, no violations」。
+
+`kicad_utils.py:1477` / `:1505` [L2 ×2]：`except OSError: pass` 後 `return False`——
+**`is_referenced_as_child` 對「檔案讀不開」回答「未被引用」**，一個讀不到的子圖頁因此被提升為 root schematic。
+
+### 五種誤報結構形狀（這些才是修法的依據）
+
+| # | 形狀 | 站點數 | 代表 |
+|---|---|---|---|
+| FP-1 | `finally` / cleanup 區塊內的 handler（`os.unlink`/`os.close`） | 4 | `kidoc_docx.py:267` |
+| FP-2 | 探測函式回 `Optional[T]`，**`None` 就是契約** | 4 | `kicad_cli.py:110` `_check_flatpak() -> str \| None` |
+| FP-3 | parse ladder：每個 `except` 落到**下一個策略**，終於明確預設 | 6 | `schematic.py:263` → `return PAPER_SIZES['A4']` |
+| FP-4 | 用 `print` 而非 drop-named container 報告降級 | 5 | `generate.py:75` |
+| FP-5 | [L6] `.get()` 取 **schema 上本就 optional** 的欄位 | 4 | `pcb_graphics.py:294` |
+
+**FP-4 是最尖锐的一個，值得單獨指出**：`schemdraw_templates/generate.py:75` 印的是
+
+```python
+print(f"\n{len(made)}/{len(matches)} matched block(s) rendered into {out_dir}")
+```
+
+**分子與分母俱全**——這正是本 checker 整個存在目的要求的那種紀律，**却被 checker 自己標記為缺陷**。
+`_records_drop()` 只認容器**名稱**含 `drop/skip/fail` 的 append，看不見 `print`。
+（coordinator 抽驗 FP-3 / FP-4 / FP-5 各一筆，**3/3 成立**。）
+
+### 誤報集中的根因
+
+> `packages/` 是 IR 轉換的函式庫碼，吐掉的異常真的會污染回傳的量測值；
+> `skills/` 是 engine / CLI 碼，它的 `except: pass` 大量屬於**能力探測、格式 ladder、溫檔拆除**
+> 這三種形狀——吐掉本身就是正確設計。
+
+**同一條規則在兩種程式碼上的正確率不同，這本身就是不能直接把 `skills/` 加進預設的理由。**
+
+### L8/L9 的零是真零（非死規則）
+
+```
+POS_L9 -> ['L9']    NEG_L9 (同程式碼 + 零長度 guard) -> []
+POS_L8 -> ['L8']    NEG_L8 (換接收者)                -> []
+```
+
+這兩條規則在 `skills/` 下 0 命中，**且已證明它們在該命中時真的會命中**——所以 0 是證據，不是沉默。
+
+### 控制組
+
+| 控制組 | 證明了什麼 |
+|---|---|
+| `check_paths(["skills_TYPO"])` → `n=0, files_scanned=0, missing_roots=[...]` | 58 是 91 個**真的被解析過**的檔的結果，非路徑靈解析 |
+| `include_advisory=True` → 1060（L1=1002） | 58 是 tier 過濾效果，不是掃描上限 |
+| dedup 58 raw vs 55 unique | 「58 findings」不等於「58 站點」 |
 
 ## 修法裁決（依量測結果，2026-08-02）
 
