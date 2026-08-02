@@ -4,7 +4,8 @@
 - Severity: **high**（工業製程紀律缺口；aiguard 當日 C04 時間浪費的直接根因）
 - Component: `packages/workflow-core/bodesign_workflow_core/{c04_layout_constraints,check_c03}.py` + `stages/{c03-ee,c04-layout}` GUIDE
 - Reporter: thesmart_products session（aiguard C03/C04）
-- Status: **FIXED-UNDEPLOYED**（2026-08-02，`c03-stage-discipline` handler；commit ff7bbbf 已落地並經派發者覆核。**依賴未解除**：`check_c03` 尚非 landing verb，在它註冊前本閘會擋住所有既有專案，故不進 `issues/closed/`）
+- Status: **FIXED**（2026-08-02。commit `ff7bbbf` 修復 + `9c00eae` 狀態 + `787bb5e` 解除依賴，全部經派發者獨立覆核。**依賴已解除且全鏈實證**，見下方「依賴解除紀錄」）
+- Closed: 2026-08-02 by coordinator `ses_04db7a1c5ffelvbxyLP1p6xlRH`
 
 ## Symptom
 
@@ -93,13 +94,47 @@ C04 入口手上只有一個資料夾路徑。要在那裡呼叫 `check_c03`，�
 
 `c03_accepted` 為三態：`None` = tier-0 已擋、tier-1 從未被詢問；`False` = 詢問過且拒絕。兩者不可合併。
 
-## ⚠ 已知依賴（未解除前不可視為完整生效）
+## ⚠ 已知依賴 → **已解除**（2026-08-02，commit `787bb5e`）
 
-**本修復在 `check_c03` 成為 landing verb 之前，實務上會把所有既有專案擋在 C04 外。** 因為 `check_c03` 目前只活在 MCP 容器工具面，host 上跑不了 → 沒有人能產出通過所需的報告。
+原始依賴（保留原文供追溯）：
 
-一個沒有任何人能通過的閘，不是嚴格，是把 C04 磚掉；第一個撞上的人最合理的反應會是繞過它或改回去——**閘會死在它保護的東西之前。**
+> **本修復在 `check_c03` 成為 landing verb 之前，實務上會把所有既有專案擋在 C04 外。** 因為 `check_c03` 目前只活在 MCP 容器工具面，host 上跑不了 → 沒有人能產出通過所需的報告。
+>
+> 一個沒有任何人能通過的閘，不是嚴格，是把 C04 磚掉；第一個撞上的人最合理的反應會是繞過它或改回去——**閘會死在它保護的東西之前。**
 
-`gate.py` 的 `check_c03` 註冊由派發者接管（該檔正被另一顆 handler 佔用）。**未加任何過渡期 warn-only 開關**——那會是一個新的 fallback 開關，需使用者批准。
+### 依賴解除紀錄
+
+`787bb5e` 將 **`check_c03` 與 `prd_bom_crosscheck` 兩個** verb 註冊進 `gate.py`（59→61）。
+兩個都要，因為 `_assess_c03_acceptance` 對兩份報告跑同一迴圈，缺任一份都回 `not_run`。
+
+**未加任何過渡期 warn-only 開關**（那會是新的 fallback，需使用者批准）——依賴是靠讓閘**可被通過**
+來解除，不是靠讓它**不擋**。
+
+註冊時避開的兩個坑（皆已寫進 `gate.py` 註解）：
+
+1. **`out_dir` 不列 required**。它在 `REPO_DEFAULT_KEYS` 裡，設為 required 會讓它靜默預設成
+   **repo root**，報告寫到 `<project>/check_c03.report.json`，而本閘讀 `<project>/C03-EE/`——
+   **verb 綠燈、報告存在、閘照樣擋，且無一處會說出差在哪。** 改由 handler 預設到 `<folder>/C03-EE`。
+2. **`netlist_path` 可為 list**。`_build_args` 只重寫純量 PATH_KEYS，list 會原封通過並對
+   **行程 cwd** 解析而非專案。新增 `_abs_under` 遞迴處理——`check_c03` 對缺檔會 raise，
+   但一個「錯誤卻存在」的 cwd-relative 命中比 raise 更糟。
+
+### 全鏈實證（verb → artifact → gate，此前無人驗過）
+
+本 BR 的測試用**手寫 fixture** 驗 reader；以下用**真實 verb 產出的報告**驗完整路徑：
+
+```
+1 verb 產出   gate.py check_c03 --repo <P> …        → gate=PASS，報告落在 C03-EE/check_c03.report.json
+              gate.py prd_bom_crosscheck --repo <P> → gate=PASS，同目錄
+2 閘的判定    c04_readiness → c03_accepted=True      ← tier-1 被詢問且接受
+3 CONTROL A   抽掉 entry report → status=blocked_c03_entry_gate_not_run, c03_accepted=False
+                                  remedy 含 `bodesign_check_c03` → True
+4 CONTROL B   放回 → c03_accepted=True（再次放行）
+```
+
+過程中 fixture 被閘擋下四次（R3 缺 symbol-source 欄 / manifest 缺 roles /
+缺 `Mechanical_Constraint_Export.json` / 缺 `Layout_Constraints.json`）——
+**四次都是該擋而擋，且錯誤訊息每次都指名下一步。** 那比任何測試都更能證明這個閘是活的。
 
 ## 驗證
 
