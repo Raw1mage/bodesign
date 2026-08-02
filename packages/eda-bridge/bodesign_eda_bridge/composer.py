@@ -379,8 +379,13 @@ def _file_provenance(path) -> dict:
 # Deliberately NOT shelling out to git for a commit id: the container has no
 # repository, so `git describe` would fail there and succeed on a host, making
 # the field's presence depend on where it ran. A content hash is available
-# everywhere and is what actually identifies the code; the caller matches it
-# against `git hash-object` when it wants a commit.
+# everywhere and is what actually identifies the code.
+#
+# The comparison command matters and is easy to get wrong: `git hash-object` is
+# NOT this digest. It is SHA-1 over `blob <len>\0<content>`, so it can never
+# equal a sha256 of the same bytes -- an instruction to compare them would fail
+# every time and read as "the engine is wrong" rather than "the recipe is".
+# The digest that does compare is `git show <rev>:<path> | sha256sum`.
 _ENGINE_MODULE_FILES = ("composer.py", "kicad_emit.py")
 
 
@@ -394,11 +399,12 @@ def _engine_provenance() -> dict:
         # An engine we could not hash must not read as an engine we verified.
         "status": "measured" if not unreadable else "incomplete",
         "unreadable": unreadable,
-        "note": ("content hashes of the running engine; match against "
-                 "`git hash-object <file>` to learn whether this run used "
-                 "committed code. No commit id is reported because the "
-                 "container has no repository and a field that appears only "
-                 "on some hosts is worse than no field."),
+        "note": ("sha256 of the running engine's own source. To learn whether "
+                 "this run used committed code, compare against "
+                 "`git show <rev>:<path> | sha256sum` -- NOT `git hash-object`, "
+                 "which is SHA-1 over a blob header and never matches. No commit "
+                 "id is reported: the container has no repository, and a field "
+                 "present only on some hosts is worse than no field."),
     }
 
 
