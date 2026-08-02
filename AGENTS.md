@@ -109,9 +109,23 @@ git status --porcelain | grep '^ M\|^M \|^MM'
 
 **⭐ 開工前先錨定自己的工作（唯一不依賴任何人記得的防護）**：
 
+```bash
+# ⚠ 不要用 `git stash create` —— 它只涵蓋 tracked 檔案，untracked 新檔會靜默漏掉
+export GIT_INDEX_FILE=$(mktemp -d -p "${XDG_RUNTIME_DIR:-$HOME/.cache}" snap.XXXXXX)/index
+git read-tree HEAD
+git add -- <每一個要保的檔案，含 untracked>
+C=$(git commit-tree $(git write-tree) -p HEAD -m "snapshot: <what>")
+git update-ref refs/wip/<session-id> "$C"
+unset GIT_INDEX_FILE
 ```
-git stash create && git update-ref refs/wip/<session-id> <那個 sha>
-```
+
+**驗收必須逐檔 `git show <ref>:<path>` 比對，不是「ref 建好了」。**
+`ses_0c87bab06` 的第一版快照就漏掉一個 untracked 測試檔——而 **ref 存在、`git show <ref>` 有輸出，
+讀起來完全像「我的工作受保護了」**。
+
+> **「我以為我快照了」比「我沒快照」更危險，因為它讓人停止擔心。**
+
+這是本節所有陷阱的同一個形狀，**發生在防護措施自己身上**：涵蓋範圍與你以為的不同，而輸出不會說。
 
 **`reset --hard` 拿不走一個有 ref 指著的 commit。** 未 `git add` 的內容從未進 object store，
 所以事後任何回收手段（`reflog` / `fsck --lost-found` / `stash list`）都是空的——**錨定必須在事前**。
