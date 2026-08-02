@@ -84,6 +84,38 @@ bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端�
   （`issue_<YYYYMMDD>_<slug>.md`，關閉移 `issues/closed/`）。除非使用者明確要求，不開 GitHub issue。
 - **plan-builder spec 在隔離分支建置才需要 beta-workflow**；純 repo 內 code 修改可直接做。
 
+## 6.1 共用工作樹紀律（2026-08-02 事故後新增）
+
+**這棵樹長期有多顆 session 並行工作，且大量工作處於未 commit 狀態。** 以下指令會靜默摧毀
+他人未 commit 的修改，**在本 repo 一律先問、先查**：
+
+| 指令 | 為什麼危險 |
+| --- | --- |
+| `git reset --hard` | **與 `git checkout` 相反**：checkout 遇到會被覆蓋的本地修改會 REFUSE 並列出擋路檔案；`reset --hard` 靜默執行、exit 0、什麼都不印。**成功態與災難態共用同一個輸出。** |
+| `git clean -fd` | 刪除全部 untracked（本樹有 458 個） |
+| `git checkout -- .` | 丟棄全樹工作區修改 |
+| `git stash`（無 pathspec） | 會捲走他人的修改 |
+
+**強制前置**：執行上述任何一個之前，先跑
+```
+git status --porcelain | grep '^ M\|^M \|^MM'
+```
+非空就停手——那些是別人的工作。
+
+**等價的安全替代**：
+- 撤銷 commit → `--soft` / `--mixed`（**不碰工作區**，絕大多數情況要的是這個）
+- 丟棄特定修改 → `git stash push -- <精確 pathspec>`，不要全樹 `--hard`
+- 搬移檔案 → `git mv`（它會在檔案未進版控時報錯，是有用的訊號）
+
+**⚠ pathspec 陷阱**：`git status --porcelain <path>` 與不帶 path 的版本**輸出形狀完全一樣**，
+沒有任何標記說結果被過濾過。**任何帶範圍限定的 `git status` / `grep` / `ls` 結果，
+若要拿去支撐全域結論，必須先重跑一次不帶限定的版本。**
+
+實錄：`issues/BR_20260802_reset_hard_silently_destroyed_uncommitted_work_on_shared_tree.md`
+——46 個檔案的未 commit 修改永久遺失，兩顆 peer 的 context 都無可回收內容。
+肇事者在事故前 30 分鐘才剛立案一張警告「`git clean -fd` 會無聲刪光 peer 工作」的 BR。
+**正在寫某條規則不構成該規則的豁免。**
+
 ## 7. Diagram / 建模
 
 - IDEF0 / GRAFCET / C4 用 `drawmiat` MCP，**先 `validate_diagram` 再 `generate_diagram`**。
