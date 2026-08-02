@@ -94,16 +94,61 @@ BR_20260731 的 handler 因此改用 `spec_from_file_location` 直接載入 `pin
 
 ## Fix proposal
 
-**必須先裁決三個符號的歸屬**，這不是接線問題。⚠ **只有一個是可從證據推導的**：
+**必須先裁決三個符號的歸屬**，這不是接線問題。
 
-| 符號 | 有無測試釘住 | 可否從證據寫出 body |
-|---|---|---|
-| `_vendor_sym_scale(page_scale, native_pitch, page_floor, pin_count) -> float` | `test_dd31` 4 個斷言 | **可以** |
-| `_native_pitch_and_count(lib_id, symbol_dir, cache) -> (float, int)` | 無 | **不可以**——沒有規格說明如何讀 vendor symbol 的原生 pin pitch |
-| `_page_pitch_floor(list[EmitComponent], symbol_dirs) -> float` | 無 | **不可以**——DD-30「無主晶片頁 → 7.62mm」的偵測規則未定義 |
+### ⚠ 本段已於 2026-08-02 更正——初版判定過嚴
 
-**後兩者若照呼叫端硬猜，就是在為了修 import 而製造一個沒有依據的量測規則。**
-需要先有規格裁決（或找到當初的設計者），不得由 handler 自行發明。
+初版寫「只有一個可從證據推導，後兩者不得由 handler 自行發明」。**那是在只讀了呼叫端與測試、
+沒有讀規格的情況下下的判定。** 規格存在，而且比我當時以為的完整：
+`specs/eda-bridge_occupancy-ledger/drafting-rulebook.md` 的 **A7**（DD-29/30/32）與 **A8**（DD-31 三次教訓）。
+
+| 符號 | 測試釘住 | 規格來源 | 可否寫出 body |
+|---|---|---|---|
+| `_vendor_sym_scale(page_scale, native_pitch, page_floor, pin_count) -> float` | `test_dd31` 4 個斷言 | A7 逐字給出公式 `max(page_scale, floor / native_pitch)` | **可以** |
+| `_page_pitch_floor(...) -> float` | 無 | **A7 完整定義**：主晶片＝該頁 pin 數最多者；無主晶片頁借全案主晶片下限 **7.62 mm**；範圍＝≥4-pin；2-pin R/C/L 除外；`u1_` 前綴豁免 | **可以**（初版說不可以，**錯**） |
+| `_native_pitch_and_count(lib_id, symbol_dir, cache) -> (float, int)` | 無 | A8 給**回傳契約與已知陷阱**（`(0.0, 0)` sentinel、`native_pitch<=0` 回退），但**未定義量測演算法本身** | **部分**——契約明確，演算法仍需裁決 |
+
+**A8 是這三者裡最有價值的一段，因為它記載的正是本 repo 反覆出現的那個形狀：**
+
+> 稽核腳本以截短 lib_id 呼叫 `load_symbol` → `KeyError` **被靜默吞** → 回 `(0.0, 0)`
+> → `native_pitch<=0` 分支**回退 `page_scale`** → **假 LOW**，連續三輪誤判。
+
+所以 `_native_pitch_and_count` 的實作**不得**用 `(0.0, 0)` 當失敗 sentinel——那正是 A8 記載的
+三輪誤判根因，也正是 BR_20260731 修掉的同一種缺陷（缺席態與失敗態共用輸出）。
+**規格已經告訴我們哪條路是坑，這比「沒有規格」有用得多。**
+
+### 規格點名的符號共有五個，全部零定義站點
+
+初版只查了 import 清單裡的三個。實測（`def <name>` / `<name> =` 全 repo，排除 `.venv`）：
+
+```
+_vendor_sym_scale        defsites=0
+_native_pitch_and_count  defsites=0
+_page_pitch_floor        defsites=0
+_adjacent_pitch          defsites=0   ← 規格 A7 點名，總提及數 0
+_PITCH_COMFORT_FLOOR_MM  defsites=0   ← 規格 A6 點名，總提及數 2（皆為引用非定義）
+_place_component         defsites=0   ← test_dd31 docstring 點名的 emit 站點
+CONTROL: load_symbol     defsites=1   （同方法找得到真實定義 ⇒ 查法有鑑別力）
+```
+
+**`_place_component` 不存在**——`test_dd31` 的 docstring 說「applied at BOTH the emit site
+(kicad_emit `_place_component`) and the placement site (composer `_estimate_bbox`)」，
+但 emit 端實際上沒有這個函式。真正的 emit 站點在 **`emit_kicad_schematic`（`:570`）內的 `:636`**：
+
+```python
+_sym_scale = 1.0 if component.lib_id.partition(":")[0].startswith("u1_") else page_scale
+```
+
+`_estimate_bbox` 則**確實存在**（defsites=1）。所以 DD-31 的兩端裡，**placement 端是真的、emit 端是虛構的**。
+
+### 這改變了什麼
+
+初版說「需要先有規格裁決，不得由 handler 自行發明」——**規格裁決其實已經寫好了**，
+只是從未被實作。真正缺的不是設計決策，是**有人把 A7/A8 落成程式碼**，
+並在過程中避開 A8 明文警告的那個 sentinel 陷阱。
+
+這件事本身也是本 BR 的一則證據：**一份寫得很完整的規格，與一份不存在的規格，
+在「程式碼有沒有實作它」這個維度上產生了完全相同的結果**——都是 ImportError。
 
 1. **實作它**（若 DD-31 的設計意圖仍成立）——在 `kicad_emit.py` 實作該 helper，
    讓 emit 端 `_place_component` 與 placement 端 `composer._estimate_bbox` 共用同一個縮放
