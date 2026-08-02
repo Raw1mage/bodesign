@@ -123,3 +123,86 @@ warning 文字自承這是 **composer 的 stub 方向缺陷**，非呼叫端接�
 3. **`docker cp <目錄>` 巢狀放入而非覆蓋** — symbol 沉到深一層，composer 看不到，**症狀與「symbol 根本不存在」完全相同**。逐檔 cp。
 
 第 2、3 點各自也是同族形狀（**錯的東西與對的東西外觀相同**），但屬操作面而非 API 面，故不獨立立案。
+
+---
+
+## 9. 實作與驗證（2026-08-02，`ses_0c87bab06fferQ0umBs2Nybb5U`）
+
+### 修法
+
+**`inputs` 恆存在，不在旗標後面。** 需要主動索取的 provenance，在問題真正浮現的那一刻不會在手上——
+而那一刻永遠是事後，數字已經可疑、只剩作廢一途。回應固定帶：
+
+```
+inputs: {
+  symbol_libraries: [{path, sha256, mtime, bytes}, ...],   # 真的開過的檔
+  symbol_dirs_searched: [...],
+  spec_sha256: "...",  spec_components: N,
+  expect_sha_checked: [...]
+}
+```
+
+**一處前提修正**：`compose_schematic` 從不讀 `gen_ccm.py`——它收的是 `spec: dict`（`composer.py:1741`）。
+所以誠實的 provenance 是「它真的開過的檔」（symbol libraries）＋「它真的收到的 spec 的摘要」，
+而不是回報一個它沒碰過的產生器腳本。`spec_sha256` 正是用來分辨「同一組數字但 spec 不同」的那一格，
+也就是本 BR §2 描述的場景在 API 邊界上的實際形狀。
+
+**`expect_sha` 是承重的那一半。** 只回報位元組，仍把「查證」留給呼叫端的自律，
+而依賴有人記得的檢查，終究會有一次沒做。宣告摘要把檢查移進工具本身：
+
+```python
+compose_schematic(..., expect_sha={path: sha256})
+  → 不符即 InputProvenanceMismatch，且在任何工作發生之前
+```
+
+**解析單一真相來源**：新增 `kicad_emit.resolve_symbol_library()`，`load_symbol` 改為呼叫它。
+provenance 回報與實際載入走同一條解析路徑，**回報的路徑無法與載入的路徑漂移**——
+一份可能與它所描述的位元組不一致的 provenance 記錄，比沒有更糟，因為它會被信任。
+
+`_file_provenance` 讀位元組算 sha256，**不信 mtime**：網路/FUSE 掛載上 mtime 可以來自
+write-back cache 而內容已不同，那正是本 BR 要揭露的故障模式。讀不到的檔記成帶 `error` 的條目
+而非省略——省略會讀成「這個輸入沒被用到」，把 unread 與 unreadable 混為一談。
+
+### 驗證
+
+`tests/test_compose_input_provenance.py` **12/12**，含四條反向鑑別力：
+
+| 測試 | 沒有它會怎樣 |
+|---|---|
+| `spec_digest_changes_when_the_spec_changes` | 摘要恆定＝識別不了任何東西 |
+| `identical_specs_produce_the_identical_digest` | 摘要恆變＝同樣識別不了 |
+| `mismatched_digest_refuses` | 閘可以接受任何值而其他測試照樣全綠 |
+| `refusal_happens_before_any_work` | 事後才拒絕＝已經付出整次 compose |
+| `a_missing_declared_path_is_a_mismatch_not_a_pass` | 缺席與相符共用結果 |
+| `reads_bytes_rather_than_trusting_mtime` | mtime 相同而內容不同時靜默通過 |
+
+**真 MCP client 實測**（非 curl——curl 繞過 client 序列化層，是 §P 的教訓）：
+
+```
+compose(spec)                     → inputs.symbol_libraries[0].sha256 = bf466eecad72…
+                                    與 host `sha256sum` 逐字相符
+                                    spec_sha256 = 343a6dc54421…  spec_components = 2
+compose(spec, expect_sha={lib:0×64}) → ok:false
+    InputProvenanceMismatch: COMPOSE_INPUT_SHA_MISMATCH: … expected 000000000000…
+    but read bf466eecad72… (2218424 bytes, mtime 1778093993)
+```
+
+部署以 pid1 `09:59:24Z` > 最新 src mtime `09:58:42Z` 確認。
+
+### 阻塞：這份修復無法在 HEAD 上執行
+
+`composer.py` 在 HEAD 匯入 `_vendor_sym_scale` 等三個 `kicad_emit` 未定義的符號，
+**整個 `bodesign_eda_bridge` 套件在 HEAD 無法 import**。
+見 `issues/BR_20260802_composer_imports_a_symbol_that_never_existed…`（我已於 `f7f46c0` 更正其根因：
+那些符號存在過，被 `reset --hard` 摧毀，已從懸空 blob 復原並錨定在 `refs/recovered/kicad_emit_full`）。
+
+本修復目前與該還原一起活在工作區，並已快照為 `refs/recovered/ses0c87_wip_provenance`（防 `reset --hard`）。
+
+**未 commit 的原因**：`packages/eda-bridge/` 是 `schematic-engine` family 的 fix surface，
+該 family 目前 unassigned，依 `issues/OWNERS.md` §4.3.2 路由至 `(default)` owner。
+等待授權；證據與量測已備齊，授權後 commit 即可。
+
+### 附帶：§6 的 90 條 POWER_PORT warning
+
+未併案。它是 `kicad_emit` 的 stub 方向缺陷，屬 `schematic-engine` 的 fix surface，
+與本 BR 的 API 揭露面不同根因——共用檔案不是歸族依據。
