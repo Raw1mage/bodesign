@@ -136,10 +136,21 @@ from what it would have been guessing at.**
 *handled there*, not that the geometry knowledge is *held there*. Treat title hits
 as candidates to probe, never as owners to assign.
 
-**Open question it raised, unresolved:** if `ses_0716c7745` (schemdraw template
-bank) *removed* the draftsman wire engine rather than adding an alternative,
-`BR_20260723e` may be moot. **Judgement to apply: as long as a `style="draftsman"`
-path is still reachable in the codebase, 723e stands.** Verify before dispatching it.
+**Open question it raised — RESOLVED 2026-08-02 (coordinator):** it asked whether
+`ses_0716c7745` (schemdraw template bank) *removed* the draftsman wire engine rather
+than adding an alternative, which would make `BR_20260723e` moot. **It added.**
+
+- `composer.py:1737-1738` still validates `style in ("netlist", "draftsman")` and
+  raises otherwise; 9 live branches consume it (`:1826`, `:1944`, `:2294`, `:2401`,
+  `:2445`, …). `server.py:1130`'s schema enum still offers it. Dedicated regression
+  suite `tests/test_composer_draftsman.py` exists.
+- schemdraw lives somewhere else entirely — `skills/bodesign/engines/kicad/scripts/schemdraw_templates/`
+  (skill-engine side), not in `packages/eda-bridge`. Different layer, not a replacement.
+- Control group: the same grep shape returns 5 files for `draftsman`, so the
+  schemdraw search was live, not a dead pattern.
+
+**`BR_20260723e` stands.** Apply the peer's ordering rule: capture 723b's repro as a
+pytest fixture before 723e lands.
 
 ### `c03-stage-discipline` — `ses_0c87bab06` declined (2026-08-02), **and corrected my root cause**
 
