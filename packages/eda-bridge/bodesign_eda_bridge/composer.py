@@ -21,6 +21,7 @@ Spec shape:
     }
 """
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,6 +33,7 @@ from .kicad_emit import (
     SchematicEmitResult,
     emit_kicad_schematic,
     load_symbol,
+    resolve_symbol_library,
     validate_kicad_schematic,
     _vendor_sym_scale,
     _native_pitch_and_count,
@@ -289,6 +291,12 @@ class ComposeResult:  # noqa: D101 — fidelity field appended for BR1 (2026-07-
     # raises SymbolLoadError before returning a "looks complete" result) — never a
     # silent empty-box on a missing multi-pin IC symbol.
     symbol_load_failures: list[dict] = field(default_factory=list)
+    # BR_20260802: WHICH bytes produced these numbers. Without it, "composed the
+    # file you just wrote" and "composed a copy you replaced two minutes ago"
+    # return the same success shape, and a measurement cannot be attributed to a
+    # version after the fact — which is how an erc_errors count had to be thrown
+    # away entirely rather than merely re-checked. Always populated.
+    inputs: dict = field(default_factory=dict)
 
 
 class SymbolLoadError(RuntimeError):
@@ -313,6 +321,85 @@ class SymbolLoadError(RuntimeError):
             f"(No-silent-fallback). See symbol_load_failures for per-ref reason + "
             f"the symbol libraries actually present on the search path."
         )
+
+
+class InputProvenanceMismatch(RuntimeError):
+    """BR_20260802: a declared expect_sha did not match the bytes on disk.
+
+    The optional half of the provenance fix, and the load-bearing one: reporting
+    which bytes were read still leaves the CHECK to the caller's discipline, and
+    a check that depends on someone remembering is one that eventually is not
+    made. Declaring the expected digest moves it into the tool, where a stale
+    file becomes a refusal instead of a plausible-looking success.
+    """
+
+    def __init__(self, mismatches: list[dict]):
+        self.mismatches = mismatches
+        lines = "; ".join(
+            f"{m['path']}: expected {m['expected'][:12]}… but read {m['actual'][:12]}…"
+            f" ({m['bytes']} bytes, mtime {m['mtime']})"
+            for m in mismatches)
+        super().__init__(
+            f"COMPOSE_INPUT_SHA_MISMATCH: {len(mismatches)} declared input(s) do not "
+            f"match the bytes on disk: {lines}. Refusing to compose — the result "
+            f"would be structurally valid and describe a version you did not mean, "
+            f"which is indistinguishable after the fact from one you did.")
+
+
+def _file_provenance(path) -> dict:
+    """path + sha256 + mtime + size for one file actually opened.
+
+    Reads the bytes rather than trusting mtime: on a network/FUSE mount an mtime
+    can be served from a write-back cache while the content differs, which is the
+    exact failure mode (a stale container copy) this record exists to expose.
+    """
+    p = Path(path)
+    try:
+        data = p.read_bytes()
+        st = p.stat()
+        return {"path": str(p), "sha256": hashlib.sha256(data).hexdigest(),
+                "mtime": int(st.st_mtime), "bytes": st.st_size}
+    except OSError as exc:
+        # Never silently omit a file we could not measure: an absent entry would
+        # read as "this input was not used", conflating unread with unreadable.
+        return {"path": str(p), "sha256": None, "mtime": None, "bytes": None,
+                "error": f"{type(exc).__name__}: {exc}"}
+
+
+# BR_20260802 (round 2, one level up): WHICH ENGINE produced the numbers.
+# `inputs` answers "which bytes were read"; it does not answer "which bytes did
+# the reading". Those are different questions and the second one bit harder:
+# this package is bind-mounted into the server container from a host working
+# tree, so the running engine tracks uncommitted edits, not any commit. Results
+# measured against such an engine stop being reproducible the moment anyone runs
+# `git checkout` / `reset --hard` on that tree -- and nothing in the response
+# lets you find out afterwards which engine you had. Recording the module's own
+# bytes costs one hash of a path Python already resolved into `__file__`.
+#
+# Deliberately NOT shelling out to git for a commit id: the container has no
+# repository, so `git describe` would fail there and succeed on a host, making
+# the field's presence depend on where it ran. A content hash is available
+# everywhere and is what actually identifies the code; the caller matches it
+# against `git hash-object` when it wants a commit.
+_ENGINE_MODULE_FILES = ("composer.py", "kicad_emit.py")
+
+
+def _engine_provenance() -> dict:
+    """Provenance of the modules doing the composing, not of what they read."""
+    here = Path(__file__).resolve().parent
+    mods = [_file_provenance(here / name) for name in _ENGINE_MODULE_FILES]
+    unreadable = [m["path"] for m in mods if m.get("sha256") is None]
+    return {
+        "modules": mods,
+        # An engine we could not hash must not read as an engine we verified.
+        "status": "measured" if not unreadable else "incomplete",
+        "unreadable": unreadable,
+        "note": ("content hashes of the running engine; match against "
+                 "`git hash-object <file>` to learn whether this run used "
+                 "committed code. No commit id is reported because the "
+                 "container has no repository and a field that appears only "
+                 "on some hosts is worse than no field."),
+    }
 
 
 class EmptySpecError(ValueError):
@@ -1706,8 +1793,16 @@ def compose_schematic(
     paper_whitelist: set[str] | None = None,
     power_port_gate: str = "error",
     ink_gate: bool = True,
+    expect_sha: dict | None = None,
 ) -> ComposeResult:
     """Compose a schematic from a declarative spec.
+
+    expect_sha (BR_20260802, optional): {path: sha256}. Every declared path is
+    hashed before any work happens and a mismatch raises InputProvenanceMismatch.
+    Without it the result still reports `inputs` (what was actually read), but
+    checking that record stays the caller's job -- and the recorded failure was
+    precisely a caller who had no way to notice it was composing a container copy
+    that a host-side edit had already superseded.
 
     style (DD-3, opt-in — default preserves pre-upgrade behaviour):
       - "netlist" (DEFAULT): naive grid + global-label. Byte-equivalent to the
@@ -1780,6 +1875,22 @@ def compose_schematic(
         if _d and str(_d) not in {str(x) for x in _merged_dirs}:
             _merged_dirs.append(_d)
     symbol_dirs = _merged_dirs
+
+    # BR_20260802: the declared-digest gate runs FIRST, before any work, so a
+    # stale input costs a refusal rather than a full compose whose numbers cannot
+    # afterwards be attributed to a version.
+    if expect_sha:
+        _mismatch: list[dict] = []
+        for _path, _want in expect_sha.items():
+            _prov = _file_provenance(_path)
+            if _prov.get("sha256") != _want:
+                _mismatch.append({"path": str(_path), "expected": str(_want),
+                                  "actual": str(_prov.get("sha256")),
+                                  "bytes": _prov.get("bytes"),
+                                  "mtime": _prov.get("mtime"),
+                                  "error": _prov.get("error")})
+        if _mismatch:
+            raise InputProvenanceMismatch(_mismatch)
 
     # BR_20260730b N2: a spec carrying NO components is refused here, before any
     # gate can bless it.
@@ -1921,6 +2032,19 @@ def compose_schematic(
             })
     if _symload_failures:
         raise SymbolLoadError(_symload_failures)
+
+    # BR_20260802: record WHICH library files backed this compose. Resolution goes
+    # through the same helper load_symbol uses, so the reported path cannot drift
+    # from the loaded one -- a provenance record that may disagree with the bytes
+    # it describes is worse than none, because it gets trusted.
+    _libs_used: dict[str, dict] = {}
+    for _c in parsed:
+        try:
+            _lp = resolve_symbol_library(_c["symbol"], symbol_dirs)
+        except (FileNotFoundError, KeyError):
+            continue  # passives legitimately fall back to a placeholder box
+        if str(_lp) not in _libs_used:
+            _libs_used[str(_lp)] = _file_provenance(_lp)
 
     # T1: declared no-connect pins (forwarded verbatim; emitter fail-fasts on
     # unresolvable entries).
@@ -2433,6 +2557,21 @@ def compose_schematic(
         sheet_fit=sheet_fit,
         ledger=_ledger,
         wire_body_intrusions=list(getattr(emit, "wire_body_intrusions", [])),
+        inputs={
+            "symbol_libraries": sorted(_libs_used.values(), key=lambda d: d["path"]),
+            "symbol_dirs_searched": [str(_d) for _d in symbol_dirs],
+            # The spec arrives as a dict, never as a file compose opens, so there
+            # is no path to report for it. Its digest is still the only way to
+            # tell two runs apart when the caller generated it from a source that
+            # changed underneath -- which is the reported failure mode.
+            "spec_sha256": hashlib.sha256(
+                json.dumps(spec, sort_keys=True, ensure_ascii=False,
+                           default=str).encode("utf-8")).hexdigest(),
+            "spec_components": len(spec.get("components", [])),
+            "expect_sha_checked": sorted(expect_sha) if expect_sha else [],
+            # Not what was read -- what did the reading. See _engine_provenance.
+            "engine": _engine_provenance(),
+        },
     )
 
     # M6-5 (DD-12 companion): expose the observe-only true-ink gate verdict so the

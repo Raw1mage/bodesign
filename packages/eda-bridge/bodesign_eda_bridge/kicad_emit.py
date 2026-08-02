@@ -374,13 +374,8 @@ def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR,
     Raises FileNotFoundError if the library is found in none of the dirs, and
     KeyError if the symbol is not present in the located library.
     """
-    library, _, name = lib_id.partition(":")
-    if not name:
-        raise KeyError(f"lib_id must be 'Library:Symbol', got {lib_id!r}")
-    dirs = [symbol_dir] if isinstance(symbol_dir, (str, Path)) else list(symbol_dir)
-    lib_path = next((Path(d) / f"{library}.kicad_sym" for d in dirs if (Path(d) / f"{library}.kicad_sym").exists()), None)
-    if lib_path is None:
-        raise FileNotFoundError(f"KiCad symbol library '{library}.kicad_sym' not found in: {[str(d) for d in dirs]}")
+    lib_path = resolve_symbol_library(lib_id, symbol_dir)
+    name = lib_id.partition(":")[2]
     source = lib_path.read_text(encoding="utf-8", errors="ignore")
     block = _extract_symbol_block(source, name)
     if block is None:
@@ -390,6 +385,20 @@ def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR,
         block = _scale_symbol_geometry(block, page_scale)
     embedded = block.replace(f'(symbol "{name}"', f'(symbol "{lib_id}"', 1)
     return embedded, _pin_endpoints(block)
+
+
+def resolve_symbol_library(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR) -> Path:
+    """Which file on disk a lib_id resolves to, without reading it."""
+    library, _, name = lib_id.partition(":")
+    if not name:
+        raise KeyError(f"lib_id must be 'Library:Symbol', got {lib_id!r}")
+    dirs = [symbol_dir] if isinstance(symbol_dir, (str, Path)) else list(symbol_dir)
+    lib_path = next((Path(d) / f"{library}.kicad_sym"
+                     for d in dirs if (Path(d) / f"{library}.kicad_sym").exists()), None)
+    if lib_path is None:
+        raise FileNotFoundError(
+            f"KiCad symbol library '{library}.kicad_sym' not found in: {[str(d) for d in dirs]}")
+    return lib_path
 
 
 def _extract_symbol_block(source: str, name: str) -> str | None:

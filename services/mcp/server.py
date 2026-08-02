@@ -159,10 +159,16 @@ def _h_compose(a: dict) -> Any:
                           connection_style=a.get("connection_style"),
                           style=a.get("style", "netlist"),
                           measure_ink=a.get("measure_ink", False),
-                          fidelity=a.get("fidelity", False))
+                          fidelity=a.get("fidelity", False),
+                          **({"expect_sha": a["expect_sha"]} if a.get("expect_sha") else {}))
+    # BR_20260802: `inputs` rides on EVERY response, never behind a flag. A caller
+    # who has to ask for provenance does not have it at the moment the question
+    # finally arises -- which is always after the fact, when the numbers are
+    # already suspect and the only remaining option is to discard them.
     out = {"placed": r.placed, "nets": r.nets, "schematic": r.emit.schematic_path,
            "style": r.style, "engine_rev": _eb.__engine_rev__,
            "unresolved_pins": r.emit.unresolved_pins, "warnings": r.warnings,
+           "inputs": r.inputs,
            "validation": _jsonable(r.validation) if r.validation else None}
     if r.fidelity is not None:
         out["fidelity"] = _jsonable(r.fidelity)
@@ -1129,7 +1135,8 @@ TOOLS: list[dict] = [
                                  "description": "custom KiCad symbol .kicad_sym parent dir(s), as an ARRAY of paths. The KiCad standard library is ALWAYS merged in downstream (BR_20260723), so listing a custom dir never costs you stock passives. A single bare path STRING is still accepted at runtime (back-compat) — the schema is deliberately NARROWER than the runtime. BR_20260730b N1+§P: this argument first declared no type at all, then an anyOf union; BOTH shapes make an MCP client serialise the array to TEXT, so '[\"/work/symbols\"]' arrives as a 'directory' that can never exist and every custom symbol silently fails to resolve while stdlib parts still load. Only a SINGLE-type array declaration transports a real list (proven A/B: covers_boards, a plain array, survives the same request in which an anyOf argument is stringified). compose raises SymbolDirsEncodingError on a JSON-encoded string rather than treating it as a path."},
                 "validate": {"type": "boolean"}, "style": {"type": "string", "enum": ["netlist", "draftsman"]},
                 "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"},
-                "fidelity": {"type": "boolean", "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."}}, "required": ["out_dir", "project_name", "spec"]}},
+                 "fidelity": {"type": "boolean", "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."},
+                 "expect_sha": {"type": "object", "description": "BR_20260802, optional {path: sha256}: assert the bytes on disk BEFORE composing; a mismatch raises COMPOSE_INPUT_SHA_MISMATCH instead of returning a structurally perfect result that describes a version you already replaced. Every response carries `inputs` (symbol libraries actually read, with sha256/mtime/bytes, plus spec_sha256) whether or not you declare this \u2014 but reading that record is your discipline, while declaring the digest moves the check into the tool. Use it whenever the inputs live somewhere they can change underneath you (a container copy, a network mount, another session's worktree)."}}, "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
      "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "components": {"type": "array"},

@@ -206,3 +206,89 @@ compose(spec, expect_sha={lib:0×64}) → ok:false
 
 未併案。它是 `kicad_emit` 的 stub 方向缺陷，屬 `schematic-engine` 的 fix surface，
 與本 BR 的 API 揭露面不同根因——共用檔案不是歸族依據。
+
+---
+
+## Round 2 — 同族的上一層：`inputs` 說了讀哪些位元組，沒說**是誰在讀**
+
+Consumer（`ses_073a93d09`）在複驗 round 1 時報回一格更上層的缺口，實測成立：
+
+```
+composer.py  grep: engine_version | __version__ | git_describe | BUILD_SHA  → 0 命中
+/app/packages  ←  ro,bind  ←  /home/pkcs12/projects/bodesign/packages   （/proc/1/mountinfo）
+container kicad_emit.py sha = fe85249fcee83183
+worktree                    = fe85249fcee83183   ← 一致
+HEAD                        = 8194fa18a6d6157e   ← 不同
+```
+
+**容器跑的引擎綁的是 host 工作區，不是任何 commit。**
+
+### 為什麼這比 round 1 更嚴重
+
+| | 失去的東西 | 爆炸半徑 |
+|---|---|---|
+| round 1（`inputs` 缺席） | **輸入**過期，讀者分不出來 | 一次 compose 的數字作廢 |
+| round 2（`engine` 缺席） | **引擎**未 commit，讀者分不出來 | 任何人在這棵樹上 `git checkout` / `reset --hard`，**所有先前的驗證永久不可重現** |
+
+而這不是假想情境：同一天同一棵樹，`reset --hard` 已摧毀 46 檔未 commit 修改
+（`BR_20260802_reset_hard_silently_destroyed_uncommitted_work_on_shared_tree`），
+且本 BR 的實作本身就依賴從懸空 blob 復原的 `kicad_emit.py`。
+**那兩起事故的爆炸半徑，完整覆蓋 consumer 當天的全部交付。**
+
+Consumer 的自曝值得逐字保留，因為它指出 receipt discipline 漏掉的那一格：
+
+> 我 commit 時逐條驗了 landed bytes、跑了 mutation proof、自建 fixture、控制組全上——
+> **但整條驗證鏈跑在一個沒有 commit 的引擎上。**
+> 我驗了交付物，沒驗**產生驗證的那個工具本身的可重現性**。
+
+歸責判準（那一格資訊系統當下有沒有）：**有**。模組被 import 的那一刻 `__file__` 就在，
+取 sha 是零成本。它選擇不放進回應。
+
+### 修法
+
+`inputs.engine`：
+
+```python
+_ENGINE_MODULE_FILES = ("composer.py", "kicad_emit.py")
+
+def _engine_provenance() -> dict:
+    here = Path(__file__).resolve().parent
+    mods = [_file_provenance(here / name) for name in _ENGINE_MODULE_FILES]
+    unreadable = [m["path"] for m in mods if m.get("sha256") is None]
+    return {"modules": mods,
+            "status": "measured" if not unreadable else "incomplete",
+            "unreadable": unreadable, "note": ...}
+```
+
+三個刻意的設計選擇：
+
+1. **複用 `_file_provenance`**，不另寫一份雜湊邏輯——兩份會漂移，而漂移後的那份
+   仍會回傳看起來正確的 hex 字串。
+2. **不 shell out 問 git**。容器裡沒有 repository，`git describe` 會在**正好需要它的那條路徑上**
+   失敗、而在 host 上成功。一個「存在與否取決於在哪裡跑」的欄位比沒有欄位更糟——
+   它會讓讀者以為「這次沒印 commit 是因為沒事」。content hash 到處都可比對
+   （`git hash-object` / `sha256sum`），且它才是真正識別程式碼的東西。
+3. **`status` + `unreadable` 而非靜默漏欄位**。量不到的模組必須大聲說量不到；
+   少一個 entry 的清單仍然讀起來像一次乾淨的量測——**那正是本 BR 要消滅的形狀，
+   在修復自身內部重演**。
+
+### 驗證（17/17）
+
+```
+獨立雜湊器交叉比對    composer.py / kicad_emit.py 逐檔 MATCH
+mutation proof        內容改變 → sha 改變（否則欄位是裝飾品）
+反向鑑別力            檔案不可讀 → status=incomplete + entry 保留 + error 具名
+                                   modules 長度不變（不靜默縮短）
+不報 commit id        assertNotIn("commit") / assertNotIn("git_describe")
+facade 可達           compose_schematic().inputs["engine"] 在回傳值裡
+```
+
+回歸：`test_composer` 的 `erc_errors 0 != 1` 經 stash A/B **逐字相同**，既有基線非本輪引入。
+
+### 給呼叫端的用法
+
+```
+engine.modules[].sha256   對比  git hash-object <file>
+  相符 → 這次跑的是已 commit 的程式碼，結果可重現
+  不符 → 跑的是工作區版本，**在那棵樹被 checkout 之前**保存證據
+```
