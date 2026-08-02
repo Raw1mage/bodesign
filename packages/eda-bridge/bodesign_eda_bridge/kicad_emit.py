@@ -80,6 +80,11 @@ class SchematicEmitResult:
     # Nets whose wire geometry the guard deterministically jogged to avoid a
     # cross-net collinear overlap / endpoint-on-wire (kept as drawn wire).
     fusion_jogged_nets: list[str] = field(default_factory=list)
+    # M6-2 (DD-12): local labels the placer could NOT fit clear of every other
+    # label / pin-name, so it down-graded to the route far-end (never stacked).
+    # Each entry {"net": name, "at": [x, y]}. Empty == every local label found a
+    # clear slot (the good case). Visible so a reviewer sees crowded pages.
+    label_local_downgrades: list[dict] = field(default_factory=list)
     # BR_20260708 machine check: drawn wire segments that still cross a NON-host
     # component body AABB (keep-out-inflated). Empty == every drawn wire clears all
     # symbol bodies (the BR acceptance geometry check). Each entry:
@@ -93,6 +98,17 @@ class SchematicEmitResult:
     # wire_body_intrusions) and a warning is appended instead of raising. Empty on
     # the default fail-loud path (it raised) OR when there were no intrusions.
     power_port_intrusions: list[str] = field(default_factory=list)
+    # M7-3b-i (DD-11): L2.5 SlotTable slot-consumption OBSERVATION (never a driving
+    # gate). When the caller passes `clusters=`, emit builds a SlotTable
+    # (l1_geometry→gap_topology→build_capacity_plan) and, for every ACCEPTED drawn
+    # wire, records whether the wire's trunk lands on its reserved lane. Geometry is
+    # NOT changed — this is the作用面 measurement that feeds M7-3b-ii's greyscale
+    # slot consumption. Each entry is a slot_observe wire record (net/has_slot/hit/
+    # lane_coord/gap/axis/nearest_delta); `slot_observe_skips` records front-stage
+    # fail-fasts caught in observation mode (net/gap unplannable — explicit, never
+    # silent). Empty when clusters is None (byte-identical legacy path).
+    slot_observe_wires: list[dict] = field(default_factory=list)
+    slot_observe_skips: list[dict] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -244,6 +260,103 @@ def _fmt_num(v: float) -> str:
     return str(int(r)) if r == int(r) else repr(r)
 
 
+def _vendor_sym_scale(page_scale: float, native_pitch: float,
+                      page_floor: float, pin_count: int) -> float:
+    """Per-symbol geometry scale for a STORED (vendor/system) peripheral symbol.
+
+    DD-29/30/31 (user review v23/v24, 「所有晶片的pin密度要跟大晶片一致」): the legacy
+    rule was `_sym_scale = page_scale` — but page_scale (1.0~1.1) is a PAPER-fit
+    ratio, not a pitch-align ratio. A 2.54 mm connector × 1.1 = 2.79 mm stays far
+    denser than the page's main chip (7.62~11.43 mm rendered pitch). This lifts the
+    scale so the symbol's rendered pin pitch reaches `page_floor`:
+
+        scale = max(page_scale, page_floor / native_pitch)
+
+    - `page_floor` (DD-29/30): the page's main-chip rendered pitch, or 7.62 mm on a
+      chip-less peripheral page.
+    - Only ≥4-pin IC/connectors are lifted (DD-29 scope). 2-pin R/C/L keep the plain
+      page_scale (their density is not the「小晶片」complaint and lifting them would
+      explode the cap farm). A symbol whose native_pitch is unknown (<=0) also keeps
+      page_scale.
+    - page_scale is a hard floor: the paper-fit ratio is never undercut.
+
+    Returns page_scale unchanged when the symbol already clears the floor, so a
+    page whose peripherals are already wide enough is a no-op (byte-stable).
+    """
+    if pin_count < 4 or native_pitch <= 0.0:
+        return page_scale
+    return max(page_scale, page_floor / native_pitch)
+
+
+# DD-30 project-wide main-chip minimum rendered pitch, used as the floor on a
+# chip-less peripheral page (06a/06b/06c) that has no u1_ variant of its own.
+_PROJECT_MAIN_PITCH_FLOOR_MM = 7.62
+
+
+def _adjacent_pitch(pins: dict) -> float:
+    """Minimum adjacent same-edge pin pitch (mm) from a pin-endpoint map.
+
+    Pins on one edge share an x (vertical edge) or y (horizontal edge); the
+    density the user sees is the smallest gap between two neighbours on the same
+    edge. Group by the shared coordinate, take the min consecutive delta on the
+    other axis. Returns 0.0 when <2 pins share any edge (no meaningful pitch).
+    """
+    from collections import defaultdict
+    by_x: dict = defaultdict(list)
+    by_y: dict = defaultdict(list)
+    for p in pins.values():
+        px, py = round(p[0], 3), round(p[1], 3)
+        by_x[px].append(py)
+        by_y[py].append(px)
+    best = float("inf")
+    for group in (*by_x.values(), *by_y.values()):
+        if len(group) < 2:
+            continue
+        s = sorted(group)
+        for a, b in zip(s, s[1:]):
+            d = b - a
+            if d > 1e-6:
+                best = min(best, d)
+    return 0.0 if best == float("inf") else best
+
+
+def _native_pitch_and_count(lib_id: str, symbol_dir,
+                            cache: dict[str, tuple[float, int]]) -> tuple[float, int]:
+    """UNSCALED native adjacent pin pitch + pin count of a stored symbol.
+
+    Loaded once per lib_id (page_scale=1.0) and cached so a symbol reused across
+    many instances is parsed a single time. Missing symbols return (0.0, 0) so
+    the caller's _vendor_sym_scale falls back to page_scale (no lift).
+    """
+    if lib_id in cache:
+        return cache[lib_id]
+    try:
+        _def, pins = load_symbol(lib_id, symbol_dir, page_scale=1.0)
+    except (FileNotFoundError, KeyError):
+        cache[lib_id] = (0.0, 0)
+        return cache[lib_id]
+    result = (_adjacent_pitch(pins), len(pins))
+    cache[lib_id] = result
+    return result
+
+
+def _page_pitch_floor(components, symbol_dir) -> float:
+    """The page's pitch floor (DD-29/30): the main chip's RENDERED pin pitch.
+
+    The main chip is the u1_ variant, ALREADY emitted at page_scale, so its
+    in-symbol adjacent pitch IS the rendered pitch (the number the user reads).
+    A chip-less peripheral page (no u1_ variant) borrows the project-wide
+    _PROJECT_MAIN_PITCH_FLOOR_MM (DD-30).
+    """
+    _cache: dict[str, tuple[float, int]] = {}
+    for component in components:
+        if component.lib_id.partition(":")[0].startswith("u1_"):
+            pitch, _n = _native_pitch_and_count(component.lib_id, symbol_dir, _cache)
+            if pitch > 0.0:
+                return pitch
+    return _PROJECT_MAIN_PITCH_FLOOR_MM
+
+
 def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR,
                 page_scale: float = 1.0) -> tuple[str, dict[str, tuple[float, float]]]:
     """Return (embedded symbol definition text, {pin_number: (x, y)}).
@@ -375,6 +488,47 @@ _RECT_RE = re.compile(
     r"\(rectangle\s*\(start\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)\s*\(end\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)"
 )
 
+# DD-14 (user review v18): passive symbols (inductor L, capacitor C) draw their
+# body as (polyline)/(arc)/(circle) primitives and NO (rectangle). `_body_rect`
+# returns None for them, so the refdes/value / net-label obstacle-avoidance had
+# an EMPTY body-graphics set and dropped text straight onto the arc/plates
+# (L_U5 refdes over the inductor arc; 100nF refdes+value over the cap plates).
+# `_graphics_bbox` unions EVERY drawn primitive's coordinate so the true body
+# extent is known regardless of which primitive the symbol uses.
+_PT_RE = re.compile(r"\(xy\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)")
+_ARC_PT_RE = re.compile(
+    r"\((?:start|mid|end|center)\s+(-?[0-9.]+)\s+(-?[0-9.]+)\)"
+)
+
+
+def _graphics_bbox(block: str) -> tuple[float, float, float, float] | None:
+    """Union bbox of ALL drawn graphic primitives in a symbol block, SYMBOL-LOCAL.
+
+    Covers (rectangle), (polyline ... (xy ..)), (arc (start/mid/end ..)), and
+    (circle (center ..)). Returns (x0, y0, x1, y1) with x0<=x1, y0<=y1 (KiCad
+    y grows upward; caller flips to sheet coords). None when the block draws no
+    graphic at all (caller falls back to the pin-tip extent).
+
+    Unlike `_body_rect` (rectangles only), this sees the polyline plates / arc
+    bumps that passives use, so the body-graphics obstacle set is never empty
+    for a drawn part (DD-14).
+    """
+    xs: list[float] = []
+    ys: list[float] = []
+    r = _body_rect(block)
+    if r is not None:
+        xs.extend((r[0], r[2]))
+        ys.extend((r[1], r[3]))
+    for m in _PT_RE.finditer(block):
+        xs.append(float(m.group(1)))
+        ys.append(float(m.group(2)))
+    for m in _ARC_PT_RE.finditer(block):
+        xs.append(float(m.group(1)))
+        ys.append(float(m.group(2)))
+    if not xs:
+        return None
+    return (min(xs), min(ys), max(xs), max(ys))
+
 
 def _body_rect(block: str) -> tuple[float, float, float, float] | None:
     """Union bbox of every `(rectangle ...)` in a symbol block, SYMBOL-LOCAL.
@@ -393,6 +547,28 @@ def _body_rect(block: str) -> tuple[float, float, float, float] | None:
     if not xs:
         return None
     return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _body_wh_from_rect(
+    rect: tuple[float, float, float, float] | None,
+    pin_map: dict | None,
+) -> tuple[float, float] | None:
+    """M7-3b-i: symbol body (w, h) for the L1 BoxRect bbox (slot observation).
+
+    Prefers the symbol's true `(rectangle ...)` extent (rect = x0,y0,x1,y1); falls
+    back to the pin-endpoint extent when the symbol draws no rectangle; None when
+    neither is available (l1_geometry then uses its conservative 2*BBOX_MARGIN_MM
+    default). Read-only helper — changes no geometry.
+    """
+    if rect is not None:
+        x0, y0, x1, y1 = rect
+        return (abs(x1 - x0), abs(y1 - y0))
+    if pin_map:
+        xs = [p[0] for p in pin_map.values()]
+        ys = [p[1] for p in pin_map.values()]
+        if xs and ys:
+            return (max(xs) - min(xs), max(ys) - min(ys))
+    return None
 
 
 def _pin_name_extents(block: str) -> list[tuple[str, float, float, float]]:
@@ -464,7 +640,8 @@ def _place_symbol_props(component: "EmitComponent",
                         pin_boxes: list[tuple[float, float, float, float]],
                         occupied: list[tuple[float, float, float, float]],
                         page_scale: float = 1.0,
-                        body_box: tuple[float, float, float, float] | None = None
+                        body_box: tuple[float, float, float, float] | None = None,
+                        frame_box: tuple[float, float, float, float] | None = None
                         ) -> tuple[float, float, float, float, tuple, tuple]:
     """Pick clear anchor positions for a component's Reference and Value text.
 
@@ -530,8 +707,18 @@ def _place_symbol_props(component: "EmitComponent",
     # Value below by default; escalate outward until both clear. The first tier is
     # the legacy fixed offset (byte-stable when it already clears — small parts);
     # the escalation tiers are BODY-RELATIVE so large bodies clear too (DD-20).
+    # DD-25 (user review v22): refdes/value must seat at the box GEOMETRIC CENTER
+    # band when it is clear (名字印在方塊正中央，不跟 pinouts 攜位置). The legacy
+    # first tier (cy-1.27) is exactly the TOP pin-name row, which is what the user
+    # saw "searching for space with the pinouts". Try centering FIRST: ref just
+    # above the center line, value just below, both on the box x-center. On a
+    # symbol whose pin names hug the edges (short names, clear center band) this
+    # wins; on a dense-center BGA the clash test rejects it and the body-relative
+    # tiers below take over (fallback, never force-center onto pin text).
+    _row = _prop_h  # one text-row height (ref above center, value below)
     ladder = [
-        (2.54, -1.27, 2.54, 1.27),      # legacy (tried first: byte-stable when clear)
+        (0.0, -_row, 0.0, _row),        # DD-25: geometric center band (tried first)
+        (2.54, -1.27, 2.54, 1.27),      # legacy (byte-stable when center is occupied)
         (2.54, -_oy, 2.54, _oy),        # above / below, past the body height
         (_ox, -_prop_h, _ox, _prop_h),  # right of body, split by one row
         (-_ox, -_prop_h, -_ox, _prop_h),# left of body, split by one row
@@ -540,18 +727,39 @@ def _place_symbol_props(component: "EmitComponent",
     ]
     # Bug2: the body graphic is an obstacle for EVERY tier's clash test, so a tier
     # that clears the (empty) pin_boxes but sits on the plates is correctly rejected.
+    # DD-25 exception: the geometric-CENTER tier (index 0) INTENTIONALLY sits inside
+    # the body — that is where the user wants the refdes. It must only clear the
+    # pin-name text + prior prop boxes, NOT be rejected by the body rect it is meant
+    # to live inside. Every other tier still treats body_box as an obstacle so it
+    # never drops text onto a passive's plates (the Bug2 orphan-cap case).
+    # DD-26/v24 Fix B (DD-25 regression): the earlier center-tier exemption dropped
+    # the WHOLE body_box, which on a 2-pin passive (Device:C) IS its plates —
+    # centering then sat the refdes/value straight onto the plate graphics again
+    # (the v23 cap regression). Narrow it: the center tier exempts only the OUTER
+    # FRAME (`frame_box`, the body rectangle the refdes legitimately lives inside),
+    # but still treats INTERIOR graphics (plates/arcs = body_box when it is the
+    # drawn-graphics extent, distinct from the frame) as an obstacle. When no
+    # separate frame_box is threaded (frame_box is None) fall back to the legacy
+    # full-body exemption so large-IC centering (03a U1/U2, whose graphics extent
+    # IS the frame and whose center band is clear) is unchanged.
     _obstacles = ([body_box] if body_box is not None else [])
-    for rdx, rdy, vdx, vdy in ladder:
+    if frame_box is not None and body_box is not None and frame_box != body_box:
+        # interior graphics = the drawn-graphics box; the center tier must clear it.
+        _center_obstacles = [body_box]
+    else:
+        _center_obstacles = []
+    for _tier_i, (rdx, rdy, vdx, vdy) in enumerate(ladder):
+        _tier_obstacles = _center_obstacles if _tier_i == 0 else _obstacles
         rb = _prop_text_box(ref, cx + rdx, cy + rdy, page_scale)
         vb = _prop_text_box(val, cx + vdx, cy + vdy, page_scale) if val else None
         clash = any(_bbox_overlap(rb, pb) for pb in pin_boxes) or \
                 any(_bbox_overlap(rb, pb) for pb in occupied) or \
-                any(_bbox_overlap(rb, pb) for pb in _obstacles)
+                any(_bbox_overlap(rb, pb) for pb in _tier_obstacles)
         if vb is not None:
             clash = clash or _bbox_overlap(rb, vb) or \
                     any(_bbox_overlap(vb, pb) for pb in pin_boxes) or \
                     any(_bbox_overlap(vb, pb) for pb in occupied) or \
-                    any(_bbox_overlap(vb, pb) for pb in _obstacles)
+                    any(_bbox_overlap(vb, pb) for pb in _tier_obstacles)
         if not clash:
             occupied.append(rb)
             if vb is not None:
@@ -581,6 +789,8 @@ def emit_kicad_schematic(
     page_scale: float = 1.0,
     ledger: "OccupancyLedger | None" = None,
     power_port_gate: str = "error",
+    clusters: list | None = None,
+    l6_avoidance: bool = False,
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
 
@@ -625,15 +835,32 @@ def emit_kicad_schematic(
     pin_maps: dict[str, dict[str, tuple[float, float]]] = {}
     # lib_id -> (x0, y0, x1, y1) SYMBOL-LOCAL body rectangle (guard C true body box).
     body_rects: dict[str, tuple[float, float, float, float] | None] = {}
+    # DD-14: lib_id -> SYMBOL-LOCAL union bbox of ALL drawn graphics (arc/plate/
+    # polyline/rect). Superset of body_rects; never empty for a drawn passive.
+    graphics_rects: dict[str, tuple[float, float, float, float] | None] = {}
     warnings: list[str] = []
+    # DD-29/30/31: the per-page pitch floor is the main chip's (u1_ variant) rendered
+    # pin pitch; a chip-less peripheral page borrows the project-wide 7.62 mm floor
+    # (DD-30). Peek every stored symbol's native pitch UNSCALED once so the floor is
+    # known before we choose each symbol's scale (a two-pass over lib_ids).
+    _page_floor = _page_pitch_floor(components, symbol_dir)
+    _native_cache: dict[str, tuple[float, int]] = {}
     for component in components:
         if component.lib_id in embedded_defs:
             continue
+        _is_u1 = component.lib_id.partition(":")[0].startswith("u1_")
         try:
-            # v11 bug 2: scale stored peripheral symbols to the per-page density.
-            # The U1 variant (lib prefix `u1_`) is ALREADY emitted at page_scale by
-            # build_u1_variant, so it loads unscaled to avoid double-scaling.
-            _sym_scale = 1.0 if component.lib_id.partition(":")[0].startswith("u1_") else page_scale
+            # v11 bug 2 + DD-31: scale stored peripheral symbols so their RENDERED
+            # pin pitch reaches the page floor (not just page_scale, a paper-fit
+            # ratio). The U1 variant (lib prefix `u1_`) is ALREADY emitted at
+            # page_scale by build_u1_variant, so it loads unscaled (no double-scale).
+            if _is_u1:
+                _sym_scale = 1.0
+            else:
+                _npitch, _ncount = _native_pitch_and_count(
+                    component.lib_id, symbol_dir, _native_cache)
+                _sym_scale = _vendor_sym_scale(
+                    page_scale, _npitch, _page_floor, _ncount)
             definition, pins = load_symbol(component.lib_id, symbol_dir, page_scale=_sym_scale)
         except (FileNotFoundError, KeyError) as error:
             warnings.append(f"{component.ref}: {error}")
@@ -641,6 +868,10 @@ def emit_kicad_schematic(
         embedded_defs[component.lib_id] = definition
         pin_maps[component.lib_id] = pins
         body_rects[component.lib_id] = _body_rect(definition)
+        # DD-14: full drawn-graphics extent (arc/plate/polyline/rect), used as a
+        # sheet-abs obstacle so refdes/value AND net labels clear the body even
+        # when the part draws no (rectangle) (passives — L_U5 arc, cap plates).
+        graphics_rects[component.lib_id] = _graphics_bbox(definition)
 
     # Snap every component onto KiCad's 1.27 mm connection grid. Library pin local
     # offsets are grid-multiples, so once the symbol origin is on-grid the absolute
@@ -652,6 +883,60 @@ def emit_kicad_schematic(
         component.y = _snap_grid(component.y)
 
     placements = {component.ref: component for component in components}
+
+    # M6-8d (user 03a ruling): cross-IC bus policy. When >=2 signals cross the SAME
+    # pair of ICs, force every cross-IC signal between them onto a global label
+    # (all-label for that pair) — killing the 12+ unordered wire crossings a drawn
+    # cross-IC bus produced. Drawn wires survive ONLY for short IC<->satellite-passive
+    # / intra-cluster links. An IC = a >2-pin part (passives are <=2-pin); a signal
+    # "crosses" an IC pair when its nodes touch >=2 ICs.
+    #
+    # M7-3.3 (DD-9 方案 B): this decision's SINGLE SOURCE OF TRUTH is now the L2.5
+    # capacity layer's decide_route_policy (capacity_plan.py); the once-duplicated
+    # per-pair inference here is deleted and delegated. Lazy import breaks the cycle
+    # (capacity_plan imports LANE_PITCH_MM from this module).
+    from .capacity_plan import NetConn as _NetConn, decide_route_policy as _decide_policy
+    _pin_ct = {ref: len(pin_maps.get(c.lib_id, {})) for ref, c in placements.items()}
+    _policy = _decide_policy(
+        [_NetConn(name=_net.name, nodes=tuple(_net.nodes)) for _net in nets],
+        _pin_ct,
+    )
+    _crossic_label = {name for name, style in _policy.items() if style == "label"}
+    if _crossic_label:
+        label_nets = (set(label_nets) if label_nets else set()) | _crossic_label
+
+    # M7-3b-i (DD-11): build the L2.5 SlotTable OBSERVATION here — pin_maps (→pin
+    # count) and placements are ready, and the caller has passed `clusters` (the one
+    # datum only composer holds). This is the missing wiring that takes the once-
+    # island modules (l1_geometry→gap_topology→build_capacity_plan) into the render
+    # main path. It changes NO geometry: `_slot_reserved` is only READ by the wire
+    # observation below to record whether each accepted wire lands on its reserved
+    # lane. Front-stage fail-fasts are caught in OBSERVATION mode (explicit skips,
+    # never silent) so the render still completes and the作用面 is measured for
+    # M7-3b-ii. clusters is None on every legacy caller → byte-identical.
+    _slot_reserved: dict = {}
+    _slot_gap_axis: dict = {}
+    _slot_route_gap: dict = {}
+    slot_observe_wires: list[dict] = []
+    slot_observe_skips: list[dict] = []
+    if clusters:
+        from .slot_observe import build_slot_observation
+        _slot_bboxes = {
+            ref: (
+                None if c.lib_id not in pin_maps
+                else _body_wh_from_rect(body_rects.get(c.lib_id), pin_maps.get(c.lib_id))
+            )
+            for ref, c in placements.items()
+        }
+        _slot_obs = build_slot_observation(
+            clusters, components, nets, _pin_ct, _slot_bboxes,
+        )
+        slot_observe_skips = list(_slot_obs.skips)
+        _slot_gap_axis = dict(_slot_obs.gap_axis)
+        if _slot_obs.slot_table is not None and _slot_obs.slot_table.reserved:
+            _slot_reserved = dict(_slot_obs.slot_table.reserved)
+            _slot_route_gap = _slot_obs.route_gap
+
     # symbol_blocks are generated AFTER pin_name_boxes so each part's Reference/
     # Value text can be positioned clear of in-body pin-name text (see below).
     symbol_blocks: list[str] = []
@@ -785,7 +1070,9 @@ def emit_kicad_schematic(
         # as a sheet-abs obstacle box so a nameless orphan part (decoupling cap)
         # never drops its refdes/value onto its own plates. Local->sheet: x adds,
         # y flips (sheet_y = comp.y - local_y). None when the symbol draws no rect.
-        _br = body_rects.get(component.lib_id)
+        # DD-14: prefer the full drawn-graphics extent (covers polyline plates /
+        # arc bumps on passives that draw no rectangle) over the rect-only box.
+        _br = graphics_rects.get(component.lib_id) or body_rects.get(component.lib_id)
         _body_box = None
         if _br is not None:
             _lx0, _ly0, _lx1, _ly1 = _br
@@ -793,7 +1080,20 @@ def emit_kicad_schematic(
             _sy_b = component.y - _ly1
             _body_box = (component.x + _lx0, component.x + _lx1,
                          min(_sy_a, _sy_b), max(_sy_a, _sy_b))
-        rx, ry, vx, vy, rb, vb = _place_symbol_props(component, pin_name_boxes, prop_boxes, page_scale, _body_box)
+        # DD-26/v24 Fix B: also thread the OUTER FRAME (the plain body rectangle,
+        # distinct from the drawn-graphics extent). The center tier exempts the
+        # frame (refdes lives inside it) but still clears interior graphics
+        # (plates/arcs). When the symbol draws only a rectangle (frame == graphics)
+        # frame_box == _body_box and the exemption stays the legacy full-body one.
+        _fr = body_rects.get(component.lib_id)
+        _frame_box = None
+        if _fr is not None:
+            _flx0, _fly0, _flx1, _fly1 = _fr
+            _fsy_a = component.y - _fly0
+            _fsy_b = component.y - _fly1
+            _frame_box = (component.x + _flx0, component.x + _flx1,
+                          min(_fsy_a, _fsy_b), max(_fsy_a, _fsy_b))
+        rx, ry, vx, vy, rb, vb = _place_symbol_props(component, pin_name_boxes, prop_boxes, page_scale, _body_box, _frame_box)
         prop_owners.append(component.ref)          # rb (Reference box) always appended
         if vb is not None:
             prop_owners.append(component.ref)      # vb (Value box) appended when present
@@ -833,7 +1133,9 @@ def emit_kicad_schematic(
         bx0, bx1, by0, by1 = box
         if not (bx1 > bx0 and by1 > by0):
             return
-        ledger.try_reserve(LedgerRect(bx0, by0, bx1, by1, owner, kind))
+        # M7-1.3 (DD-6) 分段落帳：body → L1；pin_extent 等非分層 kind 不標（source_layer=None）。
+        _src = "L1" if kind == "body" else None
+        ledger.try_reserve(LedgerRect(bx0, by0, bx1, by1, owner, kind, source_layer=_src))
 
     # M4-3a-1 (DD-10a): register each in-body text box with its REAL source ref as
     # owner and kind="pin_extent" (in-body pin-name / refdes / value text, which
@@ -850,10 +1152,17 @@ def emit_kicad_schematic(
 
     def _place_local_label(name: str, x: float, y: float, wp: list[tuple[float, float]]):
         """Emit a local label at (x,y), nudged along the route so its RENDERED text
-        box clears every earlier local label. The old version only guarded the
-        anchor coord, so two short labels one grid apart (e.g. HSPI_IO4/HSPI_IO8 on
-        the memory page) still overlapped horizontally. We now test the full bbox
-        against all placed boxes and pick the first candidate coord that is clear."""
+        box clears every earlier label AND every in-body pin-name (M6-2 / DD-12).
+
+        The old version only checked a private `_local_label_boxes` list, so a
+        local label could still land on a pin-name box or a global label owned by
+        another symbol (the cross pin/label smear). We now test each candidate
+        coord against the SHARED ledger (label + pin_extent kinds, cross-owner) so
+        the label sees EVERY placed text box. When every candidate collides we
+        DOWN-GRADE (place at the route's far end, recorded) rather than the old
+        「last resort 原位硬放」 which stacked text (使用者鐵律：label 永不疊放).
+        The accepted box is reserved into the ledger so later labels avoid it too.
+        """
         candidates: list[tuple[float, float]] = [(x, y)] + list(wp)
         # also add intra-segment grid points for a finer nudge
         for a, b in zip(wp, wp[1:]):
@@ -867,15 +1176,45 @@ def emit_kicad_schematic(
                 cy = a[1]
                 while (step > 0 and cy <= b[1]) or (step < 0 and cy >= b[1]):
                     candidates.append((a[0], round(cy, 2))); cy += step
+
+        def _clear(box: tuple[float, float, float, float]) -> bool:
+            # private list (byte-stable legacy guard) AND the shared ledger
+            # (label + pin_extent, cross-owner). A label box is (x0,x1,y0,y1);
+            # the ledger overlap test wants a rect, so probe via _bbox_overlap on
+            # the ledger's label/pin_extent rects.
+            if any(_bbox_overlap(box, pb) for pb in _local_label_boxes):
+                return False
+            bx0, bx1, by0, by1 = box
+            for r in ledger.rects:
+                # M6-8 (缺陷B): a local/net label must also clear power-port boxes,
+                # not only label/pin_extent — the power-port Value box (kind="power",
+                # the "GND"/rail glyph text) is reserved into the SAME ledger, and a
+                # label landing on it is the HSE_OUT⨯GND overlap the user flagged.
+                if r.kind not in ("label", "pin_extent", "power"):
+                    continue
+                if not (bx1 <= r.x0 or r.x1 <= bx0 or by1 <= r.y0 or r.y1 <= by0):
+                    return False
+            return True
+
+        def _commit(cx: float, cy: float, box: tuple[float, float, float, float]) -> None:
+            _local_label_boxes.append(box)
+            bx0, bx1, by0, by1 = box
+            if bx1 > bx0 and by1 > by0:
+                ledger.try_reserve(LedgerRect(bx0, by0, bx1, by1, name, "label"))
+            label_blocks.append(_local_label_block(name, cx, cy))
+
         for cx, cy in candidates:
             box = _label_bbox(name, cx, cy, False)
-            if not any(_bbox_overlap(box, pb) for pb in _local_label_boxes):
-                _local_label_boxes.append(box)
-                label_blocks.append(_local_label_block(name, cx, cy))
+            if _clear(box):
+                _commit(cx, cy, box)
                 return
-        # exhausted (degenerate): place at original and record (last resort)
-        _local_label_boxes.append(_label_bbox(name, x, y, False))
-        label_blocks.append(_local_label_block(name, x, y))
+        # DOWN-GRADE (never stack): place at the route's FAR endpoint (the wire
+        # terminus, furthest from the crowded pin cluster) and record. This keeps
+        # the net named and ERC-valid while refusing to smear text on the pin
+        # cluster. Recorded via label_local_downgrades for machine observability.
+        fx, fy = (wp[-1] if wp else (x, y))
+        label_local_downgrades.append({"net": name, "at": [fx, fy]})
+        _commit(fx, fy, _label_bbox(name, fx, fy, False))
 
     # DD-11 anti-fusion registry: net_name -> its list of registered wire segments
     # ((x1,y1),(x2,y2)). A new net's segments are checked against EVERY OTHER
@@ -885,6 +1224,7 @@ def emit_kicad_schematic(
     fusion_registry: dict[str, list[tuple]] = {}
     fusion_label_fallbacks: list[dict] = []
     fusion_jogged_nets: list[str] = []
+    label_local_downgrades: list[dict] = []
     # BR_20260708 machine check: every DRAWN wire segment paired with the set of
     # host refs that segment's net legitimately touches (its own pin bodies). The
     # post-emit assertion tests each segment against every body box EXCEPT its own
@@ -950,6 +1290,55 @@ def emit_kicad_schematic(
         skip = set(host_refs)
         return [box for ref, box in wire_obstacle_boxes.items() if ref not in skip]
 
+    # M6-1 (DD-12, 使用者鐵律「routing 不得碰到任何其他元素」): a drawn route is
+    # ACCEPTED only if its polyline clears the shared ledger's FULL occupancy
+    # (body / pin_extent / label / wire / power), not just the body-only keep-out
+    # boxes. The body keep-out (wire_obstacle_boxes) stays as the router's INTERNAL
+    # detour hint (it shapes the candidate polyline), but the FINAL accept/reject
+    # gate is this ledger check — so a route that dodges bodies yet still crosses a
+    # pin-name or an already-drawn wire is REJECTED and the net down-grades to a
+    # global label (fail-safe, never fail-ugly). Each accepted wire is then reserved
+    # into the ledger (kind="wire") so LATER nets route around it too.
+    # M6-1: the ledger accept-gate guards against wire↔label and wire↔wire
+    # collisions ONLY (kinds={"label","wire"}); body / pin_extent avoidance stays
+    # the job of the router's own body keep-out (wire_obstacle_boxes, the verified
+    # golden-baseline path). Limiting the kinds prevents double-guarding a legal
+    # detour that already clears the inflated body box from being false-rejected
+    # by a pin-name box that pokes a hair past the body edge.
+    _ROUTE_GUARD_KINDS = frozenset({"label", "wire"})
+
+    def _route_clears_ledger(waypoints, host_refs) -> bool:
+        clear, _hit = ledger.path_clear(
+            waypoints, host_owners=frozenset(host_refs), kinds=_ROUTE_GUARD_KINDS)
+        return clear
+
+    def _observe_wire_slot(waypoints, net_name) -> None:
+        """M7-3b-i (DD-11): OBSERVE whether this accepted wire lands on its reserved
+        lane. Read-only — records to slot_observe_wires, changes NO geometry. No-op
+        unless the caller passed `clusters` (else _slot_reserved is empty)."""
+        if not _slot_reserved:
+            return
+        from .slot_observe import observe_wire_on_lane
+        gid = _slot_route_gap.get(net_name)
+        axis = _slot_gap_axis.get(gid, "x") if gid else "x"
+        rec = observe_wire_on_lane(net_name, waypoints, _slot_reserved, gap_axis=axis)
+        if rec.get("has_slot"):
+            slot_observe_wires.append(rec)
+
+    def _reserve_wire(waypoints, net_name) -> None:
+        """Register each accepted wire segment as a thin rect so later routes avoid it."""
+        _observe_wire_slot(waypoints, net_name)
+        for a, b in zip(waypoints, waypoints[1:]):
+            x0, x1 = sorted((a[0], b[0]))
+            y0, y1 = sorted((a[1], b[1]))
+            # inflate the degenerate axis to a hair so the rect is non-empty; the
+            # keep-out ring makes later routes give it real berth.
+            if x1 - x0 < 0.2:
+                x0 -= 0.1; x1 += 0.1
+            if y1 - y0 < 0.2:
+                y0 -= 0.1; y1 += 0.1
+            ledger.try_reserve(LedgerRect(x0, y0, x1, y1, net_name, "wire"))
+
     for net in nets:
         force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
@@ -972,7 +1361,14 @@ def emit_kicad_schematic(
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
             _obst = _obstacles_excluding(endpoint_refs)
-            waypoints = _orthogonal_route(endpoints[0], endpoints[1], _obst)
+            # M6-8 (使用者 SW-crossing feedback): give each endpoint its outward pin
+            # escape vector so the wire leaves the pin STRAIGHT before elbowing —
+            # the corner can no longer land back in the pin's own lane and cross the
+            # SAME IC's other pin wires. A satellite passive (single-pin-ish) still
+            # escapes along its own pin edge; endpoint_sides already holds the
+            # outward unit vector per endpoint (BR four-edge pin placement).
+            _escape = [endpoint_sides[0], endpoint_sides[1]]
+            waypoints = _orthogonal_route(endpoints[0], endpoints[1], _obst, escape=_escape)
             guarded, jogged = _guard_route(net.name, waypoints)
             if guarded is None:
                 # DD-11 fallback: jog exhausted → down-grade this net to label
@@ -986,9 +1382,22 @@ def emit_kicad_schematic(
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
             waypoints = guarded
+            # M6-1 (DD-12): final ledger clearance gate. A route that dodges bodies
+            # (guard C) and other-net fusion (guard A) but still crosses a pin-name
+            # box or an already-drawn wire is REJECTED here → down-grade to label.
+            if not _route_clears_ledger(waypoints, endpoint_refs):
+                fusion_label_fallbacks.append({"net": net.name, "reason": "ledger-collision"})
+                kind = _power_net_kind(net.name) if power_ports else None
+                for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
+                    if kind is not None:
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
+                    else:
+                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
+                continue
             if jogged:
                 fusion_jogged_nets.append(net.name)
             fusion_registry[net.name] = _segments_of(waypoints)
+            _reserve_wire(waypoints, net.name)
             _hosts = frozenset(endpoint_refs)
             for a, b in zip(waypoints, waypoints[1:]):
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
@@ -1012,7 +1421,25 @@ def emit_kicad_schematic(
                     else:
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
+            # M6-1 (DD-12): final ledger clearance gate for the multi-node bus. Flatten
+            # every segment into one polyline sample; if ANY segment crosses a ledger
+            # rect (body / pin_extent / label / earlier wire) that is not a host, the
+            # whole bus down-grades to per-pin labels (fail-safe).
+            _bus_clear = all(
+                _route_clears_ledger([a, b], endpoint_refs) for (a, b) in segments
+            )
+            if not _bus_clear:
+                fusion_label_fallbacks.append({"net": net.name, "reason": "ledger-collision"})
+                kind = _power_net_kind(net.name) if power_ports else None
+                for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
+                    if kind is not None:
+                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
+                    else:
+                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
+                continue
             fusion_registry[net.name] = list(segments)
+            for (a, b) in segments:
+                _reserve_wire([a, b], net.name)
             _hosts = frozenset(endpoint_refs)
             for (a, b) in segments:
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
@@ -1038,11 +1465,46 @@ def emit_kicad_schematic(
                 else:
                     label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
 
-    label_blocks.extend(_staggered_label_blocks(label_endpoints, reserved=reserved_boxes,
+    # DD-14: sheet-abs AABBs of every component's drawn body graphics, threaded
+    # into the label placer so L6 avoidance keeps labels CLEAR of arcs/plates
+    # (local->sheet: x adds, y flips — same convention as _body_box above).
+    _label_graphics_boxes: list[tuple[float, float, float, float]] = []
+    for component in components:
+        _gr = graphics_rects.get(component.lib_id)
+        if _gr is None:
+            continue
+        _gx0, _gy0, _gx1, _gy1 = _gr
+        _gsy_a = component.y - _gy0
+        _gsy_b = component.y - _gy1
+        _label_graphics_boxes.append((component.x + _gx0, component.x + _gx1,
+                                      min(_gsy_a, _gsy_b), max(_gsy_a, _gsy_b)))
+    # DD-26/v24 Fix A (DD-28 A1): power-label net-name boxes are placed AFTER flags
+    # (the power-port loop below), so the flag avoidance never saw them and a flag
+    # from component A could seat straight onto component B's power label (the X1
+    # HSE_IN vs MCU +3V3 cross-component smear). Pre-budget every power-port net-
+    # name box HERE (same box model the power loop registers at :_pbox — centred on
+    # the pin endpoint, _pvw wide, _pbh tall) and thread them into the flag
+    # avoidance `reserved` so a flag steps outward off a reserved power label. The
+    # anchor is the pin endpoint (px, py) which is already known from power_endpoints
+    # before the port loop runs; identical to the box the loop reserves so this is a
+    # faithful pre-image, not a new estimate.
+    _pwr_name_cw_pre = _PIN_NAME_CW_MM * (page_scale if page_scale > 1.0 else 1.0)
+    _pwr_name_ch_pre = _PIN_NAME_CH_MM * (page_scale if page_scale > 1.0 else 1.0)
+    _power_label_boxes: list[tuple[float, float, float, float]] = []
+    for _pep in power_endpoints:
+        _pnet, _pkind, _ppx, _ppy, *_prest = _pep
+        _pvw = len(_pnet) * _pwr_name_cw_pre
+        _pbh = (_pwr_name_ch_pre + _LABEL_VMARGIN_MM)
+        _power_label_boxes.append((_ppx - _pvw / 2, _ppx + _pvw / 2,
+                                   _ppy - _pbh / 2, _ppy + _pbh / 2))
+    _flag_reserved = reserved_boxes + _power_label_boxes
+    label_blocks.extend(_staggered_label_blocks(label_endpoints, reserved=_flag_reserved,
                                                 page_scale=page_scale,
                                                 avail_y=_paper_avail_y(paper),
                                                 avail_x=_paper_avail_x(paper),
-                                                ledger=ledger))
+                                                ledger=ledger,
+                                                l6_avoidance=True,
+                                                graphics_boxes=_label_graphics_boxes))
 
     # Power ports: one KiCad power-port symbol per GND/supply endpoint, replacing
     # the label stack. A stub wire joins the pin endpoint to the port so the port
@@ -1240,7 +1702,10 @@ def emit_kicad_schematic(
         no_connect_count=len(nc_blocks),
         fusion_label_fallbacks=fusion_label_fallbacks,
         fusion_jogged_nets=fusion_jogged_nets,
+        label_local_downgrades=label_local_downgrades,
         wire_body_intrusions=wire_body_intrusions,
+        slot_observe_wires=slot_observe_wires,
+        slot_observe_skips=slot_observe_skips,
     )
 
 
@@ -1263,8 +1728,8 @@ def _symbol_instance_block(component: EmitComponent, project_name: str, root_uui
     (unit 1)
     (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
     (uuid "{ref_uuid}")
-    (property "Reference" "{component.ref}" (at {round(rx, 4)} {round(ry, 4)} 0) (effects (font (size 1.27 1.27))))
-    (property "Value" "{component.value}" (at {round(vx, 4)} {round(vy, 4)} 0) (effects (font (size 1.27 1.27))))
+    (property "Reference" "{component.ref}" (at {round(rx, 4)} {round(ry, 4)} 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "{component.value}" (at {round(vx, 4)} {round(vy, 4)} 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "{component.footprint}" (at {component.x} {component.y} 0) (effects (font (size 1.27 1.27)) (hide yes)))
 {pin_uuids}
     (instances (project "{project_name}" (path "/{root_uuid}" (reference "{component.ref}") (unit 1))))
@@ -1323,6 +1788,41 @@ _LABEL_HMARGIN_MM = 0.4
 # scaled by _LABEL_SPAN_BUDGET (allow modest outward growth, capped).
 _LABEL_SPAN_BUDGET = 1.6   # usable y-span = pin-row y-extent * this (>=1 grow cap)
 _LABEL_COL_GAP_MM = 2.54   # extra gap between adjacent vertical labels in a column
+
+# ---- M6-8e/f: routing lane discipline (user 四輪審圖 rulings) ----
+# M6-8e (03b memory-ospi ruling): parallel drawn-wire lanes were spaced at 1 grid
+# (1.27 mm ≈ half a text row) and jammed. Lane pitch MUST be >= one text row so a
+# net-name printed on one lane never collides with the adjacent lane. One rendered
+# text row = _LABEL_CH_MM (1.27) → a full row of clearance = 2 grid = 2.54 mm.
+LANE_PITCH_MM = 2.54       # min centre-to-centre spacing of parallel wire lanes
+# M6-8f (04 wireless ruling): a lane vertical band must be repelled from an IC's
+# body so it does not cut through the pin stub / pin-number / pin-name reach band.
+# The keep-out band = body box inflated on every edge by the pin stub reach + the
+# pin-name text reach + one text-row buffer.
+_KEEPOUT_STUB_MM = 2.54    # pin stub length (2 grid) drawn outward from the body
+_KEEPOUT_PINNAME_MM = _PIN_NAME_CH_MM + _PIN_NAME_OFFSET_MM  # pin-name text reach
+
+
+def ic_keepout_band(body: tuple[float, float, float, float],
+                    text_row_mm: float = _LABEL_CH_MM) -> tuple[float, float, float, float]:
+    """M6-8f: inflate an IC body box into its routing keep-out band.
+
+    A lane assigned to route past an IC must stay OUT of this band, which wraps the
+    body with the space its own pins consume: pin stub + pin-name text reach + one
+    text-row buffer. Returns (x0, y0, x1, y1) strictly containing the input body.
+
+    - input  body      : (x0, y0, x1, y1) the component's drawn body AABB (mm).
+    - input  text_row_mm: one rendered text-row height (buffer past the pin names).
+    - output           : the inflated band; every edge is pushed outward by
+                         stub + pin-name reach + one text row.
+    - rule: symmetric inflation (pins can leave any of the four edges); the band is
+            never smaller than the body on any edge.
+    """
+    x0, y0, x1, y1 = body
+    if x1 < x0 or y1 < y0:
+        raise ValueError(f"ic_keepout_band: degenerate body {body!r}")
+    pad = _KEEPOUT_STUB_MM + _KEEPOUT_PINNAME_MM + max(0.0, text_row_mm)
+    return (x0 - pad, y0 - pad, x1 + pad, y1 + pad)
 
 # Frame-first slot budget (BR: sparse-page offpage / cap=1 degeneracy). The
 # composer picks the paper BEFORE emit runs (composer._fit_sheet -> emit paper=),
@@ -1410,6 +1910,32 @@ def _label_bbox(name: str, x: float, y: float, is_global: bool,
 
 def _bbox_overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
     return not (a[1] <= b[0] or b[1] <= a[0] or a[3] <= b[2] or b[3] <= a[2])
+
+
+# DD-14 (user review v18): a label box that merely TOUCHES a symbol graphic
+# (X1 HSE flag arrow tip on the crystal plate; VDDIO +3V3 label on the pin
+# stub) passed the strict-overlap gate — no ink actually overlaps, but there
+# is no breathing room and it reads as glued. `_bbox_clear` requires a real
+# gap of `_CLEARANCE_MM` on the separating axis; it is the safety-margin
+# analogue of `_bbox_overlap` used wherever an element must stay OFF another,
+# not merely non-overlapping.
+_CLEARANCE_MM = 1.27  # one grid = minimum breathing room between any two elements
+
+
+def _bbox_clear(a: tuple[float, float, float, float],
+                b: tuple[float, float, float, float],
+                clearance: float = _CLEARANCE_MM) -> bool:
+    """True iff boxes a,b are separated by >= `clearance` on some axis.
+
+    a,b are (x0, x1, y0, y1). Two boxes are "clear" when a gap of at least
+    `clearance` exists on the x OR the y axis (a real corridor between them).
+    Strict overlap (`_bbox_overlap` True) and edge-touching both return False.
+    This is the safety-margin gate; `_bbox_overlap` remains the strict-ink gate
+    (byte-stable — existing call sites are untouched).
+    """
+    gap_x = max(b[0] - a[1], a[0] - b[1])   # +ve => x-gap between them
+    gap_y = max(b[2] - a[3], a[2] - b[3])   # +ve => y-gap between them
+    return gap_x >= clearance or gap_y >= clearance
 
 
 # --- Power symbol emission (industry convention: GND glyph points down, supply
@@ -1608,13 +2134,125 @@ def _power_symbol_instance(lib_id: str, net_name: str, x: float, y: float, proje
     )
 
 
+# DD-19 (plan D): a same-column right-edge co-point run needs >= this many flags
+# before redistribution kicks in (a sparse pair reads fine — stay byte-stable).
+_DD19_DENSE_MIN = 3
+# outward step (mm) between consecutive flags' right edges so the column reads as
+# a legible staircase instead of one ink line. One grid = the minimum breathing
+# room (_CLEARANCE_MM); the test asserts >= 1.0mm adjacent step.
+_DD19_EDGE_STEP_MM = _CLEARANCE_MM
+
+
+def _dd19_dense_column_offsets(
+    columns: dict[float, list[tuple[str, float, float, tuple[float, float]]]],
+) -> dict[tuple[str, float, float], float]:
+    """DD-19 plan D: for every same-column, same-edge run of >= _DD19_DENSE_MIN
+    flags whose box right edges would co-point, return a per-endpoint OUTWARD
+    offset (mm along the edge vector) that steps the right edges apart.
+
+    The offset is applied purely along each flag's own outward edge vector, so the
+    emitted label still points the same way with no y-nudge / wire / jog (DD-22/23
+    bend-free). Keyed by (name, round(x,2), round(y,2)) so the emit loop can look
+    up each endpoint's step. Sparse columns (< _DD19_DENSE_MIN) get no entry and
+    stay byte-stable.
+    """
+    offsets: dict[tuple[str, float, float], float] = {}
+    for col_x, items in columns.items():
+        # group by identical outward edge vector (a co-point run shares one edge)
+        by_edge: dict[tuple[float, float], list[tuple[str, float, float, tuple[float, float]]]] = {}
+        for it in items:
+            by_edge.setdefault(it[3], []).append(it)
+        # DD-24 (user review v22): the DD-19 per-flag horizontal STAIRCASE is
+        # ABOLISHED. The user rejected the "each flag shifts one more step out,
+        # extending like an unbounded staircase" presentation and ruled that a
+        # dense same-column run must share ONE uniform x (整齊統一排列，用同一個
+        # X值). Flags anchor on the pin endpoint x already; emitting NO horizontal
+        # offset keeps that single shared column. Right-edge co-point (DD-16) does
+        # NOT visually regress: differing flag-text lengths fan the LEFT ends out
+        # while the aligned right (anchor) edge is exactly the tidy column the user
+        # wants. The DD-20 opposing-vertical separation below is retained (that is
+        # the orthogonal interpenetration axis, not the horizontal staircase).
+        for edge, grp in by_edge.items():
+            if len(grp) < _DD19_DENSE_MIN:
+                continue
+            nx, ny = edge
+            if abs(nx) < abs(ny):
+                continue
+            # DD-24: uniform x — no per-flag staircase offset (was tier * step).
+
+        # DD-20 (v21 fresh-eyes review): the ORTHOGONAL second axis of DD-16. On a
+        # shared column, an ang=90 flag (box grows -y, toward smaller y) and an
+        # ang=270 flag (box grows +y, toward larger y) point TOWARD each other; when
+        # their w-long (9~17mm) vertical runs meet they interpenetrate — the U9
+        # right-edge `VBMEBVSYGNGND` blob, the J_CAM top GND column, the
+        # LED_R/G/B<->K_R/G/B pairs. DD-19's same-edge staircase skips vertical edges,
+        # and _avoid_label_overlap only runs with l6_avoidance=True (OFF on product
+        # all-label pages — exactly where the blob lives). Like DD-19 this must be
+        # UNCONDITIONAL. Fix: for every opposing pair on the column whose vertical
+        # runs would collide, push each flag OUTWARD along its OWN edge (the +y-anchor
+        # flag toward +y, the -y-anchor flag toward -y) so the runs separate. Purely
+        # along the outward edge vector — no x-jog, no wire, no bend (DD-22/23 safe).
+        # Split the column's vertical-edge flags into the two opposing growth
+        # directions. edge=(0,1) => ang270 => box grows +y (y..y+w); edge=(0,-1) =>
+        # ang90 => box grows -y (y-w..y). See _label_bbox / _edge_label_angle.
+        grow_pos = []  # box grows toward +y (edge (0, +1))
+        grow_neg = []  # box grows toward -y (edge (0, -1))
+        for name, x, y, e in items:
+            enx, eny = e
+            if abs(enx) >= abs(eny):
+                continue  # horizontal edge — handled above
+            (grow_pos if eny > 0 else grow_neg).append((name, x, y, e))
+        # A collision happens when a +y-growing flag sits BELOW (smaller y) a
+        # -y-growing flag: their runs cover the y-gap between them. The label text
+        # length w (chars * cw + glyph + margin) is the reach; two flags whose
+        # anchor y-gap is < (w_pos + w_neg) would overlap. We resolve the tightest
+        # such opposing pairs by stepping the lower (+y) flag further +y and the
+        # upper (-y) flag further -y, away from the shared midline, until the boxes
+        # clear. Deterministic: process each -y flag against the nearest +y flag
+        # below it. Offsets ACCUMULATE with any DD-19 horizontal step already set
+        # (vertical flags never get a horizontal step, so this is the sole source).
+        for nm_n, xn, yn, en in grow_neg:
+            wn = len(nm_n) * _LABEL_CW_MM + _LABEL_GLYPH_MM + _LABEL_HMARGIN_MM
+            # nearest +y-growing flag strictly below this -y flag on the same column
+            below = [p for p in grow_pos if p[2] < yn]
+            if not below:
+                continue
+            nm_p, xp, yp, ep = max(below, key=lambda t: t[2])
+            wp = len(nm_p) * _LABEL_CW_MM + _LABEL_GLYPH_MM + _LABEL_HMARGIN_MM
+            # +y flag top edge = yp + wp ; -y flag bottom edge = yn - wn.
+            # overlap when (yp + wp) > (yn - wn), i.e. gap < wp + wn.
+            gap = yn - yp
+            overlap = (wp + wn) - gap
+            if overlap <= _CLEARANCE_MM:
+                continue  # already clear (or clears within one grid) — leave stable
+            # split the needed separation (+ one clearance grid) between the two,
+            # each pushed outward along its OWN edge.
+            need = overlap + _CLEARANCE_MM
+            half = need / 2.0
+            kp = (nm_p, round(xp, 2), round(yp, 2))
+            kn = (nm_n, round(xn, 2), round(yn, 2))
+            offsets[kp] = offsets.get(kp, 0.0) + half
+            offsets[kn] = offsets.get(kn, 0.0) + half
+    return offsets
+
+
 def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
                             reserved: list[tuple[float, float, float, float]] | None = None,
                             page_scale: float = 1.0,
                             avail_y: tuple[float, float] | None = None,
                             avail_x: tuple[float, float] | None = None,
-                            ledger: "OccupancyLedger | None" = None) -> list[str]:
+                            ledger: "OccupancyLedger | None" = None,
+                            l6_avoidance: bool = False,
+                            graphics_boxes: list[tuple[float, float, float, float]] | None = None,
+                            ) -> list[str]:
     """Emit global labels with per-column anti-overlap staggering.
+
+    graphics_boxes (DD-14): sheet-abs AABBs of every component's drawn body
+    graphics (arc/plate/rect). When `l6_avoidance` is on, a label anchor is
+    pushed out until it CLEARS these by `_CLEARANCE_MM` (not merely non-overlap)
+    so a flag never seats on a crystal plate / inductor arc. None/empty =>
+    byte-stable (no graphics constraint).
+
 
     avail_y (frame-first slot budget): the (y_lo, y_hi) usable-y corridor of the
     ALREADY-CHOSEN paper (composer picks the sheet BEFORE this runs and threads it
@@ -1654,6 +2292,26 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
     for name, x, y, *rest in endpoints:
         edge = rest[0] if rest else (1.0, 0.0)
         columns.setdefault(round(x, 2), []).append((name, x, y, edge))
+    # DD-19 (user review v20, plan D — dense-column label redistribution): on
+    # connector all-label pages (J1 USB-C, J_CAM, JSA) 6~8 per-pin flags share ONE
+    # x column at ~2.54mm pitch and all point the same outward edge, so every box's
+    # RIGHT edge lands on the SAME x (ang180 => box right == anchor x) — the ends
+    # pile into one vertical ink column (`GNONONGND`). The vertical boxes do NOT
+    # overlap (box h≈1.57mm < 2.54mm pitch) so _avoid_label_overlap never nudges
+    # them. Three prior rounds (DD-16→17→18) proved pin-pitch routes are no-ops
+    # (connector pitch rides page_scale + paper solver). Fix: for a run of >=3
+    # same-column, same-edge flags, push each anchor OUTWARD along its OWN edge
+    # vector by a DISTINCT stepped amount so the right edges step apart. This stays
+    # inside the DD-22/23 bend-free freedom (anchor moves purely along the outward
+    # edge vector — no y-nudge, no wire, no jog; ang unchanged). Computed here as a
+    # per-endpoint outward offset consumed in the emit loop below.
+    # DD-19 dense-column redistribution is a STRUCTURAL defect fix (co-point right
+    # edges), independent of the l6_avoidance label-vs-label overlap path. Its own
+    # trigger is conservative (same column + same edge + >= _DD19_DENSE_MIN + the
+    # boxes would co-point), so sparse pages get an empty map and stay byte-stable.
+    # It must NOT be gated behind l6_avoidance (product all-label pages leave that
+    # off, which is exactly where the connector co-point blob appears).
+    _dd19_offset = _dd19_dense_column_offsets(columns)
     # Seed the occupancy with the in-body pin-NAME boxes so a global label never
     # gets placed on top of the IC's own pin-name text (the cross pin/label smear).
     placed: list[tuple[float, float, float, float]] = list(reserved or [])
@@ -1673,14 +2331,81 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
             # a stub is exactly the bend the user forbids, and a zero-displacement
             # label at the pin endpoint is byte-identical to the legacy `ly==y` path
             # (2-pin R/C nets emit a bare global_label with NO wire, TV9 byte-stable).
-            _label_bbox_reg = _label_bbox(name, x, y, True, edge, text_scale=page_scale)
+            # M7 DD-13 (l6_avoidance, opt-in): the DD-22/23 straight-out rule anchors
+            # EVERY label on its pin endpoint (x, y). On product all-label pages this
+            # stacks same-pin multi-flags and adjacent same-column pins into an
+            # illegible glyph blob (v17 QA BLOCKER). L6 avoidance separates them using
+            # the ONE bend-free freedom DD-6 preserves — "label 錨點外端": push the
+            # anchor OUTWARD along the label's own outward edge vector (the text still
+            # runs straight along that vector; no wire, no jog, no perpendicular
+            # displacement) until its reach-box clears every already-placed box.
+            lx, ly = x, y
+            if l6_avoidance:
+                lx, ly = _avoid_label_overlap(name, x, y, edge, placed, page_scale,
+                                              graphics=graphics_boxes)
+            # DD-19 plan D (unconditional structural fix): step a dense co-point
+            # column's right edges apart so a connector column reads as a legible
+            # staircase. Purely along the outward edge vector (no y change, no bend
+            # — DD-22/23 safe); empty offset => byte-stable for non-dense columns.
+            _dd19 = _dd19_offset.get((name, round(x, 2), round(y, 2)))
+            if _dd19:
+                _nx, _ny = edge
+                _mag = (_nx * _nx + _ny * _ny) ** 0.5 or 1.0
+                _step = _dd19 * (page_scale if page_scale > 1.0 else 1.0)
+                lx += (_nx / _mag) * _step
+                ly += (_ny / _mag) * _step
+            _label_bbox_reg = _label_bbox(name, lx, ly, True, edge, text_scale=page_scale)
             placed.append(_label_bbox_reg)
             if ledger is not None:
                 _rx0, _rx1, _ry0, _ry1 = _label_bbox_reg
                 if _rx1 > _rx0 and _ry1 > _ry0:
                     ledger.try_reserve(LedgerRect(_rx0, _ry0, _rx1, _ry1, name, "label"))
-            blocks.append(_global_label_block(name, x, y, edge, text_scale=page_scale))
+            blocks.append(_global_label_block(name, lx, ly, edge, text_scale=page_scale))
     return blocks
+
+
+# M7 DD-13: outward step (mm) taken per iteration when nudging a label anchor off a
+# neighbour along its own outward edge vector. One text-row height keeps steps at
+# the same granularity as the reach-box height so a few steps clear a stacked pair.
+_L6_AVOID_STEP_MM = _LABEL_CH_MM + _LABEL_VMARGIN_MM  # == reach-box height at scale 1
+_L6_AVOID_MAX_STEPS = 64  # bound the search (fail-open: keep last position, never hang)
+
+
+def _avoid_label_overlap(name: str, x: float, y: float,
+                         edge: tuple[float, float],
+                         placed: list[tuple[float, float, float, float]],
+                         page_scale: float,
+                         graphics: list[tuple[float, float, float, float]] | None = None,
+                         ) -> tuple[float, float]:
+    """Return an anchor (lx, ly) for `name`'s label whose reach-box clears every box
+    in `placed`, reached by stepping the anchor OUTWARD along `edge` only.
+
+    Bend-free by construction: the anchor moves purely along the label's outward
+    unit vector, so the emitted global label is still a straight label pointing the
+    same way — just seated further out (DD-6 "label 錨點外端", never a jog/nudge/wire).
+    Fail-open: if no clear seat within the step bound, keep the furthest tried
+    position (all-label policy — a label is never dropped to resolve overlap).
+
+    DD-14: `graphics` are symbol body-graphics AABBs (arc/plate/rect) the label
+    must stay OFF with a real clearance gap (`_bbox_clear`), not merely avoid
+    overlapping — a flag arrow-tip touching a crystal plate is unacceptable.
+    `placed` (labels + pin-name text) keeps the strict-overlap gate, so callers
+    that pass no `graphics` are byte-stable.
+    """
+    nx, ny = edge
+    _mag = (nx * nx + ny * ny) ** 0.5 or 1.0
+    ux, uy = nx / _mag, ny / _mag
+    step = _L6_AVOID_STEP_MM * (page_scale if page_scale > 1.0 else 1.0)
+    _gfx = graphics or ()
+    lx, ly = x, y
+    for _ in range(_L6_AVOID_MAX_STEPS):
+        box = _label_bbox(name, lx, ly, True, edge, text_scale=page_scale)
+        if (not any(_bbox_overlap(box, p) for p in placed)
+                and all(_bbox_clear(box, g) for g in _gfx)):
+            return (round(lx, 4), round(ly, 4))
+        lx += ux * step
+        ly += uy * step
+    return (round(lx, 4), round(ly, 4))
 
 
 def _local_label_block(name: str, x: float, y: float) -> str:
@@ -1904,7 +2629,8 @@ def _waypoints_clear(waypoints: list[tuple[float, float]],
 
 
 def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
-                      obstacles: list[tuple[float, float, float, float]] | None = None) -> list[tuple[float, float]]:
+                      obstacles: list[tuple[float, float, float, float]] | None = None,
+                      escape: list[tuple[float, float]] | None = None) -> list[tuple[float, float]]:
     """Level-1 auto-router: return the polyline waypoints for an orthogonal (Manhattan)
     connection between two pin endpoints, avoiding component-body obstacles.
 
@@ -1929,6 +2655,45 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
     """
     (x1, y1), (x2, y2) = p1, p2
     obstacles = obstacles or []
+
+    # M6-8 (使用者 SW-crossing feedback): pin escape corridor. When the caller
+    # supplies an outward escape unit vector per endpoint, the wire must leave the
+    # pin STRAIGHT along that vector for one keep-out step BEFORE any elbow, so the
+    # first corner never lands back inside the pin's own lane (which is what let a
+    # buck SW route corner immediately and X across the SAME IC's other pin wires).
+    # The escape stub is prepended to p1 and appended to p2; the interior elbow is
+    # then solved between the two escaped points. Endpoints p1/p2 stay verbatim
+    # (FIDELITY). A zero vector means "no escape for this end" (e.g. a passive).
+    e1 = escape[0] if escape and len(escape) >= 1 else (0.0, 0.0)
+    e2 = escape[1] if escape and len(escape) >= 2 else (0.0, 0.0)
+    step = WIRE_KEEPOUT_MM
+
+    def _escaped(px: float, py: float, ev: tuple[float, float]) -> tuple[float, float]:
+        # Move ONLY along the escape axis (snap that axis to grid); the orthogonal
+        # axis keeps the pin's exact coordinate so the escape stub stays perfectly
+        # axis-aligned (a horizontal +x escape must not nudge y, else the stub is a
+        # diagonal and the "leaves the pin straight" contract breaks).
+        if ev[0] and not ev[1]:          # horizontal escape → keep py exact
+            return (_snap_grid(px + ev[0] * step), py)
+        if ev[1] and not ev[0]:          # vertical escape → keep px exact
+            return (px, _snap_grid(py + ev[1] * step))
+        return (px, py)
+
+    q1 = _escaped(x1, y1, e1) if (e1[0] or e1[1]) else p1
+    q2 = _escaped(x2, y2, e2) if (e2[0] or e2[1]) else p2
+
+    def _wrap(inner: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        # prepend p1->q1 escape and append q2->p2 escape, dropping degenerate repeats
+        seq: list[tuple[float, float]] = []
+        for pt in ([p1] if q1 != p1 else []) + inner + ([p2] if q2 != p2 else []):
+            if not seq or seq[-1] != pt:
+                seq.append(pt)
+        return seq
+
+    if q1 != p1 or q2 != p2:
+        # solve the interior between the escaped points, then wrap with the stubs
+        inner_wp = _orthogonal_route(q1, q2, obstacles)
+        return _wrap(inner_wp)
 
     candidates: list[list[tuple[float, float]]] = []
     if abs(x1 - x2) < 1e-6 or abs(y1 - y2) < 1e-6:
