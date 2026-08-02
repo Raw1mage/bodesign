@@ -217,6 +217,24 @@ VERBS = {
                                    "Project a partition MODEL into a layered breakout SVG (pptx=容器 tool)."),
     "c03_emit_host_block_diagram": (_WC, "emit_c03_host_block_diagram", ("folder", "model"),
                                     "Project a host/MCU MODEL into a layered block-diagram SVG (pptx=容器 tool)."),
+    # C03->C04 stage-entry gates (2). BR_20260707: c04_readiness REFUSES entry
+    # until both reports exist under <folder>/C03-EE, so these two must be
+    # reachable from the landing plane or the C04 gate blocks every project.
+    # `out_dir` is deliberately NOT required: it is a REPO_DEFAULT_KEY, so
+    # requiring it would silently default it to the repo ROOT and write the
+    # report one directory above where the gate reads it -- a green verb and a
+    # still-blocked gate. The handlers default it to <folder>/C03-EE instead.
+    "check_c03": (_WC, "check_c03", ("folder", "bom_csv"),
+                  "C03->C04 stage-entry gate: BOM schema/readiness/drawability/SSOT. "
+                  "Writes check_c03.report.json to out_dir (default <folder>/C03-EE). "
+                  "Pass netlist_path (str or list) + covers_boards to exercise R5/R6; "
+                  "omitting netlist_path yields netlist_crosscheck=not_run, which the "
+                  "C04 gate treats as BLOCKING (a PASS without it does not mean every "
+                  "BOM row is drawn)."),
+    "prd_bom_crosscheck": (_WC, "prd_bom_crosscheck", ("folder", "manifest_path", "netlist_path"),
+                           "Per-role fulfilment of the PRD component manifest against a KiCad "
+                           "netlist. Writes prd_bom_crosscheck.report.json to out_dir "
+                           "(default <folder>/C03-EE); the C04 entry gate requires it."),
     # C04/C05/C06 scaffold + readiness (6)
     "c04_emit_layout_package": (_WC, "emit_c04_layout_package", ("out_dir",),
                                 "Assemble the C04 layout constraint package from C01+C03 exports."),
@@ -316,7 +334,8 @@ VERBS = {
 # Path-like arg keys resolved against --repo when relative; folder/out_dir
 # default to the repo root itself when the verb requires them but the caller
 # did not pass them (the `gate.py <verb> --repo <abs>` short form).
-PATH_KEYS = ("folder", "out_dir", "corpus_dir", "source_image", "ai_export_path", "vault_root", "svg_path")
+PATH_KEYS = ("folder", "out_dir", "corpus_dir", "source_image", "ai_export_path", "vault_root", "svg_path",
+             "bom_csv", "pin_allocation_csv", "manifest_path")
 REPO_DEFAULT_KEYS = ("folder", "out_dir")
 
 
@@ -512,6 +531,61 @@ def _v_c04_readiness(a):
     return assess_c04_layout_readiness(
         a["folder"], feasibility_signals=a.get("feasibility_signals"),
     ).to_dict()
+
+
+def _c03_out_dir(a):
+    """Default out_dir to <folder>/C03-EE -- the ONE path the C04 entry gate reads.
+
+    Deliberately not a search: `c04_layout_constraints` pins
+    `C03-EE/check_c03.report.json`, and a search chain would itself be the
+    fallback this repo forbids. Callers may still pass out_dir explicitly.
+    """
+    out_dir = a.get("out_dir")
+    if out_dir:
+        return out_dir
+    return os.path.join(a["folder"], "C03-EE")
+
+
+def _abs_under(folder, value):
+    """Resolve a path (or list of paths) against `folder` when relative.
+
+    _build_args only rewrites scalar PATH_KEYS, so a list-valued netlist_path
+    would otherwise arrive relative and silently resolve against the process
+    cwd -- which is NOT the project. check_c03 raises on a missing netlist, but
+    a wrong-but-existing cwd-relative match would be worse than a raise.
+    """
+    if isinstance(value, str):
+        return value if os.path.isabs(value) else os.path.join(folder, value)
+    if isinstance(value, (list, tuple)):
+        return [_abs_under(folder, v) for v in value]
+    return value
+
+
+def _v_check_c03(a):
+    from bodesign_workflow_core import check_c03
+    folder = a["folder"]
+    result = check_c03(
+        _abs_under(folder, a["bom_csv"]),
+        pin_allocation_csv=_abs_under(folder, a.get("pin_allocation_csv")),
+        netlist_path=_abs_under(folder, a.get("netlist_path")),
+        covers_boards=a.get("covers_boards"),
+        frozen_pad_counts=a.get("frozen_pad_counts"),
+        out_dir=_c03_out_dir(a),
+    )
+    from dataclasses import asdict
+    return asdict(result)
+
+
+def _v_prd_bom_crosscheck(a):
+    from bodesign_workflow_core import prd_bom_crosscheck
+    folder = a["folder"]
+    result = prd_bom_crosscheck(
+        _abs_under(folder, a["manifest_path"]),
+        _abs_under(folder, a["netlist_path"]),
+        out_dir=_c03_out_dir(a),
+    )
+    from dataclasses import asdict
+    return asdict(result)
 
 
 def _v_c04_placement_review(a):
