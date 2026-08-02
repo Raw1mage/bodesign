@@ -1,6 +1,6 @@
 # BR_20260802 — no-silent-degradation lint 的預設 root 漏掃 `skills/`：預設回 12 筆，實際全樹 70 筆
 
-- **Status**: OPEN
+- **Status**: OPEN（訊噪比已量測完成 2026-08-02，修法已裁決；待實作）
 - **Owner**: `(default)`
 - **Family**: `silent-success`
 - **Filed at**: 2026-08-02（coordinator `ses_04db7a1c5ffelvbxyLP1p6xlRH`；由 BR_20260731 handler 在第二輪回報「基線 11 vs 實測 12」的疑點延伸量測而發現）
@@ -85,14 +85,78 @@ repo 有三個含 python 的頂層目錄（`packages/` / `services/` / `skills/`
 - **分母**：斷言 Coverage 輸出同時含 scanned 與 total，且在有未覆蓋 root 時明確列出。
 - **README 基線同步**：文件記載的數字必須與修復後的預設執行一致，並註明掃描範圍。
 
-## 未確認（誠實標註）
+## 訊噪比量測（2026-08-02 完成，13/58 樣本，coordinator 覆核）
 
-- 未逐一分類那 58 筆新增 finding 中有多少是真陽性、多少是誤報。
-  `skills/` 下多為 KiCad 引擎腳本，L2（except 只有 pass/log 而函式有回傳值）在該類程式碼
-  的訊噪比**未經量測**。**這會影響修法**：若誤報率高，正解可能是「納入掃描但分層報告」
-  而非「直接讓 CI 對 70 筆變紅」。**修這張 BR 前必須先做這個量測。**
-- 未確認是否有 CI 實際在跑這個 CLI 入口（`if __name__ == "__main__"`），
-  若無，則「CI 假綠」的後果目前是潛在而非已發生。
+原本此段標為「未確認、修這張 BR 前必須先量測」。已量測，**結果改變了推薦修法**。
+
+**規則分布**（實測；控制組見下）：
+
+| root | findings | files_scanned | 密度 | 規則 |
+|---|---|---|---|---|
+| `skills` | **58** | 91 | **0.64/檔** | L2×51、L6×7 |
+| `packages` | 6 | 128 | 0.047/檔 | L6×3、L2×3 |
+| `services` | 6 | 9 | 0.67/檔 | L2×6 |
+| `docs` | 0 | **0** | — | — |
+
+⚠ **`docs/` 是空對照，證明不了任何事**（它沒有 `.py` 檔，掃描器根本沒啟動）。
+真正有效的鑑別力證據是**密度差異**：`skills/` 是 `packages/` 的約 13 倍。
+
+**人工稽核 13 筆（22% 樣本）**：**6 真陽性 / 7 誤報 ≈ 46% 訊號**。
+6 個真陽性中只有 **3 個是中高嚴重度**，全部在 `analyze_schematic.py`、且全是同一個形狀
+（datasheet metadata 讀不到 → 判決與「本來就沒有 datasheet」完全相同）。
+**實際可行動的訊號約 23%。**
+
+⚠ **樣本偏誤（誠實標註）**：稽核者刻意挑了看起來最高風險的 L2，
+所以 51 筆 L2 的真實真陽性率**可能更低**，不會更高。46% 不是點估計。
+
+### 最嚴重的一筆
+
+`skills/bodesign/engines/kicad/scripts/analyze_schematic.py:6468`（`_read_ic_abs_max`）：
+
+```python
+except (json.JSONDecodeError, OSError):
+    pass
+if not extract_path.exists():
+    return None
+```
+
+`datasheets/extracted/manifest.json` 損毀或讀不到 → 該 IC 被**靜默排除在絕對最大額定電壓
+derating 檢查之外**（呼叫端 `:6535`）→ `derating_issues` 保持空 → 報告呈現「無 derating 問題」。
+**一個 PASS 形狀的答案，由「沒有檢查」產生。而它守的是過壓安全。**
+
+### 一個 lint 抓不到的漏網（recall gap）
+
+`skills/bodesign/engines/kicad/scripts/analyze_pcb.py:1998`：
+
+```python
+except (ValueError, TypeError):
+    thickness += 0.2      # 靜默塞入一個沒有來源的 0.2mm 介電厚度
+```
+
+這比 51 筆 L2 中的多數**更嚴重**（它不只是丟失資訊，是編造一個數值參與 `best_neighbor` 計算，
+會選錯參考層），而 **L2 看不到它**——因為 handler body 既不是 `pass` 也不是 log call。
+**規則的形狀決定了它能看見什麼；擴大掃描範圍不會讓它看見這個。**
+
+## 修法裁決（依量測結果，2026-08-02）
+
+**掃描 `skills/`：要。直接加進預設 root：不要（順序反了）。**
+
+靜默略過 91 個檔案在這個模組上是不可辯護的——它自己的 `Coverage` docstring（`:447`）
+就是為了「0 findings 不得被讀成從未掃描」而寫的，**現行預設正是該模組自己的反模式**。
+
+但把 58 筆（46% 誤報、僅 23% 可行動）直接倒進一個會擋人的閘，會重演該 docstring 自己
+診斷過的 L1 失敗：**「19 筆雜訊淹掉 3 筆真訊號，最後沒人跑這條 lint」**。
+
+**正確順序：先精煉規則，再擴大範圍（同一個 commit）。**
+三條窄豁免可消掉稽核樣本中 7 個誤報的 6 個：
+
+1. `finally` / cleanup 區塊內的 handler（best-effort 拆除，無可觀測輸出）
+2. handler 之後緊接 `return None`／sentinel 且函式回傳型別為 `Optional`
+   （**`None` 本身就是明確的缺席標記**，規則的前提在此不成立）
+3. L6 守的是 **schema 上本來就 optional 的欄位**，而非呼叫端提供的 key
+
+精煉後若 `skills/` 的誤報率仍 >30%，該目錄的 L2 先降為 advisory 一個週期。
+**基線數字必須在同一個 commit 重新錨定**（README 記載 11、實測 12）。
 
 ## Cross-ref
 
