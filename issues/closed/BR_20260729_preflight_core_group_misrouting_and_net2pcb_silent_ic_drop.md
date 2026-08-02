@@ -1,6 +1,7 @@
 # BR_20260729 — (A) autoroute_preflight 誤分 core group 永遠 ready:false；(B) route_net2pcb 靜默丟棄 8 顆主動 IC
 
-- Status: OPEN
+- Status: CLOSED — 全 12 節（§A–§L）已修並經 commit 驗證
+- Closed: 2026-08-02 by ses_04db7a1c5（coordinator，(default) owner）— 前置條件 BR_20260802 已立案
 - Filed by: aiguard consumer session `ses_073a93d09ffeRTpR9TwIdofhb3`
 - Supersedes: `br=freerouting-toolchain` 的 "restart 空窗暫態" RCA（該 RCA 不成立，見 §A）
 - Fix venue: NEW session rooted in `/home/pkcs12/projects/bodesign`
@@ -48,8 +49,12 @@ platform 用 `docker exec` 進 **ee worker 容器**驗證，看到 java/jar/xvfb
 - **不是暫態**：與 restart 時序無關，是 group 分派表的靜態缺漏，**每次呼叫都必 false**。
 - **契約自相矛盾**：`bodesign_autoroute` 正確 forward 到 ee worker，其**前置 gate** 卻在 facade 本地跑。
   gate 與被 gate 的動作在不同容器評估環境 → gate 結論對 autoroute 毫無效力。
-- platform 順修的 `routing.py` jar default 路徑（`/opt/freerouting/` → `/opt/freerouting.jar`）
-  是**另一個獨立的 latent bug，修得對**，但**不解本缺陷**（facade 內 jar 根本不存在，路徑對不對都 false）。
+- ~~platform 順修的 `routing.py` jar default 路徑（`/opt/freerouting/` → `/opt/freerouting.jar`）
+  是**另一個獨立的 latent bug，修得對**~~ — **CORRECTION 2026-08-02（ses_04db7a1c5）：該修復從未落地。**
+  `routing.py:1737`/`:1829` 在 HEAD 上仍是 `/opt/freerouting/freerouting.jar`（子目錄），而
+  `Dockerfile.ee:23` 裝在 `/opt/freerouting.jar`（平的）。本段原文認證了一個不存在的修復。
+  已另立 `BR_20260802_freerouting_jar_default_path_contradicts_install_path.md` 追蹤。
+  本 BR 自身的 §A 判定不受影響（facade 內 jar 根本不存在，路徑對不對都 false）。
 
 ### Fix proposal
 
