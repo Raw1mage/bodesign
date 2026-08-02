@@ -13,7 +13,10 @@
 
 ```
 State:
-Fix: none — 損失確定不可逆（回收窗口 2026-08-02 關閉，零回收）；防護未實作
+Fix: none — 損失確定不可逆（回收窗口 2026-08-02 關閉，零回收）。防護未實作，且
+  §5 已實測推翻原提案 1：alias 不可覆蓋內建指令、reference-transaction hook 報
+  aborted 但工作區已毀（比不裝更危險）、PATH wrapper 唯一有效但打擊面錯配。
+  正解移交 opencode bash denylist（跨 repo，見 §5.4）。
 Effect: damage done, unrecoverable
 Custody: bodesign
 Blocker: none — 兩顆 peer 皆已回覆並排除（見 §4.1）；損失確定不可逆
@@ -141,13 +144,80 @@ git status --porcelain issues/     → 顯示 4 個 ` M`
 
 遺失的是這些 baseline **之上**的未 commit 增量（可能含 task 勾選、state 推進、design 修訂）——其內容不可知。**任何接手這三份 plan 的人必須知道：它們的 on-disk 狀態是 07-04～07-07 的 committed 版本，不保證反映最後一次實際工作。**
 
-## 5. Fix proposal — 三層，由硬到軟
+## 5. Fix proposal — 已實測，原提案 1 不可實作
 
-1. **pre-reset 護欄（唯一在決策點生效的）**：把 `git reset --hard` 包成 wrapper 或 alias，執行前先跑 `git status --porcelain | grep '^ M\|^M \|^MM'`，非空就 loud-warn 並列出檔案，要求二次確認。**理由**：這正是 `checkout` 已經在做的事，只是 `reset --hard` 沒做。
-2. **共用工作樹的破壞性指令清單**：`reset --hard` / `clean -fd` / `checkout -- .` / `stash`（會捲走他人修改）寫進 `AGENTS.md`，標明在共用樹上一律先問。**但這是紀律不是機制**，效力有限——本事故正是在我已知該紀律的情況下發生的。
-3. **改用不碰工作區的等價操作**：撤 commit 用 `--soft`/`--mixed`；真要丟棄工作區修改時，先 `git stash push -- <精確 pathspec>` 而非全樹 `--hard`。
+> **2026-08-02 更新**：使用者批准安裝提案 1 後，我先量測三條實作路徑。**兩條是死的，其中一條比不裝更危險。**
+> 原文的「wrapper 或 alias」是在**未經任何驗證**的情況下寫下的；以下取代它。
 
-**傾向 1**，理由與 `BR_20260802_issues_ledger` 選 pre-commit hook 相同：它不依賴任何人記得。
+### 5.1 `git config alias.reset` — 不可行（內建指令不可被 alias 覆蓋）
+
+控制組決定性：**同一份 alias 值**，只差掛在哪個名字上。
+
+| alias 名 | 是否為 git 內建 | 結果 |
+| --- | --- | --- |
+| `alias.reset` | 是 | **完全忽略**，走真 `reset`（零輸出） |
+| `alias.zzprobe` | 否 | 正常展開，印出 porcelain 清單 |
+
+`git` 的 alias 解析只在**找不到內建指令時**才查。原提案的 alias 分支自始不成立。
+
+### 5.2 `reference-transaction` hook — **比不裝更危險**（做災難、報成功阻止）
+
+git 沒有 `pre-reset` hook。唯一會在 ref 更新時觸發的是 `reference-transaction`。實測（XDG scratch repo，非真實工作樹）：
+
+```
+treatment（hook 在 prepared 階段 exit 1）    control（無 hook）
+  fatal: ref updates aborted by hook           HEAD is now at c1
+  exit=128                                     exit=0
+  HEAD  = probe2   ← 未變                      HEAD  = c1   ← 已變
+  f.txt = [base]   ← 已毀                      f.txt = [base]
+```
+
+**兩邊工作區的結果完全相同。** hook 成功擋下 ref 更新、git 大聲印 `aborted`、exit 128 ——
+**而工作區在 hook 被呼叫之前就已經被覆寫。** ref 更新是 `reset --hard` 的**最後**一步。
+
+這是 §3 那個形狀的最惡質變體。前述變體是「缺席態與失敗態共用輸出」；
+這一個是**它印的是失敗、做的是災難**——裝上去會讓下一個人看到 `aborted`
+就以為 peer 的工作還在，而它已經沒了。**明確不建議安裝。**
+
+### 5.3 PATH wrapper — 唯一真的會攔（四組控制組）
+
+```
+prepended + reset --hard  → GUARD_INTERCEPTED  exit=99  f.txt=[PEER_WORK]  ✓ 保住
+appended  + reset --hard  → 真 git 勝           exit=0   f.txt=[base]       ← 證明是 PATH 位序在起作用
+prepended + log           → 通過                exit=0
+prepended + reset --soft  → 通過                exit=0   f.txt=[PEER_WORK]  ✓ 不誤傷
+```
+
+第一版探針回 `exit=0`（看似 PATH 也無效）——**那是探針本身寫錯**：用了 `git -C <path> reset --hard`，
+wrapper 檢查 `$1` 時拿到的是 `-C`。改成掃描全部參數後才正確攔截。
+**這是本 BR 第三次「我的判準壞了而不是結論成立」。**
+
+但落點全部有問題：
+
+| 落點 | 攔得到 | 阻礙 |
+| --- | --- | --- |
+| `~/.local/bin` | ✗ | **不在 PATH 裡**（實測 PATH 無此項） |
+| `export PATH=` | ✗ | 探針 `GUARD_PERSIST_PROBE` 下次呼叫回 `UNSET` — env 不跨呼叫存活 |
+| `~/.bashrc` | ✗ | harness shell **不 source 它**（`.bun/bin` 不在 PATH 可證） |
+| `/usr/local/bin/git` | ✓（位序 2 < `/usr/bin` 位序 4） | root-owned；**本機有 13 個真實使用者全部受影響** |
+
+### 5.4 結論：打擊面錯配，改走 harness denylist
+
+**事故的肇事者是 agent，不是人。** 為攔住 agent 而改 13 人共用的 `git`，
+打擊面與風險來源不匹配；wrapper 一旦有 bug，壞的是所有人的 git。
+
+正解是 `opencode` 的 `packages/opencode/src/tool/bash.ts:131` `DAEMON_SPAWN_DENYLIST` —
+它**已經在做這件事**（4 條既有規則、AST 解析剝 wrapper、`denylistVerdict` 是可測純函式），
+且**只作用於 agent 的 bash tool**。加一條 `git-reset-hard-shared-tree` 是既有機制的擴充，不是新機制。
+
+已 file 到 opencode repo（跨 repo，走 BRNS）。**本 BR 的防護部分依賴該 BR 落地。**
+
+### 5.5 仍然有效的兩層（原提案 2、3）
+
+2. **共用工作樹破壞性指令清單**寫進 `AGENTS.md` — **已落地**（§6.1「共用工作樹紀律」）。
+   但這是紀律不是機制，效力有限——本事故正是在我已知該紀律的情況下發生的。
+3. **改用不碰工作區的等價操作**：撤 commit 用 `--soft`/`--mixed`；
+   真要丟棄時用 `git stash push -- <精確 pathspec>` 而非全樹 `--hard`。
 
 ## 6. Explicitly NOT bugs
 
