@@ -29,7 +29,7 @@ an existing owner is the default.
 | `mcp-protocol-surface` | `ses_07c1ad2a4ffesVhlKotYBmsZlq` | `services/mcp/server.py` (protocol handler / route / tool registry / `run_tool`), `mcp.json`, `services/mcp/{preflight,_skill_nudge,token_store}.py`, `skills/bodesign/doctrine.md`, 4× Dockerfile + `docker-compose*` | `BR_20260721` ✅closed · `BR_20260723` (**verified closeable 2026-08-02 — owner's call**) |
 | `skill-shipping` | `ses_04db7a1c5ffelvbxyLP1p6xlRH` | `services/mcp/skill_shipping.py`, `server.py` `/skills` routes, 4× Dockerfile, `.dockerignore` | `BR_20260730` (PARTIAL) |
 | `readiness-contract` | **unassigned** | `packages/workflow-core/bodesign_workflow_core/{c01_id_package,c02_me_package,provenance,guide_dod,readiness_common}.py`, `skills/bodesign/scripts/gate.py`, `server.py:1179-1182` | `BR_20260719_c01_readiness_folder_arg_double_prefix` · `BR_20260719_c02_readiness_provenance_root_and_dod_surface` · `BR_20260719_c01_photoreal_render_pathway_adhoc_oauth` |
-| `schematic-engine` | **unassigned** — `ses_0c8efa1b4` probed · declined, see note | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` |
+| `schematic-engine` | **unassigned** — 2 sessions probed · both declined (`ses_0c8efa1b4`, `ses_0c87bab06`; see notes) | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` · `BR_20260802_reset_hard_destroyed_kicad_emit…` (**restored, verified `2efc3a9`+`23c0bc7`**) · `BR_20260802_fidelity_gate_is_red_after_restore…` (**P1, 電氣正確性**) |
 | `silent-success` | **unassigned** — `ses_03edcab76` 以 handler 身分修完 BR_20260731（已遣散），未任 owner | `packages/component-kb/bodesign_component_kb/vault.py`, `packages/workflow-core/bodesign_workflow_core/{reference_crosscheck,checkers/no_silent_degradation}.py`, `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py`, **`skills/bodesign/engines/kicad/scripts/domain_detectors.py`**, `ragbase/control/no-silent-degradation/` | ~~`BR_20260731_vacuous_pass…`~~ ✅closed (`b429b06`+`3de27b2`) · `KB_20260729…` (**PARTIAL**) · `BR_20260802_no_silent_degradation_lint_default_roots_miss_skills` |
 | `c03-stage-discipline` | **unassigned** — `ses_0c87bab06` probed · declined · `ses_03edbc893` 以 handler 身分修完 entry-gate（已遣散）. **cross-ref: `check_c03.py` 內部語意由 `ses_0c87bab06`（BR_20260730 family，§A–§Q 19 輪）演進至 HEAD；動它的內部規則前先 inject 那顆。——行數更正：磁碟實況 927 行，前述「1200+」為二手轉述未經查證** | `packages/workflow-core/bodesign_workflow_core/{check_c03,c04_layout_constraints}.py`, `skills/bodesign/scripts/gate.py`, `skills/bodesign/stages/{c03-ee,c04-layout}/GUIDE.md`, `services/mcp/server.py:479,1163-1164` | `BR_20260707_bom_proposal…` · ~~`BR_20260707_c03_stage_entry_gate…`~~ ✅closed (`ff7bbbf`+`787bb5e`) |
 | `layout-route` | **unassigned** | `packages/eda-bridge/bodesign_eda_bridge/routing.py`, `Dockerfile.ee`, `docker-compose.workers.yml`, `server.py:1334-1385` | `BR_20260802_freerouting_jar_default_path…` · ~~`BR_20260729_ee_worker`~~ ✅closed · ~~`BR_20260729_preflight`~~ ✅closed |
@@ -233,3 +233,33 @@ information no acceptance would have.
 - Split a new family out only when its fix surface is **genuinely disjoint at the
   file level**. Families are a mutable classification; a registry cut too fine
   becomes one nobody maintains.
+
+
+### `schematic-engine` — `ses_0c87bab06` declined the family, offered the single BR (2026-08-02)
+
+第二顆探測到的 session，**與 `ses_0c8efa1b4` 的拒絕理由方向相反且同樣正確**。
+
+它在復原 `kicad_emit.py` 的過程中累積了這個檔案最厚的即時 context——逐函式算過傳遞閉包、
+做過三方 A/B 量測、知道 HEAD 版與 recovered 版有 6 個函式本體不同。那份 context 當時沒有第二個人有。
+
+**但它拒絕 family ownership，理由是分層的**：
+
+> 我熱的是 `composer.py` 的 API 揭露面（provenance / typed error / schema），
+> 冷的是 wire-geometry 與 net partition 的**演算法層**——那正是 `test_fidelity_gate` 紅燈的所在。
+> 接下來會變成我拿 BR 的敘述去猜一個我沒有心智模型的子系統。
+
+**這比「我不熟」精確得多**：它區分了「我碰過這個檔案」與「我有這個子系統的心智模型」。
+`ses_0c8efa1b4` 拒絕時說「我熱的是鄰居不是本體」，這次是「我熱的是同一個檔案的**另一層**」。
+
+**兩次探測共同確立的判準**：*檔案共用不是歸族依據，**同檔不同層**也不是*。
+
+它另外交出兩格對派工有用的資訊（已寫進紅燈 BR）：
+
+1. `test_fidelity_gate` 是**唯一**「還原讓它從沒開機變成紅燈」的模組；其餘 12 筆是
+   「本來就紅、只是被 loader error 壓縮成 1 筆」。**不同類，不該混進同一份 handler brief。**
+2. `only_candidate=0` / `moved=0` 是強約束——沒有節點跑到錯的 net，是**整段連接消失**。
+   嫌疑收在「wire fusion / label collision 把兩條 net 熔成一條」，不是佈線或編號邏輯。
+   **handler 不會自己得出這個推論，它只會看到 6≠9。**
+
+值星官裁決：**接受拒絕**。紅燈是電氣正確性缺陷（J1 連接器與 R1/R2/R5 接點消失），
+值得給有原作脈絡的人，而不是給手上有 context 的人——**那兩者這次剛好不是同一個人**。

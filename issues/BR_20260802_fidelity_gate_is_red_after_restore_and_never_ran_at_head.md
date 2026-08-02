@@ -82,3 +82,60 @@ FIDELITY FAIL moved=0 only_baseline=6 only_candidate=0
 - `issues/OWNERS.md` — `schematic-engine` family 無 owner
 - `plans/eda-bridge_layered-pipeline/` — DD-8（`interior_crossings=0`）、DD-14（justify-left）
   的驗收紀錄；DD-16 記載 net-flag 疊印為獨立缺陷軸
+
+
+---
+
+## 值星官獨立覆核（2026-08-02，commit `2efc3a9` / `23c0bc7` 落地後）
+
+三個授權條件我親手重算，不採信 peer 的自報數字：
+
+```
+條件1 位元組  blob   9d92d442c1dd95dece15a9fe44a1616e2f7e02559b01d68d374a4074c2577470
+              landed 9d92d442c1dd95dece15a9fe44a1616e2f7e02559b01d68d374a4074c2577470   IDENTICAL
+   控制組     pre-commit 版本 8194fa18a6…  ← 不同 ⇒ sha256 比對有鑑別力，非 vacuous
+條件2 分離    resolve_symbol_library: A=0  B=1        （控制組 bogus 在 A=0）
+條件3 紅燈    A 的 message: nets=9 / J1.1 / only_candidate=0 / _FailedTest / NEVER RAN 全命中
+```
+
+### 回歸基線：pre vs post，同一個儀器
+
+原 BR 的「還原前這些模組沒跑」是引述 peer 的。我用 `git archive 2efc3a9~1` 匯出乾淨樹自己量：
+
+| 模組 | pre-restore | post-restore |
+| --- | --- | --- |
+| `test_kicad_emit` | ran=1 `_FailedTest`=2 | **ran=10** failures=3 |
+| `test_composer_draftsman` | ran=1 `_FailedTest`=2 | **ran=61** errors=11 |
+| `test_fidelity_gate` | ran=1 `_FailedTest`=2 | **ran=5** failures=1 errors=1 |
+| `test_block_drafter` | ran=1 `_FailedTest`=2 | ran=1 `_FailedTest`=2 ← **沒變** |
+| **控制組**：不存在的模組 | ran=1 `_FailedTest`=2 | ran=1 `_FailedTest`=2 |
+
+**控制組與四個真實模組在 pre-restore 完全同形。** 這不是儀器失效，這正是本 BR 的論點：
+還原前，「這個模組壞了」與「這個模組根本不存在」**在測試輸出上無法區分**。
+
+### ⚠ 更正 peer 的一項數字：43 → **2**，不是 43 → 0
+
+`commit 2efc3a9` 的 message 寫「43 個 collection-time 死亡模組歸零」。**實測不是 0。**
+
+```
+逐一 import 全部 133 個 tests/test_*.py（單一 process）
+  importable  = 131
+  IMPORT-DEAD = 2
+    test_block_drafter    ModuleNotFoundError: No module named 'kiutils'
+    test_symbol_resolver  ModuleNotFoundError: No module named 'kiutils'
+  控制組：import 一個確定不存在的模組 → raise（偵測器有鑑別力）
+```
+
+**但這不折損還原的價值**：剩下 2 筆的成因與被摧毀的符號**完全無關**——是 `kiutils`
+這個第三方套件沒安裝。還原修好了它該修的那 41 個，第二個獨立的阻塞因此才浮現。
+
+**這正是本 BR 的形狀第三次出現**：`kiutils` 缺失一直都在，只是先前被
+`_vendor_sym_scale` 的 ImportError 蓋住——**一個缺陷把另一個缺陷藏起來，而兩者回報同一個訊號**。
+
+`kiutils` 缺失屬環境/依賴問題，不屬本 BR，另計。
+
+### 結論
+
+- 還原**成立**，三條件全過，import 在 HEAD 可用（我親測 `IMPORT_OK`）
+- 保真閘紅燈**確認**、deterministic、與 peer 回報逐字相同
+- 本 BR **維持 OPEN**，需 `schematic-engine` owner

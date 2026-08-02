@@ -427,3 +427,76 @@ HEAD 沒有它 ⇒ **HEAD 是 DD-14 之前的版本**；recovered 有它 ⇒ rec
 - 保真閘紅燈 → 已另立 BR，需 `schematic-engine` owner
 - `kicad_emit.py` 有 **~765 行從未被 commit 的工作**（3030 vs 2265）長期只活在工作區。
   這是本次資料損失規模的真正放大器，屬流程缺陷而非程式缺陷。
+
+
+---
+
+## 值星官交付覆核（2026-08-02 round 2）— 三條件全過，一項數字更正
+
+peer 回報 `2efc3a9`（純還原）+ `23c0bc7`（新符號）。**我獨立重算，不採信回報值。**
+
+### 條件 1 — 位元組相同 ✓（我自己算的 sha256）
+
+```
+blob   refs/recovered/kicad_emit_full        9d92d442c1dd95de…c2577470
+landed git show 2efc3a9:…/kicad_emit.py      9d92d442c1dd95de…c2577470   BYTE-IDENTICAL
+控制組 git show 2efc3a9~1:…/kicad_emit.py    8194fa18a6d6157e…f3636e9b   differs ⇒ 比對有鑑別力
+```
+
+### 條件 2 — 拆分 ✓
+
+```
+Commit A  1 檔 +796/−31   def resolve_symbol_library 命中 0
+Commit B  5 檔 +497/−9    def resolve_symbol_library 命中 1
+```
+
+A→B 的 `kicad_emit.py` 差異僅 2 個 hunk，就是把 `load_symbol` 的 path-resolution 抽成獨立函式；
+`load_symbol` 簽章未變（實測 `inspect.signature`），9 個 call site 不受影響。
+
+### 條件 3 — 紅燈數字 ✓
+
+`2efc3a9` 的 message 逐字帶了 `74`→`49`、`nets=9`、`J1.1`、`only_candidate=0`、`_FailedTest`、`NEVER RAN`，
+並指向子 BR 檔名。**B 沒帶**——正確，紅燈屬於還原這筆的後果，不屬於新符號那筆。
+
+### 更正 peer 一項數字：collection-dead 是 **2**，不是 0
+
+peer 報「43 個 collection-time 死亡 → 0」。**我逐檔 import 全部 133 個測試模組**（單一 process，
+附控制組確認偵測器會對不存在的模組報錯）：
+
+```
+importable  = 131
+IMPORT-DEAD = 2
+  test_block_drafter    ModuleNotFoundError: No module named 'kiutils'
+  test_symbol_resolver  ModuleNotFoundError: No module named 'kiutils'
+```
+
+**但這不是還原的缺陷，也不是 peer 造假。** `kiutils` 是**缺少的第三方依賴**，與 `kicad_emit.py`
+的符號完全無關。還原修好了這兩個模組的**原本**死因，露出了它們背後**第二個獨立**的死因。
+
+**這正是本 BR 的形狀又一次**：`_FailedTest` 對「缺自家符號」與「缺第三方套件」回報同一個東西。
+peer 量到 0 是因為它量的是**自己修的那個死因**清空了；我量到 2 是因為我問的是「還有沒有模組沒載入」。
+**兩人都對，問的不是同一個問題。**
+
+已另記：`kiutils` 依賴缺失屬環境/依賴議題，不進 `schematic-engine`。
+
+### 迴歸基線：前後對比必須用同一支儀器
+
+```
+                        2efc3a9~1（還原前）        HEAD（還原後）
+test_kicad_emit         ran=1  _FailedTest=2   →   ran=10  _FailedTest=0  failures=3
+test_composer_draftsman ran=1  _FailedTest=2   →   ran=61  _FailedTest=0  errors=11
+test_fidelity_gate      ran=1  _FailedTest=2   →   ran=5   _FailedTest=0  failures=1 errors=1
+test_block_drafter      ran=1  _FailedTest=2   →   ran=1   _FailedTest=2  （kiutils，非本次）
+控制組 test_zznosuch    ran=1  _FailedTest=2   →   ran=1   _FailedTest=2  （模組不存在）
+```
+
+**還原前，那四個模組與一個不存在的模組在輸出上完全無法區分。** 這一格才是這次交付的真正價值：
+不是「失敗變少了」，是**儀器從沒開機變成會報數**。`test_kicad_emit` 的 3 個 failure 與
+`test_composer_draftsman` 的 11 個 error 是**新看見的既有缺陷**，不是回歸——
+它們在還原前根本沒有機會執行。
+
+### 交付結論
+
+**接受。** 兩筆 commit 符合全部三個條件。
+本 BR 的 import 缺陷 **FIXED**；`fidelity_gate` 紅燈另張追蹤，**本 BR 不因此關閉**
+（依 §Status 規則，仍有 scoped remainder 者留頂層）。
