@@ -138,3 +138,73 @@ fidelity→render QA），直到最基本電路可畫。本產出 session 只產
 
 **收斂目標（使用者定調）**：反覆調試直到最基本分壓電路能以「視覺有連線 + 電氣正確」畫出並通過
 fidelity + render QA——**這是談任何專案產品的前置門檻**。
+
+---
+
+## 重驗附註（2026-08-04，dispatcher `ses_04db7a1c5` 親手量測）
+
+派工前依「BR 是快照卻讀起來像現況」重驗本 BR。**四項 fix proposal 有兩項不成立，且其中一項不是過期
+——是寫的當下就不成立。**
+
+### ① fix#1 已存在，而且在本 BR 被 filed 之前 17 天就存在
+
+fix#1 要求「`_segment_fuses` 補端點首尾相接即熔合的判定」。該判定**三向俱全**（`kicad_emit.py`
+`_segment_fuses`：`_collinear_overlap` + 兩個方向的 `_point_on_segment`），且 `_point_on_segment`
+的 docstring 逐字寫著 `(endpoints included)`。
+
+| 事件 | 日期 |
+|---|---|
+| `_point_on_segment` 引入（`1fe46df`，docstring 當時已含 `endpoints included`） | 2026-07-06 |
+| 本 BR filed | 2026-07-23 |
+| 間隔 | **17 天** |
+
+**而本 BR 的 §RCA evidence anchor 逐字引用了 `_point_on_segment`**（第 65、82 行）。作者列出了那個
+函式，卻在 fix proposal 提議補上它已經在做的事。
+
+**這不是 stale BR，是引用了符號但沒讀它的語義。** 兩者的防護方式不同：
+- stale → 「派工前重驗 BR 是否仍成立」（時間軸判準）
+- 本例 → **「BR 引用的每個符號，作者是否讀過它的實作」**（不是時間問題，重驗一百次日期都對）
+
+所以本 BR 剩餘的 fix#2 / #3 / #4 **不得只因「日期沒過期」就採信**，逐條重驗是 P0 的前置。
+
+### ② `_bus_route` 被列為根因，但本 BR 的 repro spec 一次都不會執行它
+
+分流條件 `kicad_emit.py:1416` 是 `len(endpoints) >= 3`。repro spec（本 BR §Symptom 逐字所載）：
+
+| net | nodes | 實際走 |
+|---|---|---|
+| VO / VOUT / GND | 2 | `_orthogonal_route`（`:1371`） |
+| VIN | 1 | label |
+
+`MAX_NODES=2` → **`reaches_bus_route=False`**。
+
+§RCA 把 `_orthogonal_route` / `_bus_route` / power stub 三者並列為根因，但只有第一個在這個 symptom
+的執行路徑上。**照原 proposal 派工，handler 會去改一個與該 symptom 無關的函式。**
+
+誤導來源已獨立建檔：`BR_20260804_bus_route_docstring_promises_a_channel_router_the_code_does_not_implement.md`
+——`_bus_route` 的 docstring 承諾一個 channel router（`channel_y = max(pin_y)+5.08`，宣稱橫向 channel
+橫跨 `[min_x, max_x]`），而 executable body 是 daisy-chain。AST 量測：`channel_y` 的 `ast.Name` /
+`ast.Attribute` 出現 **0** 次，raw 出現 5 次全在 docstring；控制組 `ast.Name('endpoints')`=17，證明
+探針抓得到可執行識別字。那段 docstring 描述的 channel 幾何**聽起來完全像共線熔合的成因**。
+
+排除「曾實作而被 `reset --hard` 摧毀」（本樹有前科，且該前科的教訓正是把「被摧毀」誤讀成「從未寫過」）：
+`git log -S 'channel_y ='` 唯一命中 `1731897`，其 `+` 行五處全為散文無一行賦值；三個 `refs/recovered/*`
+逐一檢查，賦值數皆 0。**注意 `refs/recovered/kicad_emit_full` 是 blob 不是 commit**，用 `<ref>:<path>`
+定址會回空——那個空是「檔案不在該 ref 裡」不是「符號不存在」，須 `git cat-file -p` 直接讀（讀後
+`total=5 / assignments=0 / CONTROL _orthogonal_route=5`）。此處**確實是從未寫過**。
+
+### ③ 仍成立的部分
+
+- §「不是 bug / 不要動」四條**全部維持**：fidelity gate fail-loud 是對的、netlist→label 是 by-design、
+  723d 的 wire honour 無誤、SPICE/fidelity/ERC 鏈不要動。
+- symptom 本身未重驗（需實跑 compose），但 fix#2（串聯鏈確定性 jog）與 fix#3（佈局層預防）都指向
+  `_orthogonal_route` 與 placement，未被本次重驗推翻。
+
+### ④ 對 P0 的直接約束
+
+repro fixture 必須鎖住 **`_orthogonal_route` 路徑上的幾何前提**，不是 `_bus_route`，也不只是 fidelity
+結果。理由（handler `ses_03408d1fa` 提出，dispatcher 認可）：723b（power port 誤判未 bypass）與 723e
+（共線熔合）**都以 `fused` 的形式出現在 fidelity 層**，所以 723e 修好之後，723b 是「被修好」還是「變得
+不可達」在儀器上長得一樣——缺席態與失敗態共用輸出。
+
+**Status**: open（RCA 部分過期，已於本節逐項更正；fix#1 撤銷、fix#2/#3/#4 待逐條重驗）
