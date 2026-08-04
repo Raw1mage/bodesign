@@ -1,5 +1,6 @@
 # BR: c02_readiness provenance 解析根與 constraints 載入根不一致 + dod_ok 工具面缺口
 
+- **Status**: FIXED — 兩個症狀（folder 語義矛盾、缺 dod_ok）都已收斂（見文末「2026-08-04 覆核」）
 - Date: 2026-07-19
 - Source: thesmart_products aiguard C02-ME 執行（plan aiguard_c01-c04-autonomous-delivery task 2.8）
 - Axis: 軸A（工具能用性）
@@ -32,3 +33,43 @@ landing verb 的 `folder` 參數缺乏單一契約：`assess_c02_constraint_read
 
 ## Workaround（本次採用）
 caller 在 `Mechanical_Constraints.json` 補 scanner 期望的頂層 key（board_outline/component_heights/battery_envelope/provenance），dod 判定改讀 `package_readiness` 的 c02 block（dod_ok:true 已驗）。
+
+---
+
+## 2026-08-04 覆核（by `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
+
+**本檔原本沒有 Status 行**（三張例外之一，另見 `BR_20260804l`）。
+
+兩個症狀分別驗證（我親手跑）：
+
+### 症狀 A：folder 語義矛盾 — 已修
+
+```
+c02_me_package.py:57   def _c02_stage_dir(folder)          <- 它把 folder 當產品根推導 <folder>/C02-ME
+c02_me_package.py:772  collect_provenance_gaps(..., stage_dir=_c02_stage_dir(folder))
+c02_me_package.py:847  同上（第二個 provenance 呼叫點）
+```
+
+與 `_load_constraints` 讀 `<folder>/C02-ME/Mechanical_Constraints.json` **同基準**
+⇒ 原本「constraints 讀得到時 provenance 永遠假 gap」的矛盾不再成立。
+
+### 症狀 B：缺 `dod_ok` / `guide_compliance` — 已修
+
+```
+c02_me_package.py:18   from .guide_dod import guide_compliance_for
+c02_me_package.py:156  gc = guide_compliance_for(self.folder, "c02", root_visible=...)
+c02_me_package.py:159  d["dod_ok"] = bool(gc.get("dod_ok"))
+CONTROL  grep 'def guide_compliance_for' 全 packages -> 命中 1（guide_dod.py:69）
+```
+
+GUIDE 指示「跑 c02_readiness 讀 dod_ok」現在拿得到了，與 c01/c04/c05/c06 對齊。
+`tests/test_readiness_folder_contract.py` 14 passed。
+
+### 一個不屬本張的殘留（已另行建檔，不阻礍本張歸檔）
+
+`_c02_stage_dir` 目前只有 provenance 兩個 consumer；export / generate verb 仍各自
+`root / C02_OUTPUTS[key]`。這個 dual-prefix 殘留已拆成獨立 work item **`BR_20260804h`**
+（見 `c02_me_package.py:63-73` 的契約註解）。
+
+**本張主張的兩個具體症狀已收斂，故判 FIXED；那個殘留不是本張的 scoped remainder，
+而是另一張已建檔的獨立缺陷**——兩者差別在於：前者歸檔會讓殘留消失，後者不會。
