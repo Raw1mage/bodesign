@@ -76,11 +76,50 @@ MMBT2222A    pins (-5.08,0) (2.54,5.08) (2.54,-5.08)  ->  兩軸皆非零（非�
 ```
 scanned                   22582
   with rectangle          18216      <- 804b 的範圍，不在本 BR
-  NO-RECT                  4216      <- 本 BR 的範圍
+  NO-RECT                  4216      <- 走 fallback 的符號總數（含 215 個無 pin 者）
       tip box 退化         1198  (28%)   判準恆為 False
       tip box 有判別力     2803          centre_inside=True, far_inside=False
   load errors               150      （已列出型別與訊息）
 ```
+
+**⚠ 兩個口徑，都要看，不要只留一個**（1198 + 2803 = 4001 ≠ 4216）：
+
+```
+4216   走 fallback 的符號總數（`_body_rect` 回 None）
+4001   其中真正有 tip extent 可談的（4216 − 215）
+ 215   既無 rectangle 也無任何 pin 的符號（圖框 / logo / 註記類）
+       它們在 `:1728` 的 `if not xs: continue` 就出局，從不進入判準——
+       既不退化也不非退化，所以不在 1198 / 2803 任何一邊
+```
+
+「多少符號走 fallback」與「多少符號有 tip extent」是**兩個問題，各有讀者**。
+`deg` 與 `nondeg` 在兩種口徑下逐字相同（1198 / 2803），差的 215 全在分母。
+
+#### 退化的三分桶——`other = 0` 是本 BR 與 `804b` 不相交的證據
+
+```
+退化 1198 依成因分桶
+    1-pin       112     tip extent 是一個「點」，兩軸皆 0
+    共線       1086     2+ pins 全在一線上，某一軸 = 0
+    其他          0     <- 決定性
+CHECK  112 + 1086 + 0 = 1198 = deg        三桶互斥且窮盡
+```
+
+**`other = 0` 的意義**：沒有任何一個退化案例是「本體有二維範圍、只是被 inset 吃掉」。
+若該格非零，那部分本來落在 `804b` clamp 的射程內，兩張 BR 的域就會重疊。
+
+> 實測為 0 ⇒ **`804b`（本體太窄，clamp 可救）與本 BR（輸入缺一個維度，clamp 救不了）
+> 的域嚴格互斥。** 這先前是機制推論，現由全庫窮盡計數坐實。
+
+分桶樣本（證明分桶不是把所有東西塞進同一個桶）：
+
+```
+1-pin      Connector:Conn_01x01_Socket  npin=1  tipW=0.0  tipH=0.0
+           Connector:TestPoint          npin=1  tipW=0.0  tipH=0.0
+共線       Connector:Conn_01x02_Socket  npin=2  tipW=0.0  tipH=2.54
+           Connector:Conn_01x06_Socket  npin=6  tipW=0.0  tipH=12.7
+```
+
 
 **控制組（雙向，證明探針不是對什麼都說 yes/no）**：
 
