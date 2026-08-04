@@ -1,6 +1,6 @@
 # BR_20260804l — `issues/` 帳本沒有 Status schema：兩支合理的 sweep 對同一批檔案回不同答案，而「沒有 Status」與「Status 在我的視窗外」共用同一個輸出
 
-- **Status**: OPEN — 已量清規模並補齊三張缺失的 Status 行；**schema 與 checker 未定**（見 §5）
+- **Status**: PARTIAL — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；殘留只剩 26 張 WARN 的格式收斂（見 §10）
 
 | Field | Value |
 | --- | --- |
@@ -174,3 +174,43 @@ BR_20260802_reset_hard_silently_destroyed_...           <- severity high
 **我刻意不在本輪搬它們**：搬位置就是實施 §5 選項 1 的一半，
 而那個選項還未裁示、checker 還沒寫。**先搬完再寫 checker，會讓 checker 失去它唯一的真實負例**
 ——一支從未在真實資料上紅過的 checker，與一支壞掉的 checker 共用同一個輸出。
+
+## §10 裁決與實作（2026-08-05，`d63566d`）
+
+值星官裁定 **選項 1 + 3**（§5 傾向已由 §8 實測否證選項 2）。已落地：
+
+| 交付物 | 檔 | 治哪一側 |
+| --- | --- | --- |
+| schema 定義 | `issues/README.md` | 寫入側——canonical `- **Status**:` line-3 + 四態 |
+| checker | `scripts/check_issue_headers.sh` | 讀取側——全檔掃描 + 揭露視窗 `scanned N, window=full-file` |
+| pre-commit 接線 | `scripts/hooks/pre-commit` | 決策點（commit time）warn-only |
+
+**§9「唯一真實負例」的顧慮已由永久 fixture 解決**，不再依賴那 5 張暫不搬：
+`issues/.schema-fixtures/` 兩個檔（一保證 ERROR、一保證 clean），checker 每次跑先自測，
+任一翻轉就拒絕對真實資料下判。這把「唯一真實負例」從一次性的暫存狀態，
+升級成**永久的、每次跑都存在的控制組**——§9 那 5 張現在可以安全收斂而不影響 checker 的牙。
+
+### checker 判準（兩級）
+
+- **ERROR（rc=1）**：全檔零條 Status-ish 行 → 真排程危害。實測負例＝ERROR fixture。
+- **WARN（rc=0）**：有 Status 但非 line-3 canonical 形式 → 收斂用，不擋。
+
+實測（`d63566d` 落地後，41 張頂層）：
+```
+self-test: no-status fixture -> ERROR （控制組有牙）
+self-test: canonical fixture -> OK
+scanned 41 file(s), window=full-file
+ERROR = 0        <- 沒有一張是真的零 Status（§7 已補齊那 3 張）
+WARN  = 26       <- 格式收斂 backlog，見下
+```
+
+### 殘留：26 張 WARN（格式收斂，PARTIAL 的唯一開口）
+
+這 26 張都**有** Status（checker 綠、不擋 commit），只是不在 line-3 canonical 形式
+（裸 `Status:`、或深埋 line 6/7/23/24/26）。它們是漸進收斂工作，不急、可隨手做：
+每次碰到其中一張 BR 時把 Status 行改成 canonical 形式即可，WARN 數單調下降。
+**不批次搬**——批次改 26 個檔的 Status 位置與本 BR 的 scope 無關，且會在共用樹上
+產生一大批與各 BR 內容無關的 diff。checker 的 WARN 清單就是這個 backlog 的 live 追蹤。
+
+本 BR 標 **PARTIAL 留頂層**：schema+checker 已生效（主交付完成），
+WARN=26 的收斂是明確的 scoped remainder。WARN 歸零時可移 `closed/`。
