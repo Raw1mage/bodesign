@@ -95,8 +95,23 @@ class SchematicEmitResult:
     # (raises in emit). When the caller opts into `power_port_gate="warn"` — the
     # ERC-only / netlist-only path that must not be held hostage by a purely-visual
     # layout defect — the intrusions are recorded here (observation, same pattern as
-    # wire_body_intrusions) and a warning is appended instead of raising. Empty on
-    # the default fail-loud path (it raised) OR when there were no intrusions.
+    # wire_body_intrusions) and a warning is appended instead of raising.
+    #
+    # This is the LOSSLESS channel: the warning string truncates at 12 entries and
+    # appends "(+N more)", so entries 13.. are unrecoverable from it. Read this
+    # field, not the warning, when you need the individual `ref@(x,y) inside ref`.
+    #
+    # BR_20260804f: this field was declared here with the paragraph above ALREADY
+    # promising "recorded here" — and was never assigned (grep: one hit, the
+    # declaration; `git log -S 'power_port_intrusions='`: zero commits; control
+    # `wire_body_intrusions=`: 3c019df). So an instrument that read it per the
+    # docstring got [] while the SAME compose emitted a guard-C warning naming one
+    # intrusion. Empty now means exactly one thing: no intrusions were found.
+    #
+    # Observable ONLY on the warn path. On the default fail-loud path emit raises,
+    # so no result object exists to carry it — the previous wording ("Empty on the
+    # default fail-loud path") described a state nobody can observe, which is the
+    # same defect one level down.
     power_port_intrusions: list[str] = field(default_factory=list)
     # M7-3b-i (DD-11): L2.5 SlotTable slot-consumption OBSERVATION (never a driving
     # gate). When the caller passes `clusters=`, emit builds a SlotTable
@@ -537,6 +552,76 @@ def _graphics_bbox(block: str) -> tuple[float, float, float, float] | None:
     if not xs:
         return None
     return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _guard_c_body_box(x0: float, x1: float, y0: float, y1: float,
+                      inset: float | None = None) -> tuple[float, float, float, float]:
+    """Guard C's keep-out box for one placed component: the body extent shrunk by
+    `inset` so a power port legitimately hugging the body edge is not reported.
+
+    BR_20260804b -- the degrade is CONDITIONAL, not `min(inset, span*k)`.
+
+    A fixed inset INVERTS the interval on a narrow body (bx0 > bx1), making
+    `bx0 < ex < bx1` unsatisfiable: the guard then reports nothing for that
+    component, which is byte-identical to "no intrusion found".
+
+    All figures below share ONE convention -- blind <=> the box width is <= 0,
+    i.e. exactly when the guard's own strict predicate cannot be satisfied. They
+    come from one sweep of /usr/share/kicad/symbols via `load_symbol` (so
+    `(extends ...)` is flattened -- what the engine actually sees), 18217 symbols
+    with a rectangle out of 22583 scanned; the 150 load failures are name-lookup
+    misses and are reported, never swallowed.
+
+        INVERTED under the old fixed inset   513
+        fixed by this degrade                511
+        still blind after it                   2      (513 - 511 = 2)
+        non-blind bodies perturbed             0
+
+    `Device:R` -- the most common symbol there is -- was among the 513.
+
+    Why CONDITIONAL and not `min(inset, span*k)`: any min() form perturbs every
+    body in the band `span < inset/k`, including ones whose unclamped box was
+    perfectly valid. Same sweep, `min(inset, span/4)`: 512 fixed but **1617
+    never-blind bodies perturbed** (e.g. `Regulator_Linear:AMS1117-3.3`, y-span
+    6.985mm). Tightening the guard on already-verified pages is how a fix
+    manufactures new raises. The conditional form is a no-op by construction
+    whenever `span - 2*inset > 0`, so that count is 0 rather than merely small.
+
+    Note the `>` (not `>=`): at exactly `span == 2*inset` (17 symbols, e.g.
+    `Connector_Audio:SpeakON_NL2`) the unclamped box has ZERO width, so the strict
+    comparison is unsatisfiable there too -- they are blind and must degrade.
+
+    KNOWN RESIDUAL -- 2 symbols stay blind, for two different reasons:
+      * `74xGxx:74LVC1GU04DRL`  x-span 0.0 -- the rectangle itself is degenerate;
+        no inset rule can help.
+      * `Mechanical:Housing_Pad` x-span 3.8100000000000005 -- a FLOATING-POINT
+        boundary. It is `> 2*inset` by 5e-16, so the condition takes the "wide
+        enough" branch and shrinks by the full inset, leaving a box 5e-16 wide:
+        still unsatisfiable. Same 1.27mm-boundary family as BR_20260804c.
+    Do not "fix" this by loosening the comparison without measuring -- a tolerance
+    wide enough to catch it also moves real bodies.
+
+    Effect on emitted verdicts is bounded WITHOUT re-running compose, by squeeze:
+    for all 18217 symbols the conditional box is a SUBSET of the span/4 box
+    (0 violations; controls: 1756 are strictly narrower so the claim is not
+    vacuous, and the reverse subset does NOT hold for all). A narrower box can
+    only contain the same points or fewer, since the predicate is `bx0 < ex < bx1`.
+    With baseline and span/4 both measured at 1 intrusion on
+    `experiments/e2e-led-driver/C03-EE/e2e-led-driver-npn.spec.json`, the
+    conditional form is squeezed to 1 as well -- delta 0. (An earlier note here
+    justified this by claiming the two forms agree on `Device:R`; they do not --
+    they differ on its y axis, 5.08mm > 2*inset. Monotonicity is the reason, not
+    similarity.)
+
+    Whether `_PWR_STUB_STEP_MM/4` is the right keep-out width is a separate
+    product question -- the same question before and after this. What this fixes
+    is that on narrow bodies the chosen width was not being applied at all.
+    """
+    if inset is None:
+        inset = _PWR_STUB_STEP_MM / 4.0
+    ix = inset if (x1 - x0) > 2 * inset else (x1 - x0) / 4.0
+    iy = inset if (y1 - y0) > 2 * inset else (y1 - y0) / 4.0
+    return (x0 + ix, x1 - ix, y0 + iy, y1 - iy)
 
 
 def _body_rect(block: str) -> tuple[float, float, float, float] | None:
@@ -1642,9 +1727,12 @@ def emit_kicad_schematic(
             ys = [component.y - p[1] for p in pmap.values()]
         if not xs:
             continue
-        inset = _PWR_STUB_STEP_MM / 4.0  # tolerate a port hugging the body edge
+        # BR_20260804b: the shrink is CONDITIONAL -- a fixed inset inverts the box
+        # on a narrow body and silently blinds the guard. Rationale, the measured
+        # figures and the known residual live in `_guard_c_body_box`; deliberately
+        # NOT restated here, since a second copy is a second thing to keep true.
         _body_boxes.append((component.ref,
-            (min(xs) + inset, max(xs) - inset, min(ys) + inset, max(ys) - inset)))
+            _guard_c_body_box(min(xs), max(xs), min(ys), max(ys))))
     _port_intrusions: list[str] = []
     for ep in power_endpoints:
         ex_pt, ey_pt = ep[2], ep[3]
@@ -1721,6 +1809,10 @@ def emit_kicad_schematic(
         fusion_jogged_nets=fusion_jogged_nets,
         label_local_downgrades=label_local_downgrades,
         wire_body_intrusions=wire_body_intrusions,
+        # BR_20260804f: the lossless carrier for guard C. The warning string
+        # truncates at 12; this does not. Assigned unconditionally so "empty"
+        # means "none found" and never "nobody wrote it".
+        power_port_intrusions=list(_port_intrusions),
         slot_observe_wires=slot_observe_wires,
         slot_observe_skips=slot_observe_skips,
     )

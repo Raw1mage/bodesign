@@ -427,3 +427,179 @@ class CollinearFusionComposeTests(unittest.TestCase):
                    "nets": [{"name": "VOUT", "nodes": ["R1.2", "R2.2"]},
                             {"name": "GND", "nodes": ["R2.1"]}]}
         self._compose(swapped, "cut_swap")            # must not raise
+
+
+class GuardCInsetClampTests(unittest.TestCase):
+    """BR_20260804b: guard C shrinks each component's body box by a fixed inset
+    (`_PWR_STUB_STEP_MM/4` = 1.905mm) so a power port hugging the body edge is
+    tolerated. On a body narrower than 2*inset the shrink INVERTED the interval
+    (bx0 > bx1), making `bx0 < ex < bx1` unsatisfiable -- the guard then reported
+    nothing for that component, which is byte-identical to "no intrusion found".
+
+    These lock the GEOMETRIC PREMISE, not a fidelity verdict: a downstream change
+    that silently restores the inversion must fail here even if no page happens to
+    have an intruding port at that moment. Measured on this repo: 516 of 21437
+    flattened library symbols inverted on at least one axis, `Device:R` among them.
+    """
+
+    INSET = 1.905          # _PWR_STUB_STEP_MM / 4.0
+    CX = CY = 100.0
+
+    def _extent(self, lib_id):
+        """The component's body extent, placed at (CX, CY) -- guard C's INPUT."""
+        from bodesign_eda_bridge.kicad_emit import (
+            load_symbol, _body_rect, _PWR_STUB_STEP_MM,
+        )
+        self.assertAlmostEqual(_PWR_STUB_STEP_MM / 4.0, self.INSET, places=6,
+                               msg="inset constant drifted; update this fixture")
+        block, _pmap = load_symbol(lib_id)
+        rect = _body_rect(block)
+        self.assertIsNotNone(rect, f"{lib_id} has no rectangle; not a guard-C case")
+        rx0, ry0, rx1, ry1 = rect
+        xs = [self.CX + rx0, self.CX + rx1]
+        ys = [self.CY - ry0, self.CY - ry1]
+        return min(xs), max(xs), min(ys), max(ys)
+
+    def _box(self, lib_id):
+        """Guard C's body box for `lib_id`, obtained by CALLING the production
+        helper -- never by re-deriving it here.
+
+        The first version of this suite recomputed the shrink inline. It passed,
+        and it kept passing when the clamp was mutated out of the emitter: a test
+        that reimplements the rule verifies its own copy, so its green says nothing
+        about the code that ships. That is the exact defect class this file exists
+        to catch, one level up."""
+        from bodesign_eda_bridge.kicad_emit import _guard_c_body_box
+        return _guard_c_body_box(*self._extent(lib_id))
+
+    @staticmethod
+    def _inside(box, px, py):
+        bx0, bx1, by0, by1 = box
+        return bx0 < px < bx1 and by0 < py < by1
+
+    def test_narrow_body_box_does_not_invert(self):
+        """`Device:R` (2.032mm wide) and `Device:Polyfuse` (1.524mm) are both
+        narrower than 2*inset. Without the clamp bx0 > bx1 and the guard is blind."""
+        for lib in ("Device:R", "Device:Polyfuse"):
+            with self.subTest(lib=lib):
+                bx0, bx1, by0, by1 = self._box(lib)
+                self.assertLess(bx0, bx1, f"{lib}: x interval inverted (guard blind)")
+                self.assertLess(by0, by1, f"{lib}: y interval inverted (guard blind)")
+
+    def test_narrow_body_box_has_discriminating_power(self):
+        """Not inverting is necessary but not sufficient: the box must actually
+        contain points that lie inside the real body. The component's own centre
+        is unambiguously interior."""
+        for lib in ("Device:R", "Device:Polyfuse"):
+            with self.subTest(lib=lib):
+                box = self._box(lib)
+                self.assertTrue(self._inside(box, self.CX, self.CY),
+                                f"{lib}: centre not inside box -- guard still blind")
+
+    def test_far_point_is_outside(self):
+        """Control. If the predicate said yes to everything, the test above would
+        pass for the wrong reason."""
+        for lib in ("Device:R", "Device:Polyfuse",
+                    "Connector:USB_C_Receptacle_USB2.0_16P"):
+            with self.subTest(lib=lib):
+                box = self._box(lib)
+                self.assertFalse(self._inside(box, 1000.0, 1000.0),
+                                 f"{lib}: predicate accepts a point 900mm away")
+
+    def test_non_degenerate_body_is_untouched(self):
+        """Blast-radius control, and the reason the degrade is CONDITIONAL rather
+        than `min(inset, span*k)`. Any min() form perturbs every body in the band
+        `span < inset/k`, including ones whose unclamped box was perfectly valid --
+        measured: `min(inset, span/4)` moved 1631 never-blind symbols, AMS1117
+        (y-span 6.985mm) among them. Tightening the guard on already-verified pages
+        is how a fix manufactures new raises.
+
+        The real no-op threshold is `span > 2*inset` (3.81mm) -- exactly the
+        condition under which the unclamped box is non-degenerate. AMS1117 sits
+        between 2*inset and 4*inset, so it is precisely the symbol that tells the
+        two rules apart: it MUST be untouched here."""
+        from bodesign_eda_bridge.kicad_emit import load_symbol, _body_rect
+        for lib in ("Connector:USB_C_Receptacle_USB2.0_16P",
+                    "Regulator_Linear:AMS1117-3.3"):
+            with self.subTest(lib=lib):
+                block, _pmap = load_symbol(lib)
+                rx0, ry0, rx1, ry1 = _body_rect(block)
+                xs = [self.CX + rx0, self.CX + rx1]
+                ys = [self.CY - ry0, self.CY - ry1]
+                x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+                self.assertGreater(x1 - x0, 2 * self.INSET,
+                                   f"{lib} is degenerate on x; pick another")
+                self.assertGreater(y1 - y0, 2 * self.INSET,
+                                   f"{lib} is degenerate on y; pick another")
+                del xs, ys
+                unclamped = (x0 + self.INSET, x1 - self.INSET,
+                             y0 + self.INSET, y1 - self.INSET)
+                self.assertEqual(self._box(lib), unclamped,
+                                 f"{lib}: degrade perturbed a non-degenerate body")
+
+    def test_ams1117_is_the_discriminating_case(self):
+        """Control for the control. If AMS1117 ever stopped sitting in the band
+        `2*inset < span <= 4*inset`, the test above would still pass while having
+        lost the only sample that distinguishes the conditional rule from a
+        `min(inset, span/4)` one."""
+        from bodesign_eda_bridge.kicad_emit import load_symbol, _body_rect
+        block, _pmap = load_symbol("Regulator_Linear:AMS1117-3.3")
+        rx0, ry0, rx1, ry1 = _body_rect(block)
+        span_y = abs((self.CY - ry1) - (self.CY - ry0))
+        self.assertGreater(span_y, 2 * self.INSET)
+        self.assertLessEqual(span_y, 4 * self.INSET,
+                             "AMS1117 left the discriminating band; find another "
+                             "symbol with 3.81 < span <= 7.62 or these tests no "
+                             "longer tell the two clamp forms apart")
+
+
+class PowerPortIntrusionsFieldTests(unittest.TestCase):
+    """BR_20260804f: `SchematicEmitResult.power_port_intrusions` was declared with
+    a docstring promising the guard-C intrusions are "recorded here", and was never
+    assigned -- so an instrument reading it per the docstring got [] while the SAME
+    compose emitted a warning naming an intrusion. [] meant both "none found" and
+    "nobody wrote it".
+
+    The warning string is lossy (truncates at 12 + "(+N more)"), so this field is
+    the only channel that can carry entry 13. These lock that it is populated AND
+    that it agrees with the warning."""
+
+    SPEC = "experiments/e2e-led-driver/C03-EE/e2e-led-driver-npn.spec.json"
+    PREFIX = "POWER_PORT_INSIDE_SYMBOL_BODY:"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="ppi_")
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        repo = Path(__file__).resolve().parents[1]
+        self.spec_path = repo / self.SPEC
+        if not self.spec_path.exists():
+            self.skipTest(f"real-page spec absent: {self.spec_path}")
+
+    def _warning_count(self, warnings):
+        import re as _re
+        for w in warnings:
+            if self.PREFIX in w:
+                tail = w.split("blind): ", 1)[1]
+                m = _re.search(r"\(\+(\d+) more\)$", tail)
+                more = int(m.group(1)) if m else 0
+                listed = _re.sub(r"\s*\(\+\d+ more\)$", "", tail)
+                return len([e for e in listed.split("; ") if e.strip()]) + more
+        return 0
+
+    def test_field_is_populated_and_agrees_with_the_warning(self):
+        import json
+        from bodesign_eda_bridge.composer import compose_schematic
+        spec = json.loads(self.spec_path.read_text())
+        result = compose_schematic(os.path.join(self.tmp, "p"), "ppi", spec,
+                                   validate=False, style="netlist",
+                                   power_port_gate="warn")
+        field = list(getattr(result.emit, "power_port_intrusions", []) or [])
+        warned = self._warning_count(result.warnings)
+        # Control: if this page stopped producing an intrusion the test would pass
+        # vacuously (0 == 0), so require the page to still exercise the guard.
+        self.assertGreater(warned, 0,
+                           "page no longer trips guard C; fixture needs revisiting")
+        self.assertEqual(len(field), warned,
+                         "field disagrees with the warning it is supposed to mirror")
+        for entry in field:
+            self.assertRegex(entry, r"^.+@\(.+,.+\) inside .+$")
