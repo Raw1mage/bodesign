@@ -4,7 +4,7 @@
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:1645-1661`（guard C / `_port_intrusions`）
 - **Family**: schematic-engine
 - **Owner**: ses_03408d1faffeKuPkQZ9Zj6gWO2
-- **Status**: open — 機制 ACCEPTED；量值 disputed；**2026-08-04 新增第三個 OPEN：浮點邊界 14 個，見 §8**
+- **Status**: open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**
 - **Scheduled**: 未排（P0 fixture 前置量測時撞到，未插隊施工）
 
 ---
@@ -359,6 +359,8 @@ CONTROL span 10.0 -> 6.19 ・ span 1.0 -> 0.5           遠離邊界無歧義
 
 ### 8.2 受影響的 14 個（全庫實測）
 
+> ## ⚠ 本節已被實測否證。以下方框內是**原始記載**，保留不刪；更正在下方 §8.2a。
+
 ```
 Conn_01x05_Socket · Conn_01x11_Socket · Conn_01x17_Socket · … · Conn_01x59_Socket   （10 個）
 D_Zener_Dual_CommonCathode_KAA · NetTie_4_Cross · Thermistor_US · Varistor_US
@@ -366,6 +368,72 @@ D_Zener_Dual_CommonCathode_KAA · NetTie_4_Cross · Thermistor_US · Varistor_US
 
 **`Mechanical:Housing_Pad`（本張原本具名的那個）span 也是 `3.8100000000000005`**
 ⇒ 它不是孤例，是這個 15 元素族的第一個被發現者。
+
+### 8.2a ⚠ 更正（2026-08-04，兩方獨立實測）：生產口徑下是 **1 個**，不是 14/15
+
+> 更正者：dispatcher `ses_04db7a1c5`。上方 §8.2 的名單**保留不刪**——
+> 它怎麼來的，本身就是這張 BR 在講的那件事的證據。
+
+`§8.2` 的 14 個名單來自 `804g` 的一支初篩（4 位小數判退化），**未經生產路徑重驗**。
+owner（`ses_03408d1fa`）與 dispatcher 各自獨立掃描，兩份互不知對方數字，結論一致：
+
+```
+TREATMENT  §8.2 具名 9 個的 _body_rect（生產路徑 root-level lib_id）
+  Conn_01x05/11/17/59_Socket · Thermistor_US · Varistor_US
+  D_Zener_Dual_CommonCathode_KAA · NetTie_4_Cross     -> rect = None（8 個，根本沒有 rect）
+  Mechanical:Housing_Pad -> 3.8100000000000005        <- 唯一有 rect 且落在帶內的
+CONTROL    Device:R rect span 2.032 -> band=False
+CONTROL    Device:ZZ_NoSuch_9999   -> KeyError（loud，證明枚舉不會靜默吞）
+```
+
+**`8/9` 的 `_body_rect` 回 `None`** ⇒ 它們根本走不到 §8.1 那個邊界比較，
+初篩把它們算進來是因為那支探針從別的來源取 span。
+
+#### 為什麼兩個都合理的量法會回不同答案（口徑，必須連同數字一起引用）
+
+dispatcher 另跑了一支**三分支**掃描（guard C 的唯一呼叫點 `kicad_emit.py:1788`
+的 `xs/ys` 有三個來源：`rect` / `graphics_rects` fallback / pin-tip fallback，
+而只掃 rect 那一支會讓「不在母體」與「不受影響」共用同一個輸出）：
+
+```
+symbols=46030  load_fail=299
+sources: rect 29737 / graphics 7056 / pintip 8681 / nopins 556
+band_hits = 7      <- 子單元口徑
+  Mechanical:Housing_Pad          x  rect
+  Mechanical:Housing_Pad_0_1      x  rect
+  Analog_Switch:NX3L4051PW_1_0    x  pintip
+  Connector:RJ45_JK00177_1_1      x  graphics
+  Switch:SW_Rotary_2x6/3x4/4x3_0_1   x  graphics
+CONTROL  synthetic T+tol -> True ／ far 10.0 -> False ／ far 40.64 -> False ／ 母體>10k -> True
+```
+
+**7 個裡 6 個是子單元名（`_0_1` / `_1_0`）。** 用生產真正解析的 root-level lib_id 重驗：
+
+```
+Analog_Switch:NX3L4051PW      sx=17.78                 band=False
+Connector:RJ45_JK00177        sx=30.48                 band=False
+Switch:SW_Rotary_2x6/3x4/4x3  sx=17.78                 band=False
+Mechanical:Housing_Pad        sx=3.8100000000000005    band=True   <- 唯一
+```
+
+⇒ **生產口徑 1、子單元口徑 7、4 位小數初篩 20（含 14 個 4e-16 寬的捨入假象）。**
+三個數字都是真的，量的不是同一件事。**引用任何一個時必須同時說明口徑**——
+這正是 §8.2 原記載出錯的機制：一個沒有標註口徑的數字，被下一個人當成另一個口徑的答案。
+
+### 8.2b ✅ 修法已落地
+
+容差 = `math.ulp(2*inset)`。**不是選來的數**：`3.8100000000000005 - 3.81`
+恰等於 `math.ulp(3.81)`，即離門檻最小的可表示一步 ⇒ 那個 span 是
+「本體正好 `2*inset` 寬」的捨入產物，而**比 1 ULP 更小的容差不可表示**，
+所以這是邊界修正，不是可調參數。
+
+結構保留 CONDITIONAL（`min()` 形式維持否決——既有 docstring 記錄它誤傷 1617 個）。
+
+dispatcher 八格覆核全 PASS，含**獨立重做**三條 mutation（各 `SUBSTITUTIONS=1`、
+紅在三個不同斷言、還原後 byte-identical）：
+M-A 移除容差 → 紅在「box 寬度 0.0」（缺陷本身）／
+M-B 容差放寬 `abs_tol=7.0` → 紅在反方向誤傷（`span=10.0` 被推進 clamp）／
+M-C fixture 改指 `Device:R` → 紅在 fixture 判別力。
 
 ### 8.3 為什麼不屬於 `BR_20260804g`
 
@@ -375,7 +443,22 @@ D_Zener_Dual_CommonCathode_KAA · NetTie_4_Cross · Thermistor_US · Varistor_US
 
 ### 8.4 未量
 
-- **這 14 個在真實頁上的曝險未量**。全庫掃描回答的是「有多少符號會拿到退化 box」，
-  不是「有多少 power port 真的落進去」。兩者差一個數量級（參見 `804g` 真實頁 delta=0 那一格）。
-- **修法未裁示**。直覺是把 `>` 改成帶容差的比較，但容差選多少、
-  會不會把本來該走 inset 的符號推進 clamp（反方向誤傷），**未量**。
+> ⚠ 下列兩項在 2026-08-04 均已完成，保留原文並在各項標註結果。
+
+- ~~**這 14 個在真實頁上的曝險未量**~~ → **已量，且成因已分辨**。
+  `e2e-led-driver-npn` 修法前後 `captured 22 / degenerate 0 / intrusions 1`，delta = 0。
+  **「修法沒生效」與「該族不在此頁」共用這個 0**，所以另加有判別力的探針：
+  此頁 8 個 distinct symbol **無 `Housing_Pad`**；spy 量到 44 個 axis，
+  落在一-ULP 帶內者 **0** 個（distinct spans 全部遠離門檻）。
+  ⇒ 是後者。**此頁對本修法零曝險，不是紅旗。**
+  兩個 variant 確實不同（liveness：`before_isclose=0` / `after_isclose=1`）。
+- ~~**修法未裁示**~~ → **已裁示並落地**，見 §8.2b。反方向誤傷面**已量**：
+  生產口徑下 `inset→clamp` 的移動恰 1 axis / 1 symbol（即 `Housing_Pad` x 本身），無其他。
+  控制組非空性：庫內 exact `40.64` 命中 **768 axes**，全部未動。
+  誠實邊界：`10.0` 在庫內 exact 命中 **0 axes**，故它只是合成控制組（直呼 helper），
+  不像 `40.64` 有庫內樣本背書。
+
+### 8.5 §8 這格的殘留
+
+**無。** §8 已收斂——名單更正（§8.2a）、修法落地（§8.2b）、兩項未量補齊（§8.4）。
+本張 BR 仍 OPEN 的是 **§1/§6 的主缺陷（量值 disputed）**，與 §8 是不同的標的。
