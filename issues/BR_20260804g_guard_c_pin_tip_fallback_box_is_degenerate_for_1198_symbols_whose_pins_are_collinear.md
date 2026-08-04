@@ -1,6 +1,9 @@
 # BR_20260804g — guard C 的 pin-tip fallback box 對 1198 個共線腳位符號退化，判準恆為 False
 
-**Status**: OPEN — 探測完成，修法未定（打擊半徑已量，見 §5）
+**Status**: FIXED (b1fde6b) — **有 scoped remainder，歸檔判定歸 dispatcher**
+- 修法：guard C 的 `rect is None` 分支接上 `graphics_rects`（body-first，見 §9）
+- 殘留一：6 個具名符號仍退化（graphics 本身是 1-D 或不存在）
+- 殘留二：zero-pin 第三族 33 個（有二維繪圖本體，但在 `:1709` 更早出局，本修法碰不到）
 **Filed**: 2026-08-04 by `ses_03408d1faffeKuPkQZ9Zj6gWO2` (OWNS bodesign/schematic-engine)
 **Family**: schematic-engine
 **Severity**: medium — 靜默失去判別力，但**非全新盲區**：這些符號在 `BR_20260804b` 的 516/513 名單之外，走的是另一條程式路徑
@@ -88,8 +91,11 @@ scanned                   22582
 4216   走 fallback 的符號總數（`_body_rect` 回 None）
 4001   其中真正有 tip extent 可談的（4216 − 215）
  215   既無 rectangle 也無任何 pin 的符號（圖框 / logo / 註記類）
-       它們在 `:1728` 的 `if not xs: continue` 就出局，從不進入判準——
+       它們在 `:1709` 的 `if not pmap: continue` 就出局，從不進入判準——
        既不退化也不非退化，所以不在 1198 / 2803 任何一邊
+       （**位置更正**：本 BR 先前寫 `:1728 if not xs`。那一行是**死碼**——
+       `pmap` 非空時兩條路徑都保證 `xs` 非空：rect 分支給 2 個元素，fallback
+       分支給 `len(pmap)` 個。故 `if not xs` 恆為 False，出局點比先前敘述更早。）
 ```
 
 「多少符號走 fallback」與「多少符號有 tip extent」是**兩個問題，各有讀者**。
@@ -216,7 +222,7 @@ CONTROL — rect-bearing 符號換來源是否 no-op
    zero-pin        215
        g_none      180
        g 退化         2
-       g 非退化      33   <- 有可用幾何，卻在 :1728 就 continue 了
+       g 非退化      33   <- 有可用幾何，卻在 :1709 就 continue 了
    CHECK 180 + 2 + 33 = 215                    ✓
    CONTROL with-pin NO-RECT = 4001（未混入）  ✓
    樣本：Graphic:Logo_Open_Hardware_Large (22.25×19.96) / SYM_Arrow45_* /
@@ -224,8 +230,8 @@ CONTROL — rect-bearing 符號換來源是否 no-op
    ```
    **本 BR 先前寫「那 215 個連 fallback 的輸入都沒有」是不完整的**：它們沒有 pin-tip
    extent，但其中 33 個有繪圖本體。它們今天走不到 fallback 是**現行程式碼的
-   路徑選擇**，不是它們沒有可用幾何。本輪修法碰不到它們（`xs` 為空在更前面就
-   `continue`），故列為**第三族**，不在本 BR 範圍，但不得讓它消失。
+   路徑選擇**，不是它們沒有可用幾何。本輪修法碰不到它們（`pmap` 為空在 `:1709`
+   就 `continue`），故列為**第三族**，不在本 BR 範圍，但不得讓它消失。
 7. **未量真實頁的 intrusion 差值**（裁示為只探測不修，屬實作階段）。
 8. **未量那 6 個仍退化者在真實頁的出現頻率**。`TestPoint` / `MountingHole` 在真實 PCB 上
    並不罕見，若常出現，「6 個」的實際影響會大於全庫比例。
@@ -238,3 +244,65 @@ CONTROL — rect-bearing 符號換來源是否 no-op
 
 **答案是二分的，不是二選一**：4216 個中 2803 個有判別力（合理降級），1198 個退化（缺陷）。
 故 §2.4 **不得**整格收斂為「已查、非缺陷」，也不是整格缺陷——請改為指向本 BR。
+
+---
+
+## 9. 修法落地（`b1fde6b`）與兩個未收斂的口徑
+
+### 9.1 形狀：body-first，不是 graphics-first
+
+```python
+rect = body_rects.get(component.lib_id)
+if rect is None:
+    rect = graphics_rects.get(component.lib_id)   # 只補這一個分支
+```
+
+`:1169` / `:1567` 消費同樣兩個 dict 卻是 **graphics 優先**，照抄會是錯的：那兩處是
+**避讓**（box 越大越安全，取聯集上界正確），guard C 是**內含判定**（box 越大 = 誤報）。
+同一個資料來源，兩個相反的最佳化方向。實測 graphics-first 會改動 1030 個
+`graphics != rect` 的 rect-bearing 符號中的 **1026** 個 verdict。
+
+`if rect is None` 用顯式判斷而非 `or`，是為了不讓「缺席」與「存在但 falsy」共用一條路徑。
+
+### 9.2 兩個 OPEN：不同口徑的量測，差值未查明，**刻意不對齊**
+
+| 量 | 探針 A | 探針 B | 狀態 |
+|---|---|---|---|
+| zero-pin 符號數 | 215 | 219 | **OPEN** |
+| `graphics != rect`（gdiff） | 1030（含 zero-pin） | 1027（排除） | **OPEN** |
+
+兩組都是**獨立量測**，錨定頂層符號的方式不同（B 用 `^\t\(symbol "`）。
+**不把任一邊調去對上另一邊**——調整口徑去命中已知答案，會讓兩個獨立量測退化成一個，
+而那正是本 fleet 反覆付學費的形狀。差值未查明，記為 OPEN。
+
+### 9.3 方法論：量修法**直接改變**的量，不要量它下游三層的後果
+
+真實頁 `e2e-led-driver-npn` 的 intrusion 差值是 **0**，而這**不是**紅旗。
+
+intrusion 計數對下面兩件事回同一個答案，因此在此**沒有判別力**：
+
+```
+(a) 降級鏈生效、box 確實變了，只是沒有 port 落進新生效的 box
+(b) 降級鏈根本沒接上，box 沒變
+```
+
+判別方式是**攔 `_guard_c_body_box`**，直接看 emitter 實際建出來的 box：
+
+```
+                BEFORE(HEAD)   AFTER
+degenerate box       8           0
+non-degenerate      14          22
+(0.0, 3.81)×2  ->  (0.254, 0.762)×2
+(3.81, 0.0)×5  ->  (1.27, 1.27)×5
+(6.35, 0.0)    ->  (2.032, 1.778)
+```
+
+是 (a)。**一般形式**：判別力會被下游每一層稀釋，而稀釋到 0 的那一刻不會有任何提示——
+它只會回一個看起來正常的數字，而那個數字同時相容於「修好了」與「根本沒接上」。
+所以驗收判準要打在修法直接改變的量上，不是它的後果上。
+
+### 9.4 mutation proof 的一格陷阱
+
+M-A（拿掉降級鏈）若用 regex 刪掉那一行賦值，會留下一個空的 `if` 區塊 →
+`IndentationError`。那是**無效 mutant 不是紅**，而 collection error 與 assertion
+failure 在輸出的 `FAILED` 那行**長得一模一樣**。正解是拿 HEAD 本身當 mutant。
