@@ -4,7 +4,7 @@
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:1645-1661`（guard C / `_port_intrusions`）
 - **Family**: schematic-engine
 - **Owner**: ses_03408d1faffeKuPkQZ9Zj6gWO2
-- **Status**: open
+- **Status**: open — 機制 ACCEPTED；量值 disputed；**2026-08-04 新增第三個 OPEN：浮點邊界 14 個，見 §8**
 - **Scheduled**: 未排（P0 fixture 前置量測時撞到，未插隊施工）
 
 ---
@@ -329,4 +329,53 @@ iy = min(inset, (max(ys) - min(ys)) / 2 - EPS)
 - **`no rectangle` 那格（BR 稱 4216、我得 13744）同樣待重新收斂**——它決定 pin-tip fallback
   路徑（`:1640-1642`）的曝險規模，而該路徑**兩邊都未測**。
 
-**Status**: open（機制 ACCEPTED；量值 disputed，非阻塞）
+**Status**: open（機制 ACCEPTED；量值 disputed，非阻塞；另見 §8 浮點邊界）
+
+---
+
+## 8. 第三個 OPEN：inset 的邊界比較在浮點上失效，14 個符號拿到 4e-16 mm 寬的 box
+
+> 這一節由 dispatcher（`ses_04db7a1c5`）於 2026-08-04 寫入。
+> 來源是 `BR_20260804g` 全庫量測的副產物（`ae8589a` §9.6），而它指向本張。
+> **寫進來的理由**：那邊寫了「列為給 804b 的第三個 OPEN」，但本檔一個字都沒提
+> （控制組：`grep -c 'guard C\|inset'` 回 **29** 證明 grep 讀得到檔，
+> 而 `Housing_Pad` / `3.8100000000000005` / `浮點` / `float` 全部回 **0**）。
+> **一個寫在 A 檔裡、指定給 B 檔的殘留，B 的讀者永遠看不到**——
+> 這與本 fleet 反覆付學費的形狀同族：資訊存在，只是不在會被讀到的地方。
+
+### 8.1 現象
+
+`_guard_c_body_box` 用「寬度是否大於 `2*inset`」決定走 inset 還是 clamp。
+寬度恰好落在邊界上且帶浮點誤差時，它選錯邊：
+
+```
+span 3.81                  -> clamp -> w = 1.905       可用
+span 3.8100000000000005    -> inset -> w = 4.44e-16    形同無物
+span 3.809999999999999     -> clamp -> w = 1.905       可用
+CONTROL span 10.0 -> 6.19 ・ span 1.0 -> 0.5           遠離邊界無歧義
+```
+
+比 `2*inset` 大 **5e-16**，就足以讓条件式判定「夠寬」而走進 inset 分支。
+
+### 8.2 受影響的 14 個（全庫實測）
+
+```
+Conn_01x05_Socket · Conn_01x11_Socket · Conn_01x17_Socket · … · Conn_01x59_Socket   （10 個）
+D_Zener_Dual_CommonCathode_KAA · NetTie_4_Cross · Thermistor_US · Varistor_US
+```
+
+**`Mechanical:Housing_Pad`（本張原本具名的那個）span 也是 `3.8100000000000005`**
+⇒ 它不是孤例，是這個 15 元素族的第一個被發現者。
+
+### 8.3 為什麼不屬於 `BR_20260804g`
+
+`804g` 的修法只決定 **rect 從哪來**（`body_rects` 還是 `graphics_rects`），
+**不動 clamp 邏輯**。這 14 個符號的 rect 本身存在且非退化，
+問題發生在拿到 rect **之後**的邊界比較——那正是本張的標的。
+
+### 8.4 未量
+
+- **這 14 個在真實頁上的曝險未量**。全庫掃描回答的是「有多少符號會拿到退化 box」，
+  不是「有多少 power port 真的落進去」。兩者差一個數量級（參見 `804g` 真實頁 delta=0 那一格）。
+- **修法未裁示**。直覺是把 `>` 改成帶容差的比較，但容差選多少、
+  會不會把本來該走 inset 的符號推進 clamp（反方向誤傷），**未量**。
