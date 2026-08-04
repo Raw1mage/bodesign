@@ -270,7 +270,7 @@ L6 的 `_avoid_label_overlap` 原本會把同一錨點上的標籤推開；關�
 
 ### §8.4 殘留的獨立成因
 
-`PWR_FLAG_3V3PB.1` 在 L6 ON/OFF **兩版都是** `only_baseline`，與 L6 無關。已確認它**有被 emit**（`grep -c PWR_FLAG_3V3PB` = 2，控制組 `R_ILIM` = 2、`PWR_FLAG` 全體 = 18），但沒接上 `+3V3_PB` 的任何夥伴（該 net 在 spec 有 19 個成員）。**深層機制未追。**
+`PWR_FLAG_3V3PB.1` 在 L6 ON/OFF **兩版都是** `only_baseline`，與 L6 無關。已確認它**有被 emit**（`grep -c PWR_FLAG_3V3PB` = 2，控制組 `R_ILIM` = 2、`PWR_FLAG` 全體 = 18），但沒接上 `+3V3_PB` 的任何夥伴（該 net 在 spec 有 19 個成員）。~~**深層機制未追。**~~ **已追出（2026-08-02）**：這不是電路缺陷，是**判準兩側不對稱**——`_drop_power_flags` 只剝除 `#` 開頭的節點，而 spec 宣告的 `PWR_FLAG_3V3PB.1` 是具名 ref；KiCad 的 PWR_FLAG 本來就不出現在 netlist，於是基準側留著它、候選側從來沒有它，**恆報一個假開路**。最小重現與修法選項見 `BR_20260802_fidelity_gate_strips_power_flags_by_name_prefix_so_a_named_pwr_flag_survives_on_one_side_only.md`。
 
 ### §8.5 沒量什麼
 
