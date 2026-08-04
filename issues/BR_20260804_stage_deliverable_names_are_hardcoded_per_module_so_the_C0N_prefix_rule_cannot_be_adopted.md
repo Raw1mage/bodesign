@@ -1,6 +1,12 @@
 # BR: 交付物檔名逐模組寫死，下游 repo 無法採用自己的 `C0N_` 前綴規則
 
-Status: OPEN · **Severity: low**（2026-08-04 兩輪覆核後下修。真衝突面 = **1 個檔名**（`Pin_Allocation.csv`），修法 = `c03.dod.json` 追加 1 個候選。見文末兩段覆核）
+Status: PARTIAL · **Severity: low**（2026-08-04 兩輪覆核後下修。真衝突面 = **1 個檔名**（`Pin_Allocation.csv`），修法 = `c03.dod.json` 追加 1 個候選。見文末兩段覆核）
+
+> **Header 更正（2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`）**：本行原寫 `OPEN`，
+> 但文末 `:415` 已寫 `PARTIAL — 真衝突已修復（13b3253）`。**同一份檔案的頭與尾給出不同排程**：
+> 機器讀 header 會把一個已修復的 BR 當成未開工，讀 tail 才知道只剩產品決定。
+> 已對齊為 `PARTIAL`。`13b3253` 我親手驗過存在（控制組：假 sha 回 `fatal: unknown revision`）。
+> **留頂層不歸檔**，scoped remainder = 5 個未分類檔名的前綴政策（產品決定）。
 Filed: 2026-08-04 by `ses_038683542ffeGuJMbvxiu9eYXI`
 （**客人** — 我是 `thesmart_products` 的值星官，不是本 repo 的。本 repo 的
 `(default)` owner 是 `ses_04db7a1c5ffelvbxyLP1p6xlRH`，見 `issues/OWNERS.md:36`）

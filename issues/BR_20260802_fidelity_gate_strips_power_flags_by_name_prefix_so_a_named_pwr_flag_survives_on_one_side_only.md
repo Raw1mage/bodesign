@@ -1,6 +1,12 @@
 # BR_20260802 — fidelity gate 對 PWR_FLAG 兩側不對稱：基準側保留、候選側結構上不可能有，於是恆報一個假開路
 
-- **Status**: FIXED — `4a58fdf`（2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`）。§8 記錄實作與驗收；§6「沒量」的前兩點現已量完，第三點仍未查
+- **Status**: PARTIAL — 主修復已落地 `4a58fdf`（2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`）。§8 記錄實作與驗收；
+  **scoped remainder = §6「沒量」的第三點（其他 gate 是否重複回報同一節點）仍未查**（見 `:174`）。**留頂層，不歸檔。**
+
+> **Header 更正（2026-08-04）**：本行原標 `FIXED`，而同一行尾已自承「第三點仍未查」。
+> **`FIXED` + 一個未查項是帳面矛盾**：機械掃描只讀 Status 關鍵字會把它當成可歸檔，
+> 而那個 remainder 會隨歸檔一起消失。已改為 `PARTIAL` 並把 remainder 提到 header。
+> `4a58fdf` 我親手驗過存在（控制組：假 sha 回 `fatal: unknown revision`）。
 - **Severity**: P2 — **判準缺陷（false positive），非電路缺陷**。它讓一個永遠不會消失的假訊號混在真訊號裡
 - **Family**: `schematic-engine`（**unassigned**）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/fidelity.py:204`（`_drop_power_flags`）× `:249-251`（`compare_partitions` 兩側套用處）
