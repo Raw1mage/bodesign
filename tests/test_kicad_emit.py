@@ -603,3 +603,167 @@ class PowerPortIntrusionsFieldTests(unittest.TestCase):
                          "field disagrees with the warning it is supposed to mirror")
         for entry in field:
             self.assertRegex(entry, r"^.+@\(.+,.+\) inside .+$")
+
+
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries not installed")
+class GuardCNoRectFallbackTests(unittest.TestCase):
+    """BR_20260804g: guard C read ONLY `body_rects`, so a symbol that draws no
+    `(rectangle ...)` fell through to the pin-tip extent -- which is DEGENERATE
+    (zero width or height) whenever the pins are collinear or there is one pin.
+    `bx0 < ex < bx1` is then unsatisfiable and the guard reports nothing, which is
+    byte-identical to "no intrusion found".
+
+    Measured over /usr/share/kicad/symbols (22582 top-level symbols, 150 load
+    failures reported): 4216 draw no rectangle, 1198 of those produce a degenerate
+    box, and the drawn-graphics extent recovers a real 2-D body for 1192 of them.
+
+    The fallback is a LAST RESORT, not a preference. Guard C asks "is this point
+    INSIDE the body", so a larger box means FALSE POSITIVES -- the opposite of the
+    obstacle-avoidance consumers (:1169/:1567) which prefer graphics precisely
+    because larger is safer there. Preferring graphics here would change the
+    verdict for 1026 of the 1030 rect-bearing symbols whose graphics differ from
+    their rect, on pages that are already verified.
+
+    Every assertion below drives the real `emit_kicad_schematic`; none recomputes
+    the box. A suite that re-derives the rule verifies its own copy and stays green
+    when the emitter is mutated (the defect class BR_20260804b's suite exists to
+    catch, one level up)."""
+
+    # Rect-bearing host that carries the power pins the ports are drawn from.
+    HOST = "Regulator_Linear:AMS1117-3.3"
+    # NO-RECT, 2-pin, pins collinear on x -> pin-tip box is 0-wide (the defect).
+    NORECT = "Device:C"
+    # Rect-bearing AND graphics != rect: its polyline body frame runs 6.35 mm
+    # ABOVE the rectangle, so body-first and graphics-first disagree on the y span
+    # (11.43 mm vs 17.78 mm). This is what makes it the discriminating sample.
+    RECT_BEARING = "4xxx_IEEE:4006"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="norect_", dir=str(PRIVATE_BASE)
+                                    if PRIVATE_BASE.exists() else None)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def _emit(self, other_ref, other_lib, ox, oy, hx=150.0, hy=100.0):
+        components = [
+            EmitComponent(ref="U1", lib_id=self.HOST, x=hx, y=hy),
+            EmitComponent(ref=other_ref, lib_id=other_lib, x=ox, y=oy),
+        ]
+        nets = [
+            EmitNet(name="GND", nodes=[("U1", "1"), (other_ref, "1")]),
+            EmitNet(name="VIN", nodes=[("U1", "3"), (other_ref, "2")]),
+        ]
+        return emit_kicad_schematic(self.tmp, "norect", components, nets,
+                                    symbol_dir=SYMBOL_DIR,
+                                    power_port_gate="warn")
+
+    def _guard_c_inputs(self, **kwargs):
+        """Every (x0, x1, y0, y1) extent guard C fed to the production helper.
+
+        Spying on the helper is what makes this test see the emitter's OWN choice
+        of rect. Reading only `power_port_intrusions` cannot: a page where the box
+        changed but no port happens to land in it reports the same count as a page
+        where the fallback never ran -- absent and unchanged share one output."""
+        import bodesign_eda_bridge.kicad_emit as ke
+        captured = []
+        original = ke._guard_c_body_box
+
+        def spy(x0, x1, y0, y1, inset=None):
+            captured.append((x0, x1, y0, y1))
+            return original(x0, x1, y0, y1) if inset is None \
+                else original(x0, x1, y0, y1, inset)
+
+        ke._guard_c_body_box = spy
+        try:
+            self._emit(**kwargs)
+        finally:
+            ke._guard_c_body_box = original
+        return captured
+
+    @staticmethod
+    def _degenerate(extent):
+        x0, x1, y0, y1 = extent
+        return x1 - x0 <= 0.0 or y1 - y0 <= 0.0
+
+    def test_norect_symbol_no_longer_yields_a_degenerate_extent(self):
+        """M-A target. Without the fallback `Device:C` reaches the helper as a
+        0-wide extent and the guard is blind for it."""
+        extents = self._guard_c_inputs(other_ref="C1", other_lib=self.NORECT,
+                                       ox=142.38, oy=100.0)
+        # Control: the emitter must actually have built a box per component, or
+        # "no degenerate extents" would be true because there are no extents.
+        self.assertEqual(len(extents), 2,
+                         "guard C did not build one box per component")
+        degenerate = [e for e in extents if self._degenerate(e)]
+        self.assertEqual(degenerate, [],
+                         f"a degenerate extent survived: {degenerate}")
+
+    def test_norect_symbol_actually_reports_an_intrusion(self):
+        """M-A target, end to end: the recovered box must not merely be non-
+        degenerate, it must let the guard SEE a port that sits inside the body.
+        Measured on this fixture: 0 intrusions before the fallback, 1 after."""
+        result = self._emit(other_ref="C1", other_lib=self.NORECT,
+                            ox=142.38, oy=100.0)
+        found = [e for e in (result.power_port_intrusions or [])
+                 if "inside C1" in e]
+        self.assertEqual(len(found), 1,
+                         f"expected exactly one intrusion inside C1, got "
+                         f"{result.power_port_intrusions}")
+
+    def test_far_port_placement_reports_nothing(self):
+        """Control for the two above. If the recovered box accepted everything,
+        they would pass for the wrong reason."""
+        result = self._emit(other_ref="C1", other_lib=self.NORECT,
+                            ox=142.38, oy=250.0)
+        found = [e for e in (result.power_port_intrusions or [])
+                 if "inside C1" in e]
+        self.assertEqual(found, [],
+                         f"guard C accepted a port 150mm from the body: {found}")
+
+    def test_rect_bearing_symbol_still_uses_its_rectangle(self):
+        """M-B / M-C target: the fallback is reachable ONLY when there is no
+        rectangle. `4xxx_IEEE:4006` HAS one, and its drawn graphics are 6.35 mm
+        taller, so an unconditional `graphics or rect` would hand guard C a
+        17.78 mm span instead of the rectangle's 11.43 mm -- silently widening
+        the keep-out on 1026 already-verified symbols."""
+        from bodesign_eda_bridge.kicad_emit import (
+            load_symbol, _body_rect, _graphics_bbox)
+        block, _pins = load_symbol(self.RECT_BEARING, SYMBOL_DIR)
+        rect, graphics = _body_rect(block), _graphics_bbox(block)
+        self.assertIsNotNone(rect, f"{self.RECT_BEARING} lost its rectangle")
+
+        # Compare ASPECT RATIOS, not absolute spans. `_vendor_sym_scale` lifts a
+        # >=4-pin symbol's geometry so its rendered pin pitch reaches the page
+        # floor -- this one is a 13-pin part loaded at scale 3.0, so the extent the
+        # emitter builds is 3x what an unscaled `load_symbol` here reports. The
+        # first version of this test asserted the raw span and failed at 45.72 vs
+        # 15.24: a control that does not go through the same pipeline as the thing
+        # it controls measures a different quantity. Scaling multiplies both axes
+        # equally, so h/w survives it.
+        def _ratio(box):
+            return abs(box[3] - box[1]) / abs(box[2] - box[0])
+
+        rect_ratio, graphics_ratio = _ratio(rect), _ratio(graphics)
+        # Fixture control: the two must still DISAGREE, or this test cannot tell
+        # body-first from graphics-first at all.
+        self.assertNotAlmostEqual(
+            rect_ratio, graphics_ratio, places=3,
+            msg=f"{self.RECT_BEARING} graphics no longer differ from its rect; "
+                f"this sample can no longer discriminate the two orders")
+
+        extents = self._guard_c_inputs(other_ref="U2",
+                                       other_lib=self.RECT_BEARING,
+                                       ox=60.0, oy=60.0, hx=120.0, hy=60.0)
+        # Guard C shrinks each extent by a fixed inset on both axes, which is NOT
+        # ratio-preserving, so undo it before comparing. The helper's own constant
+        # is the source of truth for how much came off.
+        from bodesign_eda_bridge.kicad_emit import _PWR_STUB_STEP_MM
+        ratios = [round(abs(y1 - y0) / abs(x1 - x0), 3)
+                  for x0, x1, y0, y1 in extents if abs(x1 - x0) > 0]
+        self.assertIn(round(rect_ratio, 3), ratios,
+                      f"guard C never saw the rectangle's shape (h/w "
+                      f"{rect_ratio:.3f}); saw {ratios}")
+        self.assertNotIn(round(graphics_ratio, 3), ratios,
+                         f"guard C used the GRAPHICS shape (h/w "
+                         f"{graphics_ratio:.3f}) for a symbol that HAS a "
+                         f"rectangle; the fallback is no longer conditional")
+        del _PWR_STUB_STEP_MM

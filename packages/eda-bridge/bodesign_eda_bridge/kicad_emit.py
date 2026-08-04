@@ -1717,12 +1717,35 @@ def emit_kicad_schematic(
         # power-port endpoint (the pin `at`) legitimately hugs that edge, so a port
         # exactly on/just outside the rect is NOT an intrusion.
         rect = body_rects.get(component.lib_id)
+        if rect is None:
+            # BR_20260804g: no `(rectangle ...)` in the symbol -- 4216 of 22582
+            # library symbols (18.7%). The pin-tip extent used below is DEGENERATE
+            # for 1198 of them (pins collinear, or a single pin), so the box has
+            # zero width or height and `bx0 < ex < bx1` can never hold: the guard
+            # reports nothing, byte-identical to "no intrusion found".
+            #
+            # The drawn-graphics extent recovers a real 2-D body for 1192 of those
+            # 1198. It is a LAST RESORT, not a preference: `_body_rect` stays the
+            # source of truth whenever the symbol draws one, because guard C asks
+            # "is this point INSIDE the body" and a larger box means FALSE POSITIVES
+            # here (the opposite of the obstacle-avoidance consumers at :1169/:1567,
+            # which prefer graphics precisely because a larger box is safer there).
+            # Measured: preferring graphics would change the verdict for 1026 of the
+            # 1030 rect-bearing symbols whose graphics differ from their rect.
+            #
+            # Residual after this fallback: 6 symbols stay degenerate because their
+            # GRAPHICS are themselves 1-D or absent -- TestPoint, TestPoint_Small,
+            # MountingHole_Pad, MountingHole_Pad_MP (no drawn body at all) and
+            # TestPoint_2Pole, NetTie_2 (a bare horizontal polyline: width, no height).
+            rect = graphics_rects.get(component.lib_id)
         if rect is not None:
             rx0, ry0, rx1, ry1 = rect
             xs = [component.x + rx0, component.x + rx1]
             ys = [component.y - ry0, component.y - ry1]
         else:
-            # no rectangle in the symbol (rare): fall back to pin-tip extent.
+            # Neither a rectangle nor any drawn graphics: fall back to pin-tip
+            # extent. Degenerate whenever the pins are collinear (see above); the
+            # 6 residual symbols land here or produce a 1-D box from graphics.
             xs = [component.x + p[0] for p in pmap.values()]
             ys = [component.y - p[1] for p in pmap.values()]
         if not xs:
