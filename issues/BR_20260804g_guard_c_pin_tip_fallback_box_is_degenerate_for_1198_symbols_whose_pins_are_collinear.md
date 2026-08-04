@@ -306,3 +306,95 @@ non-degenerate      14          22
 M-A（拿掉降級鏈）若用 regex 刪掉那一行賦值，會留下一個空的 `if` 區塊 →
 `IndentationError`。那是**無效 mutant 不是紅**，而 collection error 與 assertion
 failure 在輸出的 `FAILED` 那行**長得一模一樣**。正解是拿 HEAD 本身當 mutant。
+
+### 9.5 全庫實測（`b1fde6b` 的 bytes，驅動真的 emitter）
+
+**量法**：`sys.path` 指向 `b1fde6b` 抽出的套件樹，呼叫 `emit_kicad_schematic` 本身，
+spy 掛在 production helper `_guard_c_body_box` 上。**不是模擬 fallback 的演算法**——
+量的是 committed bytes 實際建出來的 box。
+
+```
+boxes captured        22214    == 進得了 guard C 的符號數（mismatch batches = 0）
+load_fail               150    first = KeyError: Symbol 'TLP184xSE' not found
+NO-RECT                4001
+rect-bearing          18213
+CONTROL  NO-RECT + rect-bearing == captured                      ✓
+
+NO-RECT 嚴格退化          6    <- 與事先寫下的驗收判準逐字相符
+    Connector:TestPoint          span 0×0
+    Connector:TestPoint_Small    span 0×0
+    Mechanical:MountingHole_Pad  span 0×0
+    MountingHole_Pad_MP          span 0×0
+    Connector:TestPoint_2Pole    span 3.556×0      <- 有寬無高
+    Device:NetTie_2              span 2.54×0       <- 有寬無高
+⇒ 修復 4001 − 6 − (原本就非退化的 2803) = 1192，與修法前的模擬值相符
+
+rect-bearing 嚴格退化      3    74xGxx:74LVC1GU04DRL (rect span 0×15.24)
+                               Device:Earphone     (3.175×3.81)
+                               Relay:COTO_3660_Split (6.35×3.81)
+    這三個是 `BR_20260804b` 的既有殘留（rect 自身退化 / 浮點邊界），
+    **不經過本修法的分支**（它們 `rect is not None`）。本修法對 rect-bearing
+    的影響是 0，由控制流結構蘊含（`if rect is None` 才進 graphics）。
+```
+
+### 9.6 新發現：浮點邊界上有 14 個「技術上非退化、實務上等同退化」的符號
+
+篩選時用 4 位小數的 box 得到 20 個候選，嚴格判定只有 6 個。差額 14 個**不是**捨入誤差
+造成的假象，而是一個真實的邊界族：
+
+```
+Connector:Conn_01x05_Socket … Conn_01x59_Socket   （10 個，5/11/17/…/59 pin）
+Device:D_Zener_Dual_CommonCathode_KAA
+Device:NetTie_4_Cross
+Device:Thermistor_US
+Device:Varistor_US
+```
+
+以 `Conn_01x11_Socket` 為例，它進 `_guard_c_body_box` 的 x-span 是
+**3.8100000000000005**，比 `2*inset = 3.81` 大 **5e-16**。於是條件式判定「夠寬」，
+走 `inset` 分支而非 clamp 分支，得到寬度 **5.68e-14 mm** 的 box：
+
+```
+span = 3.81                  -> clamp 分支 -> w = 1.905     可用
+span = 3.8100000000000005    -> inset 分支 -> w = 4.44e-16  形同無物
+span = 3.809999999999999     -> clamp 分支 -> w = 1.905     可用
+CONTROL span = 10.0 -> 6.19 · span = 1.0 -> 0.5            遠離邊界時無歧義
+```
+
+**這與 `BR_20260804b` 具名的 `Mechanical:Housing_Pad`（x-span 3.8100000000000005）
+是同一族**，只是當時只發現一個。**不在本 BR 修法範圍**（本修法只決定 rect 從哪裡來，
+不動 clamp），列為給 `804b` 的第三個 OPEN：條件式的邊界比較用 `>` 對浮點寬度有
+5e-16 級的敏感度，而兩側結果差 15 個數量級。
+
+### 9.7 量測本身壞了三次，形狀各不相同（**這節比數字重要**）
+
+三次都通過了「跑完、沒有 exception、有輸出」，而輸出都像正常結果：
+
+| # | 缺陷 | 錯誤輸出 | 為什麼看不出來 |
+|---|---|---|---|
+| 1 | 定義了 `Recorder` 類別要攔 `_body_boxes.append`，**從未裝上去** | JSON = `{}`（2 bytes） | 「零筆記錄」與「零個退化」共用同一個輸出 |
+| 2 | `_guard_c_body_box` 回傳 `(x0, x1, y0, y1)`，我當成 `(x0, y0, x1, y1)` | 2058 個假退化 | 兩種排列都是四元組，型別、長度、數量級全部合理 |
+| 3 | 用 4 位小數的 box 判退化 | 20 個（含 14 個 4e-16 寬的） | 捨入把極小正數變 0，與真正的 0 不可分辨 |
+
+第 2 個是最危險的：它產生的不是空結果或例外，而是**一個看起來很有說服力的錯誤結論**
+（「修法沒生效，2058 個仍退化」）。抓到它靠的是常識檢查——`Device:C` 與 `Device:LED`
+出現在「仍退化」名單裡，而那兩個我上一輪剛量到修好了。
+
+第 3 個的正確處置不是「改用嚴格判定重跑」，而是認識到**捨入只會把極小正數變成 0，
+不會把 ≤0 變成正數**⇒ 捨入後的退化集合是嚴格退化集合的**超集**，拿它當初篩不會漏，
+但必須再過一層嚴格判定。這個推理讓我不必重跑 33 分鐘。
+
+### 9.8 效能外推與正確性推論適用同一條規則，但只有後者會被要求附控制組
+
+我用「60 元件 / 2 個 library、0.15 秒」的試跑，外推出全庫「約 4 分鐘」。實測 33 分鐘。
+
+錯誤的形狀與本 BR 反覆記錄的完全相同：**樣本沒有經過與 treatment 相同的管線**——
+試跑只讀 2 個 `.kicad_sym`，而 emitter 每次呼叫都重讀，真跑要讀 223 個。
+
+但它與前面所有實例有一個關鍵差別：**判準沒壞、結論沒錯，錯的是成本估計**。
+而成本估計同樣會做決策——那個「4 分鐘」差點讓我不去問「有沒有哪個 variant 可以砍掉」。
+（實際上 BEFORE variant 完全不必跑：`rect-bearing 改變 = 0` 由控制流結構蘊含，
+且有一條專屬 mutation M-B 守著，不需要用 18213 個符號的窮舉去再證一次。）
+
+**沒有人會要求一個效能估計附上控制組**，而正確性推論被要求了幾十次。這條不對稱
+本身就是缺口：兩者都是從樣本外推到母體，兩者都會做決策。
