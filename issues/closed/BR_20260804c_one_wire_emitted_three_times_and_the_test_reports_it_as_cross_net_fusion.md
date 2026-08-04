@@ -3,7 +3,7 @@
 - **Severity**: MEDIUM（不造成短路，但**讓 anti-fusion 回歸網在基線就是紅的**，且紅燈指向錯誤的成因）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`（wire emission）／
   `tests/test_kicad_emit.py:142-174`（`test_anti_fusion_guard_prevents_collinear_cross_net_wires`）
-- **Status**: **PARTIAL** — 兩側修法皆已落地並經 dispatcher 獨立覆核，但**真實產品頁的曝險未量**（見文末殘留）
+- **Status**: **CLOSED** — 兩側修法皆已落地並經 dispatcher 獨立覆核；唯一 scoped remainder R1（真實頁曝險）已於 2026-08-04 量測回答，見文末「R1 已回答」節
 - **Filed**: 2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`（dispatcher，量測 kiutils 是否擋住 P0 時撞到）
 - **Fixed**: 2026-08-04 — 引擎側 `4690737`、測試側 `67dcdc4`（順序正確：引擎先、測試後）
 - **Owner**: `schematic-engine`（`ses_03408d1fa`）
@@ -135,13 +135,56 @@ mutation overshoot FIXED 0 / MUTANT 19      <- 超集，規模是可見症狀的
 落在 grid 上的那個 case 才會產生逐字重複），**其餘 18 個是 off-grid 時的無聲越界**。
 症狀的可見度與缺陷的規模無關。
 
-### 殘留（為何是 PARTIAL 而非 closed）
+### 殘留（原本為何是 PARTIAL）—— 2026-08-04 已回答，見下節
 
 **上面「沒有量這在真實產品頁上發生幾次」那格仍未被回答。** 全部證據（含修後驗收）
 依舊來自合成測試幾何；399 個 sep 的掃描是參數空間而非真實頁面。
 **真實頁上有多少 pin 對落在 sep < 2.54mm，兩邊都不知道** — 而那才是這個缺陷的實際曝險面。
 
 這格排在 guard C 曝險量測那一包（同樣跑 aiguard CCM 各頁），兩者可一併取得。
+
+### R1 已回答（2026-08-04，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH` 派獨立量測員）
+
+**真實頁曝險 = `0/11`，而且是一個有判別力的 0。**
+
+量法：monkey-patch `_orthogonal_route`，攔截 `e2e-led-driver-npn`（22 comps）真實 compose
+過程中**每一次帶 escape 向量的 2-pin 呼叫**（即實際走 pin-escape 路徑的那些），逐對計 sep。
+不是重寫一支模擬探針——量的是產品程式碼自己跑出來的呼叫。
+
+```
+走 pin-escape 路徑的 pin 對總數          11
+  sep < 2.54mm                            0  =  0/11 = 0.0%
+  escape 指向對方（夾制前提成立）          11  = 11/11 = 100%
+  CRITICAL：指向對方 AND sep <= 1.27mm     0  =  0/11 = 0.0%
+
+全 11 對 sep 排序（mm）：
+  23.3  90.4  233.1  235.6  237.8  247.7  255.1  259.0  261.9  290.6  368.0
+最近的一對 23.35mm，與觸發門檻 1.27mm 差一個數量級。
+```
+
+**為什麼這個 0 可信（三個控制組）**：
+
+1. **總數非零**。11 對是實測值——若總數也是 0，那 0 曝險就只證明探針沒抓到東西。
+2. **合成臨界對會觸發**。餵一對「恰一步之隔、escape 互指」的幾何進同一支探針，
+   回 `sep=1.2700, sep<2.54=True, toward=True, crit=True`——**三個分類器都會在條件成立時非零**。
+3. **修法在觸發幾何上確實生效**。同一合成對餵給 `_orthogonal_route`，回
+   `waypoints=[(100,100),(100.33,100),(101.27,100)]`，`n_segs=2`——夾成單段，不再 emit 三段。
+
+另：探針以 `escape is not None` 過濾掉 `:2913` 那次不帶 escape 的內部遞迴，避免重複計數。
+
+**這個 0 只代表這一張頁，樣本數就是 1。** 全 repo `find experiments -name '*.spec.json'`
+只回 `e2e-led-driver-npn` 一張；`aiguard_c03_compose` 引用 `buck_3v3:TPS62826`
+而 `/usr/share/kicad/symbols/buck_3v3.kicad_sym` 確認不存在（**缺庫跑不起來**，
+不是「跑起來但沒命中」——兩者結論完全不同，不得混為一談），`aiguard_c04` 底下
+是 DRC 報告 JSON 而非可 compose 的 spec。
+
+所以口徑是：**在目前唯一能跑的真實頁上，此缺陷的曝險為 0**。要把「產品線曝險為 0」
+講成結論，需要私有符號庫到位後重量——那格記在 `BR_20260707_ccm_workflow_*`
+與 guard C 曝險同一包，不在本 BR。
+
+**Closed**: 2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`（dispatcher）。
+兩個子缺陷皆已修且各有測試守著（`4690737` 引擎、`67dcdc4` 測試），
+唯一 scoped remainder R1 已於本節回答且為有判別力的 0 ⇒ verified-AND-effective、無殘留。
 
 ### 順帶：第二個 failed 已單獨建檔
 
