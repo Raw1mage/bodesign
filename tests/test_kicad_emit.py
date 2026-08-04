@@ -244,3 +244,143 @@ class ExtendsFlattenTests(unittest.TestCase):
         self.assertNotIn("Base_0_1", definition)                # no leftover base unit names
         self.assertIn('"Deriv-3.3"', definition)                # derived property override kept
         self.assertEqual({"1", "2", "3"}, set(pins))            # pins inherited from base
+
+
+# ---------------------------------------------------------------------------
+# BR_20260723e regression fixture — collinear-wire fusion on a minimal 2-node net.
+#
+# SHRUNK from the BR's original repro (U1=AMS1117 + R1 + R2 series divider) by
+# delta-debug, each cut re-checked for reproduction and the final candidate
+# re-checked that ONE MORE cut stops reproducing (BR_20260804 §minimality):
+#   drop VIN (1-pin net)          -> still reproduces
+#   drop VO  (U1->R1 link)        -> still reproduces
+#   drop U1  entirely             -> still reproduces      <- LDO is NOT needed
+#   remove the 2nd net            -> STOPS  (nothing to fuse into)
+#   remove R1 (single resistor)   -> STOPS  (no 2-node net -> no drawn wire)
+#   swap which R2 pin each net uses -> STOPS (wire no longer spans the body)
+# So the minimal trigger is TWO RESISTORS, not a three-part series chain, and
+# the BR's "same column series chain" framing is not the necessary condition.
+#
+# MECHANISM (measured, not inferred): with R1/R2 side by side, the 2-node VOUT
+# wire enters R2's TOP pin from BELOW, so its vertical leg runs the full height
+# of R2's body and passes exactly through R2's BOTTOM pin -- which belongs to
+# GND. KiCad fuses a wire to any pin it crosses, so VOUT and GND short.
+#
+# All three anti-fusion layers are blind to this by construction:
+#   guard A (_segment_fuses vs fusion_registry) - GND has no registered segment
+#       yet (emission order) and, once down-graded to a label, never gets one.
+#   guard C (body keep-out) - R2 is an ENDPOINT HOST of VOUT, so its own box is
+#       dropped by _obstacles_excluding(); the box WOULD have blocked the leg.
+#   the jog retry - the route is 5 waypoints and _jog_free_axis only handles
+#       len 2 and 3, so all three "retries" return the input unchanged.
+#
+# These tests lock the GEOMETRIC PRECONDITION on the _orthogonal_route path, not
+# just the fidelity verdict: BR_20260723b (power-port bypass) also surfaces as
+# `fused` at the fidelity layer, so a fidelity-only assertion cannot tell "723e
+# was fixed" from "723e became unreachable".
+# ---------------------------------------------------------------------------
+class CollinearFusionMinimalTests(unittest.TestCase):
+    # R2 sits at this sheet position in the minimal spec; both values come from
+    # the emitted schematic, and the test re-derives them so it fails loudly if
+    # placement changes rather than silently testing nothing.
+    VOUT_LEG = ((199.39, 110.49), (199.39, 100.33))
+    R2_BOTTOM_PIN = (199.39, 109.22)   # GND node
+    R2_TOP_PIN = (199.39, 101.6)       # VOUT node (the wire's legitimate end)
+
+    def test_wire_leg_crosses_the_other_pin_of_its_own_endpoint_host(self):
+        """The fusion precondition itself: VOUT's leg contains R2's GND pin."""
+        from bodesign_eda_bridge.kicad_emit import _point_on_segment
+        self.assertTrue(_point_on_segment(self.R2_BOTTOM_PIN, self.VOUT_LEG),
+                        "fusion precondition gone -- re-derive the fixture")
+        # CONTROL: the probe must also see the leg's own endpoint ...
+        self.assertTrue(_point_on_segment(self.R2_TOP_PIN, self.VOUT_LEG))
+        # ... and must NOT see a point in a different column, or one past the end.
+        self.assertFalse(_point_on_segment((175.26, 109.22), self.VOUT_LEG))
+        self.assertFalse(_point_on_segment((199.39, 120.0), self.VOUT_LEG))
+
+    def test_own_host_box_would_have_blocked_the_leg_but_is_excluded(self):
+        """guard C had the geometry to stop this; _obstacles_excluding drops it."""
+        from bodesign_eda_bridge.kicad_emit import (
+            WIRE_KEEPOUT_MM, _body_rect, _seg_hits_box)
+        block, _pins = load_symbol("Device:R", SYMBOL_DIR)
+        rect = _body_rect(block)
+        self.assertIsNotNone(rect, "Device:R lost its body rectangle")
+        rx0, ry0, rx1, ry1 = rect
+        cx, cy = 199.39, 105.41                      # R2 placement
+        m = WIRE_KEEPOUT_MM
+        box = (min(cx + rx0, cx + rx1) - m, max(cx + rx0, cx + rx1) + m,
+               min(cy - ry0, cy - ry1) - m, max(cy - ry0, cy - ry1) + m)
+        a, b = self.VOUT_LEG
+        self.assertTrue(_seg_hits_box(a, b, box),
+                        "R2's own keep-out box no longer covers the leg")
+        # CONTROL: a far-away segment must NOT hit the same box.
+        self.assertFalse(_seg_hits_box((50.0, 50.0), (50.0, 60.0), box))
+
+    def test_jog_retry_is_a_silent_noop_beyond_three_waypoints(self):
+        """_guard_route retries 3x; on a 5-waypoint route every retry is identical."""
+        from bodesign_eda_bridge.kicad_emit import _jog_free_axis
+        five = [(199.39, 109.22), (199.39, 110.49), (101.6, 110.49),
+                (101.6, 114.3), (101.6, 113.03)]
+        for offset in (-3.81, 2.54, 1.27):
+            self.assertEqual(five, _jog_free_axis(five, offset),
+                             "jog now handles 5 waypoints -- update this test")
+        # CONTROL: the two documented arities DO change, so the probe has power.
+        two = [(100.0, 100.0), (100.0, 110.0)]
+        three = [(100.0, 100.0), (110.0, 100.0), (110.0, 120.0)]
+        self.assertNotEqual(two, _jog_free_axis(two, 2.54))
+        self.assertNotEqual(three, _jog_free_axis(three, 2.54))
+
+
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries are not installed")
+@unittest.skipUnless(HAS_KICAD_CLI, "kicad-cli is not installed")
+class CollinearFusionComposeTests(unittest.TestCase):
+    """End-to-end half of the BR_20260723e fixture. Self-contained: the spec is
+    literal here, nothing is read from issues/assets_* or experiments/."""
+
+    MINIMAL_SPEC = {
+        "components": [
+            {"ref": "R1", "symbol": "Device:R", "value": "20k"},
+            {"ref": "R2", "symbol": "Device:R", "value": "10k"},
+        ],
+        "nets": [
+            {"name": "VOUT", "nodes": ["R1.2", "R2.1"]},
+            {"name": "GND", "nodes": ["R2.2"]},
+        ],
+    }
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-fusion-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def _compose(self, spec, name):
+        from bodesign_eda_bridge.composer import compose_schematic
+        return compose_schematic(self.work / name, name, spec, symbol_dirs=SYMBOL_DIR,
+                                 style="draftsman", validate=True, fidelity=True)
+
+    def test_minimal_two_resistor_spec_still_shorts(self):
+        """XFAIL-style guard: this MUST raise until the fusion defect is fixed.
+
+        When it stops raising, that is the fix landing -- delete the raise
+        expectation and assert the partition instead. It must NOT be relaxed to
+        `try/except: pass`, which would make a fix and a regression identical."""
+        from bodesign_eda_bridge.fidelity import FidelityError
+        with self.assertRaises(FidelityError) as ctx:
+            self._compose(self.MINIMAL_SPEC, "min")
+        # Lock WHICH nodes move, so an unrelated fidelity failure cannot pass.
+        message = str(ctx.exception)
+        self.assertIn("R2.1", message)
+        self.assertIn("R2.2", message)
+
+    def test_one_more_cut_stops_reproducing(self):
+        """Minimality control. If these start raising, the fixture is no longer
+        isolating the fusion mechanism and the shrink must be redone."""
+        single_net = {"components": self.MINIMAL_SPEC["components"],
+                      "nets": [{"name": "VOUT", "nodes": ["R1.2", "R2.1"]}]}
+        self._compose(single_net, "cut_net")          # must not raise
+        swapped = {"components": self.MINIMAL_SPEC["components"],
+                   "nets": [{"name": "VOUT", "nodes": ["R1.2", "R2.2"]},
+                            {"name": "GND", "nodes": ["R2.1"]}]}
+        self._compose(swapped, "cut_swap")            # must not raise
