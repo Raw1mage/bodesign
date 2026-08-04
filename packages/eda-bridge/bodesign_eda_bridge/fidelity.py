@@ -54,6 +54,11 @@ class FidelityReport:
     # missing component is a design decision, and a gate must not settle it by
     # refusing to run.
     spec_overlapping_nodes: dict[str, list[str]] = field(default_factory=dict)
+    # BR_20260802: power-symbol refs excluded from BOTH sides, measured from the
+    # drawing (see `power_symbol_refs`). Kept visible for the same reason as
+    # `singleton_only_candidate`: an exemption the reader cannot see is
+    # indistinguishable from a check that was never made.
+    excluded_power_refs: list[str] = field(default_factory=list)
 
     def diagnosis(self) -> list[str]:
         """Mechanism names DERIVED from what was measured — never asserted.
@@ -122,6 +127,12 @@ class FidelityReport:
             lines.append(f"  ONLY_BASELINE (missing from candidate): {self.only_baseline[:40]}")
         if self.only_candidate:
             lines.append(f"  ONLY_CANDIDATE (extra in candidate): {self.only_candidate[:40]}")
+        if self.excluded_power_refs:
+            # Printed on PASS too. A gate that only shows its exemptions when it
+            # fails lets a reader who sees a clean report believe nothing was
+            # exempted -- and this exemption removes nodes from BOTH sides.
+            lines.append(f"  EXCLUDED as power symbols (named, from the drawing): "
+                         f"{self.excluded_power_refs[:40]}")
         return "\n".join(lines)
 
 
@@ -227,15 +238,94 @@ def sch_union_classes(sch_files: list[Path], workdir: Path) -> list[frozenset]:
     return [frozenset(v) for v in comps.values()]
 
 
-def _drop_power_flags(classes):
-    """Strip synthetic power-flag/port pseudo-nodes (#PWR*, #FLG*) — drawing
-    artifacts, not real component pins."""
+def _drop_power_flags(classes, extra_refs: frozenset[str] = frozenset()):
+    """Strip synthetic power-flag/port pseudo-nodes — drawing artifacts, not real
+    component pins.
+
+    The `#` prefix catches the ones KiCad auto-annotates (#PWR*, #FLG*). It does
+    NOT catch a power symbol the spec gave a name of its own: `PWR_FLAG_3V3PB` is
+    a power flag by SYMBOL, and KiCad's netlist exporter omits it just the same,
+    but it survives this prefix test. The baseline then keeps a node the candidate
+    can never contain -> a permanent phantom open circuit, reported identically to
+    a real one. `extra_refs` carries the refs measured from the DRAWING (see
+    `power_symbol_refs`) so both sides are cleaned by the same rule.
+    """
     cleaned = []
     for cls in classes:
-        real = frozenset(n for n in cls if not n.startswith("#"))
+        real = frozenset(n for n in cls
+                         if not n.startswith("#")
+                         and n.split(".")[0] not in extra_refs)
         if real:
             cleaned.append(real)
     return cleaned
+
+
+def _balanced_block(s: str, start: int) -> str:
+    """The parenthesised block beginning at `start` (which must be a '(')."""
+    depth = 0
+    j = start
+    while j < len(s):
+        if s[j] == "(":
+            depth += 1
+        elif s[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return s[start:j + 1]
+        j += 1
+    return ""
+
+
+def power_symbol_refs(sch_files: list[Path]) -> set[str]:
+    """Refs the DRAWING places as power symbols — i.e. the ones KiCad's netlist
+    exporter will omit, whatever they are called.
+
+    Measured, not assumed: KiCad marks such a definition with a `(power)` token in
+    its `lib_symbols` entry (control: `Device:R`'s entry has none). Changing ONLY
+    an instance's `lib_id` from `power:PWR_FLAG` to `Device:R` on the real aiguard
+    page takes the exported component count from 46 to 47 and makes the node
+    appear -- so the exclusion is driven by the SYMBOL, not by the reference name.
+
+    Anchored on the drawing rather than on the spec deliberately. Reading it from
+    the spec would also swallow the case where the component was never placed at
+    all, and that IS a real defect this gate must keep reporting.
+    """
+    refs: set[str] = set()
+    for sf in sch_files:
+        try:
+            txt = sf.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        # 1. Which library definitions are power symbols?
+        i = txt.find("(lib_symbols")
+        if i < 0:
+            continue
+        libs = _balanced_block(txt, i)
+        power_lib_ids: set[str] = set()
+        for m in re.finditer(r'\(symbol\s+"([^"]+)"', libs):
+            block = _balanced_block(libs, m.start())
+            # `(power)` sits in the definition's own header, before any nested
+            # sub-unit symbol; bound the search so a nested unit cannot leak in.
+            nested = block.find("(symbol ", 1)
+            head = block[:nested] if nested > 0 else block
+            if re.search(r"\(power\s*\)", head):
+                power_lib_ids.add(m.group(1))
+        if not power_lib_ids:
+            continue
+        # 2. Which placed instances use one of them?
+        for m in re.finditer(r'\(lib_id\s+"([^"]+)"\)', txt):
+            if m.group(1) not in power_lib_ids:
+                continue
+            # the enclosing (symbol ...) instance block
+            k = txt.rfind("(symbol", 0, m.start())
+            while k >= 0:
+                block = _balanced_block(txt, k)
+                if block and block.find(m.group(0)) > 0:
+                    r = re.search(r'\(property\s+"Reference"\s+"([^"]+)"', block)
+                    if r:
+                        refs.add(r.group(1))
+                    break
+                k = txt.rfind("(symbol", 0, k)
+    return refs
 
 
 def _index(classes):
@@ -286,11 +376,12 @@ def _spec_overlapping_nodes(expected: dict[str, list[str]]) -> dict[str, list[st
 
 
 def compare_partitions(expected: dict[str, list[str]],
-                       candidate_classes: list[frozenset]) -> FidelityReport:
+                       candidate_classes: list[frozenset],
+                       power_refs: frozenset[str] = frozenset()) -> FidelityReport:
     overlapping = _spec_overlapping_nodes(expected)
     baseline_classes = _drop_power_flags(
-        [frozenset(nodes) for nodes in expected.values()])
-    cand_classes = _drop_power_flags(candidate_classes)
+        [frozenset(nodes) for nodes in expected.values()], power_refs)
+    cand_classes = _drop_power_flags(candidate_classes, power_refs)
 
     b_idx = _index(baseline_classes)
     c_idx = _index(cand_classes)
@@ -354,6 +445,7 @@ def compare_partitions(expected: dict[str, list[str]],
         singleton_only_candidate=singleton_only_c,
         disconnected=disconnected, fused=fused, regrouped=regrouped,
         spec_overlapping_nodes=overlapping,
+        excluded_power_refs=sorted(r for r in power_refs if not r.startswith("#")),
     )
 
 
@@ -375,4 +467,5 @@ def verify_partition_fidelity(expected_nets, sch_path: str | Path) -> FidelityRe
         raise FileNotFoundError(f"no .kicad_sch under {p}")
     with tempfile.TemporaryDirectory() as td:
         cand = sch_union_classes(sch_files, Path(td))
-    return compare_partitions(expected, cand)
+    return compare_partitions(expected, cand,
+                              frozenset(power_symbol_refs(sch_files)))
