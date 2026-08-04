@@ -44,6 +44,16 @@ class FidelityReport:
     disconnected: list[str] = field(default_factory=list)  # peers LOST only  -> open circuit
     fused: list[str] = field(default_factory=list)         # peers GAINED only -> short / fusion
     regrouped: list[str] = field(default_factory=list)     # lost AND gained   -> re-partition
+    # BR_20260802: nodes the SPEC itself declares in more than one net. The
+    # baseline is then not a partition (its classes overlap), and this gate ends
+    # up asking the emitter to keep apart what the spec declares joined -- so
+    # every node in the transitive closure of these lands in `fused` no matter
+    # what the emitter does. Measured on the aiguard C03 page: 6 such pins, and
+    # their closure accounted for ALL 17 fused nodes with nothing left over.
+    # Surfaced rather than raised: whether those declarations are aliases or a
+    # missing component is a design decision, and a gate must not settle it by
+    # refusing to run.
+    spec_overlapping_nodes: dict[str, list[str]] = field(default_factory=dict)
 
     def diagnosis(self) -> list[str]:
         """Mechanism names DERIVED from what was measured — never asserted.
@@ -58,8 +68,16 @@ class FidelityReport:
             out.append(f"open circuit: {len(self.disconnected)} node(s) lost every peer "
                        f"they share a net with in the spec")
         if self.fused:
-            out.append(f"net fusion / short: {len(self.fused)} node(s) gained peers "
-                       f"they must not be connected to")
+            msg = (f"net fusion / short: {len(self.fused)} node(s) gained peers "
+                   f"they must not be connected to")
+            # Never let this count be read as an emitter defect while the spec
+            # itself is self-contradictory: the qualifier travels WITH the number.
+            if self.spec_overlapping_nodes:
+                msg += (f" -- BUT the spec declares {len(self.spec_overlapping_nodes)} "
+                        f"pin(s) in several nets at once, so an unknown share of "
+                        f"this count is the spec's own contradiction, not the "
+                        f"emitter's: {sorted(self.spec_overlapping_nodes)}")
+            out.append(msg)
         if self.regrouped:
             out.append(f"re-partition: {len(self.regrouped)} node(s) both lost and "
                        f"gained peers")
@@ -70,6 +88,14 @@ class FidelityReport:
         if self.only_candidate:
             out.append(f"node absent from spec: {len(self.only_candidate)} node(s) exist "
                        f"in the emitted schematic but not in the spec")
+        # Reported even when the partition matched: a baseline that is not a
+        # partition is a defect in the INPUT to this gate, and it is true
+        # regardless of what the emitter produced.
+        if self.spec_overlapping_nodes and not self.fused:
+            out.append(f"spec is not a partition: {len(self.spec_overlapping_nodes)} "
+                       f"pin(s) are declared in more than one net "
+                       f"({sorted(self.spec_overlapping_nodes)}); the expected "
+                       f"classes overlap, so 'fused' cannot be trusted here")
         return out
 
     def summary(self) -> str:
@@ -244,8 +270,24 @@ def expected_partition_from_nets(nets) -> dict[str, list[str]]:
     return part
 
 
+def _spec_overlapping_nodes(expected: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Nodes the spec puts in more than one class -- i.e. proof that `expected`
+    is not a partition.
+
+    Computed here rather than in expected_partition_from_nets because a caller
+    may hand compare_partitions a ready-made dict, and the check must hold for
+    that path too. Returns {node: [net names]}, empty when the spec is sound.
+    """
+    seen: dict[str, list[str]] = defaultdict(list)
+    for name, nodes in expected.items():
+        for nd in nodes:
+            seen[nd].append(name)
+    return {nd: sorted(names) for nd, names in seen.items() if len(names) > 1}
+
+
 def compare_partitions(expected: dict[str, list[str]],
                        candidate_classes: list[frozenset]) -> FidelityReport:
+    overlapping = _spec_overlapping_nodes(expected)
     baseline_classes = _drop_power_flags(
         [frozenset(nodes) for nodes in expected.values()])
     cand_classes = _drop_power_flags(candidate_classes)
@@ -311,6 +353,7 @@ def compare_partitions(expected: dict[str, list[str]],
         singleton_only_baseline=singleton_only_b,
         singleton_only_candidate=singleton_only_c,
         disconnected=disconnected, fused=fused, regrouped=regrouped,
+        spec_overlapping_nodes=overlapping,
     )
 
 
