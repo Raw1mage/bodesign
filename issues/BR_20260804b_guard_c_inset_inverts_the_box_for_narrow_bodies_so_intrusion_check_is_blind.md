@@ -117,13 +117,13 @@ Connector:Conn_01x01..10_Pin body= 0.86 x  N      xw=-2.95
 
 `Device:R` 是任何電路圖裡出現次數最多的符號。**盲區不在冷門角落，在最熱的路徑上。**
 
-### 2.4 ❗ OPEN：`no rectangle` 那 4039 個符號走 pin-tip fallback，曝險完全未知
+### 2.4 ✅ CLOSED（已探測）：`no rectangle` 的 pin-tip fallback —— 答案是**二分的**，見 `BR_20260804g`
 
 **這不是本 BR 的盲區，是另一條程式路徑，且它比盲區大 8 倍。**
 
 ```
-guard C 看得見但盲掉的        =  516      <- 本 BR 的標的
-_body_rect 回 None 而走 fallback = 4039      <- 完全未量（`:1640-1642`）
+guard C 看得見但盲掉的        =  513      <- 本 BR 的標的（口徑見 §3）
+_body_rect 回 None 而走 fallback = 4216      <- 本節的標的（`:1725-1727`）
 ```
 
 別把它當成冷門集合——實測兩個主流符號就在裡面：
@@ -133,12 +133,40 @@ Device:C                      _body_rect -> None   （以 polyline 畫極板，�
 Amplifier_Operational:LM358   _body_rect -> None
 ```
 
-**guard C 對這些符號不是「盲」，是根本不審視**——它們在 `:1640` 就轉彎走了
-從 pin 端點重建本體的 fallback，那條路徑的寬高取自 pin 長而非真實畫形，
-**它自己會不會产生同型的區間反轉或尺寸失真，兩邊都沒人量過。**
+**guard C 對這些符號不是「盲」，是根本不審視**——它們在 `:1725` 就轉彎走了
+從 pin 端點重建本體的 fallback。
 
-此格的歸屬：**另一個工作包**（dispatcher 已裁示排在 guard C 曝險量測之後）。
-寫在這裡是為了防止下一個讀者把 **516 誤讀成全部曝險面**。
+#### 探測結果（2026-08-04，`ses_03408d1faffe`）：問題本身是錯的形狀
+
+本節原本問「那條路徑是合理降級，還是同型的反轉？」——**它預設只有一個答案。實測有兩個**，
+分界是**腳位共不共線**：
+
+```
+NO-RECT                4216
+    tip box 退化       1198  (28%)   判準恆為 False  -> 缺陷
+    tip box 有判別力   2803          centre_inside=True, far=False -> 合理降級
+```
+
+機制：pin `at` 是腳位**外端點**，共線腳位的外端點集合是一條**線**不是框，某軸 span = 0。
+
+```
+Device:LED   (-3.81,0) (3.81,0)                  y-span = 0   -> 退化
+Device:C     (0,3.81) (0,-3.81)                  x-span = 0   -> 退化
+MMBT2222A    (-5.08,0) (2.54,5.08) (2.54,-5.08)  兩軸皆非零  -> OK
+```
+
+**本 BR 的 clamp 在那裡救不了，而理由界定了本 BR 的適用範圍**：條件式降級只在
+`span - 2*inset > 0` 時用 `inset`，否則降級——但 **span = 0 時任何非零內縮都退化**。
+與 inset 大小無關。
+
+> **本 BR 處理的是「本體太窄」（幾何退化，可調）；`804g` 處理的是「輸入沒有二維範圍」
+> （資料模型退化，不可調）。同一個症狀（box 退化）兩個成因——混為一談會讓 clamp 看起來失效。**
+
+完整量測、方法、修法候選與其打擊半徑：**`BR_20260804g_guard_c_pin_tip_fallback_box_is_degenerate_for_1198_symbols_whose_pins_are_collinear.md`**。
+
+**本節原本的警告仍然成立且更強了**：不要把 513 讀成全部曝險面。真實頁
+`e2e-led-driver-npn`（22 comps）的三態是 BLIND 9 / NO-RECT 12 / SEEN 1——
+**guard C 修好 inset 之後仍有 12 個元件走另一條路徑**，其中 8 個的 box 是退化的。
 
 ### 2.5 ⚠ 判讀更正：修法恢復的是 43%，不是「intrusion 檢查」
 
