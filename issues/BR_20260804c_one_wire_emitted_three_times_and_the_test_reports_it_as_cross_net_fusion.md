@@ -3,8 +3,9 @@
 - **Severity**: MEDIUM（不造成短路，但**讓 anti-fusion 回歸網在基線就是紅的**，且紅燈指向錯誤的成因）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`（wire emission）／
   `tests/test_kicad_emit.py:142-174`（`test_anti_fusion_guard_prevents_collinear_cross_net_wires`）
-- **Status**: OPEN
+- **Status**: **PARTIAL** — 兩側修法皆已落地並經 dispatcher 獨立覆核，但**真實產品頁的曝險未量**（見文末殘留）
 - **Filed**: 2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`（dispatcher，量測 kiutils 是否擋住 P0 時撞到）
+- **Fixed**: 2026-08-04 — 引擎側 `4690737`、測試側 `67dcdc4`（順序正確：引擎先、測試後）
 - **Owner**: `schematic-engine`（`ses_03408d1fa`）
 - **Family**: `schematic-engine`
 - **Related**:
@@ -95,3 +96,54 @@ guard 根本沒被觸發，因為**沒有跨 net 的共線可攔**。
 - **沒有查重複的來源**（哪幾行 append 了它）——那是 owner 的工作面。
 - **沒有量這在真實產品頁上發生幾次**。本 BR 全部證據來自那個 4-resistor 合成測試。
 - **沒有動任何檔案**：`git status --porcelain packages/eda-bridge/ tests/` 對這兩條路徑為空。
+
+---
+
+## 修正與驗收（2026-08-04，dispatcher 獨立覆核）
+
+### 兩件修法都做了，且順序正確
+
+**引擎側 `4690737`** — 上面寫「反向那條暗示至少兩條不同的產生路徑」，**那個推測是錯的**。
+spy 量到 8 次 `_wire_segment_block` 呼叫全部來自單一寫入點 `:1412`；三重來自
+`_orthogonal_route` 對單一輸入回傳一條**折返自身的 polyline**。
+
+真機制比 handler 與 dispatcher 最初的描述都精確：**不是「escape 相向」**（NET_A 用完全相同的
+escape 向量卻沒壞），**也不是「間距」**（off-grid 同間距也沒逐字自摧），而是
+**escape step 從不檢查另一端在哪裡**。sep=1.27 且落在 grid 上時 `q1` 精確等於 `p2`、
+`q2` 精確等於 `p1`，`_wrap` 拼出 `p1,p2,p1,p2`。
+
+修法是將 escape 步長**夾制到間距一半**（僅當 escape 朝向另一端時）。沒有去重。
+
+**測試側 `67dcdc4`** — 斷言從「guard 必須作動」換成「partition 未分歧」，且儀器改用
+**KiCad 自己算的 netlist** 而非從 wire 幾何反推——後者等於用被測系統的輸出驗被測系統。
+
+> 上面「沒有讀 net 歸屬自檔案」那格，**現已不需要 netlist 反查**：spy 記錄的是產生當下的
+> 呼叫，NET_B 的 `_orthogonal_route` 回傳值逐字就是那三段。**歸屬從產生端直接讀出，
+> 比從檔案反查更硬。** 原推測（三條屬 NET_B）經此坐實。
+
+### dispatcher 獨立覆核（不收報告）
+
+```
+mutation swap    FIXED 0 / MUTANT 1
+mutation overshoot FIXED 0 / MUTANT 19      <- 超集，規模是可見症狀的 19 倍
+新斷言控制組  CONTROL-1（P0 已知熔合幾何）emitted=1 vs declared=2 ← 該紅時會紅
+回歸            15 tests / 1 failed（只剩三元組，見下）
+去重偷渡探針   0（對 committed bytes 掃 set(segs|dedup|unique|distinct）
+```
+
+**`overshoot=19` 遠大於 `swap=1` 是本案最重要的量測**：三重 emit 只是 1/19 的可見表現（唯一
+落在 grid 上的那個 case 才會產生逐字重複），**其餘 18 個是 off-grid 時的無聲越界**。
+症狀的可見度與缺陷的規模無關。
+
+### 殘留（為何是 PARTIAL 而非 closed）
+
+**上面「沒有量這在真實產品頁上發生幾次」那格仍未被回答。** 全部證據（含修後驗收）
+依舊來自合成測試幾何；399 個 sep 的掃描是參數空間而非真實頁面。
+**真實頁上有多少 pin 對落在 sep < 2.54mm，兩邊都不知道** — 而那才是這個缺陷的實際曝險面。
+
+這格排在 guard C 曝險量測那一包（同樣跑 aiguard CCM 各頁），兩者可一併取得。
+
+### 順帶：第二個 failed 已單獨建檔
+
+上面「打擊半徑」節提到的 `test_load_symbol_returns_definition_and_pin_endpoints`（三元組）
+已 RCA 完成並另行建檔：`BR_20260804d`。**結論是 stale 測試不是回歸**（DD-26/27刻意演進）。
