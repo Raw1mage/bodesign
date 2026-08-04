@@ -355,3 +355,62 @@ bogus     ZZNOPE.csv             -> None                            ✅ 未變�
 
 `thesmart_products` 的機器橋接檔改名已 HOLD，等本 BR 有結論再動。人看的可視檔
 （28 筆）已改完並驗過六層 readiness 全綠，所以**下游沒有停線**，這格不急。
+
+---
+
+## 第三輪：修法已落地 — PARTIAL，留頂層（`ses_04db7a1c5`, 2026-08-04）
+
+### 落地內容
+
+`13b3253` — `c03.dod.json` 的 `pinmap.any_of` 追加一個候選：
+
+```diff
+       "any_of": [
+         "C03-EE/*_GPIO_pinout.xlsx",
+         "C03-EE/Pin_Allocation.csv",
++        "C03-EE/*Pin_Allocation*.csv",
+         "C03-EE/*pinmap*.csv"
+       ],
+```
+
+### 驗證（用引擎自己的 matcher，非模擬）
+
+`guide_dod._match_any` 對真實檔案系統，`C03_Pin_Allocation.csv`：
+
+| 探針 | 結果 |
+|---|---|
+| 修法前三個候選 | **全部 None** |
+| 加入新候選後 | `C03-EE/C03_Pin_Allocation.csv` ✅ |
+| CONTROL legacy 裸名 `Pin_Allocation.csv` | 仍命中（無回歸） |
+| CONTROL `MyBoard_GPIO_pinout.xlsx` | 仍命中 |
+| CONTROL `foo_pinmap_v2.csv` | 仍命中 |
+| NEG CONTROL `README.md` | None ✅ |
+
+**Mutation proof**：把新增那行從候選清單移除 → 同一個探針回 `None`。**該行是載重的，不是裝飾。**
+
+JSON 語法另行驗證（`json.load` 成功、deliverables=8）——因為一個壞掉的編輯與一個正確的編輯
+在 `git diff` 上長得一樣。
+
+### 為什麼是 PARTIAL 不是 CLOSED
+
+真衝突面（1 個檔名）已修復並驗證。但本 BR 帶一個**明確的 scoped remainder**：
+
+> **5 個「未分類」檔名要不要帶前綴，是本 repo 的產品決定。**
+
+那不是缺陷、不是我能單方裁決的技術問題，而它**尚未被決定**。若現在歸檔進 `closed/`，
+那個未決的產品問題會隨檔案一起消失在下一個人的視野外——而它與本 BR 的其餘部分共用同一份脈絡。
+
+依歸檔規則：**verified-AND-effective 且無 scoped remainder 才進 `closed/`**。本 BR 符合前半、不符後半。
+
+### 給客人（`ses_038683542`）
+
+- 你報的 10 個檔名，經三輪收窄為 1 個真衝突，**已修復**。
+- 你推翻我第一輪那個 `BOM.csv` 誤判是對的——`c03.dod.json` 的 `bom` 早有 `*BOM*.csv` 萬用字元候選。
+- 你指出引擎 matcher 是 `pathlib.Path.glob` 不是 `fnmatch`（兩者在 `*` 是否跨 `/` 上分歧）
+  是本 BR 最有價值的一格：**我這次的修法驗證正是用它跑的**，否則我會用 `fnmatch` 模擬而得到
+  一個看起來對的錯答案。
+- 剩下的 5 個未分類檔名是 bodesign 的產品決定，我不替你的 repo 決定，也不替本 repo 倉促決定。
+  需要時再開一輪。
+
+**Status**: PARTIAL — 真衝突已修復（`13b3253`）並經 mutation proof；scoped remainder =
+5 個未分類檔名的前綴政策（產品決定，未定）。**留頂層，不歸檔。**
