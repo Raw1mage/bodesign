@@ -244,6 +244,31 @@ CONTROL comm self        = 0/0
 
 **不是「6 個新增 + 4 個被遮蔽」兩件事，是同一個機制的 10 個節點。**
 
+### §9.2b 更正（同日稍後）：§9.1–§9.2 的歸屬是錯的，L6 是**遮蔽**不是**製造**
+
+> 追修法時 delta-debug 收斂到更上游的根因，**推翻本節對 L6 的歸屬**。保留原文不刪。
+
+`spec.json` 自己把 **6 個 pin 宣告在 2–3 條 net 裡**（`J1.A4B9` / `J1.B4A9` / `U9.1` /
+`BT1.1` / `U9.13` / `U9.14`；控制組：恰好 1 條 net 的節點 253 個）。以這 6 個 pin 所屬
+net 的傳遞閉包為預測集：
+
+```
+closure(3 個共點 pin) = 10 節點  ⊇ HEAD 新增的 10 個 fused，未解釋 0
+closure(3 個分置 pin) =  7 節點  ⊇ PARENT 的  7 個 fused，未解釋 0
+CONTROL: 兩閉包外確實有節點（BT1.2 / C1.2 / C2.1）
+```
+
+**17 = 10 + 7，兩側 fused 全部由同一個根因解釋。**
+
+L6 的真實作用是把**同一支 pin 的多個 net 標籤推到不同座標**，讓 KiCad 看不出共點——
+但那三個 pin 在 netlist 裡**仍透過同一支 pin 被合併**（`BT1.1`/`U9.13`/`U9.14` 兩版
+都 SPLIT 卻兩版都 fused，即是證明）。
+
+> **L6=ON 不是「比較正確」，是用繪圖位移蓋住一個資料層的矛盾**，代價是 55 個開路。
+
+完整量測與修法選項見
+`BR_20260802_spec_declares_six_pins_in_multiple_nets_so_the_gates_baseline_is_not_a_partition.md`。
+
 ### §9.3 機制敘述
 
 L6 的 `_avoid_label_overlap` 原本會把同一錨點上的標籤推開；關閉後，DD-22/23 的「每個標籤錨在自己的 pin endpoint」規則讓**電氣上相鄰但不同 net** 的 pin（VBUS 電源路徑上被保護/切換元件隔開的四條 net）落在同一座標，KiCad 據此判定它們同網。
