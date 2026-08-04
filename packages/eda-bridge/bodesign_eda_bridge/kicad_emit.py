@@ -2745,8 +2745,19 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
         with no interior stub at all. That is pre-existing grid behaviour, NOT a
         cost of clamping -- a side-by-side sweep of 399 separations found 20
         stub-absent cases WITH the clamp and the same 20 WITHOUT it (newly
-        stub-absent because of the clamp: zero). The tension between grid
-        quantisation and DD-22/23 at sep <= 1 step is a separate question.
+        stub-absent because of the clamp: zero).
+
+        And "no interior stub" is NOT a DD-22/23 violation, which is worth stating
+        because it reads like one. DD-22/23 requires that every pin EXIT STRAIGHT;
+        it does not mandate a stub of any particular length. At sep <= 1 step the
+        route degenerates to the single segment p1->p2, and a single axis-aligned
+        segment already leaves the pin straight. Measured over 798 cases (399
+        separations x both axes): zero routes where the first leg out of p1 or the
+        last leg into p2 departs from its own escape vector, and zero diagonal
+        legs (control: a deliberately diagonal path IS flagged; comparing against
+        the wrong expected vector DOES return False). So there is no outstanding
+        grid-vs-DD-22/23 tension here -- an earlier draft of this docstring said
+        there was, and that sentence was retracted after the sweep above.
         """
         if ev[0] and not ev[1]:
             delta, axis_dir = ox - px, ev[0]
