@@ -29,7 +29,7 @@ an existing owner is the default.
 | `mcp-protocol-surface` | `ses_07c1ad2a4ffesVhlKotYBmsZlq` | `services/mcp/server.py` (protocol handler / route / tool registry / `run_tool`), `mcp.json`, `services/mcp/{preflight,_skill_nudge,token_store}.py`, `skills/bodesign/doctrine.md`, 4× Dockerfile + `docker-compose*` | `BR_20260721` ✅closed · `BR_20260723` (**verified closeable 2026-08-02 — owner's call**) |
 | `skill-shipping` | `ses_04db7a1c5ffelvbxyLP1p6xlRH` | `services/mcp/skill_shipping.py`, `server.py` `/skills` routes, 4× Dockerfile, `.dockerignore` | `BR_20260730` (PARTIAL) |
 | `readiness-contract` | **unassigned** | `packages/workflow-core/bodesign_workflow_core/{c01_id_package,c02_me_package,provenance,guide_dod,readiness_common}.py`, `skills/bodesign/scripts/gate.py`, `server.py:1179-1182` | `BR_20260719_c01_readiness_folder_arg_double_prefix` · `BR_20260719_c02_readiness_provenance_root_and_dod_surface` · `BR_20260719_c01_photoreal_render_pathway_adhoc_oauth` |
-| `schematic-engine` | **unassigned** — 2 sessions probed · both declined (`ses_0c8efa1b4`, `ses_0c87bab06`; see notes). **`(default)` has been working this surface directly since 2026-08-02** (see §Membership below) | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | **20 top-level BRs**, not the 4 listed here through 2026-08-02 — enumerated in §Membership. The four originally listed: `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` · `BR_20260802_reset_hard_destroyed_kicad_emit…` (**restored, verified `2efc3a9`+`23c0bc7`**) · `BR_20260802_fidelity_gate_is_red_after_restore…` (**P1, 電氣正確性**) |
+| `schematic-engine` | **`ses_03408d1faffeKuPkQZ9Zj6gWO2`** — appointed 2026-08-04 by user directive, after 2 declines (`ses_0c8efa1b4`, `ses_0c87bab06`; see notes). Third probe **accepted** — see §Acceptance. `(default)` worked this surface 2026-08-02→08-04 and hands it over | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | **20 top-level BRs**, not the 4 listed here through 2026-08-02 — enumerated in §Membership. The four originally listed: `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` · `BR_20260802_reset_hard_destroyed_kicad_emit…` (**restored, verified `2efc3a9`+`23c0bc7`**) · `BR_20260802_fidelity_gate_is_red_after_restore…` (**P1, 電氣正確性**) |
 | `silent-success` | **unassigned** — `ses_03edcab76` 以 handler 身分修完 BR_20260731（已遣散），未任 owner | `packages/component-kb/bodesign_component_kb/vault.py`, `packages/workflow-core/bodesign_workflow_core/{reference_crosscheck,checkers/no_silent_degradation}.py`, `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py`, **`skills/bodesign/engines/kicad/scripts/domain_detectors.py`**, `ragbase/control/no-silent-degradation/` | ~~`BR_20260731_vacuous_pass…`~~ ✅closed (`b429b06`+`3de27b2`) · `KB_20260729…` (**PARTIAL**) · `BR_20260802_no_silent_degradation_lint_default_roots_miss_skills` |
 | `c03-stage-discipline` | **unassigned** — `ses_0c87bab06` probed · declined · `ses_03edbc893` 以 handler 身分修完 entry-gate（已遣散）. **cross-ref: `check_c03.py` 內部語意由 `ses_0c87bab06`（BR_20260730 family，§A–§Q 19 輪）演進至 HEAD；動它的內部規則前先 inject 那顆。——行數更正：磁碟實況 927 行，前述「1200+」為二手轉述未經查證** | `packages/workflow-core/bodesign_workflow_core/{check_c03,c04_layout_constraints}.py`, `skills/bodesign/scripts/gate.py`, `skills/bodesign/stages/{c03-ee,c04-layout}/GUIDE.md`, `services/mcp/server.py:479,1163-1164` | `BR_20260707_bom_proposal…` · ~~`BR_20260707_c03_stage_entry_gate…`~~ ✅closed (`ff7bbbf`+`787bb5e`) |
 | `layout-route` | **unassigned** | `packages/eda-bridge/bodesign_eda_bridge/routing.py`, `Dockerfile.ee`, `docker-compose.workers.yml`, `server.py:1334-1385` | `BR_20260802_freerouting_jar_default_path…` · ~~`BR_20260729_ee_worker`~~ ✅closed · ~~`BR_20260729_preflight`~~ ✅closed |
@@ -404,3 +404,91 @@ family ownership 要的是**長期心智模型**，單張 RCA 要的是**當下�
 理由：那個約束是**它自己從自己的量測推出來的**，而它同時是唯一的取證者。
 一個人既提出假設又獨力驗證時，假設會悄悄變成前提——這與本 session 全天記錄的
 「缺席與失敗共用輸出」同族，只是發生在**推論**而非**指令**上。
+
+---
+
+## Acceptance — `schematic-engine`, `ses_03408d1fa` accepted (2026-08-04)
+
+Two probes had declined this family; the third accepted, and **the acceptance
+had to clear the bar the two declines set**. It did, on the axis they named:
+
+| session | verdict | cold where |
+|---|---|---|
+| `ses_0c8efa1b4` | declined | **the body** — the wire-geometry implementation was done by a subagent it dispatched; second-hand |
+| `ses_0c87bab06` | declined | **the algorithm layer** — hot on `composer.py`'s API surface (provenance / typed error / schema), cold on wire geometry + net partition |
+| `ses_03408d1fa` | **accepted** | upstream (`composer.py` placement solver) and downstream (`.kicad_sch` format) — **hot on exactly the layer both others were cold on** |
+
+### What the acceptance produced that a case-by-case pass does not
+
+The dispatcher had reached "L6 displaces the anchor → 55 open circuits" by
+measuring one case at a time. The new owner derived the same thing structurally:
+
+> Path A preserves endpoints verbatim — all detours move only intermediate
+> waypoints. So path A **structurally cannot** change the partition unless some
+> mechanism moves an anchor. L6 is that mechanism.
+
+A measured chain explains the case in hand; a structural one predicts the next
+defect of the same class. That difference is the whole reason this family needed
+a durable owner rather than another round of `(default)`.
+
+It also read the 1.27mm triple identity (grid pitch = label cell height =
+clearance) as the root of the `_bbox_clear` float-equality boundary, tying
+`fbcc7f3` (epsilon), `316150f` (dead gate) and the 55 open circuits into **one**
+causal chain rather than three findings.
+
+### Membership independently re-measured, both directions
+
+```
+MEMBERS 17   TOTAL 31   OUTSIDE 14        (control A: pattern is not matching everything)
+BR_20260723b IN_SET · BR_20260723e IN_SET (control B: catches members the registry already names)
+BR_20260730_skills_endpoint 0             (control C: a known non-member stays out)
+```
+
+Owner's own correction, accepted: **3 of the 17 are shared-tree / tooling
+incidents** (`reset_hard_*` ×2, `stale_pyc_*`) that cite `kicad_emit.py` as the
+victim, not the fix surface. Membership is right; they are not engine work when
+ordering the queue.
+
+### Priority, as agreed
+
+- **P0** `BR_20260723b` repro as a pytest fixture, before `723e` lands. Owner's
+  added reason: 723b and 723e **both surface as `fused` in path B**, so after
+  723e, "fixed" and "made unreachable" look identical on the instrument. The
+  fixture must pin 723b's *geometric premise*, not its fidelity result.
+- **P1** VBUS-side real short (`BR_…_spec_declares_six_pins…` §9). Union-find, if
+  implemented, **must carry an explicit allow-list** — unconditional merging
+  absorbs a real short on the VBUS side and blinds the gate permanently.
+- **P2** `_symbol_geometry(scale=)` — 9 errors, baseline-control already done by
+  `(default)` (identical error set at HEAD), so no need to re-establish that. The
+  other 2 are `INK_DENSITY_LOW`, a separate cause (`f2320e0`).
+- **P3** `kiutils`, unless it blocks P0.
+- **Explicitly not queued**: remaining aiguard open circuits — §9 explains them
+  with zero residue, and further digging is the "proving the proof" path that
+  cost this fleet three rounds on 2026-07-28.
+
+### Fixture input source — ruled
+
+`issues/assets_20260706_c03_session/` is **partly untracked**, and the two states
+are indistinguishable by `ls`:
+
+```
+gen_product.py   UNTRACKED
+fidelity_cc.py   TRACKED
+README.md        TRACKED
+CONTROL AGENTS.md TRACKED   (the probe discriminates)
+```
+
+So: read it for shape, but **the fixture must not depend on it** — a fixture
+importing an untracked file breaks when someone cleans the tree, and it breaks as
+"the test went red and nobody touched the code under test".
+
+Method is **shrink, not synthesise**. Recorded because the dispatcher tried the
+other way the same day and it failed: a hand-built minimal spec did **not**
+reproduce, while the same probe returned 3 on the real page (positive control) —
+so the probe was fine and the *guessed shape* was wrong. Delta-debug from the
+real spec found `VBUS_5V` + `PP_VBUS` + `J1` as the necessary triple, with `U11`
+removal *raising* the count — none of which was guessable in advance.
+
+Every shrink step needs its own control: confirm it still reproduces after each
+cut, and confirm one more cut breaks it. Otherwise you cannot tell a necessary
+element from a coincidental one.
