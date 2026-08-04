@@ -222,26 +222,67 @@ files) and is cold on the C04 side, which is exactly where the fix decision live
 Two probes, two declines, two different reasons — and both declines carried
 information no acceptance would have.
 
-## Membership — measured 2026-08-04, and it is 5× what this file said
+## Membership — measured 2026-08-04. **17, not the 20 committed in `f157780`**
 
 The `schematic-engine` row listed **4** members. A count over the actual issue
-bodies returns **20**. That is not drift in one row; it is the row having become
+bodies returns **17**. That is not drift in one row; it is the row having become
 decorative while the work went on somewhere else.
 
 ```
 top-level BR/KB                     30
-  text names the eda-bridge surface 20   <- schematic-engine territory
-  does not                          10   (control: nonzero, so the pattern is
+  cites a concrete eda-bridge file  17   <- schematic-engine territory
+  does not                          13   (control: nonzero, so the pattern is
                                           not simply matching everything)
+
+control: both members this registry already names are inside the 17
+         (BR_20260723b ✓  BR_20260723e ✓)
 ```
 
-**How the count was reached, including the part that was wrong first.** A first
-pass keyed on the `Component:` header field, or on a `packages/eda-bridge` path
-in the body, and returned **13**. `BR_20260723b` — a member this file itself
-lists — was NOT among them: it has no `Component` field and cites
-`kicad_emit.py:1377` with no directory. Bare module names had to be counted too.
-**A membership probe that misses a member the registry already names is not
-measuring membership**, and the 13 would have read as a plausible number.
+### The count was wrong TWICE, in opposite directions
+
+**Too low first (13).** Keyed on the `Component:` header field or a
+`packages/eda-bridge` path. `BR_20260723b` — a member this file itself lists —
+was not among them: no `Component` field, and it cites `kicad_emit.py:1377` with
+no directory. **A membership probe that misses a member the registry already
+names is not measuring membership**, and 13 read as a perfectly plausible number.
+
+**Then too high (20), and that one was committed** in `f157780` before it was
+checked. Widening to bare module names also swept in `pin_allocation` — which
+belongs to `silent-success`'s surface per this very file, not to this family —
+plus three prose mentions. All four verified individually:
+
+| BR | what actually fired |
+|---|---|
+| `BR_20260707_bom_proposal` | `Pin_Allocation.csv`, a BOM spreadsheet filename |
+| `BR_20260730_skills_endpoint` | `pin_allocation` as one of several *tool* names |
+| `BR_20260802_c00_answer_state` | the sentence "another peer's kicad_emit fix caused this" |
+| `BR_20260802_probe_ambiguity` | the line `eda-bridge file count = 0` — **a control group** |
+
+The last one is worth its own sentence: the probe counted a BR **because that BR
+recorded measuring zero eda-bridge files.** The evidence of non-membership was
+read as evidence of membership.
+
+**Both errors produced a number, and neither produced a warning.** 13 and 20 were
+equally quotable. The strict form used now requires a concrete file reference
+(`packages/eda-bridge`, `bodesign_eda_bridge`, `kicad_emit.py`, `fidelity.py`,
+`composer.py`) — a subsystem named in passing is not a fix-surface claim.
+
+> A count is not a measurement until something has been shown to fall outside it
+> **and** something the answer must contain has been shown to fall inside it.
+> `f157780` had the first control and not the second.
+
+### The other six families are NOT measured
+
+A sweep over all seven returned ratios of 2×–7× against their listed counts. It is
+**withdrawn, not recorded as a finding**: 63 matches across 30 BRs, with 8 BRs
+matching four or more families at once, and the bare word `silent` alone hitting
+13. Those patterns classify almost everything as almost everything.
+
+The ratios are left out rather than published with a caveat — a plausible number
+with a footnote gets quoted without the footnote, which is the same failure the
+fidelity gate's `fused` column was fixed for on the same day. What stands is the
+narrow claim: **`schematic-engine` is 17.** The rest are unmeasured, and
+"unmeasured" is deliberately not written as a number.
 
 **Two structural facts this exposes, both more useful than the number:**
 
