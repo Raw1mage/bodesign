@@ -290,9 +290,34 @@ narrow claim: **`schematic-engine` is 17.** The rest are unmeasured, and
   **17 do not**. Any dispatch procedure that begins "look up the BR's family"
   silently covers less than half the ledger. Routing works off the fix surface
   named in the body — which is why the count above is text-based, not field-based.
-- **19 of 30 have no `Component` field at all**, so they cannot be routed
-  mechanically even by surface. That is the gap to close before this registry can
-  carry dispatch weight.
+- ~~**19 of 30 have no `Component` field at all**, so they cannot be routed
+  mechanically even by surface.~~ **RETRACTED 2026-08-04 — that 19 was my own
+  probe's format assumption, not a property of the ledger.** It was measured with
+  `grep -E '^- \*\*Component\*\*:'`, which only matches ONE of the three formats
+  in use. Remeasured format-agnostically over 29 BR files (excluding `OWNERS.md`
+  and `KB_*`):
+
+  | probe | result |
+  |---|---|
+  | strict `- **Component**:` only | 11 have it |
+  | ANY format (`- Component:`, `\| Component \|`, `- **Affected paths**:`) | **17 have it** |
+  | no component-ish field at all | 12 |
+  | ...of those 12, body names a concrete file path | **12 (all of them)** |
+  | ...genuinely unroutable (no file reference anywhere) | **0** |
+
+  So the real figure is **0 unroutable BRs**, not 19. Two files I had listed as
+  unroutable — `BR_20260707_bom_proposal…` and `BR_20260802_issues_ledger…` —
+  both DO carry a Component field; one uses `- Component:` (no bold), the other a
+  markdown table row `| Component |`. **My regex read a formatting difference as
+  a missing field**, which is this repo's recurring defect shape: the probe's
+  blind spot and the ledger's real gap produced the same number.
+
+  **The remaining question is not "backfill the field" but "does anything read
+  it".** Measured: nothing does. The only `Component` consumers in the tree are
+  three lines in `skills/bodesign/engines/kicad/scripts/export_issues.py` emitting
+  a `## Components` section for **KiCad DRC** export — unrelated to BR routing.
+  So backfilling a field with no consumer buys nothing; routing already works off
+  the fix surface named in the body, which every BR has.
 
 **And the honest part:** `(default)` (the coordinator) has been landing commits
 on this surface since 2026-08-02 — `cedc262`, `fbcc7f3`, `4be52bf`, `f37a8c7`,
