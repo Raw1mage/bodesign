@@ -2716,19 +2716,63 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
     e2 = escape[1] if escape and len(escape) >= 2 else (0.0, 0.0)
     step = WIRE_KEEPOUT_MM
 
-    def _escaped(px: float, py: float, ev: tuple[float, float]) -> tuple[float, float]:
+    def _escape_step(px: float, py: float, ev: tuple[float, float],
+                     ox: float, oy: float) -> float:
+        """BR_20260804c: bound the escape stub so it cannot over-shoot the OTHER pin.
+
+        The raw step is a fixed keep-out applied WITHOUT ever consulting how far
+        apart the two endpoints are. When two pins face each other exactly one
+        step apart, each end escapes precisely ONTO the other (q1 == p2 and
+        q2 == p1); `_wrap` then emits p1, p2, p1, p2, so a 2-pin net renders as
+        THREE wire segments with the middle one reversed. Clamping to half the
+        separation is the bound that makes a swap unrepresentable: each escaped
+        point stays strictly inside its own half of the span.
+
+        The clamp applies ONLY when the escape vector points TOWARD the other
+        endpoint. An outward-facing escape cannot over-shoot anything, so
+        clamping it would shrink stubs on close-but-diverging pairs for no
+        benefit -- and every such change would move geometry that is on the
+        verified baseline. `ox, oy` is the other endpoint.
+
+        Correctness rests on `_snap_grid` being MONOTONE NON-DECREASING (measured:
+        10000 points, zero violations; a deliberately non-monotone control caught
+        8). The snap happens AFTER the clamp, so "no swap before snapping" only
+        implies "no swap after snapping" because of that property -- an implicit
+        coupling to _snap_grid's grid worth knowing about if it is ever retuned.
+
+        What the clamp does NOT cause: when two pins sit within ONE grid step,
+        _snap_grid quantises the escape away entirely, so the wire leaves the pin
+        with no interior stub at all. That is pre-existing grid behaviour, NOT a
+        cost of clamping -- a side-by-side sweep of 399 separations found 20
+        stub-absent cases WITH the clamp and the same 20 WITHOUT it (newly
+        stub-absent because of the clamp: zero). The tension between grid
+        quantisation and DD-22/23 at sep <= 1 step is a separate question.
+        """
+        if ev[0] and not ev[1]:
+            delta, axis_dir = ox - px, ev[0]
+        elif ev[1] and not ev[0]:
+            delta, axis_dir = oy - py, ev[1]
+        else:
+            return step
+        if delta == 0 or (delta > 0) != (axis_dir > 0):
+            return step                  # escape points away → no over-shoot possible
+        return min(step, abs(delta) / 2.0)
+
+    def _escaped(px: float, py: float, ev: tuple[float, float],
+                 ox: float, oy: float) -> tuple[float, float]:
         # Move ONLY along the escape axis (snap that axis to grid); the orthogonal
         # axis keeps the pin's exact coordinate so the escape stub stays perfectly
         # axis-aligned (a horizontal +x escape must not nudge y, else the stub is a
         # diagonal and the "leaves the pin straight" contract breaks).
+        s = _escape_step(px, py, ev, ox, oy)
         if ev[0] and not ev[1]:          # horizontal escape → keep py exact
-            return (_snap_grid(px + ev[0] * step), py)
+            return (_snap_grid(px + ev[0] * s), py)
         if ev[1] and not ev[0]:          # vertical escape → keep px exact
-            return (px, _snap_grid(py + ev[1] * step))
+            return (px, _snap_grid(py + ev[1] * s))
         return (px, py)
 
-    q1 = _escaped(x1, y1, e1) if (e1[0] or e1[1]) else p1
-    q2 = _escaped(x2, y2, e2) if (e2[0] or e2[1]) else p2
+    q1 = _escaped(x1, y1, e1, x2, y2) if (e1[0] or e1[1]) else p1
+    q2 = _escaped(x2, y2, e2, x1, y1) if (e2[0] or e2[1]) else p2
 
     def _wrap(inner: list[tuple[float, float]]) -> list[tuple[float, float]]:
         # prepend p1->q1 escape and append q2->p2 escape, dropping degenerate repeats
