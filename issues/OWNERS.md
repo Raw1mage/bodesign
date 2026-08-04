@@ -29,7 +29,7 @@ an existing owner is the default.
 | `mcp-protocol-surface` | `ses_07c1ad2a4ffesVhlKotYBmsZlq` | `services/mcp/server.py` (protocol handler / route / tool registry / `run_tool`), `mcp.json`, `services/mcp/{preflight,_skill_nudge,token_store}.py`, `skills/bodesign/doctrine.md`, 4× Dockerfile + `docker-compose*` | `BR_20260721` ✅closed · `BR_20260723` (**verified closeable 2026-08-02 — owner's call**) |
 | `skill-shipping` | `ses_04db7a1c5ffelvbxyLP1p6xlRH` | `services/mcp/skill_shipping.py`, `server.py` `/skills` routes, 4× Dockerfile, `.dockerignore` | `BR_20260730` (PARTIAL) |
 | `readiness-contract` | **unassigned** | `packages/workflow-core/bodesign_workflow_core/{c01_id_package,c02_me_package,provenance,guide_dod,readiness_common}.py`, `skills/bodesign/scripts/gate.py`, `server.py:1179-1182` | `BR_20260719_c01_readiness_folder_arg_double_prefix` · `BR_20260719_c02_readiness_provenance_root_and_dod_surface` · `BR_20260719_c01_photoreal_render_pathway_adhoc_oauth` |
-| `schematic-engine` | **unassigned** — 2 sessions probed · both declined (`ses_0c8efa1b4`, `ses_0c87bab06`; see notes) | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` · `BR_20260802_reset_hard_destroyed_kicad_emit…` (**restored, verified `2efc3a9`+`23c0bc7`**) · `BR_20260802_fidelity_gate_is_red_after_restore…` (**P1, 電氣正確性**) |
+| `schematic-engine` | **unassigned** — 2 sessions probed · both declined (`ses_0c8efa1b4`, `ses_0c87bab06`; see notes). **`(default)` has been working this surface directly since 2026-08-02** (see §Membership below) | `packages/eda-bridge/bodesign_eda_bridge/{kicad_emit,composer,fidelity}.py`, `tests/test_{fidelity_gate,kicad_emit}.py`, `plans/eda-bridge_draftsman-series-divider-wireable/` | **20 top-level BRs**, not the 4 listed here through 2026-08-02 — enumerated in §Membership. The four originally listed: `BR_20260723b_power_ports_false_not_bypassed` · `BR_20260723e_draftsman_cannot_wire_basic_series_divider_collinear_fusion` · `BR_20260802_reset_hard_destroyed_kicad_emit…` (**restored, verified `2efc3a9`+`23c0bc7`**) · `BR_20260802_fidelity_gate_is_red_after_restore…` (**P1, 電氣正確性**) |
 | `silent-success` | **unassigned** — `ses_03edcab76` 以 handler 身分修完 BR_20260731（已遣散），未任 owner | `packages/component-kb/bodesign_component_kb/vault.py`, `packages/workflow-core/bodesign_workflow_core/{reference_crosscheck,checkers/no_silent_degradation}.py`, `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py`, **`skills/bodesign/engines/kicad/scripts/domain_detectors.py`**, `ragbase/control/no-silent-degradation/` | ~~`BR_20260731_vacuous_pass…`~~ ✅closed (`b429b06`+`3de27b2`) · `KB_20260729…` (**PARTIAL**) · `BR_20260802_no_silent_degradation_lint_default_roots_miss_skills` |
 | `c03-stage-discipline` | **unassigned** — `ses_0c87bab06` probed · declined · `ses_03edbc893` 以 handler 身分修完 entry-gate（已遣散）. **cross-ref: `check_c03.py` 內部語意由 `ses_0c87bab06`（BR_20260730 family，§A–§Q 19 輪）演進至 HEAD；動它的內部規則前先 inject 那顆。——行數更正：磁碟實況 927 行，前述「1200+」為二手轉述未經查證** | `packages/workflow-core/bodesign_workflow_core/{check_c03,c04_layout_constraints}.py`, `skills/bodesign/scripts/gate.py`, `skills/bodesign/stages/{c03-ee,c04-layout}/GUIDE.md`, `services/mcp/server.py:479,1163-1164` | `BR_20260707_bom_proposal…` · ~~`BR_20260707_c03_stage_entry_gate…`~~ ✅closed (`ff7bbbf`+`787bb5e`) |
 | `layout-route` | **unassigned** | `packages/eda-bridge/bodesign_eda_bridge/routing.py`, `Dockerfile.ee`, `docker-compose.workers.yml`, `server.py:1334-1385` | `BR_20260802_freerouting_jar_default_path…` · ~~`BR_20260729_ee_worker`~~ ✅closed · ~~`BR_20260729_preflight`~~ ✅closed |
@@ -221,6 +221,49 @@ to `check_c03.py`'s internal rules, without owning the family.
 files) and is cold on the C04 side, which is exactly where the fix decision lives.
 Two probes, two declines, two different reasons — and both declines carried
 information no acceptance would have.
+
+## Membership — measured 2026-08-04, and it is 5× what this file said
+
+The `schematic-engine` row listed **4** members. A count over the actual issue
+bodies returns **20**. That is not drift in one row; it is the row having become
+decorative while the work went on somewhere else.
+
+```
+top-level BR/KB                     30
+  text names the eda-bridge surface 20   <- schematic-engine territory
+  does not                          10   (control: nonzero, so the pattern is
+                                          not simply matching everything)
+```
+
+**How the count was reached, including the part that was wrong first.** A first
+pass keyed on the `Component:` header field, or on a `packages/eda-bridge` path
+in the body, and returned **13**. `BR_20260723b` — a member this file itself
+lists — was NOT among them: it has no `Component` field and cites
+`kicad_emit.py:1377` with no directory. Bare module names had to be counted too.
+**A membership probe that misses a member the registry already names is not
+measuring membership**, and the 13 would have read as a plausible number.
+
+**Two structural facts this exposes, both more useful than the number:**
+
+- **`Family:` is not a routing key.** 13 of 30 top-level BRs carry the field;
+  **17 do not**. Any dispatch procedure that begins "look up the BR's family"
+  silently covers less than half the ledger. Routing works off the fix surface
+  named in the body — which is why the count above is text-based, not field-based.
+- **19 of 30 have no `Component` field at all**, so they cannot be routed
+  mechanically even by surface. That is the gap to close before this registry can
+  carry dispatch weight.
+
+**And the honest part:** `(default)` (the coordinator) has been landing commits
+on this surface since 2026-08-02 — `cedc262`, `fbcc7f3`, `4be52bf`, `f37a8c7`,
+`316150f`, `392200d`, `31d537b`, `4a58fdf`. That is legitimate under §4.3.2
+(unclaimed families route to `(default)`), but it means **"unassigned" here has
+not meant "unattended" for two days**, and a future reader would have inferred
+the opposite. Recorded rather than quietly normalised: the reason two probed
+sessions declined was that the family needs a durable mental model of wire
+geometry and net partition, and doing the work case-by-case out of `(default)`
+does not build one — it just keeps the queue moving.
+
+---
 
 ## Registry maintenance
 
