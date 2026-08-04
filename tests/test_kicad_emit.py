@@ -158,20 +158,63 @@ class KiCadEmitTests(unittest.TestCase):
         result = emit_kicad_schematic(
             self.work, "fusion", components, nets,
             symbol_dir=SYMBOL_DIR, connection_style="wire")
-        sch = Path(result.schematic_path).read_text(encoding="utf-8")
-        segs = self._wire_segments(sch)
-        # Assert NO two emitted wire segments collinearly overlap. If the guard
-        # down-graded a net to label, that net contributes no wire segment (so no
-        # overlap) AND is recorded in fusion_label_fallbacks (visible).
+
+        # BR_20260804c: what must hold is that NO TWO NETS FUSED -- not that the
+        # guard did something. The old assertion required `fusion_jogged_nets or
+        # fusion_label_fallbacks` to be non-empty, i.e. it asserted THE DEFECT WAS
+        # PRESENT: once the escape-stub over-shoot was fixed (commit 4690737) this
+        # layout no longer produces a cross-net collinear run at all, so the guard
+        # correctly does nothing and a "the guard must have acted" test necessarily
+        # goes red. Do not restore it, and do not silence this by de-duplicating
+        # segments -- read the partition instead.
+        #
+        # KiCad computes the partition itself, so ask IT rather than inferring net
+        # ownership from wire geometry: the emitted netlist is the same instrument
+        # a real short would show up in.
+        validation = validate_kicad_schematic(result.schematic_path)
+        self.assertEqual("validated", validation.status)
+        emitted = {frozenset(n["nodes"]) for n in validation.netlist_nets
+                   if len(n.get("nodes", ())) > 1}
+        declared = {frozenset(f"{ref}.{pin}" for ref, pin in net.nodes) for net in nets}
+        self.assertEqual(declared, emitted,
+                         "net partition diverged from the spec -- two nets fused")
+
+        # Geometry-level backstop, now net-aware: two segments may legally be
+        # collinear when they belong to the SAME net (a straight run split at a
+        # waypoint). Only a CROSS-net overlap is a short.
+        owner = self._segment_owner(validation.netlist_nets, components)
+        segs = self._wire_segments(Path(result.schematic_path).read_text(encoding="utf-8"))
         for i in range(len(segs)):
             for j in range(i + 1, len(segs)):
+                if owner(segs[i]) is not None and owner(segs[i]) == owner(segs[j]):
+                    continue                      # same net -- collinearity is fine
                 self.assertFalse(
                     _collinear_overlap(segs[i], segs[j]),
-                    f"collinear cross-segment fusion survived: {segs[i]} X {segs[j]}")
-        # The guard must have acted (either jogged NET_B off the column or
-        # down-graded it): the fusion never silently ships.
-        acted = bool(result.fusion_jogged_nets) or bool(result.fusion_label_fallbacks)
-        self.assertTrue(acted, "guard did not act on a collinear cross-net layout")
+                    f"collinear CROSS-NET fusion survived: {segs[i]} X {segs[j]}")
+
+    def _segment_owner(self, netlist_nets, components):
+        """Map a wire segment to the net name that owns it, by matching either
+        endpoint against a pin coordinate of a component on that net. Returns a
+        callable; None means "could not attribute" (an interior elbow), which the
+        caller must treat as cross-net rather than assuming same-net -- an
+        unattributable segment has to fail safe, or the check loses its power."""
+        pins = {}
+        for comp in components:
+            _defn, pmap = load_symbol(comp.lib_id, SYMBOL_DIR)
+            for number, (lx, ly, *_rest) in pmap.items():
+                pins[(round(comp.x + lx, 2), round(comp.y - ly, 2))] = f"{comp.ref}.{number}"
+        node_net = {}
+        for entry in netlist_nets:
+            for node in entry.get("nodes", ()):
+                node_net[node] = entry["name"]
+
+        def owner(seg):
+            for pt in seg:
+                node = pins.get((round(pt[0], 2), round(pt[1], 2)))
+                if node is not None and node in node_net:
+                    return node_net[node]
+            return None
+        return owner
 
     def test_anti_fusion_guard_untouched_when_no_collision(self):
         # A layout with NO cross-net collinearity (two horizontally-separated Rs on
