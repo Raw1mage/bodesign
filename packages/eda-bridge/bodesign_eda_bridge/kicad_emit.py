@@ -1512,7 +1512,15 @@ def emit_kicad_schematic(
                                                 avail_y=_paper_avail_y(paper),
                                                 avail_x=_paper_avail_x(paper),
                                                 ledger=ledger,
-                                                l6_avoidance=True,
+                                                # BR_20260802 (c4): this was hardcoded True, which made the
+                                                # `l6_avoidance` parameter declared at the top of this function
+                                                # DEAD — AST-verified 0 reads in the body, against 10 reads of
+                                                # page_scale as a control. Callers could compute the flag and
+                                                # thread it in, and it was silently discarded. L6 displacement
+                                                # (bounded by _L6_AVOID_MAX_STEPS x 1.0mm = 64mm) is the only
+                                                # path that can produce the measured 1.57-53.38mm anchor moves;
+                                                # DD-20 tops out at ~7mm on this page's longest label (14 ch).
+                                                l6_avoidance=l6_avoidance,
                                                 graphics_boxes=_label_graphics_boxes))
 
     # Power ports: one KiCad power-port symbol per GND/supply endpoint, replacing
