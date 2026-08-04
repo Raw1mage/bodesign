@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .readiness_common import boundary_next_step, root_guard
+from .readiness_common import boundary_next_step, root_guard, stage_dir_arg_detail
 from .guide_dod import guide_compliance_for
 from .provenance import collect_provenance_gaps
 from .refs_gate import require_refs
@@ -59,10 +59,49 @@ def _c02_stage_dir(folder: str | Path | None) -> Path | None:
 
     Returns None when there is no folder at all, so provenance adjudication keeps
     failing CLOSED rather than silently resolving against the process cwd.
+
+    SCOPE (corrected 2026-08-04 — the block comment above ``C02_STAGE_DIRNAME``
+    claims the stage prefix is derived "in ONE place" so "no two code paths can
+    disagree"; that is NOT true today). This helper has exactly two callers, both
+    on the provenance path. Every export/generate verb still joins
+    ``root / C02_OUTPUTS[key]``, and each of those 12 constants carries its own
+    ``C02-ME/`` prefix — so two prefix models coexist in this module. Converging
+    them is tracked as a separate work item (see
+    ``issues/BR_20260804h_c02_outputs_constants_are_dual_role_so_the_one_place_stage_prefix_claim_is_false.md``);
+    it is deliberately NOT bundled with the BR_20260804 fix because those
+    constants are also the rel paths RETURNED to callers, so moving the prefix
+    silently changes what a caller's own join produces.
     """
     if folder is None:
         return None
     return Path(folder) / C02_STAGE_DIRNAME
+
+
+def _classify_missing_source(root: Path, probed: Path) -> tuple[str, str]:
+    """Split the old single ``source_missing`` into three distinguishable states.
+
+    Before BR_20260804 these three returned a byte-identical result (status
+    ``source_missing``, one hardcoded message, no path), and the three fixes are
+    completely different: change the argument / create the directory / run
+    ``c02_generate_openscad``. The external filer needed a full round to tell them
+    apart, and only managed it because the ``folder`` field happened to print a
+    usable path — luck, not design.
+    """
+    if not root.exists():
+        return (
+            "folder_missing",
+            f"out_dir={root} does not exist (nothing was created). "
+            f"Expected to find the source at {probed}.",
+        )
+    detail = stage_dir_arg_detail(root, C02_STAGE_DIRNAME, probed)
+    if detail is not None:
+        return detail
+    return (
+        "source_missing",
+        f"{C02_OUTPUTS['openscad']} is required before STL export. "
+        f"Looked for {probed} — out_dir={root} exists but holds no generated source; "
+        f"run c02_generate_openscad first.",
+    )
 
 
 @dataclass(slots=True)
@@ -169,13 +208,33 @@ class C02OpenScadResult:
         }
 
 
+# `openscad_bin_path` when the function returned before it ever looked for the
+# OpenSCAD executable. BR_20260804 §4: `None` was carrying BOTH "probed and the
+# binary is absent" AND "never probed — we short-circuited earlier", so a caller
+# reading `null` concluded the container had no OpenSCAD when the real cause was
+# a path that never resolved. An absent state and a failure state must not share
+# one output, so the un-probed case gets its own value.
+OPENSCAD_BIN_NOT_PROBED = "not_probed"
+
+
 @dataclass(slots=True)
 class C02StlExportResult:
     folder: str
     stl_path: str | None
     status: str
     message: str
-    openscad_path: str | None = None
+    # The `.scad` SOURCE deliverable, relative to `folder`. This is what the
+    # legacy `openscad_path` key has always carried — the name said "path to the
+    # openscad binary", the value was the source file, and a caller reading it
+    # got "openscad lives at C02-ME/Enclosure.scad" (BR_20260804 §2, filer's
+    # own report). The legacy key is still emitted as a deprecated alias so no
+    # out-of-repo consumer breaks; the correctly-named field is this one.
+    source_path: str | None = None
+    # The absolute path actually stat'ed for the source. Emitted on EVERY result
+    # so "where did you look?" never needs a second round-trip to answer.
+    probed_source_path: str | None = None
+    # The OpenSCAD EXECUTABLE. OPENSCAD_BIN_NOT_PROBED / None / "/usr/bin/openscad".
+    openscad_bin_path: str | None = OPENSCAD_BIN_NOT_PROBED
 
     def to_dict(self) -> dict[str, object]:
         exported = self.status == "stl_exported"
@@ -184,8 +243,14 @@ class C02StlExportResult:
             "stl_path": self.stl_path,
             "status": self.status,
             "message": self.message,
-            "openscad_path": self.openscad_path,
-            "source_ready": bool(self.openscad_path),
+            "source_path": self.source_path,
+            "probed_source_path": self.probed_source_path,
+            "openscad_bin_path": self.openscad_bin_path,
+            # DEPRECATED (BR_20260804): misleading name, kept as an alias of
+            # `source_path` so existing consumers keep the value they already
+            # get. Read `source_path` / `openscad_bin_path` instead.
+            "openscad_path": self.source_path,
+            "source_ready": bool(self.source_path),
             "viewable_draft_ready": exported,
             "printable_draft_ready": exported,
             "vendor_handoff_ready": False,
@@ -335,15 +400,23 @@ def export_c02_stl(
     out_dir: str | Path,
     openscad_bin: str | None = None,
 ) -> C02StlExportResult:
-    """Export STL through OpenSCAD CLI when available; otherwise fail fast."""
+    """Export STL through OpenSCAD CLI when available; otherwise fail fast.
+
+    ``out_dir`` is the PRODUCT ROOT, never the ``C02-ME/`` stage dir — the stage
+    prefix is carried by ``C02_OUTPUTS``. Passing the stage dir double-prefixes
+    the lookup; that case is DETECTED and reported as ``folder_is_stage_dir``
+    rather than guessed at (see ``_classify_missing_source``).
+    """
     root = Path(out_dir)
     source = root / C02_OUTPUTS["openscad"]
     if not source.exists():
+        status, message = _classify_missing_source(root, source)
         return C02StlExportResult(
             folder=str(root),
             stl_path=None,
-            status="source_missing",
-            message="C02-ME/Enclosure.scad is required before STL export.",
+            status=status,
+            message=message,
+            probed_source_path=str(source.resolve() if root.exists() else source),
         )
     executable = openscad_bin or shutil.which("openscad")
     if not executable:
@@ -352,7 +425,9 @@ def export_c02_stl(
             stl_path=None,
             status="export_unavailable",
             message="OpenSCAD CLI is not available; no fake STL was created.",
-            openscad_path=str(C02_OUTPUTS["openscad"]),
+            source_path=str(C02_OUTPUTS["openscad"]),
+            probed_source_path=str(source.resolve()),
+            openscad_bin_path=None,
         )
     stl = root / C02_OUTPUTS["stl"]
     stl.parent.mkdir(parents=True, exist_ok=True)
@@ -368,7 +443,9 @@ def export_c02_stl(
             stl_path=None,
             status="export_failed",
             message=(completed.stderr or completed.stdout or "OpenSCAD export failed.").strip(),
-            openscad_path=str(C02_OUTPUTS["openscad"]),
+            source_path=str(C02_OUTPUTS["openscad"]),
+            probed_source_path=str(source.resolve()),
+            openscad_bin_path=executable,
         )
     _update_print_settings_for_stl(root)
     return C02StlExportResult(
@@ -376,7 +453,9 @@ def export_c02_stl(
         stl_path=str(C02_OUTPUTS["stl"]),
         status="stl_exported",
         message="Generated real STL via OpenSCAD CLI. This is still a prototype draft, not ME approval.",
-        openscad_path=str(C02_OUTPUTS["openscad"]),
+        source_path=str(C02_OUTPUTS["openscad"]),
+        probed_source_path=str(source.resolve()),
+        openscad_bin_path=executable,
     )
 
 

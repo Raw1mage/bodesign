@@ -63,6 +63,52 @@ def stage_folder_for(layer: str) -> str:
     return STAGE_FOLDER[key]
 
 
+def stage_dir_arg_detail(root: Path, stage_dirname: str, probed: Path) -> tuple[str, str] | None:
+    """Name the "folder IS the stage dir" mistake instead of letting it read as absent.
+
+    This family's contract: ``folder`` / ``out_dir`` is the PRODUCT ROOT, and the
+    stage prefix already lives inside every rel_path constant. A caller who
+    pre-joins the stage folder therefore probes ``<root>/C0x-XX/C0x-XX/...`` and
+    gets a clean, reassuring "not there" — byte-identical to "the deliverable was
+    never generated". Two BRs and two independent callers have now paid for that
+    collision:
+      - ``issues/BR_20260719_c01_readiness_folder_arg_double_prefix.md`` (still
+        reproducible at HEAD: a compliant package reads 100%% via the product root
+        and 0%% / all-missing via ``<root>/C01-ID``)
+      - ``issues/BR_20260804_c02_export_stl_cannot_see_files_staged_into_its_own_token.md``
+
+    Returns ``(status, message)`` ONLY for that shape, else None — so a caller
+    that got the argument right is completely unaffected.
+
+    Deliberately NOT a normaliser. Stripping the extra segment would make
+    ``folder=<root>`` and ``folder=<root>/C0x-XX`` BOTH succeed while denoting
+    different directories — a silent fallback (天條 1) that would also guarantee
+    the contract can never be violated visibly, i.e. never learned. Naming the
+    ambiguity costs the caller one edit; guessing costs nothing today and hides
+    every future instance.
+
+    ``probed`` is the path the caller actually stat'ed, so the message can show
+    the doubled segment rather than describing it.
+    """
+    if root.name != stage_dirname:
+        return None
+    # Only claim the double prefix when the deliverable really does sit directly
+    # inside `root`. Without this the branch would fire for a genuine product
+    # root that merely happens to be named C0x-XX, converting a correct call into
+    # an error — the check has to discriminate, not pattern-match a name.
+    inner = root / probed.name
+    if not inner.exists():
+        return None
+    return (
+        "folder_is_stage_dir",
+        f"folder={root} is already the {stage_dirname} stage dir, but this family's "
+        f"folder/out_dir argument is the PRODUCT ROOT — the {stage_dirname}/ prefix is "
+        f"added internally, so I stat'ed {probed} (absent) while {inner} exists. "
+        f"Pass folder={root.parent} instead. "
+        f"(If {root} really is your product root, the deliverable belongs at {probed}.)",
+    )
+
+
 def cross_track_inconsistency(
     *,
     all_missing: bool,
