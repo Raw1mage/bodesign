@@ -48,23 +48,63 @@ Device:R at (100, 103.81)
 
 ### 2.3 影響面——全庫掃描
 
-```bash
-PP=$(ls -d packages/*/ | tr '\n' ':')
-PYTHONPATH="$PP" python3 <掃描腳本，見 §6>
-```
+> **2026-08-04 收斂完成。** 初版此節只記了數字沒記方法，導致 dispatcher 重跑得 452 而非 513，
+> 且無從判斷誰對（見文末覆核節）。分歧點現已坐實為**單一維度**：`_flatten_extends`。
+> 完整方法如下，任何人可重跑。
+
+#### 方法（與數字同等重要，缺一則此節作廢）
+
+| 維度 | 本次採用 | 為何是這個 |
+|---|---|---|
+| 掃描目錄 | `/usr/share/kicad/symbols/*.kicad_sym`（223 檔）| KiCad stdlib，引擎預設 `DEFAULT_SYMBOL_DIR` |
+| symbol 切塊 | **深度解析，只取 lib 深度 1 的 `(symbol "X"`** | regex 掃 `(symbol "` 分不出 part 與其 unit 子區塊（`R_0_1`），會重複計數 |
+| 擷取器 | `_body_rect`（`kicad_emit.py:542`）| guard C 於 `:879` 實際呼叫的就是它；**不是** `_graphics_bbox` |
+| **是否展開 extends** | **是**——`_flatten_extends(blk, name, src)` | **這是分歧的唯一成因**，見下 |
+| 盲區判準 | 該軸長度 `<= 2*inset = 3.81` | `:1647` 內縮後 `bx0 > bx1`，`:1659` 恆 False |
+
+**為何必須展開 extends**：`load_symbol` 在 `:383` 對每個 block 呼叫 `_flatten_extends`，
+**所以引擎看到的永遠是展開後的**。而 `(extends ...)` 的衍生符號自身不畫 rectangle——
+未展開時它被歸進 `no rectangle`，展開後才顯出它繼承來的本體。
+**未展開的掃描量的是「檔案裡寫了什麼」，展開後量的才是「guard C 看到什麼」。**
+
+#### 結果（同腳本、只變動 flatten 一個維度）
 
 ```
-inset = 1.905 mm  (本體兩軸都需 > 3.81 mm 才不被抹掉)
-symbols scanned      = 22583
-  load error         = 150
-  no rectangle       = 4216   <- 走 pin-tip fallback，本次未量
-  has rectangle      = 18217
-      guard sees it        = 17704     <- CONTROL，>0 故計算有判別力
-      BLIND on x only      = 407
-      BLIND on y only      = 26
-      BLIND on both axes   = 80
-      -> TOTAL BLIND       = 513  (2.8% of rect-bearing symbols)
+inset = 1.905 mm   (blind when axis <= 3.81)
+
+variant                 scan    hasR    sees    bX   bY   bB   BLIND    noR
+A raw (no flatten)     21437    7882    7430   373   27   52     452  13555
+B FLATTENED (engine)   21437   17398   16882   407   29   80     516   4039
 ```
+
+**A 逐項對上 dispatcher 的獨立重跑**（他得 452 / 373 / 26 / 53 / 13744）——
+所以他量的是未展開版，我初版量的是展開版，**兩邊都沒算錯，量的是不同東西**。
+
+**B 是引擎的真實視角，`TOTAL BLIND = 516`。** 初版報 513，差 3；`scan` 21437 vs 22583 的差距
+來自初版用 regex 掃 `(symbol "` 而含入了 unit 子區塊。**以 516 為準，513 作廢。**
+
+熱路徑符號兩個變體一致（故此結論不受 flatten 影響）：
+
+```
+symbol                          has_rect      w        h    BLIND   這個樣本證明什麼
+----------------------------------------------------------------------------------
+Device:R                        yes       2.032    5.080   True    盲區（x 軸反轉）
+Device:R_Small                  yes       1.524    3.556   True    盲區（兩軸全盲）
+Regulator_Linear:AMS1117-3.3    yes      10.160    6.985   False   CONTROL —— 判準真的會說「不盲」
+MCU_ST_STM32F4:STM32F407VETx    yes      40.640  134.620   False   CONTROL —— 同上，寬本體
+flatten_errors = 0                                                 展開步驟本身未吞任何例外
+```
+
+> **❗ 控制組更正（2026-08-04，dispatcher 指正）。** 初版此處用 `Device:C` 當控制組並寫「不在盲區」——
+> **那是壞的**。`Device:C` 的 `_body_rect` 回 `None`（它以 polyline 畫極板，不畫 rectangle），
+> 於 `:1640-1642` 就走了 pin-tip fallback——**它從頭到尾沒有被 guard C 的謂詞審視過**。
+>
+> 所以「不盲」與「不在管轄內」共用了那個控制組的輸出。拿一個**從未執行該判準的樣本**
+> 去證明該判準有判別力，判別力是零。現改用寬本體符號：它們 `has_rect=yes` 且回 `BLIND=False`
+> **並帶實際尺寸**，那才證明這個謂詞真的會對某些輸入說不盲。
+
+腳本落點：`$XDG_RUNTIME_DIR/guardc-scan/fast.py`（scratch，不入版控；
+上表三欄 + 兩個 variant 的定義即其等價描述，可據以重寫）。
 
 **2.8% 這個數字會誤導，因為分布不是隨機的。** 名單裡有：
 
@@ -76,6 +116,29 @@ Connector:Conn_01x01..10_Pin body= 0.86 x  N      xw=-2.95
 ```
 
 `Device:R` 是任何電路圖裡出現次數最多的符號。**盲區不在冷門角落，在最熱的路徑上。**
+
+### 2.4 ❗ OPEN：`no rectangle` 那 4039 個符號走 pin-tip fallback，曝險完全未知
+
+**這不是本 BR 的盲區，是另一條程式路徑，且它比盲區大 8 倍。**
+
+```
+guard C 看得見但盲掉的        =  516      <- 本 BR 的標的
+_body_rect 回 None 而走 fallback = 4039      <- 完全未量（`:1640-1642`）
+```
+
+別把它當成冷門集合——實測兩個主流符號就在裡面：
+
+```
+Device:C                      _body_rect -> None   （以 polyline 畫極板，不畫 rectangle）
+Amplifier_Operational:LM358   _body_rect -> None
+```
+
+**guard C 對這些符號不是「盲」，是根本不審視**——它們在 `:1640` 就轉彎走了
+從 pin 端點重建本體的 fallback，那條路徑的寬高取自 pin 長而非真實畫形，
+**它自己會不會产生同型的區間反轉或尺寸失真，兩邊都沒人量過。**
+
+此格的歸屬：**另一個工作包**（dispatcher 已裁示排在 guard C 曝險量測之後）。
+寫在這裡是為了防止下一個讀者把 **516 誤讀成全部曝險面**。
 
 ## 3. 這與 BR_20260723b 的關係（方向相反，不是同一件事）
 
