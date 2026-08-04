@@ -168,6 +168,48 @@ unset GIT_INDEX_FILE
 肇事者在事故前 30 分鐘才剛立案一張警告「`git clean -fd` 會無聲刪光 peer 工作」的 BR。
 **正在寫某條規則不構成該規則的豁免。**
 
+## 6.2 `pkill -f` / `pgrep -f` 會把發出指令的 shell 算進目標（2026-08-04）
+
+§6.1 管的是「摧毀他人未 commit 的修改」。這一條是**同一個形狀、不同族**：摧毀的不是別人的檔案，
+是**你自己這一串指令的後半段**，而輸出完全相同——沒有輸出。
+
+`-f` 匹配**完整命令列**，而發出這道指令的 shell，其命令列本身就含有那個 pattern：
+
+```
+pkill -f "myscript.py"        # 這行自己的 cmdline 就有 "myscript.py"
+```
+
+於是它連呼叫者一起殺。**整串指令從該步之後靜默停止**，後續步驟一個都沒跑，而看起來只是
+「少印了幾行」。第一反應會是「檔案沒寫成功」，而不是「shell 已經死了」。
+
+**量測（本機 `procps-ng`，非破壞性，用 `pgrep` 等價證明，可重跑）**：
+
+| variant | 匹配到的 pid | 意義 |
+| --- | --- | --- |
+| `pgrep -f $M`，**目標完全不存在** | 就是呼叫者自己的 pid | 沒有任何東西該被匹配，它仍匹配到一個 |
+| `pgrep -A -f $M`，同上 | 空 | `-A` 排除祖先後正常 |
+| CONTROL：不存在於任何 cmdline 的 marker | 空 | 探針有判別力 |
+
+第一格是決定性的：**目標不存在**排除了「殺過頭」這個解釋——它匹配的只可能是呼叫者。
+
+**正解是 `-A`，不是 `[m]yscript` 字元類技巧**：
+
+```bash
+pkill -A -f "myscript.py"     # --ignore-ancestors；本機 procps-ng 有此旗標
+```
+
+字元類（`pkill -f "[m]yscript.py"`）是**繞開**不是修復——它靠「pattern 字面與自身不相等」躲過，
+換一個呼叫形狀（heredoc、被別的腳本包一層）就再度自殺。
+
+**歸類 G13-harness-disclosure，不是操作失誤**：`man pkill` 明寫「The running pgrep, pkill, or
+pidwait process will never report itself」——它**知道自己是誰**；`-A` 存在——它**知道祖先是誰**。
+缺的不是資訊，是預設值與揭露：殺了 N 個、與殺了 N 個並自殺，共用同一個空輸出。
+
+實錄：`issues/BR_20260804e_pkill_f_self_matches_and_silently_kills_the_calling_shell.md`
+——該 BR 的量測過程自己踩了三次，第三次最值得記：**控制組與 treatment 死於同一個原因**
+（控制組的字面 pattern 也在命令列裡），於是那格當時無法證明任何事。
+**判準與被測對象共用同一個失效模式時，判別力歸零。**
+
 ## 7. Diagram / 建模
 
 - IDEF0 / GRAFCET / C4 用 `drawmiat` MCP，**先 `validate_diagram` 再 `generate_diagram`**。
