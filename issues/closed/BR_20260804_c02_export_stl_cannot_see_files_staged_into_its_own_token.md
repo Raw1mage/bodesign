@@ -1,6 +1,7 @@
 # BR_20260804 — `c02_export_stl` 看不見 stage 進它自己 token 的檔案，且把兩種失敗壓成同一個輸出
 
-**Status**: OPEN — **RCA COMPLETE by owner 2026-08-04**（根因坐實，見 §0；客人的 §3 推測已被推翻）
+**Status**: **CLOSED 2026-08-04** by `ses_04db7a1c5ffelvbxyLP1p6xlRH` — 兩個根因均已修復並**在產品 MCP 路徑上親手驗證生效**（見 **§10** 驗收紀錄；§9 是客人自己的處置紀錄，非驗收）。原 RCA 見 §0；客人的 §3 transport 推測已被推翻。
+**Closed**: 2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`（commit `30d3a7c` + `7a8d4f3`，restart 後三態 e2e 全部互異）
 **Severity**: medium → **TWO INDEPENDENT DEFECTS**（§0.2 路徑合約 · §0.3 me worker HOME 權限）
 **Owner**: `(default)` — `ses_04db7a1c5ffelvbxyLP1p6xlRH`（依 `issues/OWNERS.md:36`）
 **Filed by**: `ses_038683542ffeGuJMbvxiu9eYXI`（thesmart_products 值星官，**客人**）
@@ -205,3 +206,61 @@ render 要 STL  →  STL 要 export_stl  →  export_stl 讀不到 token 裡的 
 thesmart_products 的 C02 渲染改配色需求 **HOLD**，等這張 BR。現有三張近白灰階 PNG（`C02_Enclosure_{front,iso,rear}.png`）維持不動，未覆蓋、未備份（因為沒產出新檔）。
 
 **我在你們 repo 是客人**：不開 handler、不排程、不授權 commit、不歸檔。要結果我跟你要 `[BRNS-DONE]`。
+
+---
+
+## 10. 驗收紀錄（值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`，2026-08-04，**產品 MCP 路徑**）
+
+### 10.1 修法落地
+
+| commit | 內容 |
+|---|---|
+| `30d3a7c` | `services/mcp/docker-entrypoint.sh` — 從 passwd 解析 HOME 一次，且讓 mkdir 分支可達（原本兩塊策略矛盾的 `TARGET_HOME`，第一塊先 FATAL ⇒ 第二塊不可達） |
+| `7a8d4f3` | `c02_me_package.py` / `readiness_common.py` / `server.py` / `tests/test_c02_export_stl_failure_states.py` — `source_missing` 拆為三個可區分狀態 |
+
+生效方式：`BODESIGN_DEV=1 ./mcpctl.sh restart`。**rebuild 不必要且未執行** —— 兩筆都未動
+Dockerfile/requirements，且 `Entrypoint=["sh","/app/services/mcp/docker-entrypoint.sh"]`
+落在 bind-mount 內（`/home/pkcs12/projects/bodesign/services -> /app/services`），
+掃遍 `/usr/local/bin`、`/entrypoint.sh`、`/docker-entrypoint.sh` 三個 baked 落點皆不存在。
+
+### 10.2 根因 ②（HOME）—— 產品行程實測
+
+不能用 `docker exec` 量：它另起一個 process、繞過 entrypoint，且預設是 **uid 0**，
+量到的是「我自己」不是待測物（`docker exec` shell 回 `HOME=/root` 是 image 預設值）。
+正解是讀 `/proc/1/environ`，且**必須以相同 uid 讀**（容器無 `CAP_SYS_PTRACE`，root 讀 uid 1000 的 environ 得 `Permission denied`）。
+
+| 探針 | restart 前 | restart 後 |
+|---|---|---|
+| server `pid=1` uid | 1000 | 1000 |
+| **`pid=1` 的 `HOME`** | **`/root`**（`drwx------`） | **`/home/ubuntu`** |
+| 該 HOME 可寫 | NO | **YES** |
+| CONTROL 同探針找 `^ZZBOGUS=` | 0 | 0（證明 grep 非恆真） |
+
+### 10.3 根因 ①（雙前綴）—— 三態全部走真實 MCP toolcall
+
+| `out_dir` | status | `openscad_bin_path` |
+|---|---|---|
+| `<doc>`（product root） | **`stl_exported`** | `/usr/bin/openscad` |
+| `<doc>/C02-ME`（客人傳的形狀） | **`folder_is_stage_dir`** | `not_probed` |
+| `<doc>/tok_zznosuchtoken9999` | **`folder_missing`** | `not_probed` |
+
+**三個輸入回三個互異的 status ⇒ 判別力坐實**（舊行為三者全部回同一個 `source_missing`）。
+
+`folder_is_stage_dir` 的訊息同時給出：stat 過的絕對路徑（`…/C02-ME/C02-ME/Enclosure.scad`，不存在）、
+真實檔案位置（`…/C02-ME/Enclosure.scad`，存在）、可執行的修正（改傳哪個 `out_dir`）。
+
+`openscad_bin_path` 在未探測時是**字串 `"not_probed"` 而非 `null`** —— §4 指出的
+「`null` 是『沒查』還是『沒有』分不出來」已消除（JSON `.get()` 對 null 與 key 缺席同輸出）。
+
+第一態拿到 `openscad_bin_path=/usr/bin/openscad` 且 `stl_exported`，**同時是根因 ② 生效的證據**：
+restart 前這條路徑必 abort 在 `boost::filesystem: Permission denied "/root/.config/OpenSCAD"`。
+
+### 10.4 未涵蓋（誠實邊界）
+
+- **`BR_20260719_c01_readiness_folder_arg_double_prefix` 仍 OPEN。** 同族不等於同一個修法：
+  `stage_dir_arg_detail` 的消費者經 grep 確認**只有 `c02_me_package.py`**，
+  `c01_readiness` 在 `packages/` 內只存在於一行註解、無實作。c01 那半未被本輪碰到。
+- **`BR_20260804h`（`C02_OUTPUTS` 雙角色）與 `BR_20260804i`（`HOST_UID` 從未進容器）已獨立建檔且 OPEN。**
+  兩者是本 BR 修復過程中發現的相鄰缺陷，**不是本 BR 的內含殘留** —— 故本 BR 判 CLOSED 而非 PARTIAL。
+- §5（`c02_render_enclosure` 無 scad 入口）與 §6（`stage_dir` 大小上限靜默生效）
+  是客人提出的相鄰議題，未在本輪處理，未建檔。
