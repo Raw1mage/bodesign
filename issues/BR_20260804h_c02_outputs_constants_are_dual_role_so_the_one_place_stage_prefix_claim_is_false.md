@@ -1,6 +1,6 @@
 # BR_20260804h — `C0x_OUTPUTS` 常數身兼兩職，使「stage 前綴只在一處推導」這句宣稱不成立
 
-**Status**: OPEN — 已量測定位，**刻意未修**（見 §4 為何不能與 BR_20260804 同輪）
+- **Status**: OPEN — 已量測定位，**刻意未修**（見 §4 為何不能與 BR_20260804 同輪）
 **Severity**: medium — 不是當下的錯誤行為，是**一句錯誤的單一真相來源宣稱**
 **Owner**: `readiness-contract` family（`issues/OWNERS.md`）
 **Filed by**: `ses_0330e7869ffev0nZL0XqoXSp78`（BRNS handler，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）

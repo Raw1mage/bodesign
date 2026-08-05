@@ -1,6 +1,6 @@
 # BR: C01 photoreal 表皮渲染路徑非引擎一級能力（軸A）
 
-- Status: OPEN — **2026-08-02 重寫**：憑證抱怨已失效並移除，能力缺口全數存續
+- **Status**: OPEN — **2026-08-02 重寫**：憑證抱怨已失效並移除，能力缺口全數存續
 - Re-verified: 2026-08-02 by ses_04db7a1c5（coordinator），逐條對照 HEAD
 - Owner: **unassigned** — family `readiness-contract`（見 `issues/OWNERS.md`）
 - 原始立案: 2026-07-19，aiguard C01 consumer

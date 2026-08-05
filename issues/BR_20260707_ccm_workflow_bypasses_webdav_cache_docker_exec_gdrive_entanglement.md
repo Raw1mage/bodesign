@@ -1,6 +1,6 @@
 # BR_20260707 — CCM 原理圖工作流繞過 webdav working-cache：docker-exec 直驅容器內部路徑 + GDrive 工程檔糾纏
 
-**Status**: OPEN
+- **Status**: OPEN
 **Severity**: Medium（工作流違規，非引擎缺陷；R14 rail 本身已合規）
 **Scope**: C03 CCM 頁面生成工作流（orchestration 層，axis-B tool-selection miss）
 **Related**: `issues/closed/BR_20260706_webdav_r14_5_provision_r14_6_credential_rail_r14_7_fallback_gaps.md`（R14 rail 已 CLOSED 合規——本 BR 是「rail 存在卻沒被用」的正交缺陷）

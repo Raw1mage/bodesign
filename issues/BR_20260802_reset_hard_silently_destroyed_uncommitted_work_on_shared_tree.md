@@ -1,5 +1,7 @@
 # BR_20260802 — `git reset --hard` 在共用工作樹上靜默摧毀 46 個檔案的未 commit 修改；同族指令 `git checkout` 會拒絕，它不會
 
+- **Status**: OPEN
+
 | Field | Value |
 | --- | --- |
 | Title | reset --hard silently discards uncommitted work while its sibling checkout refuses to; and a path-scoped `git status` renders identically to a full one |

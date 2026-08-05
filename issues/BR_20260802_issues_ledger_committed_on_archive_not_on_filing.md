@@ -1,5 +1,7 @@
 # BR_20260802 — local-first issue ledger 只在歸檔時進版控，立案時不會：8 張 open BR 從未被 git 追蹤
 
+- **Status**: OPEN — 殘留：復發防護未實作
+
 | Field | Value |
 | --- | --- |
 | Title | The issues/ ledger commits BRs when ARCHIVED but never when FILED — the open-issue list lived in one working tree only |

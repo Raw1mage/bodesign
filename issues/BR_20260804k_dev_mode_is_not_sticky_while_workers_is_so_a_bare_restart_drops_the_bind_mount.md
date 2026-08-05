@@ -1,6 +1,6 @@
 # BR_20260804k — `BODESIGN_DEV` 沒有 sticky marker 而 `BODESIGN_WORKERS` 有，於是裸跑 `restart` 會把 dev 掛載悄悄拿掉
 
-**Status**: OPEN — 已量測定位，**未修**
+- **Status**: OPEN — 已量測定位，**未修**
 **Severity**: **MEDIUM** — 不會毀資料，但會讓「我剛改的碼」與「容器實際跑的碼」分歧，而分歧點在部署層不在程式層
 **Family**: `G13-harness-disclosure`（**部分**——見 §3，它並非完全靜默，我先前的描述有誤）
 **Owner**: `(default)` — `ses_04db7a1c5ffelvbxyLP1p6xlRH`（bodesign 值星官）

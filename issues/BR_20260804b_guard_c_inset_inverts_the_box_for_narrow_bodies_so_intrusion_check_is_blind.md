@@ -1,11 +1,11 @@
 # BR_20260804b — guard C 的 inset 讓窄本體的 box 區間反轉，POWER_PORT_INSIDE_SYMBOL_BODY 對 513 個符號永遠回 False
 
+- **Status**: **PARTIAL**（2026-08-05 更正；原措辭見下方引言）— **§1 主缺陷已修**（`05dce34` + `d64bbd0`，重驗見 §1.1）；**§6 建議修法已被實測否決（SUPERSEDED，見 §6.1，照著施工會誤傷 1617 個從未盲的本體）**；§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）。**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 `BR_20260804g` 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。
+  > **原 Status 措辭（2026-08-04，保留不刪）**：`open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**`
 - **Severity**: MEDIUM-HIGH（純視覺缺陷的**檢查器**失效；受影響符號含 `Device:R`——最常用的符號）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:1645-1661`（guard C / `_port_intrusions`）
 - **Family**: schematic-engine
 - **Owner**: ses_03408d1faffeKuPkQZ9Zj6gWO2
-- **Status**: **PARTIAL**（2026-08-05 更正；原措辭見下方引言）— **§1 主缺陷已修**（`05dce34` + `d64bbd0`，重驗見 §1.1）；**§6 建議修法已被實測否決（SUPERSEDED，見 §6.1，照著施工會誤傷 1617 個從未盲的本體）**；§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）。**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 `BR_20260804g` 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。
-  > **原 Status 措辭（2026-08-04，保留不刪）**：`open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**`
 - **Scheduled**: 未排（P0 fixture 前置量測時撞到，未插隊施工）
 
 ---

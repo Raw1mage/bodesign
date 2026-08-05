@@ -1,6 +1,6 @@
 # BR_20260804l — `issues/` 帳本沒有 Status schema：兩支合理的 sweep 對同一批檔案回不同答案，而「沒有 Status」與「Status 在我的視窗外」共用同一個輸出
 
-- **Status**: PARTIAL — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；殘留只剩 26 張 WARN 的格式收斂（見 §10）
+- **Status**: PARTIAL — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；格式收斂殘留**已於 2026-08-05 12:21 CST 完成（WARN 24 → 0；基底 commit `cf0f62f`，改動停在工作樹未 commit）**，歸檔與否待 dispatcher 裁決（見 §10）
 
 | Field | Value |
 | --- | --- |
@@ -195,7 +195,7 @@ BR_20260802_reset_hard_silently_destroyed_...           <- severity high
 - **ERROR（rc=1）**：全檔零條 Status-ish 行 → 真排程危害。實測負例＝ERROR fixture。
 - **WARN（rc=0）**：有 Status 但非 line-3 canonical 形式 → 收斂用，不擋。
 
-實測（`d63566d` 落地後，41 張頂層）：
+實測（**歷史快照：`d63566d` 落地當下**，41 張頂層。**這三個數字皆已過期，當前值見緊接著的更正框**）：
 ```
 self-test: no-status fixture -> ERROR （控制組有牙）
 self-test: canonical fixture -> OK
@@ -204,13 +204,50 @@ ERROR = 0        <- 沒有一張是真的零 Status（§7 已補齊那 3 張）
 WARN  = 26       <- 格式收斂 backlog，見下
 ```
 
-### 殘留：26 張 WARN（格式收斂，PARTIAL 的唯一開口）
+> **量值更正（2026-08-05 12:2x CST，by `ses_02fe2ffe8ffe0y33B8FszeyVvM`）**：
+> 上方區塊是 **`d63566d` 落地當下的快照**，三個數字全部不是現況，
+> 而它們**未帶任何時間錨**——這正是 `BR_20260805c` 描述的缺陷，
+> 發生在記錄該缺陷家族的帳本自己身上。以 **2026-08-05 checker 實測為準**：
+>
+> | 欄位 | `d63566d` 快照 | 2026-08-05 實測 |
+> | --- | --- | --- |
+> | `scanned` | 41 file(s) | **47 file(s)** |
+> | `ERROR` | 0 | 0（未變） |
+> | `WARN` | 26 | **0**（收斂前為 24，非 26） |
+>
+> 歷史區塊保留不刪（它是 `d63566d` 當下的真實輸出），
+> 但任何引用請以本更正框為準。`41 → 47` 的差額成因未查。
 
-這 26 張都**有** Status（checker 綠、不擋 commit），只是不在 line-3 canonical 形式
-（裸 `Status:`、或深埋 line 6/7/23/24/26）。它們是漸進收斂工作，不急、可隨手做：
-每次碰到其中一張 BR 時把 Status 行改成 canonical 形式即可，WARN 數單調下降。
-**不批次搬**——批次改 26 個檔的 Status 位置與本 BR 的 scope 無關，且會在共用樹上
-產生一大批與各 BR 內容無關的 diff。checker 的 WARN 清單就是這個 backlog 的 live 追蹤。
+### 殘留：格式收斂 — **已於 2026-08-05 完成（WARN 24 → 0）**
 
-本 BR 標 **PARTIAL 留頂層**：schema+checker 已生效（主交付完成），
-WARN=26 的收斂是明確的 scoped remainder。WARN 歸零時可移 `closed/`。
+> **量值更正（2026-08-05 12:21 CST，by `ses_02fe2ffe8ffe0y33B8FszeyVvM`，BRNS handler）**：
+> 本節原寫「26 張 WARN」且**未帶時間錨**，讀起來像現況而實為快照
+> （即 `BR_20260805c` 描述的缺陷）。於基底 commit `cf0f62f` 實測為 **24 張**，非 26。
+> 差額來源未查（可能是 `d63566d` 之後有兩張被別人順手收斂或歸檔）——
+> 本次只重新量測，不回推歷史。
+
+**收斂前**（量測於 2026-08-05 12:10 CST，基底 commit `cf0f62f`）：
+`WARN = 24`、`ERROR = 0`、`rc = 0`，checker 自報 `scanned 47 file(s), window=full-file`，
+self-test 雙綠。這 24 張都**有** Status（checker 綠、不擋 commit），只是不在 line-3
+canonical 形式（裸 `Status:`、缺列表前綴的 `**Status**:`、或深埋 line 4/5/6/7/23/24/26）。
+
+**收斂後**（量測於 2026-08-05 12:21 CST，同一基底 `cf0f62f` + 工作樹未 commit 修改）：
+`WARN = 0`、`ERROR = 0`、`rc = 0`，self-test 雙綠。
+**壞掉控制組**：把其中一張的 line 3 改回裸 `Status:` 後重跑，checker 回到
+`WARN: 1` 並點名那一張；還原後輸出與壞掉前逐字相同——證明 `WARN = 0`
+不是因為 checker 瞎了。
+
+收斂手法分兩類，**語意狀態一字未改**（OPEN / PARTIAL / FIXED 逐字保留）：
+
+- **20 張**：原 Status 行補上 `- ` 列表前綴、或整行上移至 line 3（純搬遷，不新增不刪除）。
+- **4 張**（`BR_20260730_skills_endpoint`、`BR_20260802_freerouting_jar`、
+  `BR_20260802_issues_ledger_committed`、`BR_20260802_reset_hard_silently`）：
+  Status 位於結構化 State 區塊內（`Fix:` / `Effect:` / `Custody:` / `Blocker:` /
+  `Disposition:` / `Venue:` / `Status:` 一整組）。**搬走它會拆壞那筆記錄**，
+  故改為在 line 3 **新增**一行 canonical Status 鏡射區塊內的值，區塊原封不動。
+  其中三張為逐字鏡射；`BR_20260730` 因原 Status 是四行換行段落，line 3 寫成
+  同語意縮寫（態詞 `PARTIAL — deliberately NOT closed` 逐字相同，
+  尾句改指向 State 區塊與 §13）——**這是唯一一張 line 3 非逐字複寫者**。
+
+**尚未裁決**：本 BR 是否由 PARTIAL 升 FIXED、是否移 `closed/`——依權責歸 dispatcher，
+handler 不自行改語意狀態。handler 的理由見回報。

@@ -1,7 +1,7 @@
 # BR — `refs_ingest` landing verb is a THIRD `folder` convention, and its miss is indistinguishable from a genuinely-absent stage
 
-- **Filed**: 2026-08-02
 - **Status**: OPEN — **not fixed** (fixing it re-widens the scope of the readiness-contract work that adjudicated *internal* paths only)
+- **Filed**: 2026-08-02
 - **Severity**: medium-high — it is on the **landing plane** (a user/agent calls it directly)
 - **Family**: G13-harness-disclosure / 缺席態與失敗態共用同一個輸出
 - **Owner**: bodesign refs-first paradigm (`refs_gate.py`, `skills/bodesign/scripts/gate.py`)

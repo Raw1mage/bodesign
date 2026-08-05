@@ -1,9 +1,9 @@
 # BR_20260804d — `load_symbol` 的簽章與 docstring 仍承諾 2-tuple，實際回 3-tuple
 
+- **Status**: OPEN
 - **Severity**: LOW（**不是功能缺陷**——所有消費端都已適應；但它讓一個測試永久紅著，而紅燈指向錯誤的方向）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:360-362`（`load_symbol` 簽章 + docstring）／
   `tests/test_kicad_emit.py::test_load_symbol_returns_definition_and_pin_endpoints`
-- **Status**: OPEN
 - **Filed**: 2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`（dispatcher）
 - **Owner**: `schematic-engine`（`ses_03408d1fa`）
 - **Family**: `schematic-engine`

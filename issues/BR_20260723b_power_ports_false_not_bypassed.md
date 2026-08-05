@@ -1,9 +1,9 @@
 # BR_20260723b — power_ports=False 未真正抑制 power-port 幾何 + stub-orientation defect
 
+- **Status**: open
 - **Filed by**: aiguard C03 consumer session (ses_073a93d09ffeRTpR9TwIdofhb3)
 - **Repo**: bodesign (platform)
 - **Severity**: medium — 純視覺 layout defect(不影響 net 連通),但擋住預設 emit
-- **Status**: open
 - **Fix venue**: bodesign-rooted session (platform owner，上輪已預告可接)
 
 ## Symptom (verbatim)

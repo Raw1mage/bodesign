@@ -1,8 +1,8 @@
 # BR_20260723e — draftsman 畫不出最基本的串聯分壓（collinear-wire fusion 殘留漏洞）
 
+- **Status**: open
 - **Severity**: HIGH（立身能力缺陷 · 連最基本電路都無法以「視覺有連線 + 電氣正確」交付）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`（draftsman drawn-wire emission + anti-fusion guard）／`composer.py`（style=draftsman 路徑）
-- **Status**: open
 - **Filed**: 2026-07-23
 - **Scope / venue**: bodesign repo 內修（electrical design capability 主線）；**BRNS — 開新 session rooted in bodesign 反覆調試，本 BR 只做 RCA + fix plan，不在產出 session 內聯修**（遵 `BR_20260706_methodology_in_session_engine_rnd_antipattern` 的教訓：引擎層問題不在呼叫層打地鼠）
 - **Related（同族根因，全 CLOSED）**:

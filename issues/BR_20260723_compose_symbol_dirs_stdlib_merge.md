@@ -1,9 +1,9 @@
 # BR_20260723 — compose_schematic 覆蓋標準庫 → 給定 symbol_dirs 時 placed:0
 
+- **Status**: open
 - **Filed by**: aiguard C03 consumer session (ses_073a93d09ffeRTpR9TwIdofhb3)
 - **Repo**: bodesign (platform)
 - **Severity**: high — 任何需要「自訂 symbol 目錄 + 標準庫 passive」的 compose 全數 `placed:0`
-- **Status**: open
 - **Fix venue**: bodesign-rooted session (platform owner)
 
 ## Symptom (verbatim)

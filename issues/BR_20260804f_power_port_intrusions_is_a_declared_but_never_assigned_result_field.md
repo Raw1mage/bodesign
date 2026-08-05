@@ -1,6 +1,6 @@
 # BR_20260804f — `power_port_intrusions` 宣告了、docstring 承諾了、從未被賦值
 
-**Status**: OPEN
+- **Status**: OPEN
 **Severity**: MEDIUM (instrument defect — 讀者拿到的空清單與「沒有缺陷」無法區分)
 **Family**: schematic-engine / G13-harness-disclosure
 **Filed**: 2026-08-04 by ses_03408d1faffeKuPkQZ9Zj6gWO2 (schematic-engine owner)

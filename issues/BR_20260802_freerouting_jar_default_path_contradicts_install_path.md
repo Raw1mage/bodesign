@@ -1,5 +1,7 @@
 # BR_20260802 — `routing.py` 的 freerouting jar 預設路徑與 `Dockerfile.ee` 安裝路徑不一致（且一份「已修復」紀錄從未落地）
 
+- **Status**: OPEN
+
 | Field | Value |
 | --- | --- |
 | Title | freerouting jar default resolves to a subdirectory that no image creates; the mismatch is masked only by an env var, and a sibling BR certifies this as already-fixed when it never landed |

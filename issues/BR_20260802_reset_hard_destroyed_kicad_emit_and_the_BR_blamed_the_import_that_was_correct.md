@@ -1,10 +1,11 @@
 # BR_20260802 — `reset --hard` 摧毀了 `kicad_emit.py` 的未 commit 版本，而本 BR 把責任歸給了那個從頭到尾都正確的 import
 
+- **Status**: OPEN
+
 > **標題已於 2026-08-02 改寫**（原題：「`composer.py` import 三個從未存在的符號」）。
 > 原題會派出「去實作三個不存在的函式」的工作；正確工作是**還原一份存在且已驗證的檔案**。
 > 改寫依據見 §更正 與 §值星官裁決。
 
-- **Status**: OPEN
 - **Owner**: `(default)`
 - **Family**: `schematic-engine`（該 family 目前無 owner，見 `issues/OWNERS.md`）
 - **Filed at**: 2026-08-02（coordinator `ses_04db7a1c5ffelvbxyLP1p6xlRH`；由 BR_20260731 handler 在驗證中發現並回報，coordinator 獨立覆核）

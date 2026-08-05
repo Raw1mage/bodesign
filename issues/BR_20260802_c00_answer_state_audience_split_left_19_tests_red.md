@@ -1,7 +1,7 @@
 # BR: C00/C01 answer_state audience-split 遷移只做了寫入端，19 個測試永久紅
 
+- **Status**: OPEN（未修 — 在 readiness-contract 派工的 scope 之外，依規定 file 不順手修）
 - Date: 2026-08-02
-- Status: OPEN（未修 — 在 readiness-contract 派工的 scope 之外，依規定 file 不順手修）
 - Family: `audience-split-migration`（`stage-structure.md` 2026-07-17 的 03_output/ 遷移）
 - Severity: **medium-high** — 缺陷本身是低風險的測試漂移，但它的**二階效應**（永久紅測試摧毀
   count-based 回歸判準）在 2026-08-02 當天差點讓一次真回歸被漏掉。見 §4。

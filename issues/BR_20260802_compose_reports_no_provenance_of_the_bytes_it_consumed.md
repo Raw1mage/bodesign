@@ -1,6 +1,6 @@
 # BR_20260802 — compose 的成功回報不含它讀了哪些位元組
 
-Status: OPEN
+- **Status**: OPEN
 Owner: 未定（bodesign-platform；本 repo 為 consumer，不在此修）
 Filed: 2026-08-02 by ses_073a93d09ffeRTpR9TwIdofhb3（thesmart_products 值星官）
 Family: no-silent-degradation（V-series 變體，見 bodesign `ragbase/control/no-silent-degradation/`）

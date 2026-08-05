@@ -1,10 +1,10 @@
 # BR_20260804 — `_bus_route` 的 docstring 承諾一個 code 沒有實作的 channel router
 
+- **Status**: open
 - **Severity**: MEDIUM（本體無使用者可感知傷害；傷害在**它讓兩張 BR 的 RCA 指向錯的函式**）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:2797-2850`（`_bus_route`）
 - **Family**: schematic-engine
 - **Owner**: ses_03408d1faffeKuPkQZ9Zj6gWO2
-- **Status**: open
 - **Filed**: 2026-08-04
 - **Scheduled**: 未排（先於 P0 fixture 之前建檔，不插隊施工）
 

@@ -1,6 +1,6 @@
 # BR_20260804i — `HOST_UID`/`HOST_GID` 從未進入容器，而在開發者的機器上失效與生效產生逐字相同的觀察結果
 
-**Status**: OPEN — 已量測定位，**刻意未修**（修法要動 compose，不在本 handler 的可碰檔案集）
+- **Status**: OPEN — 已量測定位，**刻意未修**（修法要動 compose，不在本 handler 的可碰檔案集）
 **Severity**: medium（今日無害；在 `id -u ≠ 1000` 的 host 上靜默失效）
 **Family**: `readiness-contract`（發現於缺陷 3 的修法過程；與 entrypoint 同一支檔案但**不同缺陷**）
 **Owner**: `(default)` — dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`

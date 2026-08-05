@@ -1,6 +1,6 @@
 # BR_20260804j — 驗證層自己沒有驗證層：同一輪內五個實例
 
-**Status**: OPEN
+- **Status**: OPEN
 **Severity**: HIGH (meta-instrument defect — 它讓**整份 mutation proof 靜默失效**，而失效的輸出與通過逐字相同)
 **Family**: G13-harness-disclosure / verification-methodology
 **Filed**: 2026-08-04 by ses_0330e7869ffev0nZL0XqoXSp78 (readiness-contract handler)

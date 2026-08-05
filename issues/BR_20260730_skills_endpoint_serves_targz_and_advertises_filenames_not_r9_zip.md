@@ -1,5 +1,7 @@
 # BR_20260730 — bodesign 的 `GET /skills` 服務 `.tar.gz` 並廣告檔名，偏離 R9.2 釘死的 `.zip`（且服務來源與 `skillPaths` 宣告來源不同源）
 
+- **Status**: PARTIAL — deliberately NOT closed；scoped remainder 見下方 State 區塊與 §13
+
 | Field | Value |
 | --- | --- |
 | Title | bodesign R9.2 格式偏離：`/skills` 廣告檔名 + 服務 `.tar.gz`，遠端 client 全數取不到 |
