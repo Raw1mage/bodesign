@@ -8,7 +8,7 @@
 | Date | 2026-07-31 |
 | Severity | high — these are the gates AGENTS.md §2.4 and README name as the mechanism by which bodesign *demonstrates* rather than *claims* reliability. A gate that passes on nothing is not a weaker gate; it is a gate that reports the same word for "checked and clean" and "never checked anything". |
 | Priority | P1 — no known live miscall yet, but the failure is silent by construction and the callers most likely to hit it (an extractor that found nothing, a netlist parse that yielded no nets) are exactly the ones whose failure it would mask. |
-| Affected paths | `packages/component-kb/bodesign_component_kb/vault.py:222-252`; `packages/workflow-core/bodesign_workflow_core/reference_crosscheck.py:45-56`; `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py:51-64` |
+| Affected paths | `packages/component-kb/bodesign_component_kb/vault.py:222-252`; `packages/workflow-core/bodesign_workflow_core/reference_crosscheck.py:45-56`; `packages/eda-bridge/bodesign_eda_bridge/pin_allocation.py:51-64`; `skills/bodesign/engines/kicad/scripts/domain_detectors.py:1294-1379` (`_check_rf_reference_values`, the fourth site — found and fixed later in `3de27b2`, backfilled into this header 2026-08-05) |
 
 ```
 State:
