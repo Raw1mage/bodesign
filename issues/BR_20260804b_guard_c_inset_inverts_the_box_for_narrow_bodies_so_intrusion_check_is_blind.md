@@ -4,7 +4,8 @@
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:1645-1661`（guard C / `_port_intrusions`）
 - **Family**: schematic-engine
 - **Owner**: ses_03408d1faffeKuPkQZ9Zj6gWO2
-- **Status**: open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**
+- **Status**: **PARTIAL**（2026-08-05 更正；原措辭見下方引言）— **§1 主缺陷已修**（`05dce34` + `d64bbd0`，重驗見 §1.1）；**§6 建議修法已被實測否決（SUPERSEDED，見 §6.1，照著施工會誤傷 1617 個從未盲的本體）**；§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）。**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 `BR_20260804g` 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。
+  > **原 Status 措辭（2026-08-04，保留不刪）**：`open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**`
 - **Scheduled**: 未排（P0 fixture 前置量測時撞到，未插隊施工）
 
 ---
@@ -15,6 +16,70 @@ guard C 把本體 box **內縮** `inset = _PWR_STUB_STEP_MM/4 = 1.905 mm` 後才
 本體寬度 ≤ 2×inset = 3.81 mm 時，內縮後 `bx0 > bx1`，**區間反轉**，該不等式恆為 False。
 
 「port 沒有落在 body 內」與「這個 body 太窄所以我看不見」**共用同一個輸出**（都是不 append）。
+
+### 1.1 ⚠ ALREADY-FIXED（2026-08-05 重驗，`ses_030202fa9` 隔離量測 + `ses_03000bf24` 覆算）
+
+> **上方 §1 是原記載，保留不刪。** 它記述的是**修法落地前**的行為；記載的演變本身就是這張 BR 在講的那件事的證據。
+> **要區分兩件事**：**觸發前提消失了，機制沒有。**
+
+**修掉它的兩顆 commit**（本 session 以 `git log -1` 逐顆驗過 sha 與標題存在，控制組：假 sha `deadbee` → `fatal: unknown revision`，rc=128）：
+
+| sha | 標題 |
+|---|---|
+| `05dce34` | `fix(guard-c): conditional inset degrade + assign the intrusion field it promised` |
+| `d64bbd0` | `fix(eda-bridge): guard C -- treat a span within one ULP of 2*inset as not wide enough` |
+
+`_guard_c_body_box`（`kicad_emit.py:558`）現在是 **CONDITIONAL**，不再是固定內縮（`:664-665`，本 session 直接讀原始碼確認）：
+
+```python
+ix = inset if _wide_enough(x1 - x0) else (x1 - x0) / 4.0
+iy = inset if _wide_enough(y1 - y0) else (y1 - y0) / 4.0
+```
+
+#### 原記載 / 重驗（2026-08-05）並列
+
+| 格 | 原記載 | 重驗（HEAD） | 判定 |
+|---|---|---|---|
+| §2.2 `Device:R` 的 GUARD C box | `x[100.889, 99.111]`（**區間反轉**） | **`x[99.492, 100.508]`，w=1.016，`inverted=False`** | 已修 |
+| §2.5 真實頁 `e2e-led-driver-npn` 的 BLIND | **9** | **0** | 已修 |
+| 機制：guard 只有 append / 不 append 兩態、無第三態（`:1801-1814`） | 成立 | **仍然成立** | **未修，也不打算修** |
+
+**重驗的決定性證據**——真實頁 `experiments/e2e-led-driver/C03-EE/e2e-led-driver-npn.spec.json`（本 session `test -f` 確認存在；控制組假檔名回 MISSING），spy 掛**生產 helper**（非重寫的等價實作）：
+
+```
+          boxes_built   DEGENERATE(blind)   intrusions
+HEAD           22               0                1
+PRE-FIX        22              17                1
+```
+
+`DEGENERATE` 兩個 variant 不同（17 → 0）⇒ **這個探針有判別力，不是「兩邊都 0 所以看不出差別」。**
+
+#### 覆算（`ses_03000bf24`，直接呼叫生產 `_guard_c_body_box`，非採信上游回報）
+
+```
+Device:R body x[98.984, 101.016]  -> guard C x[99.492, 100.508] w=1.016 inverted=False
+CONTROL AMS1117ish 10.16 x 6.985  -> x[1.905, 8.255] y[1.905, 5.080] inverted=False   （寬本體，走 inset 分支，未被修法擾動）
+CONTROL 74LVC1GU04DRL 型 span=0.0 -> w=0.000000                                        （rect 本身退化，任何 inset 規則都救不了）
+```
+
+**⇒ §1 的觸發前提（固定 inset 造成區間反轉）已不存在；§1 的機制描述（兩態共用輸出）仍為真。不要把整張 BR 讀成「完全不成立」。**
+
+### 1.2 §1 標題的「513 個符號」——三個口徑都是真的，但沒有一個是 513
+
+| 口徑 | pre-fix blind | HEAD blind | 定義 |
+|---|---|---|---|
+| **A 生產全鏈** | 1882 | **9** | root-level lib_id（paren-depth 追蹤，排除 `_0_1` / `_1_0` 子單元）= 22583 個；走生產 fallback 全鏈 `_body_rect` → `_graphics_bbox` → pin-tip；blind ⟺ box 寬 ≤ 0 |
+| **B 只算 rect 來源** | **516** | **1** | 同 A 但只計 `_body_rect` 有回值者（18547 個）。**這格逐字對上 §2.3 修正後的 516** |
+| **C BR 原記載** | 513 | — | **方法未記錄，兩方皆無法重現** |
+
+三分計數（**缺席態不與失敗態共用輸出**）：`src_rect=18547 / src_graphics=4036 / src_pintip=0 / load 失敗=0 / flatten 失敗=0`。
+
+HEAD 殘留的 **9 個 blind** 拆解：
+
+- **rect 來源 1 個**：`74xGxx:74LVC1GU04DRL`，x-span **0.0** —— rect 本身退化，**任何 inset 規則都救不了**（覆算已重現，見上方 CONTROL）。
+- **graphics 來源 8 個**：轄區屬 `BR_20260804g`。**未核對是否已在 804g 名單內**（見 §9）。
+
+**⇒ `513` 在 A / B / C 任一口徑下皆不重現。** 這與 §2.6 記的是同一個教訓：**一個沒有標註口徑的數字，會被下一個人當成另一個口徑的答案。**
 
 ## 2. 量測（可重跑，含控制組）
 
@@ -267,6 +332,40 @@ iy = min(inset, (max(ys) - min(ys)) / 2 - EPS)
 **必須先量後改**：修法會讓既有 aiguard CCM 各頁冒出新的 intrusion，而預設 gate 是 `error`。
 所以修法要跟一次「修好後有多少頁會從 pass 變 raise」的量測，否則會把一個檢查器修復變成一次交付中斷。
 
+### 6.1 ⛔ SUPERSEDED（2026-08-05）——上方建議修法**不得照著施工**
+
+> **上方 §6 是原記載，保留不刪**——它是「一個看起來合理的修法被實測否決」的記錄，刪掉就看不到否決發生過。
+
+**否決的是 `min()` 形式本身，不只是參數選得不好。** `kicad_emit.py:583-589` 的 docstring 記載實測結果（本 session 直接讀原始碼確認，`grep -n '1617'` 命中 `:585`；控制組：假 token 回 0）：
+
+```
+Same sweep, `min(inset, span/4)`: 512 fixed but **1617 never-blind bodies
+perturbed** (e.g. `Regulator_Linear:AMS1117-3.3`, y-span 6.985mm).
+```
+
+⇒ `min()` 形式會擾動**每一個落在 `span < inset/k` 帶內的 body**，包括那些 unclamped box 本來完全正常的。本 session 覆算 AMS1117 y-span 6.985：`min(1.905, 6.985/4) = 1.746` ≠ `inset 1.905` ⇒ **確實會被擾動**。
+
+**實際落地的是條件式降級，不是 `min()`**：
+
+```python
+def _wide_enough(span): return span > threshold and not math.isclose(span, threshold, rel_tol=0.0, abs_tol=math.ulp(threshold))
+ix = inset if _wide_enough(x1 - x0) else (x1 - x0) / 4.0
+```
+
+條件式形式在 `span - 2*inset > 0` 時依構造是 no-op，所以誤傷數是 **0 而非只是很小**。另見 §8.2b（ULP 容差）。
+
+### 6.2 §6 的「**必然**新增 intrusion 回報」——預測未兌現，但只量了 1 頁
+
+真實頁 `e2e-led-driver-npn`：
+
+```
+HEAD     intrusions = 1
+PRE-FIX  intrusions = 1
+delta    = 0
+```
+
+**這不是「§6 的預測是錯的」，是「在這一頁未兌現」。** 其餘 aiguard CCM 各頁**未量** ⇒ §6 結尾要求的那次「各頁曝險」量測仍是 **UNMEASURED，不是 FALSE**。兩者不得共用同一個輸出——這正是本 BR 全文在講的形狀。
+
 ## 7. 驗收判準
 
 1. §2.1 四格重跑：窄本體 + `power_ports=True` 必須從 `no-raise` 變 **RAISE**
@@ -461,4 +560,23 @@ M-C fixture 改指 `Device:R` → 紅在 fixture 判別力。
 ### 8.5 §8 這格的殘留
 
 **無。** §8 已收斂——名單更正（§8.2a）、修法落地（§8.2b）、兩項未量補齊（§8.4）。
-本張 BR 仍 OPEN 的是 **§1/§6 的主缺陷（量值 disputed）**，與 §8 是不同的標的。
+
+~~本張 BR 仍 OPEN 的是 **§1/§6 的主缺陷（量值 disputed）**，與 §8 是不同的標的。~~
+
+> **⚠ 2026-08-05 更正（原句保留划掉，不刪）**：§1 主缺陷已於 `05dce34` + `d64bbd0` 修正（見 §1.1），
+> §6 建議修法已 SUPERSEDED（見 §6.1）。本張現為 **PARTIAL**，殘留逐項列於 §9。
+
+---
+
+## 9. ⚠ 未量 / 未裁定（2026-08-05，本張仍為 PARTIAL 而非 closed 的理由）
+
+> 這一節存在的理由：上方 §1.1 / §6.1 把已修的部分寫得很清楚，**而一張只寫「已修」不寫「還沒量什麼」的 BR，
+> 讀起來與一張真的收斂完的 BR 長得一模一樣。** 未量的格不得被已量的格吸收掉。
+
+| # | 未量 / 未裁定項 | 現狀 | 不得誤讀為 |
+|---|---|---|---|
+| C8 | **aiguard CCM 各頁曝險**（§6 結尾要求的那次量測） | **只量了 1 頁**（`e2e-led-driver-npn`，delta=0） | 不得讀成「全部頁都不會新增 intrusion」。**UNMEASURED ≠ FALSE** |
+| R9 | **HEAD 殘留 8 個 graphics 來源 blind** | 已知存在，已知轄區屬 `BR_20260804g` | **未核對它們是否已在 804g 的名單內**。「已轉出」與「沒人接」目前共用同一個輸出 |
+| N3 | **母體數三方分歧** | `22583`（生產全鏈 root-level）/ `22431`（dispatcher 重跑，見覆核節）/ `21437`（§2.3 掃描） | **未裁定哪個是對的**。三個都可能量的是不同東西（參 §8.2a 那次口徑分歧的形狀） |
+
+**本張可以 closed 的條件**：C8 補量、R9 核對完（或明確轉入 804g）、N3 裁定或明確判為不影響結論。
