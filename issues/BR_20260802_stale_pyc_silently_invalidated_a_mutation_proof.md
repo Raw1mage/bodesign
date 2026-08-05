@@ -1,6 +1,6 @@
 # BR_20260802 — stale `.pyc` 讓 mutation proof 靜默失效：同一秒內、同長度的改動，Python 不會重新編譯
 
-- **Status**: OPEN
+- **Status**: OPEN — STILL-VALID on 2026-08-05, **and prescription #1 (`python3 -B`) is MEASURED WRONG — see §Correction**
 - **Owner**: unassigned
 - **Family**: `G13-harness-disclosure`
 - **Severity**: real — 這個機制會讓**驗證程序本身**回報「已驗證」而其實什麼都沒驗到
@@ -76,12 +76,46 @@ match? mtime=True size=True  →  pyc 被視為 VALID
 **字元數相同的改動特別危險**，因為那是最常見的 mutation 形式：
 `1e-9`→`1e-3`、`>=`→`> `、`True`→`Fals`（誤植）、數字調參。
 
+## ⚠ Correction（2026-08-05，`ses_030847a3affev5QmJelNWqSK41` 重驗時量到）
+
+**下方修法 #1 的括號說明「不寫也不讀 bytecode」是錯的，而這個錯會造成假安心。**
+
+`-B` 只設定 `sys.dont_write_bytecode` ——它**阻止寫入**，**不阻止讀取既有的 `.pyc`**。
+所以在本 BR 描述的情境（`.pyc` 已經存在且被判定為 valid）下，`-B` **完全沒有保護力**。
+
+```
+情境：mod/__init__.py 已被 import 過（pyc 已存在），
+      接著同長度 mutate + 還原 mtime  ->  pyc 仍被視為 valid
+
+  disk truth                     EPS = 1e-3
+  T1 python3（預設）              1e-09      <- stale
+  T2 python3 -B                   1e-09      <- stale，**與預設完全相同**
+  T3 PYTHONDONTWRITEBYTECODE=1    1e-09      <- stale
+  T4 rm -rf __pycache__ 後         0.001      <- 唯一正確
+
+ACCEPTING CONTROL（證明探針有判別力）：
+  無既有 pyc 時，-B 讀 disk 正確     4.2
+```
+
+**T4 是唯一有效的處置。** T2 與 T1 共用同一個輸出——
+這正是本 BR 在講的那個形狀，**發生在本 BR 自己開的處方上**。
+
+**`-B` 唯一真正的作用是「不留下 `.pyc` 給下一次」**（預防），
+對「這一次已經存在的 stale `.pyc`」（治療）無效。兩者不可互換。
+
+⇒ **正解**：mutation proof 前後一律
+`find . -name __pycache__ -exec rm -rf {} +`（下方 #2），
+或以 #3 從直譯器問回來。`-B` 可加，但**不得單獨作為保護**。
+
+此更正同步影響 `BR_20260804j` §4.5（措辭相同）。
+
 ## 修法形狀
 
 三個層次，可疊加：
 
-1. **驗證腳本一律用 `python3 -B`**（不寫也不讀 bytecode）。
-   最便宜，本輪已採用並重跑全部四個 mutation proof，結論不變。
+1. ~~**驗證腳本一律用 `python3 -B`**（不寫也不讀 bytecode）。~~
+   **上行已被上方 §Correction 推翻——`-B` 不讀既有 pyc 是錯的，它照讀。**
+   `-B` 僅作為「不留 pyc 給下一次」的預防，**不可單獨作為本 BR 情境的保護**。
 2. **mutation 前後 `find . -name __pycache__ -exec rm -rf {} +`**。
    比 `-B` 慢，但涵蓋子行程。
 3. **驗證「我讀到的就是我執行的」**：mutation 後不要只 `cmp` 磁碟檔，

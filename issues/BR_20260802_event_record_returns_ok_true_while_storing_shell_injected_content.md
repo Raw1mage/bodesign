@@ -1,6 +1,10 @@
 # BR_20260802 — `event_record` 回 `ok:true` 並給了 slug，而存進去的內文已被 shell 命令替換掉包
 
-- **Status**: OPEN
+- **Status**: OPEN — STILL-VALID（2026-08-05 重驗）。**修復面確認不在 bodesign**：
+  `skills/plan-builder/scripts/producer.ts` 在本 repo **不存在**，實際位於
+  `/home/pkcs12/projects/specbase/skills/plan-builder/scripts/producer.ts`
+  （CONTROL：同一支探針對 bodesign 的 `AGENTS.md` 回 present，證明它讀得到本 repo）。
+  ⇒ 本張的 `Custody: 修復面在 specbase（跨 repo）` 註記正確，應走 BRNS 交給 specbase。
 - **Owner**: unassigned（filed by 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `G13-harness-disclosure`
 - **Severity**: real — **append-only ledger 收下了一筆內容不是我寫的紀錄，且回報成功**

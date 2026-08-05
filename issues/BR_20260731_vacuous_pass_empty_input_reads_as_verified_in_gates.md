@@ -12,8 +12,8 @@
 
 ```
 State:
-Fix: none yet
-Effect: not started
+Fix: LANDED in commit b429b06 "fix(gates): empty input is a third state, never a pass"
+Effect: verified effective 2026-08-05 by ses_030847a3affev5QmJelNWqSK41 (BRNS handler, round=1)
 Custody: bodesign
 Blocker: none
 Disposition: filed — split out of BR_20260730 round 7 rather than folded in. Different

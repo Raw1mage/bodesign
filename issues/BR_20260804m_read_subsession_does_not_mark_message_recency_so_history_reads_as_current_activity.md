@@ -1,6 +1,10 @@
 # BR_20260804m — `read_subsession` 不標示訊息新舊，於是歷史讀起來就是現況
 
-- **Status**: OPEN — 已量測，未修
+- **Status**: OPEN — STILL-VALID（2026-08-05 重驗）。**修復面不在 bodesign**：
+  `read_subsession` 由 opencode runtime 的 `system-manager` MCP 提供，本 repo
+  `packages/` `services/` `scripts/` 對它的引用數 = 0（CONTROL：同一支 grep 對 `packages/`
+  內確實存在的 token 回 115 個檔，證明探針讀得到檔）。⇒ 應走 BRNS 交給 opencode repo 的值星官，
+  本張留在 bodesign 僅作存證。
 - **Severity**: high — 它產生的不是空結果，而是一個很有說服力的錯誤結論，且該結論驅動了破壞性動作（誤遣散）
 - **Owner**: (default)
 - **Family**: G13-harness-disclosure

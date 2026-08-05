@@ -1,6 +1,7 @@
 # BR_20260802 — `git mv` 後的內容編輯不進暫存區，而「數檔案」的 staging 閘看不出差別：rename-only 與 rename+content 都回 1
 
-- **Status**: OPEN
+- **Status**: OPEN — STILL-VALID（2026-08-05 重驗，最小複現逐字成立）。
+  **但 §Fix proposal #1 的判準寫法本身有陷阱，見 §重驗補充（2026-08-05）。**
 - **Owner**: `(default)`
 - **Family**: `G13-harness-disclosure` / git-staging-visibility
 - **Filed at**: 2026-08-02（coordinator `ses_04db7a1c5ffelvbxyLP1p6xlRH`；歸檔 BR_20260707 時**實際踩到**，commit `788e523` 是一個空 commit）
@@ -96,6 +97,99 @@ git show :b/f.md                         → Status: OLD
 3. **commit 後回讀**：對「內容必須落地」的 commit，用
    `git show <sha>:<path> | grep -c <新字串>` 雙向驗證（新字串出現、舊字串消失）。
    這是唯一不依賴暫存區語意的檢查。
+
+## 重驗補充（2026-08-05，`ses_030847a3affev5QmJelNWqSK41`，round=2 口徑矩陣）
+
+缺陷本身**完全成立**。但「哪一個判準扛得住」需要**帶口徑**陳述——
+round=1 我寫成無口徑的絕對句（「numstat 帶 pathspec 無判別力」），那是不完整的。
+
+### 四態定義（`git show HEAD:a/f.md` 與 D 的 sha256 逐字相同，已驗 CONTROL）
+
+| 態 | 情境 | index | worktree |
+|---|---|---|---|
+| **B** | `git mv` 後編輯工作區，**從未 `git add`**（缺陷態） | OLD | NEW |
+| **D** | 純 rename，內容逐字未變（**合法**態） | OLD | OLD |
+| **E** | 同 B 的編輯但**已 staged**，行數相同（修好態） | NEW | NEW |
+| **C** | 同 E 但行數不同 | NEW | NEW |
+
+### 3×4 矩陣（判準全部不接管道：`cmd > out 2>&1` 再讀）
+
+| 判準 | B | D | E | C |
+|---|---|---|---|---|
+| p1 `numstat --cached -- <new>` | `3 0 b/f.md` | `3 0 b/f.md` | `3 0 b/f.md` | `4 0 b/f.md` |
+| p2 `numstat --cached`（無 pathspec） | `0 0 {a => b}/f.md` | `0 0 {a => b}/f.md` | `1 1 {a => b}/f.md` | `0 3 a/f.md` + `4 0 b/f.md` |
+| p3 `git show :<new>` readback | `Status: OLD` | `Status: OLD` | `Status: NEW` | `Status: NEW` |
+| p4 `git diff --name-only`（未暫存殘留） | `[b/f.md]` | `[]` | `[]` | `[]` |
+
+### ★ 決定性的一對是 B vs D，而**只有 p4 分得出來**
+
+> **⚠ 結論的口徑（務必連同結論一起讀，不得擴大解釋）**
+>
+> 精確宣稱是：**在偵測「`git mv` 後同行數編輯且未 staged」這個特定缺陷態上，
+> 區分 B 與 D 唯有 p4 具判別力。**
+>
+> **不是**「任何情況下只有 p4 能用」。若編輯**改變行數**（C 態），p1 就分得出來
+> （B `3 0` vs C `4 0`）。p1 的失效**僅在改動不影響行數時成立**——
+> 而 BR 歸檔（改 Status 一行、加 Closed 戳）恰好落在那個口徑內，
+> 所以對本 repo 的歸檔流程而言 p4 是必要的。
+>
+> 無口徑的絕對句在兩個方向都是錯的：「p1 永遠無判別力」錯，
+> 「readback 是三態通用判準」也錯。判準的適用範圍必須與判準本身一起陳述。
+
+```
+B(缺陷) vs D(合法純 rename)：  p1 相同  p2 相同  p3 相同  p4 DIFFERS
+B(缺陷) vs E(同編輯已 staged)： p1 相同  p2 DIFFERS  p3 DIFFERS  p4 DIFFERS
+```
+
+**這推翻兩件事，其中一件是我 round=1 自己的建議：**
+
+1. **`git show :<path>` readback 不是萬用解。** 它在 B vs E 有判別力，
+   但在 **B vs D 完全沒有**——兩者都回 `Status: OLD`，因為純 rename 的 index 內容
+   本來就該是舊的。readback 回答的是「index 內容是什麼」，**不是「有沒有東西該進去而沒進去」**。
+2. **p1（帶 pathspec）的失效有口徑**：它在 B/D/E 三態共用 `3 0`，
+   但 C（行數不同）回 `4 0`。所以「零判別力」**僅在改動不影響行數時成立**——
+   而 BR 歸檔（改 Status 一行、加 Closed 戳）**正好落在那個口徑內**。
+   無口徑的絕對句是錯的；無口徑的「有判別力」也是錯的。
+
+### 正解：p4，且它耐得住 pathspec
+
+缺陷的本質是「**工作區有改動沒進 index**」，所以判準要直接問那件事，
+而不是繞道問 index 的內容或差異量：
+
+```bash
+# 精確 pathspec（本 repo 共用工作樹的強制要求），實測仍有判別力
+test -z "$(git diff --name-only -- "$NEW")" || abort "content edited but NOT staged: $NEW"
+```
+
+```
+B  git diff --name-only -- b/f.md = [b/f.md]   <- 開火
+D  git diff --name-only -- b/f.md = []         <- 合法純 rename，正確放行
+E  git diff --name-only -- b/f.md = []         <- 已 staged，正確放行
+```
+
+⇒ **§Fix proposal 的 ★ 應從 #1（numstat）改為本節的 p4**；
+`git show :<path>` readback（#3）作為**內容正確性**的補充檢查仍有價值，
+但它**不能**單獨用來偵測本 BR 的缺陷。
+
+### 附帶發現：`git mv` 的錯誤訊息指錯對象（同族，建議併入本張）
+
+由獨立驗證員踩到、本輪複現：目的地目錄不存在時，
+
+```
+$ git mv a/f.md b/f.md            # b/ 不存在
+fatal: renaming 'a/f.md' failed: No such file or directory     rc=128
+
+  source a/f.md 在 disk?  YES-EXISTS
+  source 被 git 追蹤?      a/f.md（是）
+  目的地 b/ ?              ABSENT   <- 真正的原因
+CONTROL：mkdir -p b 後同一道指令 rc=0、stderr 空（探針有判別力）
+```
+
+**訊息把 `No such file` 掛在 source 上，而缺的是 destination。**
+讀者會去查 source（存在、且 tracked），於是「路徑打錯」與「目的地目錄沒建」
+共用同一句話。rc=128 是誠實的，但**若被管道尾端或 `|| true` 吃掉**
+（本家族的既有形狀），就退化成缺席態偽裝成成功態。
+歸入本張而非另立：同一個 `git mv` 表面、同一類「操作沒生效而輸出不明說」。
 
 ## Validation plan
 

@@ -132,9 +132,20 @@ cp "$F" "$BAK" && cmp -s "$F" "$BAK" && [ -s "$BAK" ] || { echo BACKUP FAILED; e
 - `import` 證明模組**可載入**，不證明**符號存在**（呼叫時才 `NameError`）
 - `sh -n` 證明**語法合法**，不證明**沒有重複或不可達區塊**
 
-### 4.5 Python mutation 一律 `python3 -B`，或每次切換清 `__pycache__`
+### 4.5 Python mutation ~~一律 `python3 -B`，或~~ **每次切換清 `__pycache__`**
 
 否則 ④ 會讓整份證明失效而毫無跡象。
+
+> **⚠ 更正（2026-08-05，`ses_030847a3affev5QmJelNWqSK41` 實測）：`-B` 在這裡沒有保護力。**
+> `-B` 只阻止**寫入** bytecode，**不阻止讀取既有的 `.pyc`**。在 ④ 的情境
+> （pyc 已存在且被判定 valid）下，`python3 -B` 與預設**回傳完全相同的 stale 值**：
+> ```
+> disk=1e-3 | 預設 1e-09 | -B 1e-09 | rm -rf __pycache__ 後 0.001（唯一正確）
+> ACCEPTING CONTROL：無既有 pyc 時 -B 讀 disk 正確 = 4.2（探針有判別力）
+> ```
+> ⇒ **清 `__pycache__` 是唯一有效處置**；`-B` 只能當「不留 pyc 給下一次」的預防。
+> 本 BR 主題是「驗證層自己沒有驗證層」，而**本節開的處方自己就是一個未驗證的斷言**——
+> 詳見 `BR_20260802_stale_pyc_silently_invalidated_a_mutation_proof.md` §Correction。
 
 ### 4.6 ⭐ 上位處方：**凡在同一檔案的同一區域多次編輯，收尾前數一次該符號/賦值的出現次數**
 

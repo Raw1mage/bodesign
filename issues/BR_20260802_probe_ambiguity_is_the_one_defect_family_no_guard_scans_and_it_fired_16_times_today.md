@@ -1,6 +1,7 @@
 # BR_20260802 — 探針歧義：唯一沒有任何防護掃描的缺陷家族，今日開火 16 次
 
-**Status**: OPEN — 生產線因此停線（使用者指令 2026-08-02）
+**Status**: PARTIAL — **§6 提案機制已落地並在 2026-08-05 實測開火**（見 §10）；
+生產線停線狀態需使用者裁示解除（§8 復工條件 1 已滿足，2/3 需 dispatcher 確認）
 **Severity**: P0 — 它汙染的是「我們如何知道任何事情」
 **Family**: G13-harness-disclosure
 **Owner**: ses_04db7a1c5ffelvbxyLP1p6xlRH（值星官）
@@ -414,6 +415,34 @@ grep -c 回 0。錯的路徑、打錯的 pattern、真正的缺席，三者產�
 3. 使用者明確批准復工
 
 ---
+
+## 10. 2026-08-05 重驗：機制已落地且有效（`ses_030847a3affev5QmJelNWqSK41`）
+
+**§6 提案的 post-execution ambiguity detector 已經在線上運行**，且在本次重驗的
+**同一個 session 內對我自己的指令開火至少 8 次**，全部命中真實歧義：
+
+| 開火規則 | 我當下的指令 | 若無此提示會怎樣 |
+|---|---|---|
+| `and-chain-truncates` | `git status ... && grep -c ...` | `&&` 鏈在 grep 無命中時靜默跳過後續，輸出仍讀作「全部跑過」 |
+| `pipeline-exit-status` | `... \| head` 後取 `$?` | 取到管道尾端，127 被蓋掉（**開火 5+ 次**） |
+| `pathspec-narrowed` | `git status --porcelain -- <path>` | 縮小視野與完整視野同形（本 BR §3 #1 的原始那筆） |
+| `stale-pyc-risk` | 同秒等長 mutate + restore | **它主動告訴我 `.pyc` 會 stale**，而那正是 §3 #12 |
+
+**這是本 BR 全篇唯一一個「對策真的在決策點攔截」的實例。**
+§4 的表格「今日攔截數」欄位對每一項對策都是 0，唯獨 `pre-commit` hook 是 1；
+現在多了這一個，而且它的攔截數在單一 session 內就 >8。
+
+### 附帶驗證：`pre-commit` hook 仍然是活的（且差點被我誤判為死的）
+
+```
+probe1  [ -f .git/hooks/pre-commit ]     -> NO      <- 會導向錯誤結論
+probe2  git config --get core.hooksPath  -> scripts/hooks
+probe3  [ -x scripts/hooks/pre-commit ]  -> YES     <- 唯一回答「它會不會跑」的探針
+CONTROL [ -x scripts/hooks/zzz-bogus ]   -> NO      （probe3 有判別力）
+```
+
+**`probe1` 是本 BR 家族的又一個實例**：`core.hooksPath` 被改過時，
+「hook 沒安裝」與「hook 裝在別的路徑」共用同一個 `NO`。
 
 ## 9. 方法論（給下一個人）
 
