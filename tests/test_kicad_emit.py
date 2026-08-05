@@ -553,6 +553,99 @@ class GuardCInsetClampTests(unittest.TestCase):
                              "longer tell the two clamp forms apart")
 
 
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries are not installed")
+class GuardCFloatingPointBoundaryTests(unittest.TestCase):
+    """BR_20260804b §8: the CONDITIONAL degrade compared `span > 2*inset`, and a
+    span sitting ONE ULP above the threshold took the "wide enough" branch --
+    shrinking by the full inset and leaving a box ~5e-16 wide. That box is just as
+    unsatisfiable as an inverted one, so the guard reported nothing, which is
+    byte-identical to "no intrusion found": the exact defect the conditional
+    degrade was introduced to remove, surviving on a rounding artefact.
+
+    Measured by two independent sweeps of /usr/share/kicad/symbols (223 libs,
+    21437 root-level symbols, 3 load failures reported): `Mechanical:Housing_Pad`
+    is the ONLY symbol in the library whose span lands in that one-ULP band, and
+    the tolerance moves exactly that one axis of that one symbol.
+
+    Every box below comes from CALLING the production helper. A test that
+    recomputes the rule verifies its own copy and stays green when the shipped
+    code is mutated.
+    """
+
+    BOUNDARY = "Mechanical:Housing_Pad"
+
+    def _helper(self):
+        from bodesign_eda_bridge.kicad_emit import _guard_c_body_box
+        return _guard_c_body_box
+
+    def _inset(self):
+        from bodesign_eda_bridge.kicad_emit import _PWR_STUB_STEP_MM
+        return _PWR_STUB_STEP_MM / 4.0
+
+    def _width(self, span):
+        """Guard C's box width for a square body of side `span`."""
+        box = self._helper()(0.0, span, 0.0, span)
+        return box[1] - box[0]
+
+    def test_boundary_span_is_exactly_one_ulp_above_the_threshold(self):
+        """Fixture control. The whole point of a one-ULP tolerance is that this
+        symbol's span is a rounding artefact, not a genuinely wider body. If the
+        library ever ships a real 3.82mm pad this test must fail rather than let
+        the tolerance quietly cover a body it was never measured against."""
+        import math
+        from bodesign_eda_bridge.kicad_emit import load_symbol, _body_rect
+        block, _pins = load_symbol(self.BOUNDARY, SYMBOL_DIR)
+        rect = _body_rect(block)
+        self.assertIsNotNone(rect, f"{self.BOUNDARY} lost its rectangle")
+        span_x = rect[2] - rect[0]
+        threshold = 2 * self._inset()
+        self.assertGreater(span_x, threshold,
+                           "span no longer sits ABOVE the threshold; the old "
+                           "comparison would already degrade it and this suite "
+                           "no longer tests anything")
+        self.assertEqual(span_x - threshold, math.ulp(threshold),
+                         "span is no longer exactly one ULP above 2*inset")
+
+    def test_boundary_symbol_box_is_usable(self):
+        """The defect itself: the box must have real width, not ~5e-16."""
+        from bodesign_eda_bridge.kicad_emit import load_symbol, _body_rect
+        block, _pins = load_symbol(self.BOUNDARY, SYMBOL_DIR)
+        rx0, ry0, rx1, ry1 = _body_rect(block)
+        bx0, bx1, by0, by1 = self._helper()(rx0, rx1, ry0, ry1)
+        width = bx1 - bx0
+        self.assertGreater(
+            width, 0.1,
+            f"{self.BOUNDARY}: guard C box is {width!r} wide -- the predicate "
+            f"`bx0 < ex < bx1` is unsatisfiable, i.e. still blind")
+        # Discriminating power, not merely non-degeneracy: the body centre is
+        # unambiguously interior and must be inside the box.
+        self.assertTrue(bx0 < (rx0 + rx1) / 2 < bx1,
+                        f"{self.BOUNDARY}: centre not inside box -- still blind")
+
+    def test_wide_bodies_keep_the_full_inset(self):
+        """Reverse-direction control -- the risk this fix carries. A tolerance wide
+        enough to catch the boundary must NOT push genuinely wide bodies onto the
+        clamp branch. Measured over the whole library: 0 such symbols move, and
+        the 40.64 sample is not vacuous (768 axes hit it exactly)."""
+        inset = self._inset()
+        for span in (10.0, 40.64):
+            with self.subTest(span=span):
+                self.assertAlmostEqual(
+                    self._width(span), span - 2 * inset, places=9,
+                    msg=f"span {span} left the inset branch -- the tolerance is "
+                        f"perturbing bodies it was never measured against")
+
+    def test_below_threshold_bodies_are_unchanged(self):
+        """Control on the other side of the boundary: a span just BELOW the
+        threshold already degraded before this fix and must still degrade the
+        same way (span/4), or the tolerance changed more than the one axis it
+        was measured to change."""
+        for span in (3.809999999999999, 2.032, 1.524):
+            with self.subTest(span=span):
+                self.assertAlmostEqual(self._width(span), span / 2.0, places=9,
+                                       msg=f"span {span} left the clamp branch")
+
+
 class PowerPortIntrusionsFieldTests(unittest.TestCase):
     """BR_20260804f: `SchematicEmitResult.power_port_intrusions` was declared with
     a docstring promising the guard-C intrusions are "recorded here", and was never

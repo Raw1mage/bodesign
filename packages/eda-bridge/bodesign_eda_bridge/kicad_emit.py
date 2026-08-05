@@ -21,6 +21,7 @@ multi-unit symbols and rotated placement are explicit future work.
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import math
 import os
 import re
 import subprocess
@@ -601,6 +602,36 @@ def _guard_c_body_box(x0: float, x1: float, y0: float, y1: float,
     Do not "fix" this by loosening the comparison without measuring -- a tolerance
     wide enough to catch it also moves real bodies.
 
+    BR_20260804b §8 -- the `Housing_Pad` case above is now handled, and the
+    tolerance was chosen by MEASUREMENT rather than taste. Its `span - 2*inset`
+    is 4.440892098500626e-16, which is exactly ONE ULP of `2*inset`: the smallest
+    representable step off the threshold, i.e. a rounding artefact of a body that
+    is 2*inset wide. So a span within one ULP of the threshold counts as NOT wide
+    enough and degrades, instead of shaving the full inset off and leaving a
+    5e-16 box that no point can satisfy.
+
+    Blast radius, measured by two independent sweeps over /usr/share/kicad/symbols
+    (223 libs, 21437 root-level symbols, 3 load failures reported not swallowed,
+    17395 rect-bearing): exactly ONE axis of ONE symbol -- `Mechanical:Housing_Pad`
+    x -- moves from the inset branch to the clamp branch. Nothing else moves.
+    Controls: spans 10.0 and 40.64 stay on the inset branch, and the 40.64 control
+    is not vacuous -- 768 axes in the library hit it exactly, all unmoved.
+
+    THAT "1" IS CALIBRE-DEPENDENT, so state the calibre before re-measuring it.
+    The population is the ROOT-LEVEL `lib_id`s the production path actually
+    resolves -- what `emit_kicad_schematic` passes to this helper. A sweep that
+    ALSO enumerates the per-unit sub-entries (`..._0_1`, `..._1_0`) that
+    `load_symbol` exposes as if they were top-level finds SEVEN axis-hits inside
+    the one-ULP band, not one. The extra six are sub-unit names production never
+    resolves: at root level their spans are 17.78 / 30.48 (`Analog_Switch:NX3L4051PW`,
+    `Connector:RJ45_JK00177`, `Switch:SW_Rotary_2x6` / `_3x4` / `_4x3`) -- far from
+    the threshold, unaffected either way. Two defensible enumerations answering
+    differently on the same files is the very shape BR_20260804b is about, so the
+    disagreement is recorded here rather than resolved into one number.
+
+    One ULP is the tightest tolerance that can exist (anything smaller is not
+    representable), so this is a boundary correction, not a tunable fudge factor.
+
     Effect on emitted verdicts is bounded WITHOUT re-running compose, by squeeze:
     for all 18217 symbols the conditional box is a SUBSET of the span/4 box
     (0 violations; controls: 1756 are strictly narrower so the claim is not
@@ -619,8 +650,19 @@ def _guard_c_body_box(x0: float, x1: float, y0: float, y1: float,
     """
     if inset is None:
         inset = _PWR_STUB_STEP_MM / 4.0
-    ix = inset if (x1 - x0) > 2 * inset else (x1 - x0) / 4.0
-    iy = inset if (y1 - y0) > 2 * inset else (y1 - y0) / 4.0
+    threshold = 2 * inset
+    tol = math.ulp(threshold)
+
+    def _wide_enough(span: float) -> bool:
+        # `> threshold` alone selects the wrong branch when `span` sits one ULP
+        # above it: the shrink then leaves a ~5e-16 box, which is unsatisfiable
+        # for the same reason an inverted one is. Treat one-ULP-above as ON the
+        # threshold, so it degrades. Measured blast radius: 1 axis, 1 symbol.
+        return span > threshold and not math.isclose(
+            span, threshold, rel_tol=0.0, abs_tol=tol)
+
+    ix = inset if _wide_enough(x1 - x0) else (x1 - x0) / 4.0
+    iy = inset if _wide_enough(y1 - y0) else (y1 - y0) / 4.0
     return (x0 + ix, x1 - ix, y0 + iy, y1 - iy)
 
 
