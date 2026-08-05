@@ -210,6 +210,55 @@ pidwait process will never report itself」——它**知道自己是誰**；`-A
 （控制組的字面 pattern 也在命令列裡），於是那格當時無法證明任何事。
 **判準與被測對象共用同一個失效模式時，判別力歸零。**
 
+## 6.3 `python3 -B` 擋不掉「既有」stale `.pyc`（2026-08-04）
+
+§6.1 摧毀的是別人的檔案，§6.2 摧毀的是自己指令的後半段。這一條是**同一個形狀的第三族**：
+什麼都沒被摧毀，被摧毀的是**你讀到的那份原始碼是不是你剛改的那份**——而兩種情況共用同一個輸出。
+
+**量測（兩顆互不知情的 session 獨立複現，數字一致）**：
+
+情境：`.pyc` 已存在 → **同長度** mutate 原始碼 → 還原 mtime 與 size → 讀取。
+
+| variant | 讀到的值 | 意義 |
+| --- | --- | --- |
+| `python3` | 111 | stale（disk truth = 222） |
+| `python3 -B` | 111 | **與預設逐字相同**，`-B` 沒有改變任何事 |
+| `PYTHONDONTWRITEBYTECODE=1 python3` | 111 | 同上，環境變數也擋不掉 |
+| `rm -rf __pycache__` 之後 `python3` | 222 | **唯一正確** |
+| ACCEPTING CONTROL：無既有 pyc 時 `-B` | 999（disk 新值） | 探針分得出 stale 與 fresh |
+| FORGERY CHECK：mutate 前後 `stat` 的 size 與 mtime | 逐字相同（`26 1785893280`） | 偽裝成立，不是量錯 |
+
+ACCEPTING CONTROL 是決定性的：它排除了「這支探針根本讀不到新值」這個解釋——
+沒有既有 pyc 時 `-B` 讀得到 disk，所以前四格的 111 只可能來自既有 `.pyc`。
+
+**機制**：`-B` 只設 `sys.dont_write_bytecode`，**阻止寫入、不阻止讀取既有 `.pyc`**。
+CPython 判定 pyc 是否有效用的是「來源檔 mtime（**秒級**）+ size」——同一秒內、且**等長**的 mutate，
+兩個欄位都沒變，於是 mutant 的 bytecode 存活下來被載入。
+
+**正解是清除（治療），不是 `-B`（預防）**：
+
+```bash
+find . -name __pycache__ -prune -exec rm -rf {} +
+```
+
+> **「不留 pyc 給下一次」≠「治這一次已經存在的 stale pyc」。兩者不可互換。**
+
+**判準（可機械套用）**：凡在 repo 內做 **mutate → 跑測試 → 還原** 的驗證循環，
+**清 `__pycache__` 是必要步驟，不是可選的保險**。`-B` 出現在派工單或腳本裡不構成已經清過。
+
+代價已實際發生過：mutation proof 的 mutant 沒有被真的套用 → 測試仍綠 →
+被讀成「測試沒有判別力」。得到的是**反向結論**——不是少一格證據，是一格假證據。
+
+**歸類 G13-harness-disclosure，不是操作失誤**：系統當下就握有這格資訊——
+pyc header 裡寫著來源檔的 mtime 與 size，CPython 內部一直在比對它們。
+但「pyc 命中（來源真的沒變）」與「pyc 過期、只因同秒同長度而誤判命中」
+**共用同一個輸出**：程式正常跑完，什麼都不印，也沒有旗標可以問它到底載入了哪一份。
+缺的不是資訊，是揭露。
+
+與 §6.1 / §6.2 同族：三者都是**成功態與危險態共用同一個輸出**——
+`reset --hard` 的 exit 0、`pkill -f` 的空輸出、stale pyc 的正常執行結果，
+都不會告訴你剛才發生的是哪一種。
+
 ## 7. Diagram / 建模
 
 - IDEF0 / GRAFCET / C4 用 `drawmiat` MCP，**先 `validate_diagram` 再 `generate_diagram`**。
