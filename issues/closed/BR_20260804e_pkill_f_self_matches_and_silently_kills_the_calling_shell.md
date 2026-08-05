@@ -9,6 +9,9 @@
   含 `-A` 正解與量測表）。§Related 裡「建議把本條加進該表——需 dispatcher 裁示」**已完成**。
   CONTROL：同一支 grep 對 `reset --hard` 回 4、對 bogus token 回 0 ⇒ 探針有判別力。
   剩餘：`pkill` 本身的預設行為屬 `procps-ng` 上游，本 repo 不可修，也不需修。
+- **Closed**: 2026-08-05 by ses_04db7a1c5ffelvbxyLP1p6xlRH
+  （處方落地於 AGENTS.md §6.2 :171-208，含 -A 正解、三格量測表與反向引用本 BR :208；
+    CONTROL grep -c 'reset --hard'=5 / bogus token=0）
 - **Scheduled**: 未排（guard C 曝險量測途中踩到，當輪建檔不批次）
 - **編號改過**: 2026-08-04 由 `d` 改為 `e`。handler 建檔當下，dispatcher 已在另一條線上
   將 `BR_20260804d` 給了 `load_symbol` 的 stale 2-tuple（`c8e7bd9`，且已被 `BR_20260804c:149`

@@ -20,7 +20,11 @@ Disposition: filed — split out of BR_20260730 round 7 rather than folded in. D
   surface (the compute verbs, not skill shipping), different owner-layer, and folding a
   P1 correctness defect into a BR about an HTTP endpoint would bury it.
 Venue: bodesign
-Status: OPEN
+Status: FIXED — verified effective 2026-08-05 (b429b06 on HEAD; runtime re-verified with
+  fresh __pycache__: audit_claims([]) -> publishable=None/verdict=vacuous,
+  crosscheck vacuous -> "NOT a match", accepting control real-2-nets -> "matches exactly (2 nets)";
+  tests/test_vacuous_pass_gates.py 17 passed)
+Closed: 2026-08-05 by ses_04db7a1c5ffelvbxyLP1p6xlRH
 ```
 
 ## 1. Symptom (verbatim, reproducible on HEAD)
