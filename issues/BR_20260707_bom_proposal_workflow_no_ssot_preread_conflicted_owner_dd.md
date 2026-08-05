@@ -1,6 +1,6 @@
 # BR: BOM 提案工作流缺 SSOT 必讀清單——提案與既有 owner 裁決衝突未被攔截，誤寫入 BOM 一輪
 
-- **Status**: FIXED — 三項 acceptance criteria 已全數落地（見文末「2026-08-04 覆核」）
+- **Status**: PARTIAL — criteria ①② 已落地；③ 機器兜底在生產 SSOT 形狀下 inert（見 §端對端跑證 2026-08-05）
 - Date: 2026-07-07
 - Severity: medium-high
 - Component: bodesign skill `stages/c03-ee` GUIDE + BOM 提案委派模板
@@ -54,3 +54,80 @@
 **未實跑一次「提交一份與 SSOT 衝突的 BOM」看 `check_c03` 是否真的回 `gate=FAIL`**。
 故本張標 FIXED 是對「修法已實作」而非「修法已證實有效」。
 若日後發現閘攔不住，那是新的缺陷而非本張回退。
+
+---
+
+## 端對端跑證（2026-08-05，獨立驗證員）
+
+上一節列為「未量」的那一項——**實跑一次「提交一份與 SSOT 衝突的 BOM」看 `check_c03`
+是否真的回 `gate=FAIL`**——本輪補跑完成。結果推翻 criteria ③ 的有效性宣稱。
+
+### 決定性結果
+
+把本 BR Symptom 段的原始情境（U4 = Murata LBEE5KL1YN，注入真實 aiguard BOM）
+直接餵給 `check_c03`：
+
+| 量到的欄位 | 值 |
+| --- | --- |
+| `gate` | `PASS` |
+| blocking codes | `[]` |
+| U4 findings | `[]` |
+| ssot status | `not_run` |
+
+**本 BR 記錄的那一次真實事故，餵回下游閘，閘放行。**
+
+### 根因
+
+`check_c03.py:958-985` + `:1158-1171`。
+
+真實的 `experiments/aiguard_c03_verify/Pin_Allocation.csv` 是 ball/peripheral 形狀，
+header 為：
+
+```
+peripheral,function,interface,net_group,rail,ball_assignment,provenance,deck_status
+```
+
+**沒有 `ref` 欄** ⇒ `_load_pin_alloc_refs()` 回 `None` ⇒ R4 整條標 `not_run`，
+26 個 active 件全部列入 `active_parts_unverified`。
+
+而 `GUIDE.md:230-238` 明白裁決：**無 ref 欄的形狀才是交付物合約的正常形狀。**
+所以這不是「某次資料填錯」，是合約規定形狀與閘的讀取前提互斥。
+
+### 三組控制組
+
+| 控制組 | 結果 |
+| --- | --- |
+| 合成 ref-bearing pinmap（只含 U1/U2）vs 乾淨 BOM | `gate=FAIL`, R4=24 筆 ⇒ R4 程式碼本身會開火 |
+| 合成 ref-bearing pinmap（含全部 26 個真實 active ref）vs 乾淨 BOM | `gate=PASS`, R4=`[]` ⇒ 非恆真 FAIL |
+| 同上 pinmap vs 注入 U4 衝突 BOM | `gate=FAIL`, R4=`[('U4','active part not in Pin_Allocation.csv SSOT…')]` ⇒ 有判別力 |
+
+**決定性對比：同一顆 U4 衝突，餵 ref-bearing pinmap → FAIL；餵 repo 真實 pinmap → PASS。
+差別 100% 來自 SSOT 檔案形狀，不是 BOM 內容。**
+
+### 口徑聲明（不得改寫成別的意思）
+
+這**不是**「R4 邏輯有 bug」——R4 邏輯經上表控制組證明正確且有判別力。
+
+正確讀法是：**R4 在合約規定的 SSOT 形狀上永遠不執行，所以本 BR 的機器兜底
+（criteria ③）在生產輸入上是 inert 的。**
+
+它也**不是靜默假綠**——`not_run` + `active_parts_unverified` 有誠實揭露。
+但縱深防禦的第二層在真實輸入上結構性失效，
+**唯一有效防線仍是 ①② 的人工 preread。**
+
+### 未量（不得讀成已驗）
+
+- MCP server 路徑 / `gate.py` CLI wrapper **未驗**（本次直接呼叫 `check_c03`）。
+- criteria ② 是 agent 行為，結構上無法端對端驗。
+- `tests/test_check_c03*.py` **只看通過數，未讀 case 內容**。
+- fleet 另 3 份 `Pin_Allocation.csv` 不在本 repo，未取得、未量。
+- R5-R8 一律 `not_run`（未帶 netlist）；**本次口徑只涵蓋 R4。**
+
+### 附帶揭露缺陷（本輪順手量到）
+
+原 Status 行寫 `FIXED — 三項 acceptance criteria 已全數落地`，
+而**同一份文件文末（:55 附近）自承「未證實有效」**。
+
+只讀 header 的人會取得比實際更強的宣稱——這一格資訊系統當下就有，
+只是被 header 蓋掉了。本次已把 Status 改為 PARTIAL 消除這個落差。
+
