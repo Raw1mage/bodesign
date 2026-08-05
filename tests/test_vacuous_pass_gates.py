@@ -173,6 +173,7 @@ _RF_IC = {"value": "SX1276", "lib_id": "", "description": ""}
 _L_OK = {"ref": "L1", "type": "inductor", "henries": 6.8e-9, "value": "6.8nH"}
 _C_OK = {"ref": "C1", "type": "capacitor", "farads": 2.2e-12, "value": "2.2pF"}
 _L_BAD = {"ref": "L1", "type": "inductor", "henries": 100e-9, "value": "100nH"}
+_C_BAD = {"ref": "C1", "type": "capacitor", "farads": 470e-12, "value": "470pF"}
 
 
 class RfReferenceValuesVacuousTests(unittest.TestCase):
@@ -203,6 +204,16 @@ class RfReferenceValuesVacuousTests(unittest.TestCase):
         out = check_rf_reference_values(_RF_IC, [_L_BAD, _C_OK])
         self.assertIs(False, out["values_in_range"])
         self.assertEqual(["L1"], [c["ref"] for c in out["out_of_range_components"]])
+
+    def test_control_out_of_range_capacitor_still_reports_false(self):
+        # The inductor is in range, so ONLY the capacitor branch can produce this
+        # verdict — deleting that branch must turn this test red (BR_20260731 M21:
+        # every earlier case had an in-range capacitor, so the capacitor range check
+        # was never load-bearing and could be removed with all tests still green).
+        out = check_rf_reference_values(_RF_IC, [_L_OK, _C_BAD])
+        self.assertIs(False, out["values_in_range"])
+        self.assertEqual(["C1"], [c["ref"] for c in out["out_of_range_components"]])
+        self.assertEqual(2, out["checked_count"])
 
     def test_partially_unvalued_still_gives_a_verdict_but_names_the_loss(self):
         out = check_rf_reference_values(_RF_IC, [_L_OK, {"ref": "C9", "type": "capacitor"}])
