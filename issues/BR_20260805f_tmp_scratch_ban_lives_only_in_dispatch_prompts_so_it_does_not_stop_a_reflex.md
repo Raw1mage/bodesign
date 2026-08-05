@@ -1,11 +1,11 @@
-# BR_20260805f — `/tmp` scratch 禁令的唯一載體是派工單文字，攔不住反射動作；同一天兩顆 handler 各踩一次
+# BR_20260805f — `/tmp` scratch 禁令的唯一載體是派工單文字，攔不住反射動作；同一天三顆 handler 各踩一次（第三顆的任務正是覆核本張）
 
 - **Status**: OPEN — 揭露缺陷；修復面不在 bodesign（`bash` denylist 由 opencode runtime 提供）
-- **Severity**: HIGH — 洩漏面是本機 13 個真實使用者可讀的 world-readable 目錄，且實際外洩內容包含他人未完成工作的檔名清單；禁令已重申兩次仍在同一天連續失效
+- **Severity**: HIGH — 洩漏面是本機 13 個真實使用者可讀的 world-readable 目錄，且實際外洩內容包含他人未完成工作的檔名清單；禁令已重申三次仍在同一天連續失效（第三顆的任務就是覆核本張 BR）
 - **Owner repo**: opencode（本 repo 不可修）
 - **Family**: G13-harness-disclosure
 - **Filed**: 2026-08-05 by `ses_0300f19c6ffetKMrfXyQ125dou`（bodesign 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH` 派工建檔）
-- **Provenance**: 兩顆 handler 的 session id 與所用 `/tmp` 路徑由派工的值星官 session 轉述，**本建檔 handler 未獨立驗證那兩顆的實際指令**（見 §6）。§3 的權限位／使用者數、§4 的 denylist 前例與 bash.ts 反證，皆為本 handler 於 2026-08-05 親自實測，附指令與輸出。
+- **Provenance**: 三顆 handler 的 session id 與所用 `/tmp` 路徑皆由派工的值星官 session 轉述，**未獨立驗證它們的實際指令**（見 §6）。§3 的權限位／使用者數、§4 的 denylist 前例與 bash.ts 反證，為建檔 handler 於 2026-08-05 親自實測；§1.1（第三個樣本）由 `ses_02ff37b7d` 於 2026-08-05 回填，其中 `/tmp` 權限位、使用者數、`/tmp/.nope` 現況為該 handler 重量，檔案 mode／size／內容性質為受試 session 自報。
 
 **Related**:
 - `BR_20260805g_read_subsession_strips_tool_output_bodies_so_the_verifier_gets_claims_not_evidence.md`
@@ -15,23 +15,63 @@
 
 ---
 
-## 1. Symptom — 兩個獨立樣本，同一天
+## 1. Symptom — 三個獨立樣本，同一天
 
-| session | 用了什麼路徑 | 存了什麼 |
-|---|---|---|
-| `ses_03023e18e` | `/tmp/x`、`/tmp/base.out`、`/tmp/wt.out` | 指令 stdout |
-| `ses_03019b6fe` | `/tmp/.x` | `git status --porcelain` 完整輸出 |
+| # | session | 用了什麼路徑 | 存了什麼 |
+|---|---|---|---|
+| 1 | `ses_03023e18e` | `/tmp/x`、`/tmp/base.out`、`/tmp/wt.out` | 指令 stdout |
+| 2 | `ses_03019b6fe` | `/tmp/.x` | `git status --porcelain` 完整輸出 |
+| 3 | `ses_03002962d` | `/tmp/.nope` | `git status --porcelain` 完整輸出（見 §1.1） |
 
-兩顆的派工單**都明文寫了**「scratch 一律落 `$XDG_RUNTIME_DIR`，絕對禁止 `/tmp`（資安天條，world-readable）」。
-兩顆**都自報了**違規——這一點是好的，誠實回報保住了本張 BR 的存在。
-但**兩顆都是在違規之後才自報，沒有一顆在動手前被攔下**。
+三顆的派工單**都明文寫了**「scratch 一律落 `$XDG_RUNTIME_DIR`，絕對禁止 `/tmp`（資安天條，world-readable）」。
+三顆**都自報了**違規——這一點是好的，誠實回報保住了本張 BR 的存在。
+但**三顆都是在違規之後才自報，沒有一顆在動手前被攔下**。
 
 第二顆的內容值得單獨記：`/tmp/.x` 存的是 `git status --porcelain` 的完整輸出，
 **內含這棵共用工作樹上他人約 41 行未 commit 修改的檔案路徑清單**。
 該 handler 自陳「無密鑰」——正確，但它沒點出洩漏的是**他人未完成工作的檔名與目錄結構**。
 
-**兩個獨立樣本、同一天、不同任務、不同模型指派**，是「這不是單一 handler 疏忽」的證據。
-單一樣本無法區分「這顆不小心」與「這條普遍攔不住」；兩顆可以。
+**三個獨立樣本、同一天、不同任務、不同模型指派**，是「這不是單一 handler 疏忽」的證據。
+單一樣本無法區分「這顆不小心」與「這條普遍攔不住」；兩顆可以區分；
+**第三顆進一步把「禁令資訊強度不足」這個退路也封死了**（見 §1.1）。
+
+### 1.1 第三個樣本——比前兩個都強，因為受試者當時正在讀的就是這張 BR
+
+前兩個樣本還留著一個可信的反論：「handler 沒讀仔細 / 禁令寫得不夠顯著」。
+若如此，則處方就是「把禁令寫得更大聲」，而不是執行面攔截。
+**第三個樣本不能這樣解釋。**
+
+| 項 | 值 |
+|---|---|
+| session | `ses_03002962d` |
+| 它當時的任務 | **覆核「`/tmp` 禁令攔不住反射」這張 BR 本身**（即本檔） |
+| 違規發生點 | **它的第一條指令** |
+| 指令 | `git status --porcelain > /tmp/.nope` |
+| 實際落地 | `-rw-r--r-- 1 pkcs12 pkcs12 1372 Aug  5 11:35 /tmp/.nope` |
+| 檔案 mode | `644` —— **全機可讀**，不需任何提權 |
+| size | 1372 bytes |
+| 內容性質 | 本 repo 完整的未 commit 檔名清單（tracked 修改 + untracked） |
+| 目錄權限 | `/tmp` = `drwxrwxrwt root root 1777`（任何使用者可列目錄、可讀該檔） |
+| 本機真實使用者數 | 13（§3 實測） |
+| 曝露窗 | 下一條指令 `rm -f` 移除並 `ls` 驗證消失；該 handler 自估數十秒 |
+
+該 handler 自己的定性（逐字）：
+
+> 一個剛被指派去覆核「`/tmp` 禁令攔不住反射」的覆核員，第一條指令就踩了它。
+
+**為什麼這一格比前兩格有力（本節重點）：**
+受試者當時手上拿著、正要讀的工作對象，**就是這張描述該違規的 BR**。
+禁令對它而言不只是派工單裡的一行字，而是它當下的**任務主題本身**——
+資訊強度不可能再高了。即使如此，`> /tmp/…` 仍然先於規則檢索發生。
+
+這正是 §2 所說的 reflex 形狀：**它不經過「我記得有條規矩嗎」這個步驟。**
+並把 §2 引的 `code-thinker` §8.1.1 從推論提升為實測：
+若連「正在讀這條禁令」都攔不住，則任何純資訊性修復（寫進 skill、寫進派工單、提高音量）
+的預期效果不只是「低」，而是**已有一個實測樣本將它釘在 0**。
+
+**本格未量（不得讀成已驗）**：曝露窗內**有沒有人實際讀到該檔，無從得知**——
+未裝監控，`atime` 也不可靠。上表只記載**可量測的客觀事實**
+（mode、size、內容性質、目錄權限、使用者數），**不斷言實際外洩發生與否**。
 
 ## 2. Mechanism — 為什麼攔不住
 
@@ -119,11 +159,16 @@ $ ls -la packages/opencode/src/tool/bash-denylist.test.ts
 
 - **沒量**「denylist 是否真的攔得到這個 pattern」——那需要在 opencode repo 實作＋實測，
   本 repo 不可修，本 handler 未做。§5 全部是**提議**，不是既成事實。
-- **沒獨立驗證**兩顆 handler 的 session id（`ses_03023e18e`、`ses_03019b6fe`）與它們實際跑的指令；
+- **沒獨立驗證**前兩顆 handler 的 session id（`ses_03023e18e`、`ses_03019b6fe`）與它們實際跑的指令；
   這些是派工的值星官 session 轉述而來。**本張是存證，不是二次確認。**
 - **沒量**那 13 個使用者中有多少現在有活躍 session、有多少實際去讀過 `/tmp`。
   量到的只有「權限允許」與「帳號存在」，不是「已被讀取」。
-- **沒量**兩顆 handler 寫進 `/tmp` 的檔案是否還在磁碟上（未跑 `ls /tmp`）。
+- **沒量**前兩顆 handler 寫進 `/tmp` 的檔案是否還在磁碟上（未跑 `ls /tmp`）。
+- （第三個樣本已量：2026-08-05 回填時 `ls -la /tmp/.nope` 回 `No such file or directory`，
+  與該 handler 自報的 `rm -f` 一致。正控制組：同一支 `ls` 對 `/tmp` 下實存在的檔回正常
+  stat 輸出 ⇒ 該探針有判別力。但這**只證明現在不在**，不證明曝露窗內沒被讀過。）
+- **沒獨立驗證**第三顆（`ses_03002962d`）實際跑的指令串與 session id；
+  同樣由值星官 session 轉述。本回填 handler 只獨立重驗了 `/tmp` 權限位、使用者數與該檔現況。
 
 ## 7. Cross-repo boundary
 

@@ -69,16 +69,23 @@
 packages/mcp/system-manager/src/index.ts:3241   // Compact output: first 200 chars as preview
 packages/mcp/system-manager/src/index.ts:3244   outputPreview = state.output.slice(0, 200)
                                                   + (state.output.length > 200 ? "…" : "")
-packages/mcp/system-manager/src/index.ts:3253   outputBytes: typeof state.output === "string"
+packages/mcp/system-manager/src/index.ts:3254   outputBytes: typeof state.output === "string"
                                                   ? state.output.length : 0
 packages/mcp/system-manager/src/index.ts:3296   note: "Tool output bodies stripped. …"
 ```
+
+（**行號以 2026-08-05 opencode commit `96bc7f79` 為準**——該 commit 是本張建檔當下的 opencode HEAD。
+`outputBytes` 原記為 `:3253`，2026-08-05 由 `ses_02ff37b7d` 重量後更正為 `:3254`：`:3253` 是
+`outputPreview,`，`:3254` 才是 `outputBytes`（全檔唯一命中，字串與本節記載一字不差）。
+其餘四條引用（`bash.ts:1620`、`index.ts:3241`、`:3244`、`:3296`）在同一 commit 上內容相符、
+行號精確命中，未動。**注意行號會漂**：在 2026-08-05 11:37 的 opencode HEAD `7f702048b7` 上，
+同一段程式已位移至 `:3281` / `:3284` / `:3294` / `:3336`——引用行號時務必連 commit 一起講。）
 
 ⇒ `state.output` **在那一行手上是完整的**，程式主動 `.slice(0, 200)` 之後丟棄其餘。
 
 ### 4.1 `outputBytes` 確實已存在（原派工單此處為待確認，本 handler 已確認）
 
-派工單要求先自行確認 `outputBytes` 是否真的存在，不要照抄。**實測：存在**（`:3253`，見上）。
+派工單要求先自行確認 `outputBytes` 是否真的存在，不要照抄。**實測：存在**（`96bc7f79` 的 `:3254`，見上）。
 且 preview 尾端在超長時會補 `…`。
 
 所以本張的缺口比原先設想的**窄**，必須據實修正：

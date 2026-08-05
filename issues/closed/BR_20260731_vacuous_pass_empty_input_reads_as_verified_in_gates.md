@@ -191,7 +191,7 @@ tests/test_vacuous_pass_gates.py   +11  -0
 These are **two different kinds of gap** and must not be merged; merging them understates
 the second by an order of magnitude.
 
-**VERIFIED** — `_check_rf_reference_values` (`domain_detectors.py:1294-1380`), capacitor
+**VERIFIED** — `_check_rf_reference_values` (`domain_detectors.py:1294-1379`), capacitor
 value-range branch at `:1346`. M21 KILLED by `test_control_out_of_range_capacitor_still_reports_false`,
 with both a reverse control (row 3) and an accepting control (row 4) above. Shape of the
 gap that was closed: *the function was tested, one branch inside it was not.* Cost to close:
