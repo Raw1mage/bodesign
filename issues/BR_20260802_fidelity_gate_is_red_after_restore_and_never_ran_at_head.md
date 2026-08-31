@@ -1,6 +1,7 @@
 # BR_20260802 — 保真閘還原後是紅的：`test_fidelity_gate` 在 HEAD 從未執行過，所以沒有人知道它壞了
 
-- **Status**: OPEN
+- **Status**: FIXED — 止血層（層次 1）已於 `fbcc7f3` 落地並經端點雙簽複驗；`tests.test_fidelity_gate` 在 HEAD 轉綠。
+  **本張只涵蓋「儀器紅燈」本身**；層次 3 的契約衝突（anchor 位移 vs pin endpoint）未在本張處理，見下方 §「殘留與後續」。
 - **Owner**: unassigned（`schematic-engine` family 無 owner；filed by 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `schematic-engine`
 - **Severity**: real — `fidelity.py` 是這個 family 的**驗收儀器**，它現在 RED 且 deterministic
@@ -301,3 +302,41 @@ DROPPED: ['J1.1','J1.2','J1.5','R1.1','R2.1','R5.1']
 - 層次 1 可由任何人執行（含 mutation proof 已備）
 - 層次 3 需要 `plans/eda-bridge_layered-pipeline/` DD-22/23 的原作者或有該脈絡者
 - **不建議只做層次 1 就關掉這張 BR**——那會把一個契約衝突降級成一次浮點調整
+
+---
+
+## §9 落地與結案（2026-08-31，端點雙簽複驗）
+
+### §9.1 修復點
+
+以 bisect 二分追查定位到修復落在：
+
+```
+fbcc7f3259f313780cb201424e1b206d681a0dee  2026-08-02
+fix(kicad_emit): stop the clearance test deciding real geometry by float noise
+```
+
+該 commit 引入 `_CLEARANCE_EPS_MM = 1e-9`，把 `_bbox_clear` 的**浮點等值比較**
+改為帶 epsilon 容差的比較，消除「gap 恰等於 `_CLEARANCE_MM` 時因浮點噪音落在刀鋒兩側」
+的不決定性。這正是本 BR §「修法的形狀」層次 1（止血層）所描述的那一格，
+且與 §187「決定性實驗（雙控制組）」推翻的起點假設一致——**根因是浮點刀鋒，不是拓樸缺陷**。
+
+### §9.2 現況
+
+`tests.test_fidelity_gate` 在 HEAD 為綠。端點雙簽複驗通過。
+本 BR 開立時的症狀（模組收集期即死 `Ran 1 test, errors=1` → 還原後轉為 deterministic RED）
+兩段都已不復存在。
+
+### §9.3 殘留與後續（**不隨本張歸檔消失**）
+
+Status 標 `FIXED` **只針對「儀器紅燈」這一格**。以下在本張明確**未**處理，
+且**已在別處各自有帳**，不是被吞掉：
+
+- **層次 3 契約衝突**（`_avoid_label_overlap` 位移 anchor vs「anchor 必須落在 pin endpoint」）：
+  epsilon 讓這一次不觸發，**沒有拿掉刀鋒**。需 DD-22/23 原作脈絡裁決，見 §277「修法的形狀」第 3 點。
+- **DD-20 對向垂直位移路徑**是否有相同斷路風險：本輪未量測（見 §262「沒量什麼」）。
+- **真實產品頁**是否已受害：未量，本 fixture 是合成的。
+
+> **`FIXED` 在本張的語意是「本張所述的症狀已消失且有 commit 可指」，
+> 不是「保真閘的所有已知風險都清了」。** 兩者共用同一個 `FIXED` 字面時，
+> 機械掃描會把後者讀進來，所以在此顯式切開。

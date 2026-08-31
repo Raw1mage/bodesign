@@ -1,6 +1,8 @@
 # BR_20260802 — 保真閘無法回報斷路，且對任何偏離都硬編同一個病因
 
-- **Status**: OPEN
+- **Status**: PARTIAL — 硬編病因（Fix proposal 第 2 點）已於 `cedc262` 修復；斷路診斷能力已具備。
+  **scoped remainder：現有測試對修復點的 mutation 全數 survived**——修復存在但**未被測試釘住**，
+  任何人把它改回來不會有任何東西變紅。見 §「落地與殘留」。**留頂層，不歸檔。**
 - **Scheduled**: 已授權 `ses_0c87bab06fferQ0umBs2Nybb5U` 執行（單張授權，非 family）
 - **Owner**: `(default)`（值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `G13-harness-disclosure` × `schematic-engine`（驗收儀器）
@@ -146,3 +148,40 @@ epsilon 那類修法才有辦法被正確驗收。**先修錶，再修引擎。*
 - 同族形狀：`issues/BR_20260802_event_record_returns_ok_true_while_storing_shell_injected_content.md`
   （工具握有完整性證據卻回 `ok:true`）
 - `AGENTS.md §6.1` 的 pathspec 陷阱 / 快照歧義 / `git log -S` 回空
+
+---
+
+## 落地與殘留（2026-08-31）
+
+### 修復點
+
+```
+cedc262d32443afff79a8c4acba9be12d24639a7  2026-08-02
+fix(fidelity): report the mechanism it measured, stop asserting one
+```
+
+對應 Fix proposal 第 2 點：`FidelityError` 不再硬編「collinear-wire fusion / label collision」，
+改由 report 推導實際量到的機制。斷路（`only_candidate` / 節點消失）的診斷能力已在代碼具備。
+伴隨測試：`tests/test_fidelity_instrument_reports_measured_mechanism.py`。
+
+### 為什麼是 PARTIAL 而不是 FIXED
+
+針對修復點做 mutation 測試，**全數 survived**：把 `cedc262` 引入的訊息推導邏輯變異掉，
+現有測試套件**沒有任何一個轉紅**。這代表：
+
+```
+修復存在      ✅  (cedc262 在 HEAD，可 `git show` 驗證)
+修復行為正確  ✅  (訊息由 report 推導)
+修復被釘住    ✗  ← 沒有測試在看這一格
+```
+
+本 BR 自己的 Validation plan 就寫了「Mutation proof（必要，非加分）」——那一格目前是紅的。
+**一張「修好了但沒有任何東西防它回退」的 BR 不得標 FIXED**：歸檔會把這個缺口一併帶走，
+而下一個把訊息改回硬編的人會看到全綠。
+
+### 後續（remainder）
+
+- 補一組釘住 `cedc262` 行為的測試：餵三種偏離（節點消失 / 跨 class 熔接 / 座標偏移），
+  斷言印出的病因名稱各不相同且正確，且 revert 修復後該測試必須轉紅（mutation proof）。
+- Fix proposal 第 1 點（`sch_union_classes` 保留單節點 net）是否已完整落地：本輪**未獨立量測**，
+  不得因 `cedc262` 存在而推定。

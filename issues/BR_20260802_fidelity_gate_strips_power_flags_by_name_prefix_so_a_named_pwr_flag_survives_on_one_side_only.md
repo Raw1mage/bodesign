@@ -1,7 +1,8 @@
 # BR_20260802 — fidelity gate 對 PWR_FLAG 兩側不對稱：基準側保留、候選側結構上不可能有，於是恆報一個假開路
 
 - **Status**: PARTIAL — 主修復已落地 `4a58fdf`（2026-08-04 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`）。§8 記錄實作與驗收；
-  **scoped remainder = §6「沒量」的第三點（其他 gate 是否重複回報同一節點）仍未查**（見 `:174`）。**留頂層，不歸檔。**
+  **scoped remainder 兩項**：（a）§6「沒量」的第三點（其他 gate 是否重複回報同一節點）仍未查（見 `:174`）；
+  （b）**ERC 層具名電源旗標仍會回報**，屬已知剩餘殘留（見 §9）。**留頂層，不歸檔。**
 
 > **Header 更正（2026-08-04）**：本行原標 `FIXED`，而同一行尾已自承「第三點仍未查」。
 > **`FIXED` + 一個未查項是帳面矛盾**：機械掃描只讀 Status 關鍵字會把它當成可歸檔，
@@ -207,3 +208,34 @@ mutation proof 4/4 killed, restore 位元組相同
 ```
 
 豁免在 `summary()` 中**即使 PASS 也印出**（`EXCLUDED as power symbols`）：它從兩側移除節點，而看不見的豁免與從未做過的檢查無法區分。自動標註的 `#FLG*`（該頁 87 個）刻意不列，否則會把唯一重要的那個埋掉。
+
+---
+
+## §9 狀態複核（2026-08-31）
+
+### §9.1 主修復仍在 HEAD
+
+```
+4a58fdf29a84cdb240e7ff429291c36b1a0c7c58  2026-08-04
+fix(eda-bridge): exempt named power symbols from the fidelity gate, both sides
+```
+
+控制組：同一支 `git log -1` 對一個不存在的 sha 回 `fatal: ambiguous argument ... unknown revision`（rc=128），
+所以上面那一行不是「指令沒跑」的空輸出。
+
+### §9.2 為什麼仍維持 PARTIAL
+
+保真閘（fidelity gate）側的假開路已消失，**但 ERC 層仍會對具名電源旗標回報**。
+這是一個 **scoped remainder**，不是主修復失效：本 BR 的修復範圍是
+`fidelity.py` 的兩側對稱性（`compare_partitions` / `verify_partition_fidelity`），
+**不涵蓋 `kicad-cli erc` 自己的電源旗標規則**。
+
+```
+fidelity gate 兩側對稱        ✅  4a58fdf，mutation proof 4/4
+ERC 層具名電源旗標回報      ✗  已知殘留，本張範圍外
+其他 gate 是否重複回報同節點  ?  §6 第三點，未查
+```
+
+兩項殘留都寫進 header，**因為歸檔時只有 header 會被讀**。
+這也是 2026-08-04 那次 header 更正的同一個理由：`FIXED` 加一個未查項是帳面矛盾，
+而機械掃描只讀 Status 關鍵字。
