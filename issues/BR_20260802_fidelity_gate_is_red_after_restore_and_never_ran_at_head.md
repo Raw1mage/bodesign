@@ -327,6 +327,38 @@ fix(kicad_emit): stop the clearance test deciding real geometry by float noise
 本 BR 開立時的症狀（模組收集期即死 `Ran 1 test, errors=1` → 還原後轉為 deterministic RED）
 兩段都已不復存在。
 
+#### §9.2.1 呼叫方式（2026-08-31 補；上面的過去式敘述不變，本節只是把「怎麼跑」寫下來）
+
+**上一段「為綠」的前提是帶著 `PYTHONPATH`。** 原文沒有寫出呼叫方式，
+而本 repo 的模組住在 `packages/*/` 底下、樹裡沒有 `conftest.py` / `pyproject.toml` / `pytest.ini`，
+所以「從 repo root 用最直覺的方式跑」得到的是紅燈。實跑指令（2026-08-31，`/home/pkcs12/projects/bodesign`）：
+
+```bash
+find . -name __pycache__ -prune -exec rm -rf {} +
+PP=$(ls -d packages/*/ | tr '\n' ':')
+PYTHONPATH="$PP" python3 -m unittest tests.test_fidelity_gate
+#   Ran 5 tests in 0.664s / OK        rc=0
+```
+
+**⚠ 不帶 `PYTHONPATH` 的紅燈是 env 缺口，不是回歸。** 同一棵樹、同一個 HEAD：
+
+```bash
+python3 -m unittest tests.test_fidelity_gate
+#   ModuleNotFoundError: No module named 'bodesign_eda_bridge'
+#   Ran 1 test in 0.000s / FAILED (errors=1)      rc=1
+```
+
+那行 `Ran 1 test in 0.000s` + `FAILED (errors=1)` **逐字就是本 BR :18 寫的、
+且上一段宣告「已不復存在」的那個症狀字串**。它在這裡再次出現，不代表修復失效——
+代表「儀器紅燈」與「儀器從未開機」在 unittest 摘要上仍然是同一行（本 BR :21 的形狀，
+只是這次的成因是 `sys.path` 而非 `kicad_emit.py` 缺檔）。
+
+判別方式：看 traceback 的 `ModuleNotFoundError` 指向 `bodesign_*`（=env）
+還是測試真的執行了 5 個 case 才紅（=回歸）。`Ran 1 test` vs `Ran 5 tests` 是最快的一眼判準。
+
+這一格「口耳相傳的 `PYTHONPATH` 沒有任何機制讓它可被發現」已另立
+`issues/BR_20260831a_repo_has_no_test_bootstrap_so_a_green_suite_depends_on_an_undiscoverable_pythonpath.md`。
+
 ### §9.3 殘留與後續（**不隨本張歸檔消失**）
 
 Status 標 `FIXED` **只針對「儀器紅燈」這一格**。以下在本張明確**未**處理，
