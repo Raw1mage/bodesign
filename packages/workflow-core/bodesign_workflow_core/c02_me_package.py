@@ -33,9 +33,35 @@ RECOMMENDED_FOR_USEFUL_DRAFT = (
 )
 
 # The stage folder every C02 rel_path is prefixed with. `folder` arguments in this
-# module are ALWAYS the product root (adjudicated 2026-08-02); the stage dir is
-# derived from it here, in ONE place, so no caller has to pre-join it and no two
-# code paths can disagree about what `folder` meant (BR_20260719 c02).
+# module are ALWAYS the product root (adjudicated 2026-08-02), and no caller has
+# to pre-join the stage segment.
+#
+# CORRECTED 2026-09-01 (BR_20260804h). This comment used to claim the stage dir
+# is "derived from it here, in ONE place, so ... no two code paths can disagree".
+# That was false and it made readers stop looking for the second source of truth.
+# What is actually true:
+#
+#   TWO prefix models coexist. `_c02_stage_dir()` below derives `<root>/C02-ME`
+#   and has exactly TWO callers, both on the provenance path (`:772`, `:847`).
+#   Every other verb instead joins `root / C02_OUTPUTS[key]`, and each of those
+#   12 constants carries its own literal "C02-ME/" prefix.
+#
+#   The C0x_OUTPUTS values therefore serve THREE distinct roles, and moving the
+#   prefix out of them breaks each role differently:
+#     1. right-hand side of a filesystem join  -> `c02_me_package.py:386`
+#        (`path = root / C02_OUTPUTS["openscad"]`)
+#     2. the rel path RETURNED to the caller, which the caller joins AGAIN
+#        -> returned at `c02_me_package.py:453`, re-joined at
+#           `services/mcp/server.py:320` (`Path(a["out_dir"]) / stl_rel`)
+#     3. a member of a RECONCILIATION set compared against an independently
+#        derived prefix -> `c01_id_template.py:121` compares
+#        `{p.as_posix() for p in C01_OUTPUTS.values()}` against the template's
+#        own `f"{folder}/{carrier}"`; a set difference raises C01TemplateError.
+#        (Role 3 was missed by BR_20260804h's own analysis, which counted two.)
+#
+# The invariants this comment asserts are machine-checked in
+# `tests/test_stage_prefix_invariant.py` — a claim here that stops being true
+# fails a test instead of quietly misleading the next reader.
 C02_STAGE_DIRNAME = "C02-ME"
 
 C02_OUTPUTS = {

@@ -26,6 +26,28 @@ from .refs_gate import require_refs
 # WRITE side: where the emitter puts each deliverable. Unchanged (the Rockbox
 # bucket names are the emitter's own contract and several downstream templates
 # name them literally).
+#
+# STAGE PREFIX MODEL (BR_20260804h, corrected 2026-09-01). Every value below
+# carries its own literal "C01-ID/" prefix. `_c01_stage_dir()` (:94) derives the
+# same segment but has exactly TWO callers (:617, :1133), both on the provenance
+# path — so TWO prefix models coexist in this module and the prefix is NOT
+# derived in one place.
+#
+# These values serve THREE distinct roles; moving the prefix out breaks each one
+# differently, which is why the convergence is deliberately deferred:
+#   1. right-hand side of a filesystem join -> `c01_id_package.py:399`-`:403`
+#      and `:1391` (`root / C01_OUTPUTS["constraints"]`)
+#   2. the rel path RETURNED / declared to callers -> `mode_contracts.py:74`
+#      (`_C01_EXPECTED_OUTPUTS = [str(rel) for rel in C01_OUTPUTS.values()]`),
+#      the packet's outward contract strings
+#   3. a member of a RECONCILIATION set compared against an independently derived
+#      prefix -> `c01_id_template.py:121` builds
+#      `{p.as_posix() for p in C01_OUTPUTS.values()}` and diffs it against the
+#      template's own `f"{folder}/{carrier}"`; a non-empty difference raises
+#      C01TemplateError. (Role 3 was missed by BR_20260804h's own analysis.)
+#
+# The invariants stated here are machine-checked in
+# `tests/test_stage_prefix_invariant.py`.
 C01_OUTPUTS = {
     "ai_file": Path("C01-ID") / "Ai file" / "Design_Direction.md",
     "cmf": Path("C01-ID") / "CMF" / "CMF_Direction.md",
