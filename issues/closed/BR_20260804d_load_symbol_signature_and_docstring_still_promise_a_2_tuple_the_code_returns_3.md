@@ -1,6 +1,11 @@
 # BR_20260804d — `load_symbol` 的簽章與 docstring 仍承諾 2-tuple，實際回 3-tuple
 
 - **Status**: FIXED（2026-08-31 by `ses_fa7af3a78ffeUqSLw5dMA12hQj`，handler；驗證紀錄見文末）
+- **Closed**: 2026-09-01 by `ses_fa72d47feffeTZNnlOw08pgCgS`（BRNS handler，closeout_three_debts）—
+  依據：commit `d0ffb53`；HEAD 上 `kicad_emit.py:376-378` 簽章已是
+  `tuple[str, dict[str, tuple[float, float, float]]]` 且 docstring 寫 `(x, y, rotation)`
+  （`git grep -A2 'def load_symbol' HEAD` 命中；bogus-def 控制組同檔 rc=1 回空）；
+  `tests.test_kicad_emit` 在 HEAD `Ran 36 tests … OK`（先清 `__pycache__`，負控制組 rc=1）。
 - **Severity**: LOW（**不是功能缺陷**——所有消費端都已適應；但它讓一個測試永久紅著，而紅燈指向錯誤的方向）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:360-362`（`load_symbol` 簽章 + docstring）／
   `tests/test_kicad_emit.py::test_load_symbol_returns_definition_and_pin_endpoints`

@@ -2,6 +2,14 @@
 
 - **Status**: FIXED — 止血層（層次 1）已於 `fbcc7f3` 落地並經端點雙簽複驗；`tests.test_fidelity_gate` 在 HEAD 轉綠。
   **本張只涵蓋「儀器紅燈」本身**；層次 3 的契約衝突（anchor 位移 vs pin endpoint）未在本張處理，見下方 §「殘留與後續」。
+- **Closed**: 2026-09-01 by `ses_fa72d47feffeTZNnlOw08pgCgS`（BRNS handler，closeout_three_debts）—
+  依據：止血 commit `fbcc7f3`（`git merge-base --is-ancestor fbcc7f3 HEAD` rc=0）；
+  `tests.test_fidelity_gate` 在 HEAD `Ran 5 tests … OK`（先清 `__pycache__`；負控制組
+  `tests.test_NON_EXISTENT_MODULE_CONTROL` → `Ran 1 test … FAILED (errors=1)`，證明 `Ran 5 tests` 不是空跑）。
+  §9.3 列的三項殘留**不隨本張歸檔消失**，且已各自有帳並經本次逐張確認仍在頂層：
+  `BR_20260802_dd20_opposing_flag_separation_moves_label_anchor_off_pin_ungated.md`、
+  `BR_20260802_real_product_pages_carry_dozens_of_open_circuit_nodes_cause_untraced.md`、
+  `BR_20260831a_repo_has_no_test_bootstrap_...md`（`ls` 逐檔 rc=0；不存在檔名控制組 rc=2）。
 - **Owner**: unassigned（`schematic-engine` family 無 owner；filed by 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `schematic-engine`
 - **Severity**: real — `fidelity.py` 是這個 family 的**驗收儀器**，它現在 RED 且 deterministic

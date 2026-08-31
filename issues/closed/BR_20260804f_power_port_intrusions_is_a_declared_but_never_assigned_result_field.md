@@ -1,6 +1,12 @@
 # BR_20260804f — `power_port_intrusions` 宣告了、docstring 承諾了、從未被賦值
 
 - **Status**: FIXED
+- **Closed**: 2026-09-01 by `ses_fa72d47feffeTZNnlOw08pgCgS`（BRNS handler，closeout_three_debts）—
+  依據：`05dce34`（`git merge-base --is-ancestor 05dce34 HEAD` rc=0）＋ closeout commit `8d63c49`；
+  HEAD `kicad_emit.py:1887` 有無條件賦值 `power_port_intrusions=list(_port_intrusions)`
+  （`git grep` 命中；同檔 bogus-token 控制組 rc=1 回空）；
+  `tests.test_kicad_emit` 在 HEAD `Ran 36 tests … OK`（先清 `__pycache__`，負控制組 rc=1）。
+  §5 三個「沒量」是誠實標出的未涵蓋區，非未落地的修法。
 **Severity**: MEDIUM (instrument defect — 讀者拿到的空清單與「沒有缺陷」無法區分)
 **Family**: schematic-engine / G13-harness-disclosure
 **Filed**: 2026-08-04 by ses_03408d1faffeKuPkQZ9Zj6gWO2 (schematic-engine owner)

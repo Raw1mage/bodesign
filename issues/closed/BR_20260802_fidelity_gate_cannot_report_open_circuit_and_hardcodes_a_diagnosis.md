@@ -4,6 +4,11 @@
   經三輪實測（round 1 / 2 / 3皆 2026-08-31）：**M1~M8 8/8 KILLED、N4 / N5b / P4 / P7 皆 KILLED、
   19 個測項全綠**。round 2 與 round 3 各拆穿一個「自己剛造的假防線」，見 §第三輪。
   修復 commit `cedc262`；測試補強見 §「落地與殘留」§第二輪。**已無 remainder。**
+- **Closed**: 2026-09-01 by `ses_fa72d47feffeTZNnlOw08pgCgS`（BRNS handler，closeout_three_debts）—
+  依據：修復 commit `cedc262`（`git merge-base --is-ancestor cedc262 HEAD` rc=0）＋ 測試補強 `aa016db`；
+  `tests.test_fidelity_instrument_reports_measured_mechanism` 在 HEAD `Ran 19 tests … OK`
+  （先清 `__pycache__`；負控制組 `tests.test_NON_EXISTENT_MODULE_CONTROL` → `FAILED (errors=1)`）。
+  本張自陳「已無 remainder」，M9~M12 為明確標示的範圍外，非未結殘留。
 - **Scheduled**: 已授權 `ses_0c87bab06fferQ0umBs2Nybb5U` 執行（單張授權，非 family）
 - **Owner**: `(default)`（值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `G13-harness-disclosure` × `schematic-engine`（驗收儀器）

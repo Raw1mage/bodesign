@@ -1,6 +1,12 @@
 # BR: c02_readiness provenance 解析根與 constraints 載入根不一致 + dod_ok 工具面缺口
 
 - **Status**: FIXED — 兩個症狀（folder 語義矛盾、缺 dod_ok）都已收斂（見文末「2026-08-04 覆核」）
+- **Closed**: 2026-09-01 by `ses_fa72d47feffeTZNnlOw08pgCgS`（BRNS handler，closeout_three_debts）—
+  依據：修復 commit `44deecb`（`git merge-base --is-ancestor 44deecb HEAD` rc=0）；HEAD 上
+  `c02_me_package.py:159` 的 `d["dod_ok"] = bool(gc.get("dod_ok"))` 與 `_c02_stage_dir` 皆存在
+  （`git grep` 命中 3 行，bogus-token 控制組同檔 rc=1 回空）；
+  `tests.test_readiness_folder_contract` `Ran 14 tests … OK`（負控制組 rc=1）。
+  文末已明記那個 dual-prefix 殘留**不是本張的 scoped remainder**，已獨立立案為 `BR_20260804h`（仍在頂層）。
 - Date: 2026-07-19
 - Source: thesmart_products aiguard C02-ME 執行（plan aiguard_c01-c04-autonomous-delivery task 2.8）
 - Axis: 軸A（工具能用性）

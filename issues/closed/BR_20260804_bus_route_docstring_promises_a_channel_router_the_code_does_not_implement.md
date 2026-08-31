@@ -1,6 +1,12 @@
 # BR_20260804 — `_bus_route` 的 docstring 承諾一個 code 沒有實作的 channel router
 
 - **Status**: FIXED（Option C，2026-08-31，handler `ses_fa7a4e045ffeM5zWajS6JvljoT`）
+- **Closed**: 2026-09-01 by `ses_fa72d47feffeTZNnlOw08pgCgS`（BRNS handler，closeout_three_debts）—
+  依據：commit `70485f0`（docstring 對齊 daisy-chain ＋ 7 個新測項）；
+  `tests.test_kicad_emit` 在 HEAD `Ran 36 tests … OK`（先清 `__pycache__`；
+  負控制組 `tests.test_NON_EXISTENT_MODULE_CONTROL` → `FAILED (errors=1)`）。
+  §6 `fusion_registry` 不對稱是 `observed-not-proven` 的**觀察**（§6.1 已量、得負面證據），
+  並非本張的 scoped remainder；§4/§5 指出的 RCA 更正轄區屬 `BR_20260723e`（仍 OPEN 於頂層）。
 - **Severity**: MEDIUM（本體無使用者可感知傷害；傷害在**它讓兩張 BR 的 RCA 指向錯的函式**）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:3016-3060`（`_bus_route` docstring）
 - **Family**: schematic-engine
