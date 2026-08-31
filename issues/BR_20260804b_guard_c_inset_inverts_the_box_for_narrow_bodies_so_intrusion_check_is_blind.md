@@ -814,3 +814,161 @@ CONTROL Device:R（未移動者）  len 1646 vs 1646   pins 2 vs 2   逐字相�
    這是一個**具體、可排程**的缺口，不是一個模糊的保留。
 2. **未驗證那 180 個重新進入 guard C 後是否觸發新的 intrusion 回報**（同上，需重跑 blind 判定）。
 3. **§10.1 的 22431 / 21437 仍不可重建**，本輪未重試。
+
+> **§11.3 第 1、2 項已於 2026-09-01 補量，見 §12。第 3 項仍未重試。**
+
+---
+
+## 12. blind 判定在新 P_GUARD 上重跑（2026-09-01，`ses_fa70cfaf8`，dispatcher `ses_04db7a1c5` 派工）
+
+> 這一節回答 §11.3 的第 1 項與第 2 項。**口徑逐字沿用 §10.2**（同一支分類器、同一組 box 退化
+> 判準、同一條來源鏈 rect → graphics → pin-tip）——**判準一換，新舊就不可比較，而「不可比較」
+> 會被讀成「有變化」。** 本輪**零生產碼變更**。
+
+### 12.1 三個數字，各自帶母體
+
+| 量 | 母體 | 值 |
+|---|---|---|
+| **blind 總數** | **P_GUARD_now = 22544** | **7** |
+| 其中屬 **OLD**（修法前就在 guard 的 22214） | OLD = 22214 | **7** |
+| 其中屬 **NEW**（新進的 330） | NEW = 330 | **0** ← 本包的答案 |
+
+**判準未漂移**：`blind(OLD) == 7` 這個數不只是「等於 7」，而是**與修法前那一輪逐名相同**——
+同一支分類器在同一個 process 內對注入舊掃描器的 pass 也回 7，且兩組名單集合相等：
+
+```
+drift check:  blind_before(P_GUARD_before 22214) == blind_now ∩ OLD   ->  True
+```
+
+> **方法註記（dispatcher `ses_04db7a1c5` 覆核裁決 ①，2026-09-01）——集合相等優於數值相等。**
+> 這裡回報的不是「兩邊都等於 7」，而是**兩個名單集合相等**。差別是可判別性：
+> **數值相等可以由「兩個不同的 7」滿足**（修法讓 A 不再 blind、同時讓 B 變成 blind，
+> 計數不動而判準已經漂移），集合相等不行。凡是拿一個計數去證明「沒有變化」的地方，
+> 先問一句：**這個數字若由不同的成員湊出來，我看得出來嗎？** 看不出來就改比集合。
+
+**成員拆分（同一次掃描同時輸出，不可能來自不同版本的 code）**：
+
+```
+OLD  (兩個 pass 都在 guard)     22214
+NEW  (新進 guard)                 330   = 150 (原 load_fail) + 180 (原 zeropin)
+LOST (離開 guard)                   0   ← 沒有任何符號反向移動
+```
+
+### 12.2 blind 7 個逐一具名（母體 = P_GUARD_now 22544）
+
+| # | lib_id | 來源 | w | h | pins | 轄區 |
+|---|---|---|---|---|---|---|
+| 1 | `74xGxx:74LVC1GU04DRL` | rect | 0.0 | 11.43 | 5 | **804b**（§1.2 具名，rect 自身退化） |
+| 2 | `Connector:TestPoint` | graphics | 0.0 | 0.0 | 1 | **804g §9.5 具名 6 個** |
+| 3 | `Connector:TestPoint_2Pole` | graphics | 1.778 | −0.0 | 2 | **804g §9.5 具名 6 個** |
+| 4 | `Connector:TestPoint_Small` | graphics | 0.0 | −0.0 | 1 | **804g §9.5 具名 6 個** |
+| 5 | `Device:NetTie_2` | graphics | 1.27 | −0.0 | 2 | **804g §9.5 具名 6 個** |
+| 6 | `Mechanical:MountingHole_Pad` | graphics | 0.0 | 0.0 | 1 | **804g §9.5 具名 6 個** |
+| 7 | `Mechanical:MountingHole_Pad_MP` | graphics | 0.0 | 0.0 | 1 | **804g §9.5 具名 6 個** |
+
+來源分布 `{graphics: 6, rect: 1}` —— 與 §10.2 的 P_GUARD 列（`rect 1 / graphics 6`）逐字相同。
+
+**⇒ §10.2 的結論在 330 個新成員加入後仍然成立**：blind 全數有轄區，
+**「兩者都不在」仍是空集合，沒有未建檔的第四批。**
+
+### 12.3 那個 `0` 有判別力嗎（NEW 330 中 blind = 0）
+
+**同一支分類器、同一輪掃描**對已知 blind 者必須回非零，否則這個 0 只是探針壞掉：
+
+```
+74xGxx:74LVC1GU04DRL      -> ['guard', True,  'rect',     w=0.0,   h=11.43 ]  ← 說得出 blind
+Connector:TestPoint       -> ['guard', True,  'graphics', w=0.0,   h=0.0   ]  ← 說得出 blind
+Device:R                  -> ['guard', False, 'rect',     w=1.016, h=1.27  ]  ← 說得出 non-blind
+Regulator_Linear:AMS1117-3.3 -> ['guard', False, 'rect',  w=6.35,  h=3.175 ]  ← 同上
+Mechanical:Fiducial       -> ['zeropin', None, …]                             ← 真 zero-pin 未被誤收進 guard
+```
+
+另外三組控制組**保護的是不同層**（§10.5 那句「控制組只覆蓋它所在的那一層」）：
+
+- **CONTROL_ENUM（母體枚舉器，非分類器）**：`P_ROOT` 兩個 pass 皆 22583 且集合相等
+  （`set(now) == set(before)` assert 未觸發）。母體為空時分類器會全綠——這格擋的是那個。
+  枚舉器起點錨定用 `src.index("(", m.start())` + `assert src[st] == "("`，**不寫死偏移量**
+  （§10.5 #2 的形狀，本 fleet 已獨立踩過兩次）。
+- **CONTROL_EQ（探針 == 生產路徑）**：本輪把 `load_symbol` 的 body 內聯（它每次呼叫都重讀整個
+  213 MB 語料，O(n²)）。內聯鏈與 `load_symbol` 對六個具名樣本**逐字相等**，含錯誤態：
+  ```
+  Device:R                                     True  1653 == 1653
+  Isolator:TLP184xSE                           True  4944 == 4944
+  Mechanical:Fiducial                          True  1122 == 1122
+  Connector:TestPoint                          True  1463 == 1463
+  ZZ_NoSuchLib:Nope                            True  ERR  == ERR
+  Connector_Generic:Conn_02x04_Row_Letter_Last True  4682 == 4682
+  ```
+- **CHECK 恆等式**：`22544 + 39 + 0 = 22583`（now）與 `22214 + 219 + 150 = 22583`（before）
+  兩側皆成立。
+
+### 12.4 §11.3 第 2 項：那 180 個重進 guard 後有沒有觸發新 intrusion
+
+分兩層回答，因為「符號層」與「頁面層」是兩個母體：
+
+```
+符號層（母體 = 180）：blind = 0        沒有任何一個的 box 退化
+符號層（母體 = 150）：blind = 0        同上
+頁面層（母體 = 14 頁 / 184 個已擺放元件）：這 330 個的已擺放 instance 數 = 0
+  CONTROL_MEMBER: 'Connector_Generic:Conn_02x04_Row_Letter_Last' ∈ the180  ->  True
+```
+
+**⇒ 新 intrusion 數 = 0，而這個 0 有兩個獨立理由**：那 330 個的 box 都不退化（判準層），
+且它們在現存 14 頁上**一個都沒被擺放**（曝險層）。`CONTROL_MEMBER` 證明那個 0 不是因為
+集合是空的——集合裡確實有可查得到的成員。
+
+### 12.5 §10.3 各頁曝險重取（母體與定義逐字沿用 §10.3）
+
+```
+page                                                        inst  blind seen  0pin  pwr  nolib fail
+---------------------------------------------------------------------------------------------------
+probeA / probeD / sch_product / verifyN2_empty（4 頁空）        0      0    0     0    0     0    0
+probeB / probeC                                              1,1      0    1     0    0     0    0  (各)
+probeE / probeG / probeG2 / n1_bare / p_twodirs2              2×5     0    2     0    0     0    0  (各)
+sch_direct/aiguard_product                                   134      0   47     0   87     0    0
+e2e-led-driver/C03-EE/e2e-led-driver-npn                      22      0   22     0    0     0    0
+e2e-led-driver/C03-EE/e2e-led-driver                          16      0   16     0    0     0    0
+---------------------------------------------------------------------------------------------------
+TOTAL（14 頁）                                               184      0   97     0   87     0    0
+```
+
+**BLIND = 0，與 §10.3 相同。** 六態 codomain 控制組六格全中（blind / seen / zero-pin /
+engine-pwr / no-such-lib / load-fail 各有具名探針回對應態），另加 `CONTROL_INST`：
+instance regex 對最大那頁回 134，而 `lib_symbols` 樣式的條目是 9 —— 兩者不同，
+證明母體選的是**已擺放 instance** 而非快取定義。
+
+**⚠ 與 §10.3 有一格差異，是我的分類器口徑改變，不是資料變動**：`seen 46 → 47`、
+`pwr 88 → 87`，總數 134 不變。移動的是**同一個 instance**：`power:PWR_FLAG`（1 個）。
+§10.3 的分類器把它歸為 engine glyph；本輪先判斷 `lib_id` 是否帶 library 前綴，
+`power:PWR_FLAG` 帶前綴故走 stdlib 解析路徑，解析成功（1 pin、graphics
+`(-1.016, 0.0, 1.016, 2.54)`、box `w=1.016 h=1.27`）⇒ `seen`。
+**兩種歸類下它都不是 blind，所以 BLIND=0 不受影響。** 控制組：無冒號的
+`power_gnd_GND` 與裸 `PWR_FLAG`（3 個 instance）仍走 engine-pwr 路徑。
+
+**兩個口徑各自的定義，寫在數字旁邊**（dispatcher 覆核裁決 ②：讓下一個人知道
+差 1 的成因是**分類規則**而不是資料變動）：
+
+| 口徑 | 判「是不是 engine glyph」的規則 | `power:PWR_FLAG` 落哪 | 該頁 seen / pwr |
+|---|---|---|---|
+| **§10.3（2026-09-01 上午）** | 比對 **engine glyph 名單**（`power_*` 前綴與 `PWR_FLAG` 字面，含帶 library 前綴的變體） | `engine-pwr` | 46 / 88 |
+| **§12.5（本輪）** | 先看 `lib_id` **有無 library 前綴**；有前綴就交給 library 解析鏈，解析成功即依 box 判 blind/seen | `seen` | 47 / 87 |
+
+```
+同一份檔案、同一個 instance、總數 134 不變 —— 移動的只有 power:PWR_FLAG 這 1 個。
+兩種歸類下 blind 皆為 False，故 BLIND=0 在兩個口徑下都成立。
+```
+
+**不把它解析成一個數字，是刻意的。** 兩個都是可辯護的枚舉方式，
+而「兩個可辯護的枚舉對同一份檔案答不同數字」正是本張 BR 的形狀（§10.1 同理）。
+把差異記下來比抹平誠實：**下一個看到 46 與 47 的人不會誤讀成回歸。**
+
+### 12.6 本節沒量什麼
+
+1. **§7.8 仍未量**（那 6 個具名 blind 符號在**真實** PCB 頁上的出現頻率）——依 dispatcher
+   裁決維持未量。本節只證明「repo 內現存 14 頁沒用到它們」，**不等於**「使用頻率低」。
+2. **未量那 330 個在未來頁面上的曝險**。它們今天一個都沒被擺放；若某天被擺上，
+   本節的頁面層 0 就不再適用（判準層的 0 仍適用——它們的 box 不退化）。
+3. **§10.1 的 22431 / 21437 仍不可重建**，本輪未重試（§11.3 第 3 項照舊）。
+4. **未跑 `emit_kicad_schematic` 端到端**。本節量的是 guard C 的判準與來源鏈，
+   不是完整 emit 流程；`_port_intrusions` 的實際觸發還需要 power endpoint 幾何，
+   而現存 14 頁上那 330 個符號一個都沒出現，故無可觸發的案例。

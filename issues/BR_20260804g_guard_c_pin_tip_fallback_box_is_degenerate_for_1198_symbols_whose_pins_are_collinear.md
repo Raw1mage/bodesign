@@ -542,3 +542,60 @@ CONTROL Device:R（未移動者）              1646 vs 1646   2 pins vs 2   逐
 2. **未重跑 §9.2 第二行（gdiff 1030 vs 1027）**，仍 OPEN。
 3. **未驗證那 37 個接上 fallback 後會不會產生新 intrusion**（需動 code）。
 4. **殘留一（6 個具名退化）本輪未重驗**，它們不在 zero-pin 族，不受本次分桶變動影響。
+
+> **§11.3 第 4 項已於 2026-09-01 重驗，見 §12。第 1、2、3 項仍未量。**
+
+---
+
+## 12. 殘留一（6 個具名退化）在新 P_GUARD 上重驗（2026-09-01，`ses_fa70cfaf8`）
+
+> 這一節是 `BR_20260804b §12` 那次全庫 blind 重跑的本張切片。**口徑逐字沿用 804b §10.2**
+> （同一支分類器、同一組 box 退化判準）。本輪**零生產碼變更**。
+
+### 12.1 6 個具名符號今天仍全數退化（母體 = P_GUARD_now 22544）
+
+新 P_GUARD 上的 blind 總數是 **7**，其中 **6 個是本張 §9.5 的具名名單**（第 7 個
+`74xGxx:74LVC1GU04DRL` 是 rect 來源，屬 804b）：
+
+| lib_id | 來源 | w | h | pins |
+|---|---|---|---|---|
+| `Connector:TestPoint` | graphics | 0.0 | 0.0 | 1 |
+| `Connector:TestPoint_Small` | graphics | 0.0 | −0.0 | 1 |
+| `Connector:TestPoint_2Pole` | graphics | 1.778 | −0.0 | 2 |
+| `Device:NetTie_2` | graphics | 1.27 | −0.0 | 2 |
+| `Mechanical:MountingHole_Pad` | graphics | 0.0 | 0.0 | 1 |
+| `Mechanical:MountingHole_Pad_MP` | graphics | 0.0 | 0.0 | 1 |
+
+**名單逐字未變**，且 901f 修法沒有把它們救回來——它們的 graphics 本身就是 1-D 或不存在，
+不是區塊被截斷。**這是「殘留一今天仍成立」的實測依據，故本張維持 PARTIAL。**
+
+### 12.2 那 330 個新進 guard 的符號沒有一個是 blind
+
+```
+NEW（新進 P_GUARD）330 = 150（原 load_fail）+ 180（原 zeropin）
+  blind among NEW  =  0        母體 = 330
+  LOST（離開 guard）=  0        沒有符號反向移動
+```
+
+**⇒ 本張的具名殘留沒有新增成員**，`§9.5` 的 6 個仍然是 6 個，
+**沒有第四批未建檔的 graphics 退化符號**（804b §12.2 的轄區三態表，「兩者都不在」為空集合）。
+
+判別力：同一支分類器在**同一輪**對已知 blind 者仍回 `True`
+（`Connector:TestPoint` / `74xGxx:74LVC1GU04DRL`），對已知 non-blind 者回 `False`
+（`Device:R` / `Regulator_Linear:AMS1117-3.3`），對真 zero-pin 回 `zeropin`
+（`Mechanical:Fiducial` —— 未被誤收進 guard）。母體枚舉器另有自己的控制組
+（`P_ROOT` 兩 pass 皆 22583 且集合相等）。完整控制組見 804b §12.3。
+
+### 12.3 §7.6 第三族 37 個未受影響（母體 = P_ZEROPIN_now 39）
+
+`§11.1` 已測得 37 一個不差；本輪的分桶輸出再次確認 `P_ZEROPIN_now = 39 = 0 + 2 + 37`
+（`g_none 0` + `g 退化 2` + `g 非退化 37`）。那 37 個仍在 `:1758` 出局，**未進 guard C，
+故不在本次 blind 判定的母體內**——它們既沒有變成 blind，也沒有被證明不是。
+
+### 12.4 本節沒量什麼
+
+1. **§7.8 仍未量**（那 6 個在真實 PCB 頁上的出現頻率）——依 dispatcher 裁決維持未量。
+   本輪只證明 repo 內現存 14 頁沒用到它們（804b §12.5），**「現存頁沒用到」≠「使用頻率低」**。
+2. **§9.2 第二行（gdiff 1030 vs 1027）仍 OPEN**，本輪未重試。
+3. **那 37 個接上 fallback 會不會產生新 intrusion 仍未驗**——需動 code，本包零 code 變更。
+4. **未量那 6 個的修法**。本節只回答「它們今天還退化嗎」（答：是），不回答「該怎麼修」。
