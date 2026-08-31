@@ -209,3 +209,105 @@ CONTROL：mkdir -p b 後同一道指令 rc=0、stderr 空（探針有判別力�
 - `issues/BR_20260802_issues_ledger_committed_on_archive_not_on_filing.md`
   ——同樣關於 `issues/` 帳本的版控完整性；本 BR 是它的孿生（那張是「立案時沒進版控」，
   這張是「歸檔時內容沒進版控」）。
+
+---
+
+## 2026-09-01 復發：這次外顯在**驗收儀器**上，兩層守門同時放行
+
+**Status 不變（OPEN — STILL-VALID）。** 本節只補證據，不改判定。
+
+復發實錄：`094fea9`（壞）→ `6928833`（修），handler `ses_fa72d47feffeTZNnlOw08pgCgS`，
+dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`。六張已驗證的 BR 歸檔，工作區先蓋
+`- **Closed**: 2026-09-01 by …` 戳記、再 `git mv` 進 `issues/closed/`。
+
+```
+git show --numstat 094fea9
+  1  1  issues/BR_20260804g_...md            ← 非 rename 的檔案，內容有進去
+  0  0  issues/{ => closed}/...c02_readiness...md
+  0  0  issues/{ => closed}/...cannot_report_open_circuit...md
+  0  0  issues/{ => closed}/...is_red_after_restore...md
+  0  0  issues/{ => closed}/...bus_route...md
+  0  0  issues/{ => closed}/...804d...md
+  0  0  issues/{ => closed}/...804f...md      ← 六張 rename 全部 0 0
+
+git show 094fea9:issues/closed/...is_red_after_restore...md | grep -c 'Closed\*\*: 2026-09-01'   → 0
+grep -c 'Closed\*\*: 2026-09-01' issues/closed/...is_red_after_restore...md                       → 1
+                                            ↑ 同一支探針、同一個檔，committed vs 工作區，結論相反
+```
+
+### 新的一格：`git show --name-only` 也擋不住——標題的 *file counting guard* 要擴大
+
+本張原本記的是「檔案**計數**守門分不出來」。這次量到的更強：
+
+> **`git show --name-only` 對「`0 0` 的純路徑 rename」與「帶內容的 rename」輸出逐字相同。**
+
+兩層守門用的是兩種不同探針，**而它們一起放行**：
+
+| 層 | 用的探針 | 為什麼擋不住 |
+| --- | --- | --- |
+| handler 自驗 | `git diff --cached --name-only \| wc -l` 恰好 7、全部 `^issues/closed/`、`.specbase` 守門 = 0 | 全是**檔案計數與路徑** |
+| dispatcher 覆核 | `git show --name-only <sha>` | 也是**路徑**。它列出了六個檔名，讀起來像「我看過這個 commit 動了什麼」 |
+
+`--name-only` 比 `wc -l` 更危險，因為它**看起來已經在看內容了**——它逐檔列名、還印 rename 箭頭
+`issues/{ => closed}/…`，讀者心裡的語義（「這個 commit 對這些檔做了事」）比它實際的語義
+（「這些路徑在這個 commit 的 tree diff 裡出現過」）**強得多**。一個 `0 0` 的 rename 完全滿足後者。
+
+這是本張 RCA 的同一個機制往上一層：**資訊系統當下就有**（git 自己算得出 numstat），
+缺的是**揭露**——而這次連「刻意去覆核的人」都拿不到，因為他選的探針本身不揭露。
+
+### 可貼上就用的替代探針
+
+```bash
+# ① 找出一個 commit 裡所有「零內容變更」的路徑（rename-only / mode-only）
+git show --numstat --format='' <sha> | awk '$1=="0" && $2=="0"'
+#    非空 ⇒ 這些路徑在該 commit 裡一個位元組都沒改
+
+# ② 對「我以為寫進去的那句話」逐檔雙向對照（committed vs 工作區）
+git show <sha>:<path> | grep -c '<戳記字串>'      # 進了嗎
+grep -c '<戳記字串>' <path>                        # 工作區有嗎
+#    兩數不等 ⇒ 內容沒進 commit。相等且皆非 0 ⇒ 真的進了
+
+# ③ 控制組（必要，否則 ① 的空結果分不出「沒問題」與「探針壞了」）
+git show --numstat --format='' <一個已知有內容的 sha> | awk '$1=="0" && $2=="0"'
+#    必須也回空，且該 commit 的 numstat 本身非 0 —— 證明 awk 條件會動
+```
+
+2026-09-01 實跑：② 對 `6928833` 六張皆 `1 / 1`，對 `094fea9` 同一檔 `0 / 1`；
+③ 的控制組 `ac85346` numstat 為 `158/215/157`，`awk` 條件回空。**探針分得出兩者。**
+
+### 附帶記一格不同族、但同一個「母體漏一格」形狀的失誤
+
+同一輪裡，handler 回報「六張全部蓋了戳記」而實際只有五張——`BR_20260804f` **從未被蓋**。
+驗證用的 `grep -c` 全回 1、沒有任何一格是紅的，因為**它編的檔案清單裡就漏了 804f**，
+探針從未指向那一格。**探針沒壞，母體漏了。**
+
+這不是 `git mv` 的問題，所以不改本張判定；記在這裡是因為它與本張共用讀者的同一個陷阱：
+**「我跑了檢查而且全綠」不蘊含「我檢查了該檢查的全部」。**
+本張的形狀是探針看錯層，這一格的形狀是探針看漏對象——兩者在輸出上都是一片綠。
+
+### 歷史稽核：`issues/closed/` 72 張裡，只有一張的承諾內容至今仍缺席
+
+2026-09-01 對 `issues/closed/` 全 72 張做了歷史性內容遺失稽核（clean 60 / suspect 1 / undecided 11）。
+`3dfba03`（commit message 明寫「補 Resolution 段」）的 11 個路徑 numstat 全部 `0 0`——形狀與
+`094fea9` 完全一致。但**再往前一步問「HEAD 到底有沒有」而不是「哪個 commit 加的」**，結論反轉：
+
+```
+git show HEAD:<3dfba03 的 11 個路徑> | grep -c -i -e '^#.*Resolution' -e '^\*\*Resolution'
+  → 1 1 1 1 1 1 1 1 1 1 0
+```
+
+**10/11 的 Resolution 段最終落地了**，只是不在 `3dfba03` 那個 commit——即「兩段式歸檔」，
+與 `094fea9`→`6928833` 同形，而且**已經有人補完**。所以 `0 0` 本身不蘊含內容遺失。
+
+唯一例外，也是全稽核唯一一張 **commit message 承諾了、HEAD 至今仍沒有** 的：
+
+```
+issues/closed/issue_20260703_tier3_honesty_mechanisms_unwired_c04_silent_passthrough.md
+  git show HEAD:<該路徑>  的 Resolution 命中 → 0      （檔案存在，rc=0，共 109 行）
+  同批 10 張同探針                        → 1        （對照組：探針對這個 regex 有牙）
+```
+
+判為 **suspect**（不是 undecided）。本輪唯讀不修；修法另行裁決。
+
+方法論的一格：**問「哪個 commit 加的」需要逐張讀 diff 且會被兩段式歸檔誤導；問「HEAD 有沒有」
+一次就分得出「遺失」與「補在別處」。** 要判斷內容是否遺失，探針該指向現況而不是指向出處。
