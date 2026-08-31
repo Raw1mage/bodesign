@@ -374,8 +374,15 @@ def _page_pitch_floor(components, symbol_dir) -> float:
 
 
 def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR,
-                page_scale: float = 1.0) -> tuple[str, dict[str, tuple[float, float]]]:
-    """Return (embedded symbol definition text, {pin_number: (x, y)}).
+                page_scale: float = 1.0) -> tuple[str, dict[str, tuple[float, float, float]]]:
+    """Return (embedded symbol definition text, {pin_number: (x, y, rotation)}).
+
+    The pin endpoint is a 3-tuple, NOT (x, y): `rotation` is the pin's KiCad
+    `at` third field in degrees — the pin's TRUE outward direction
+    (0=+x/right of body, 90=+y, 180=-x/left of body, 270=-y). It is the only
+    reliable edge signal for label placement; see the DD-26/27 rationale on
+    `_pin_endpoints` for why the old abs(ex)>=abs(ey) axis test was wrong.
+    Consumers that only need geometry index [0]/[1] exactly as before.
 
     `symbol_dir` may be a single directory or a list of directories (tried in
     order) — so stdlib symbols and project-local generated libraries

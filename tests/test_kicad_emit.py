@@ -48,8 +48,12 @@ class KiCadEmitTests(unittest.TestCase):
         self.assertIn('(symbol "Device:R"', definition)
         self.assertEqual({"1", "2"}, set(pins))
         # Device:R pins sit on the vertical axis at +/-3.81 in the library frame.
-        self.assertEqual((0.0, 3.81), pins["1"])
-        self.assertEqual((0.0, -3.81), pins["2"])
+        # Endpoints are (x, y, rotation) since DD-26/27: rotation is the pin's
+        # outward direction (270 = -y for the top pin, 90 = +y for the bottom
+        # one). Asserted in full on purpose — a wrong rotation must turn this
+        # test red, since it is the sole edge signal for label placement.
+        self.assertEqual((0.0, 3.81, 270.0), pins["1"])
+        self.assertEqual((0.0, -3.81, 90.0), pins["2"])
 
     def test_emit_produces_self_contained_schematic_with_connectivity(self):
         components, nets = _divider()

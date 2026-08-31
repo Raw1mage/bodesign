@@ -1,6 +1,6 @@
 # BR_20260804d — `load_symbol` 的簽章與 docstring 仍承諾 2-tuple，實際回 3-tuple
 
-- **Status**: OPEN
+- **Status**: FIXED（2026-08-31 by `ses_fa7af3a78ffeUqSLw5dMA12hQj`，handler；驗證紀錄見文末）
 - **Severity**: LOW（**不是功能缺陷**——所有消費端都已適應；但它讓一個測試永久紅著，而紅燈指向錯誤的方向）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:360-362`（`load_symbol` 簽章 + docstring）／
   `tests/test_kicad_emit.py::test_load_symbol_returns_definition_and_pin_endpoints`
@@ -89,6 +89,33 @@ kicad_emit.py:476  實際 -> dict[str, tuple[float, float, float]]          <- �
 ## 附記：本 BR 的證據來源與覆核
 
 RCA 由 subagent `ses_033be5769` 產出（conclusion-only 調查，raw context 未進 dispatcher 主線）。
+
+---
+
+## 修復紀錄（2026-08-31，handler `ses_fa7af3a78ffeUqSLw5dMA12hQj`）
+
+依「修法」三點，只動宣告側，**未改 `load_symbol` 回傳值**：
+
+1. `kicad_emit.py` `load_symbol` 型別註解 → `tuple[str, dict[str, tuple[float, float, float]]]`
+2. 同函式 docstring → `{pin_number: (x, y, rotation)}`，補上 rotation 語義
+   （0=+x/right, 90=+y, 180=-x/left, 270=-y）與指向 `_pin_endpoints` 的 DD-26/27 理由
+3. `tests/test_kicad_emit.py::test_load_symbol_returns_definition_and_pin_endpoints`
+   斷言改成完整 3-tuple：`(0.0, 3.81, 270.0)` / `(0.0, -3.81, 90.0)`
+   **未用 `pins["1"][:2]` 切片轉綠**——rotation 算錯時這個測試仍必須紅。
+
+### 驗證（先清 `__pycache__`，非僅靠 `python3 -B`）
+
+| 項目 | 修復前 | 修復後 |
+|---|---|---|
+| `tests.test_kicad_emit.KiCadEmitTests.test_load_symbol_returns_definition_and_pin_endpoints` | `FAILED (failures=1)` rc=1，`(0.0, 3.81) != (0.0, 3.81, 270.0)` | `Ran 1 test … OK` rc=0 |
+| `tests.test_kicad_emit`（全模組 29 tests） | 未量 | `Ran 29 tests … OK` rc=0 |
+
+**負控制組**：`python3 -m unittest tests.test_NON_EXISTENT_MODULE_CONTROL`
+→ `ModuleNotFoundError` / `FAILED (errors=1)` rc=1。
+證明此 runner 的缺席態（模組不存在）不會靜默回綠，故上面兩個 `OK, rc=0` 是真的通過。
+
+**未量**：端到端 render／`packages/` 以外消費端／rotation ≠ 0 元件在真實頁的分布
+——與本 BR 原「我沒量什麼」節相同的邊界，本次修復未擴充。
 **dispatcher 親手覆核了它引用的每一個行號**，雙向控制組：已知 token `def load_symbol` 命中 1、
 bogus token 回 0（證明探針能回空，非全命中）。
 
