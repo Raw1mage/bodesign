@@ -1,6 +1,13 @@
 # BR_20260831a — 這個 repo 沒有 test bootstrap：測試綠燈依賴一條口耳相傳的 `PYTHONPATH`，而漏掉它的紅燈與「真的回歸了」共用同一個輸出
 
-- **Status**: FIXED — 2026-09-01 落地選項 3+4+5（`tests/__init__.py` 機制層 + `scripts/run_tests.sh` 顯式入口 + `AGENTS.md §5` 文件）；三格對照 + 反向控制組 + 零回歸集合比對均已量測，見 §修復紀錄。**已於 2026-09-01 經 dispatcher 授權後 commit（sha 由 dispatcher 於歸檔時補）。**
+- **Status**: FIXED — 2026-09-01 落地選項 3+4+5（`tests/__init__.py` 機制層 + `scripts/run_tests.sh` 顯式入口 + `AGENTS.md §5` 文件）；三格對照 + 反向控制組 + 零回歸集合比對均已量測，見 §修復紀錄。**已於 2026-09-01 經 dispatcher 授權後 commit：`17f4baf`。**
+- **Closed**: 2026-09-01 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`（bodesign 值星官）—
+  依據：`17f4baf6e5bb3985f42f1f6a8873146b42b6facc`（`git show --numstat` 恰好四檔：
+  `AGENTS.md` 29/4、本 BR 116/1、`scripts/run_tests.sh` 278/0、`tests/__init__.py` 141/0）；
+  dispatcher 親驗 committed blob 並配 **parent 反向控制組**（`17f4baf~1` 兩句狀態字串皆為 0、
+  `parent:scripts/run_tests.sh` rc=128 不存在 / child rc=0）——排除了「這些字串從來就不在這個檔裡」
+  這個替代解釋；兩輪獨立 VANS（R1 全套 1871/11-40-51 集合 `cmp rc=0`；R2 三格突變
+  pristine 紅 / mutant 綠 / 無關函式仍紅，AST 8/8，self-test 10/10）。
 - **Owner**: unassigned（filed by BRNS handler `ses_02fb3c62cffewvdN14bK1KHXbc`，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `G13-harness-disclosure`
 - **Severity**: high — 它讓「模組根本沒載入」偽裝成「測試失敗」，而下一個 cold-context 的人會據此推論「先前的修復失效」
