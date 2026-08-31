@@ -9,6 +9,17 @@
 **Owner**: `readiness-contract` family（`issues/OWNERS.md`）
 **Filed by**: `ses_fa6ece187ffe2jyvANSTFBQStk`（BRNS handler，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 **Filed**: 2026-09-01
+**Closed**: 2026-09-01 by `ses_04db7a1c5ffelvbxyLP1p6xlRH`
+  — 依據：commit `d5dee04`（九檔：五個生產模組 + 兩支測試 + 本 BR + `BR_20260901g`）
+  ⊕ 獨立 VANS 六格全部復現：
+  **[A]** 六處 `is=True`，控制組獨立建構的等值 `Path` 回 `is=False ==True`（決定性——
+  證明 `assertEqual` 在此無判別力、`assertIs` 才有牙）；
+  **[B]** 八模組 + `__init__` 全 rc=0，控制組 `NEVER_EXISTS` rc=1、scratch 造真環 rc=1；
+  **[C]** 9 變異全 RED、accepting control 13/13 GREEN、存活 0；
+  **[D]** 同環境雙臂 RED 集合 `cmp` rc=0，控制組刪首行 rc=1（限定見 §7.5）；
+  **[E]** 六個破口無承重缺陷，E5 復驗「C01/C02 兩筆非重複」；
+  **[F]** 三條 Related 邊皆可引用。
+  殘留：無未修缺陷。§7.7 Remaining 全為**未掃範圍 / 未判定**，不是本 BR 的未修項。
 **Related**:
 - `issues/BR_20260804h_c02_outputs_constants_are_dual_role_so_the_one_place_stage_prefix_claim_is_false.md`
   — **同一組常數的不同失效面**，可引用依據：兩者都以 `C01_OUTPUTS["constraints"]`
