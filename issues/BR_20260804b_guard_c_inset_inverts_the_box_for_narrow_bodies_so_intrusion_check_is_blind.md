@@ -1,6 +1,11 @@
 # BR_20260804b — guard C 的 inset 讓窄本體的 box 區間反轉，POWER_PORT_INSIDE_SYMBOL_BODY 對 513 個符號永遠回 False
 
-- **Status**: **PARTIAL**（2026-08-05 更正；原措辭見下方引言）— **§1 主缺陷已修**（`05dce34` + `d64bbd0`，重驗見 §1.1）；**§6 建議修法已被實測否決（SUPERSEDED，見 §6.1，照著施工會誤傷 1617 個從未盲的本體）**；§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）。**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 `BR_20260804g` 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。
+- **Status**: **FIXED**（2026-09-01；§9 三項殘留全數收斂，量測見 §10。前兩版措辭保留於下方引言）— **§1 主缺陷已修**（`05dce34` + `d64bbd0`，重驗見 §1.1）；**§6 建議修法已被實測否決（SUPERSEDED，見 §6.1，照著施工會誤傷 1617 個從未盲的本體）**；§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）。
+  - **⚠ 引用本張任何 blind 數字前必讀（口徑，不是 delta）**：`9` 與 `7` 量的是**兩個母體**，不是修法前後。**口徑 A**（每個能算出 box 的 root symbol，不過 `:1758` 閘）= **9**；**P_GUARD**（pin map 非空、HEAD 生產路徑真正審視者）= **7**。差的 2 個是 `Mechanical:Fiducial` 與 `Mechanical:MountingHole`（zero-pin，生產上永遠不會被建 box）。`7 + 2 = 9` 已由同一輪掃描坐實（§10.2）。**把兩者相減會得到一個不存在的回歸。**
+  - **殘留三項的收斂結果**：C8 各頁曝險**已量**（母體 = repo 內 14 個 `.kicad_sch`、184 個已擺放元件，BLIND = **0**，附六態 codomain 控制組，§10.3）；R9 交集**已核對完畢**（9 個 blind 全數有轄區，**「兩者都不在」= 空集合**，§10.2）；N3 母體數分歧**已裁定為口徑問題**（22583 可由兩個獨立方法重現並通過交叉驗證；22431 與 21437 判為**無法重建**而非錯誤，§10.1）。
+  - **⚠ 未涵蓋區，不得被 FIXED 吞掉**：`BR_20260804g §7.8`（那 6 個仍退化符號在真實頁的出現頻率）**仍未量**。本張只證明「repo 內現存 14 頁沒用到它們」，而**「現存頁面沒用到」≠「使用頻率低」**——`TestPoint` / `MountingHole` 在真實 PCB 上並不罕見。
+  - **⚠ §10 所有以 `load_fail = 150` 為母體的數字將會變動**：那 150 筆已證實不是「symbol 不存在」，而是 `_balanced_block` 括號失步造成的**假 not-found**（見 **`BR_20260901f`** §4.2/§4.3）。修好 901f 後本張的 P_ROOT 三分計數需重取。
+  > **前版 Status 措辭（2026-08-05，保留不刪）**：`**PARTIAL**（2026-08-05 更正）— §1 主缺陷已修…**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 BR_20260804g 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。`
   > **原 Status 措辭（2026-08-04，保留不刪）**：`open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**`
 - **Severity**: MEDIUM-HIGH（純視覺缺陷的**檢查器**失效；受影響符號含 `Device:R`——最常用的符號）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:1645-1661`（guard C / `_port_intrusions`）
@@ -580,3 +585,157 @@ M-C fixture 改指 `Device:R` → 紅在 fixture 判別力。
 | N3 | **母體數三方分歧** | `22583`（生產全鏈 root-level）/ `22431`（dispatcher 重跑，見覆核節）/ `21437`（§2.3 掃描） | **未裁定哪個是對的**。三個都可能量的是不同東西（參 §8.2a 那次口徑分歧的形狀） |
 
 **本張可以 closed 的條件**：C8 補量、R9 核對完（或明確轉入 804g）、N3 裁定或明確判為不影響結論。
+
+---
+
+## 10. §9 三項殘留的收斂量測（2026-09-01，`ses_fa70cfaf8`，dispatcher `ses_04db7a1c5` 派工）
+
+> 這一節回答 §9 的 C8 / R9 / N3。**每個數字都帶母體**——母體不同的兩個數字並列會被讀成 delta。
+> 量測腳本落 scratch（`$XDG_RUNTIME_DIR/guardc_remainder/`，收尾自清）；方法見 §10.0，可據以重寫。
+> **本輪未修改任何生產程式碼**（裁示為「量測 + 判定」，修法回報給 dispatcher 裁決）。
+
+### 10.0 母體定義（三個，互斥且窮盡，全節沿用）
+
+| 代號 | 定義 | 值 |
+|---|---|---|
+| **P_ROOT** | `/usr/share/kicad/symbols/*.kicad_sym`（223 檔）內 **root-level** `(symbol "NAME")`，以**字串感知**的括號深度判定（深度 2 = `kicad_symbol_lib` 的直接子節點）；不含 unit 子區塊 | **22583** |
+| **P_GUARD** | P_ROOT 中 pin map 非空者，即通過 `kicad_emit.py:1758 if not pmap: continue` 而**真正進入 guard C** 者 | **22214** |
+| **P_ZEROPIN** | P_ROOT 中 pin map 為空者，`:1758` 即 continue，**從不建 box** | **219** |
+
+`CHECK  P_GUARD 22214 + P_ZEROPIN 219 + load_fail 150 = 22583 = P_ROOT` ✓
+
+**⚠ 量測儀器自己先壞了一次，形狀與本 BR 同族。** 第一版 walker 用生產的 `_balanced_block`
+跳過已記錄的區塊，而**該 helper 不是字串感知的**：屬性值裡的一個 `(` 就讓深度計數器對
+「檔案剩餘部分」全部失準。症狀是 `MCU_ST_STM32H7` 回報 **1** 個 root symbol（tab-regex 看到 225）。
+**它沒有報錯，它回了一個比較小的、看起來合理的數字。**
+修正後的判別依據：對五個先前分歧的檔案，string-aware walker 與 `\n\t(symbol "` regex 逐檔相符
+（533 / 225 / 1170 / 334 / 419），外加一組合成控制組——屬性值內含 `x(y)z` 的括號不得移動深度，
+實測 roots=['A','B'] units=['A_0_1'] 與預期逐字相同。
+
+### 10.1 ✅ N3 裁定：三個母體數只有一個今天可重現，而它有兩條獨立證據
+
+| 數字 | 出處 | 今天重算 | 判定 |
+|---|---|---|---|
+| **22583** | §1.2 口徑 A「生產全鏈 root-level lib_id」 | **22583**（string-aware 深度）**且** **22583**（`\n\t(symbol "` regex，獨立方法） | **重現，採為 P_ROOT** |
+| 22431 | Dispatcher 覆核節重跑（`_body_rect` 掃描） | — | **不可重建**：該節只記「掃 223 檔、用 `_body_rect`」，未記切塊方式 |
+| 21437 | §2.3 兩個 variant 的 `scan` 欄 | — | **不可重建**：腳本落 `$XDG_RUNTIME_DIR/guardc-scan/fast.py`（scratch），已不存在 |
+
+**裁定：這不是「哪個對」的問題，是「只有一個附了可重跑的方法」。**
+22583 今天由**兩個互不相干的切塊法**得到同值，並通過一條交叉驗證：
+
+```
+root 22583  +  unit 23746  =  46329
+naive re.findall(r'\(symbol\s+"')  =  46329        ✓ 逐字相等
+```
+
+⇒ 「root ⊎ unit」窮盡了檔案裡所有 `(symbol "` 的出現位置，**沒有第三類**。
+
+另兩個數字**不判為錯，判為無法重現**。這是 §2.3 開頭那條教訓（「數字記了、方法沒記」）
+在**同一張 BR 上第二次兌現**：當時付一輪學費寫下六欄方法表，而覆核節與 §2.3 自己的
+`scan` 欄並沒有跟著把方法落地。
+
+### 10.2 ✅ R9 核對：9 個 blind 的歸屬已全數確定，**且 9 = 7 + 2 的口徑差已坐實**
+
+§9 R9 問的是「這 8 個 graphics 來源的 blind 是否已在 804g 名單內」。核對結果：
+
+| # | lib_id | 來源 | box w × h | 落在 804g 哪個名單 |
+|---|---|---|---|---|
+| 1 | `74xGxx:74LVC1GU04DRL` | rect | 0 × 11.43 | **都不在**——屬本張（§1.2 已具名：rect 自身退化） |
+| 2 | `Connector:TestPoint` | graphics | 0 × 0 | **804g §9.5 具名 6 個** ✓ |
+| 3 | `Connector:TestPoint_Small` | graphics | 0 × −0 | **804g §9.5 具名 6 個** ✓ |
+| 4 | `Connector:TestPoint_2Pole` | graphics | 1.778 × −0 | **804g §9.5 具名 6 個** ✓ |
+| 5 | `Device:NetTie_2` | graphics | 1.27 × −0 | **804g §9.5 具名 6 個** ✓ |
+| 6 | `Mechanical:MountingHole_Pad` | graphics | 0 × 0 | **804g §9.5 具名 6 個** ✓ |
+| 7 | `Mechanical:MountingHole_Pad_MP` | graphics | 0 × 0 | **804g §9.5 具名 6 個** ✓ |
+| 8 | `Mechanical:Fiducial` | graphics | 0 × −0 | **804g zero-pin 第三族**（§7.6 `g 退化 2`，原本只有計數沒有名字） |
+| 9 | `Mechanical:MountingHole` | graphics | 0 × −0 | **804g zero-pin 第三族**（同上） |
+
+**回答 §9 R9 那句「兩者都不在」的審慎：沒有未建檔的第三批。**
+8 個 graphics 來源中 6 個逐字命中 804g §9.5 具名名單，另 2 個命中 804g §7.6 的 zero-pin 退化桂（先前只有計數 2，本輪首次具名）；第 1 個是 rect 來源、屬本張。**全數有轄區。**
+
+#### 為什麼 §9 記 9 而今天生產路徑只看得到 7（口徑，不是差值）
+
+**先寫假説再跑，且假説可被推翻**：若差別僅來自 `:1758` 那道閘，則應有
+`A_blind == P_GUARD_blind + zero_pin_degenerate`，即 `9 == 7 + 2`，且多出的兩個名字必須
+**恰好是**那對 zero-pin 退化者。兩個計數由**同一輪掃描**同時輸出，故不可能來自不同版本的 code：
+
+```
+口徑 A  （每一個能算出 box 的 root symbol，不過 :1758 閘）
+    A_blind = 9    sources = {rect: 1, graphics: 8}      <- 逐字對上 §9 的 9 與 8
+口徑 G  （P_GUARD，HEAD 真實路徑）
+    G_blind = 7    sources = {rect: 1, graphics: 6}
+
+A 有而 G 沒有的名字 = 2，且兩個都是 ZEROPIN：
+    Mechanical:Fiducial        graphics  w=0 h=-0
+    Mechanical:MountingHole    graphics  w=0 h=-0
+
+HYPOTHESIS  7 + 2 = 9  -> MATCH（未被推翻）
+HYPOTHESIS  graphics in A = 8 -> MATCH
+```
+
+⇒ **「9」與「7」不是 delta，是兩個母體。** §9 那個 9 含兩個 `:1758` 會提前 short-circuit
+、生產上永遠不會被建 box 的符號。兩個數字都對，回答的是不同問題：
+「有多少符號的 box 是退化的」 vs「有多少符號在 guard C 裡是盲的」。
+
+### 10.3 ✅ C8 補量：各頁曝險（定義寫在數字旁邊）
+
+> §9 C8 要求的是 §6 結尾那次「各頁曝險」量測，先前只量了 1 頁。
+
+**「一頁」的定義（不定義就不交數字）**：
+
+```
+一頁        := repo 內一個已輸出的 KiCad root schematic 檔（*.kicad_sch）
+其元件母體 := 該檔內每個已擺放的 `(symbol (lib_id "X")` INSTANCE 區塊
+              ——**不是** `lib_symbols` 快取（那裡還含未被擺放的 power/flag 定義）
+一頁的曝險 := 該頁已擺放元件中，在 HEAD guard C 來源鏈下 box 退化（w≤0 或 h≤0）者的個數
+```
+
+**為何不用 `.spec.json` 當母體**：全 repo 只有 **1** 個 `.spec.json`（就是 §6.2 已量過的
+`e2e-led-driver-npn`），以它為母體的「全部頁」等於同一頁，答不了 C8。`.kicad_sch` 是真正較大的已輸出頁面母體。
+
+**母體 = 14 頁**（repo 內全部 `*.kicad_sch`，排除 `.git` / `.venv`）
+
+```
+page                                                        inst  BLIND  seen  0pin   pwr
+---------------------------------------------------------------------------------------
+aiguard_c03_compose/probeA|D/sch_product/verifyN2_empty        0      0     0     0     0   (4 頁空)
+aiguard_c03_compose/probeB                                     1      0     1     0     0
+aiguard_c03_compose/probeC                                     1      0     1     0     0
+aiguard_c03_compose/probeE                                     2      0     2     0     0
+aiguard_c03_compose/probeG  /  probeG2                       2,2      0     2     0     0  (各)
+aiguard_c03_compose/sch_direct/aiguard_product               134      0    46     0    88
+aiguard_c03_verify/n1_bare  /  p_twodirs2                    2,2      0     2     0     0  (各)
+e2e-led-driver/C03-EE/e2e-led-driver-npn                      22      0    22     0     0
+e2e-led-driver/C03-EE/e2e-led-driver                          16      0    16     0     0
+---------------------------------------------------------------------------------------
+TOTAL （14 頁）                                              184      0    96     0    88
+```
+
+**結果：全 14 頁、184 個已擺放元件，BLIND = 0。**
+
+**這個 0 有判別力嗎？** 採用六態 codomain（blind / seen / zero-pin / engine-pwr / no-such-lib / load-fail），
+使「缺席」與「失敗」不共用輸出，並以七組探針證明分類器真的會說出不同答案：
+
+```
+Connector:TestPoint            -> blind        ✓ （它真的能說 blind）
+Regulator_Linear:AMS1117-3.3   -> seen         ✓
+Device:R                       -> seen         ✓
+Graphic:SYM_Arrow_Large        -> zero-pin     ✓
+power_gnd_GND                  -> engine-pwr   ✓
+NoSuchLib:NoSuchPart           -> no-such-lib  ✓
+Device:ZZ_NoSuch_9999          -> load-fail    ✓
+```
+
+**⚠ 這一格的第一版儀器壞了，而它回的也是 `BLIND=0`。** 實錄並保留：
+v1 只將 lib_id 解析到 `/usr/share/kicad/symbols`，於是最大那頁 134 個 instance 中 **93 個回 `load-fail`**
+（實際上它們住在 repo 內 42 個 project-local `.kicad_sym`，以及 engine 內嵌的 `power_*` glyph）。
+**一頁元件全部解析失敗時，它也回報 BLIND=0——與一頁真的干淨逐字相同。**
+v2 把搜尋路徑擴到 stdlib + repo 內全部 42 個本地 library，並把 engine glyph 從「失敗」分出來
+成為獨立態 `engine-pwr`；fail 欄這才降到 0，上表的 0 才有意義。
+
+**⇒ C8 已補量。§6 那句「必然新增 intrusion 回報」在此 14 頁母體上未兑現，
+而這次是有判別力的 0，不再是 UNMEASURED。**
+
+**誕實邊界**：母體是「repo 裡已經輸出到磁碟上的 `.kicad_sch`」。它**不等於**「任何人未來可能產生的頁」——
+若未來某頁用上上表那 9 個 blind 符號（TestPoint / MountingHole 類），曝險就不是 0。
+804g §7.8 已經指出這件事並列為未量項，**本輪也沒量**。

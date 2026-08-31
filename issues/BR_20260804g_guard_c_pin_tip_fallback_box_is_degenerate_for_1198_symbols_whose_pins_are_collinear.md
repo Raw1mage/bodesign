@@ -1,9 +1,12 @@
 # BR_20260804g — guard C 的 pin-tip fallback box 對 1198 個共線腳位符號退化，判準恆為 False
 
-- **Status**: PARTIAL (b1fde6b 已修主路徑) — 兩項具名殘留未解，見下
+- **Status**: **PARTIAL**（2026-09-01 重驗更新；原措辭見下方引言）— `b1fde6b` 已修主路徑。**殘留數字已隨重驗更正，逐項對照見 §10。**
+  > **原 Status 措辭（2026-08-04，保留不刪）**：`PARTIAL (b1fde6b 已修主路徑) — 兩項具名殘留未解，見下`／`殘留一：6 個具名符號仍退化`／`殘留二：zero-pin 第三族 33 個（…在 :1709 更早出局…）`
 - 修法：guard C 的 `rect is None` 分支接上 `graphics_rects`（body-first，見 §9）
-- 殘留一：6 個具名符號仍退化（graphics 本身是 1-D 或不存在）
-- 殘留二：zero-pin 第三族 33 個（有二維繪圖本體，但在 `:1709` 更早出局，本修法碰不到）
+- **殘留一：6 個具名符號仍退化 — 2026-09-01 重驗仍成立，名單逐字相符**（graphics 本身是 1-D 或不存在）
+- **殘留二：zero-pin 第三族 —— 今為 37 個，非原記載的 33**（有二維繪圖本體，但在 `:1758`／原記 `:1709`，行號已漂移 — 更早出局，本修法碰不到）。同時 **§9.2 第一行 OPEN 已收斂為 219**（探針 B 的值），§9.2 第二行（gdiff 1030 vs 1027）**仍 OPEN**
+- **⚠ 跨 BR 因果，歸檔時不得漏**：§9.5 原記「rect-bearing 嚴格退化 **3** 個」，今為 **1** 個 —— `Device:Earphone` 與 `Relay:COTO_3660_Split` 是**被 `BR_20260804b` 的修法 `d64bbd0`（ULP 容差）救回的**，不是本張的 `b1fde6b`。兩者 y-span 落在 `2*inset` 的 1 ULP 內；`git merge-base` 實測 `b1fde6b`(08-04 22:23) **先於** `d64bbd0`(08-05 09:04)，故 §9.5 寫下時 ULP 修法尚未存在。**那 2 個從來不是本張轄區。** 量測見 §10.1
+- **⚠ `load errors 150` 的判定已被推翻**：§3／§9.5 記為「`KeyError` 名稱查找失敗，非本 BR 相關」。實測那 150 個符號的 marker **全部存在於檔案內**，成因是 `_balanced_block` 無引號狀態機而括號失步 —— 見 **`BR_20260901f`** §4.2/§4.3。**修好 901f 後，本張所有以 150 為母體的數字都會變動。**
 **Filed**: 2026-08-04 by `ses_03408d1faffeKuPkQZ9Zj6gWO2` (OWNS bodesign/schematic-engine)
 **Family**: schematic-engine
 **Severity**: medium — 靜默失去判別力，但**非全新盲區**：這些符號在 `BR_20260804b` 的 516/513 名單之外，走的是另一條程式路徑
@@ -398,3 +401,94 @@ CONTROL span = 10.0 -> 6.19 · span = 1.0 -> 0.5            遠離邊界時無�
 
 **沒有人會要求一個效能估計附上控制組**，而正確性推論被要求了幾十次。這條不對稱
 本身就是缺口：兩者都是從樣本外推到母體，兩者都會做決策。
+
+---
+
+## 10. 兩項殘留的重驗（2026-09-01，`ses_fa70cfaf8`，dispatcher `ses_04db7a1c5` 派工）
+
+> 重驗的理由：`BR_20260804f`（`power_port_intrusions` 欄位從未被賦值）已於 `8d63c49` 修完並三方驗收。
+> 本張 **Related** 自己寫著「修好 f 才看得見本張的效果」——這是這批殘留第一次可測。
+> **本輪未修改任何生產程式碼**（裁示為「量測 + 判定」）。母體定義與完整交集表見 `BR_20260804b` §10。
+
+### 10.1 殘留一（6 個具名符號仍退化）—— **今天仍成立，逐字相符**
+
+在 P_GUARD（root symbol 且 pin map 非空，22214 個）上跑 HEAD 生產來源鏈，嚴格退化者 **7** 個：
+
+```
+來源 graphics（6 個，就是 §9.5 具名那 6 個）
+    Connector:TestPoint              w=0      h=0
+    Connector:TestPoint_Small        w=0      h=-0
+    Connector:TestPoint_2Pole        w=1.778  h=-0
+    Device:NetTie_2                  w=1.27   h=-0
+    Mechanical:MountingHole_Pad      w=0      h=0
+    Mechanical:MountingHole_Pad_MP   w=0      h=0
+來源 rect（1 個，不屬本張轄區）
+    74xGxx:74LVC1GU04DRL             w=0      h=11.43   <- rect 自身 span=0，804b §1.2 已具名
+```
+
+✅ **§9.5 的「6 個具名」今天完全成立**，名單逐字一致，不多不少。
+
+#### ⚠ 但 §9.5 另一格已過期：「rect-bearing 嚴格退化 3 個」今天是 **1** 個
+
+§9.5 列了 3 個（`74LVC1GU04DRL` / `Device:Earphone` / `Relay:COTO_3660_Split`）。今天量：
+
+```
+74xGxx:74LVC1GU04DRL    rect_span 0 × 15.24     box w=0      h=11.43   blind=True   <- 仍退化
+Device:Earphone         rect_span 3.175 × 3.81  box w=1.5875 h=1.905   blind=False  <- 已救回
+Relay:COTO_3660_Split   rect_span 6.35 × 3.81   box w=2.54   h=1.905   blind=False  <- 已救回
+CONTROL AMS1117-3.3     rect_span 10.16 × 6.985 box w=6.35   h=3.175   blind=False
+CONTROL TestPoint       graphics 0 × 0          box w=0      h=0       blind=True
+```
+
+**救回它們的是 `d64bbd0`（804b 的 ULP 容差），不是本張的 `b1fde6b`**。判別依據——兩者的 y-span 恰好落在門檻的一個 ULP 內：
+
+```
+threshold 2*inset = 3.81            ulp(3.81) = 4.440892098500626e-16
+Device:Earphone        y_span = 3.8099999999999996   > T? False   within_1ulp_of_T? True
+Relay:COTO_3660_Split  y_span = 3.81                 > T? False   within_1ulp_of_T? True
+CONTROL 74LVC1GU04DRL  y_span = 15.24                > T? True    within_1ulp_of_T? False
+CONTROL AMS1117-3.3    y_span = 6.985                > T? True    within_1ulp_of_T? False
+```
+
+且 `git merge-base --is-ancestor` 實測：`b1fde6b`（2026-08-04 22:23）**先於** `d64bbd0`（2026-08-05 09:04），
+rc=0；反方向 rc=1（控制組：自己是自己的祖先 rc=0）。
+⇒ §9.5 寫下那 3 個時，`d64bbd0` 還沒落地。**那 3 個從來不是本張轄區，現已被 804b 的修法清掉兩個。**
+
+### 10.2 殘留二（zero-pin 第三族 33 個）—— **機制仍成立，但數字是 37 不是 33**
+
+`:1758`（本張 §4 舊稱 `:1709`，行號已漂移）的 `if not pmap: continue` **今天仍在**，
+本張修法碰不到那一族——機制成立。但三分桂的數字與 §7.6 不同：
+
+| 桂 | §7.6 原記 | 本輪重量 | 差 |
+|---|---|---|---|
+| zero-pin 總數 | 215 | **219** | +4 |
+| `g_none` | 180 | **180** | 0 |
+| `g 退化` | 2 | **2** | 0 |
+| `g 非退化`（第三族） | 33 | **37** | **+4** |
+
+`CHECK 180 + 2 + 37 = 219` ✓
+
+**這 +4 不是誰錯，是 §9.2 自己記下的那個 OPEN 現在有答案了。**
+§9.2 記著「zero-pin 符號數：探針 A = 215 / 探針 B = 219，**OPEN**」並刑意不對齊。
+本輪的 string-aware walker 得 **219**，**與探針 B 一致**，且有一條獨立交叉驗證：
+`root 22583 + unit 23746 = 46329 = naive re.findall(r'\(symbol\s+"')`，逐字相等
+⇒ root ⊎ unit 窮盡了檔案裡每一個 `(symbol "`。
+⇒ **§9.2 第一行 OPEN 可收斂到 219**（探針 A 的 215 少了 4 個）。第二行（gdiff 1030 vs 1027）**本輪未量，維持 OPEN**。
+
+#### 這 2 個 `g 退化` 首次具名（§7.6 只有計數）
+
+```
+Mechanical:Fiducial        graphics 0.0 × 0.0    would-be box w=0 h=-0
+Mechanical:MountingHole    graphics 0.0 × 0.0    would-be box w=0 h=-0
+```
+
+**這兩個名字是 `BR_20260804b` §9 R9 那個交集核對的缺字塊**：804b 記的 9 個 blind 中有 8 個 graphics 來源，
+其中 6 個是 §9.5 名單、另 2 個正是這對。完整交集表見 804b §10.2；**結論：沒有未建檔的第三批 blind 符號。**
+
+### 10.3 本輪沒量什麼（誕實邊界）
+
+1. **§9.2 第二行 OPEN（gdiff 1030 vs 1027）未量**。
+2. **§7.8（6 個仍退化者在真實頁的出現頻率）仍未量**——只知 repo 內現存 14 頁均未使用它們（見 804b §10.3），
+   而「現存頁面沒用到」不等於「使用頻率低」——TestPoint / MountingHole 在真實 PCB 上並不罕見。
+3. **未重跑 §5 那條 `_graphics_bbox` 對 rect-bearing 符號的 1030 個差異**。
+4. **未驗證第三族那 37 個接上 fallback 後會不會產生新 intrusion**（需動 code，本包裁示不修）。
