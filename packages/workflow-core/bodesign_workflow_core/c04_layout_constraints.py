@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .c01_id_package import C01_OUTPUTS
 from .c03_mechanical_constraints import C03_OUTPUT
 from .feasibility import classify_product_feasibility
 from .readiness_common import boundary_next_step, root_guard
@@ -31,7 +32,13 @@ C04_FOLDER = Path("C04-Layout")
 C04_CONSTRAINTS_OUTPUT = C04_FOLDER / "Layout_Constraints.json"
 C04_PLACEMENT_OUTPUT = C04_FOLDER / "Placement_Constraints.md"
 
-_C01_CONSTRAINTS_REL = Path("C01-ID") / "Interface_Constraints.json"
+# BR_20260901e: this used to be a second, independent literal spelling of the
+# same path C01's emitter writes. Two literals with no link between them is a
+# drift surface, not a duplicate string: C01 would keep reporting "emitted" while
+# C04 reported "upstream missing", each verb correct in isolation. The read side
+# now derives from the WRITE side, which is the only source of truth for where
+# the file lands.
+_C01_CONSTRAINTS_REL = C01_OUTPUTS["constraints"]
 _C03_FOLDER = Path("C03-EE")
 
 # Tier-1 acceptance inputs. These paths are PINNED, never searched for: a search
@@ -184,7 +191,9 @@ def _assess_upstream_fulfilment(root: Path) -> dict[str, Any]:
             "electrical netlist, so nothing has landed on the board yet"
         )
     if not mech.exists():
-        gaps.append("C03-EE/Mechanical_Constraint_Export.json missing — no mechanical constraints exported from C03")
+        gaps.append(
+            f"{C03_OUTPUT.as_posix()} missing — no mechanical constraints exported from C03"
+        )
     return {
         "c03_dir_present": c03_dir.is_dir(),
         "c03_netlist_present": netlist,

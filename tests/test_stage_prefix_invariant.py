@@ -13,6 +13,10 @@ instead of silently misleading the next reader.
 Question each test answers is written beside it. Every assertion below is one a
 deliberate edit can break: see ``NegativeControlTests`` at the bottom, which
 proves the guards actually go red rather than being permanently-green scenery.
+
+Scope: WITHIN one stage. The ACROSS-stage question -- is a reader's path the same
+object as the writer's declaration, or an equal-looking copy -- is BR_20260901e
+and lives in ``tests/test_cross_stage_path_ssot.py``.
 """
 
 from __future__ import annotations

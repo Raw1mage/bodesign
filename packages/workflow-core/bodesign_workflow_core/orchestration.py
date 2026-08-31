@@ -44,8 +44,19 @@ _EVIDENCE_REL_DIR = ORCH_REL_DIR / "evidence_returns"
 _LOG_REL_PATH = ORCH_REL_DIR / "log.jsonl"
 
 # Default C00 source pointers (mirror the contract's `source` block).
+#
+# BR_20260901e: these are the SINGLE declaration of where C00's answer-state
+# lives. Before, the same path was spelled independently in THREE places —
+# here as a bare string (which is why the BR's own `Path("C0N-...")` scan
+# missed this one), plus `mode_contracts.py` and `c00_orchestration.py`. This
+# module is the right owner: it is the only common ancestor both consumers
+# already import, and `_DEFAULT_ANSWER_STATE` is what a work packet hands to a
+# downstream agent, so a drift here would ship a wrong path OUTWARD while both
+# sides still looked healthy locally.
 _DEFAULT_C00_FOLDER = "C00-PRD"
-_DEFAULT_ANSWER_STATE = "C00-PRD/03_output/answer_state.json"
+C00_ANSWER_STATE_REL = Path("C00-PRD") / "03_output" / "answer_state.json"
+C00_ANSWER_STATE_REL_LEGACY = Path("C00-PRD") / "answer_state.json"
+_DEFAULT_ANSWER_STATE = C00_ANSWER_STATE_REL.as_posix()
 
 _INPUT_BUCKETS = ["answered", "drafted", "accepted_risks", "external_needed", "blocked"]
 _SEVERITIES = {"decision", "external-needed", "blocked", "accepted-risk-request"}

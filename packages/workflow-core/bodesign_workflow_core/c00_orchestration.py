@@ -23,11 +23,18 @@ from typing import Any
 from .agent_registry import DOWNSTREAM_CODES, load_agent_registry
 from .c00_prd_template import assess_c00_prd_readiness
 from .mode_contracts import enter_c01_mode
-from .orchestration import dispatch_work_packet, list_blockers, list_work_packets
+from .orchestration import (
+    C00_ANSWER_STATE_REL as _C00_ANSWER_STATE_REL,
+    C00_ANSWER_STATE_REL_LEGACY as _C00_ANSWER_STATE_REL_LEGACY,
+    dispatch_work_packet,
+    list_blockers,
+    list_work_packets,
+)
 from .refs_gate import RefsGateError, require_refs
 
-_C00_ANSWER_STATE_REL = Path("C00-PRD") / "03_output" / "answer_state.json"
-_C00_ANSWER_STATE_REL_LEGACY = Path("C00-PRD") / "answer_state.json"
+# BR_20260901e: see `orchestration.py` — these two names are declared there once
+# and imported here, instead of being spelled a second time with the same name
+# and value (which looked like an import to every reader and was not one).
 
 # Blocker severity → preemption priority (lower = handled first).
 _SEVERITY_ORDER = {"decision": 0, "accepted-risk-request": 1, "external-needed": 2, "blocked": 3}

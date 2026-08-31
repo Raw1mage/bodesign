@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .c03_mechanical_constraints import C03_OUTPUT
+
 # ── typed error codes (plan errors.md, BINDING) ─────────────────────────────
 UPSTREAM_CONSTRAINT_MISSING = "UPSTREAM_CONSTRAINT_MISSING"
 CONNECTOR_FACE_CONFLICT = "CONNECTOR_FACE_CONFLICT"
@@ -55,7 +57,12 @@ VALID_FACES = _EDGES | _SURFACES
 UPSTREAM_FILES: dict[str, tuple[Path, str]] = {
     "face_layout": (Path("C01-ID") / "Face_Layout.json", FACE_LAYOUT_SCHEMA),
     "envelope": (Path("C02-ME") / "Envelope_Constraint.json", ENVELOPE_SCHEMA),
-    "mechanical": (Path("C03-EE") / "Mechanical_Constraint_Export.json", ""),
+    # BR_20260901e: derived from C03's own emitter constant, not spelled again.
+    # C01/C02 entries below are NOT the same case — they are C04's independent
+    # expectations of upstream files that no C0x_OUTPUTS constant declares (see
+    # the BR's "measured NOT duplicate" table), so there is nothing to derive
+    # them from and inventing a link would be worse than the literal.
+    "mechanical": (C03_OUTPUT, ""),
 }
 
 

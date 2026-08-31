@@ -1,6 +1,10 @@
 # BR_20260901e — 同一條 stage 路徑有兩個獨立的真相來源（跨模組寫死字面）
 
-- **Status**: OPEN — 已量測定位，**未修**（由 dispatcher 排入 backlog）
+- **Status**: **FIXED** — 2026-09-01 收斂完成（§7 修復紀錄）。**六**處獨立宣告收斂為單一
+  宣告；修法是「讀側 import 寫側常數」。BR 原本記四對，第五、第六處是實作階段量出來的。
+  SSOT 落點：**P1** → `c01_id_package.C01_OUTPUTS["constraints"]`；**P2/P3/P5** →
+  `orchestration.py` 的 `C00_ANSWER_STATE_REL` / `C00_ANSWER_STATE_REL_LEGACY`；
+  **P4/P6** → `c03_mechanical_constraints.C03_OUTPUT`。
 **Severity**: medium — 不是當下的錯誤行為，是**兩個獨立字面各自漂移的空間**
 **Owner**: `readiness-contract` family（`issues/OWNERS.md`）
 **Filed by**: `ses_fa6ece187ffe2jyvANSTFBQStk`（BRNS handler，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
@@ -132,8 +136,127 @@ P2/P3 更貴一格：**同名同值出現在兩個模組**（`_C00_ANSWER_STATE_
 
 ## 6. 誠實邊界（沒量什麼）
 
+> **本節是立案當時（2026-09-01 上午）的狀態。** §7 記錄哪幾格已在修復階段補上，
+> §7.7 列出**至今仍未量**的。兩節請一起讀——單讀本節會把已消解的邊界當成仍然開著。
+
 - **只掃了 `packages/`**。`services/` 與 `skills/` 下是否有第五對未量。
 - **只比對了 `Path("C0N-...")` 形式的字面**。以字串拼接（`f"{folder}/..."`）或
   從 JSON 讀取的路徑不在本次窗口內。
 - **未量 import 環**：F1 的 `c04 → c01` import 是否成環未驗（§4 已標為前置）。
 - **未量測試側**：`tests/` 下是否也各自寫死這些路徑（若有，修法時同樣要一起收斂）。
+
+---
+
+## 7. 修復紀錄（2026-09-01，過去式）
+
+Handler `ses_fa658134bffeM1Ve1jIomrfYD9`，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`，
+獨立 VANS 覆核判 PASS（六格 A–F 全部復現）。
+
+### 7.1 立案時記四對，實際是六處
+
+| # | 位置 | 修法 |
+|---|---|---|
+| P1 | `c04_layout_constraints.py:34` | `_C01_CONSTRAINTS_REL = C01_OUTPUTS["constraints"]`（新增 `from .c01_id_package import C01_OUTPUTS`） |
+| P2 | `mode_contracts.py:30` + `c00_orchestration.py:29` | 兩處本地宣告刪除，改 `from .orchestration import C00_ANSWER_STATE_REL as _C00_ANSWER_STATE_REL` |
+| P3 | 同上 `_LEGACY` | 同上 |
+| P4 | `upstream_constraints.py:58` | `"mechanical": (C03_OUTPUT, "")` |
+| **P5** | `orchestration.py:48` `_DEFAULT_ANSWER_STATE` | **立案時未發現**。改為 `C00_ANSWER_STATE_REL.as_posix()`，並把該模組升為這條路徑的唯一 owner |
+| **P6** | `c04_layout_constraints.py:187` | **立案時未發現**。gap 訊息改 f-string 引用 `C03_OUTPUT` |
+
+P2/P3/P5 收斂到 `orchestration.py` 而非任一消費端，理由是**方向**：`c00_orchestration.py:25`
+當時已經 `from .mode_contracts import enter_c01_mode`，邊已存在。往回接（mode_contracts 取
+c00_orchestration）必成環——AST 反向可達性判為 True。`orchestration.py` 是兩個消費端**都已經
+import** 的共同祖先，且它本身只 import `agent_registry`，是安全的低層模組。
+
+import 改動全部實跑驗證（清 `__pycache__` 後 `python3 -c 'import ...'`）：八個模組 + 套件
+`__init__` 全 rc=0。控制組：`NEVER_EXISTS` rc=1；在 scratch 複本刻意造真環
+（`c03` import `c04`）→ rc=1 `partially initialized module ... circular import`，同一份未變異
+複本 rc=0。
+
+### 7.2 P5 為什麼被本 BR 自己的掃描漏掉（機制層）
+
+§2.3 的掃描窗口是：
+
+```
+grep -rnE 'Path\("C0[0-9]-[A-Za-z]+"\)' packages/
+```
+
+而 P5 是**裸字串字面**：
+
+```python
+_DEFAULT_ANSWER_STATE = "C00-PRD/03_output/answer_state.json"   # 沒有 Path(
+```
+
+**掃描器對它零判別力**——不是它掃了沒中，是它從結構上看不見這一類。這比「漏了一個」更值得
+記：**下一次用同形狀 pattern 做同族普查會再漏一次**，而且掃描結果會長得一樣乾淨。
+
+P5 又是六處裡最貴的一處：`orchestration.py:303` 把它塞進 work packet 的
+`"answer_state_path"` 欄位——那是**交給下游 agent 的對外契約字串**。前四處漂移只讓本地讀檔
+失敗（會炸、看得見）；P5 漂移是**把錯的路徑發給下游**，上游 packet 顯示一切正常。
+
+P6 同族但反向：`c04:176` 用常數、`:187` 寫死同一條路徑。改了常數之後，**程式去找新路徑、
+訊息叫使用者看舊路徑**——兩個都不會報錯的錯。
+
+### 7.3 guard 用 `assertIs` 而非 `assertEqual`（§5 的建議在此被推翻並升級）
+
+§5 原本建議「斷言四對的 `as_posix()` 逐字相等」。**那個判準沒有判別力**：六處的值今天逐字
+相同，所以等值斷言在**修法前後都會綠**——它釘的是「今天恰好相等」這個事實，不是「只有一個
+宣告」這個契約。
+
+VANS 沒有照抄這個推理，做了能證偽的實驗：獨立建構一個 byte-equal 的 `Path`，量得
+**`is=False` 而 `==True`**。這一格是決定性的——它證明等值斷言接受「重複字面」這個正是要
+禁止的狀態，而 `assertIs` 拒絕它。
+
+所以 `tests/test_cross_stage_path_ssot.py` 的六個正向 guard 一律用 `assertIs`，每個反向
+control 先 `assertEqual`（證明控制組真的等值、不是拿不等的東西來湊）再 `assertIsNot`。
+
+### 7.4 變異證明（§5 的反向要求，已履行）
+
+替換全部在**測試命名空間**內（`mock.patch.object` / `dict(...)` 複本），磁碟 `.py` 零 mutate
+（理由見 AGENTS.md §6.3：同秒等長編輯會讓 stale `.pyc` 存活、mutant 靜默不被套用，於是得到
+**反向結論**）。
+
+- handler 側：8 個變異點（P2/P3 各有兩個消費端，各自獨立變異）全部 RED，存活 0。
+- VANS 側：9 個變異點全部 RED。第 9 格是 VANS 自加的，值得記下差別——
+  handler 的 8 格證明「guard 對每一對敏感」；**VANS 的 M9 重建 pre-fix 狀態**（訊息改回硬編
+  字面 + 常數改名），證明的是「guard 抓得到我們原本要修的那個東西」。兩者不同，都需要。
+- **accepting control**：未變異時同樣的 cells 必須全綠（13/13）。沒有這格，一個恆回 failure
+  的 runner 也能讓上面每一行看起來合格。
+
+### 7.5 零回歸的量法與它的限定（**這一格請照抄，不要簡化**）
+
+零回歸結論成立於**同環境雙臂**：scratch base `19 failures / 57 errors` vs scratch after
+`19 / 57`，RED 集合逐筆 `cmp` rc=0（+13 = 新測試 cells）。
+
+**不是**跨環境對照 handler 在真實工作樹量到的 `11 / 51`。VANS 第一次量到不符時查出成因：
+差的 8 筆全是 `SentinelProvenanceTests`——它們要追 sentinel 到 git commit，而 scratch 複本
+**排除了 `.git`**。
+
+⚠ **所以正確的說法是「同環境雙臂 RED 集合 cmp rc=0」，不是「對上了基線」。**
+在 scratch 複本上跑本 repo 測試的人會撞到同一格：缺 `.git` 讓 8 筆 sentinel 測試變紅，
+而那與被測改動無關。
+
+控制組：`cmp` 對刪首行的副本 rc=1（證明 `cmp` 不是恆 0）；抽取器對 `ZZQQ_NEVER` 回 0
+（證明抽取器會回空）。
+
+### 7.6 主動劃出「不做」的三處（都經量測，不是省略）
+
+| 不做的 | 依據 |
+|---|---|
+| `tests/test_c01_id_package.py:72,79` 獨立寫死 `C01-ID/Interface_Constraints.json` | **測試獨立寫死是特性不是缺陷**。測試若 import 生產常數，就變成用被測物驗證自己 |
+| `upstream_constraints.py` 的 `face_layout` / `envelope` 兩筆 | 無可衍生來源。VANS E5 復驗：`C01_OUTPUTS` 五個值、`C02_OUTPUTS` 十二個值裡都沒有 `Face_Layout.json` / `Envelope_Constraint.json`；控制組（問 `mechanical` → 命中 `C03_OUTPUT`）證明該搜尋有牙 |
+| `skills/bodesign/stages/c00-prd/assets/render_prd.py:18,78,110` | 跨 package 邊界且**物理上無法引用**——`:78` 在 `_prepend_packages()` 改 `sys.path` **之前**執行。另立 `BR_20260901g`（同族，Related 帶三條可引用依據） |
+
+### 7.7 Remaining（**未判定，不是已確認無事**）
+
+- **f-string / 字串拼接 / 從 JSON 讀出的路徑形式未掃**。§6 的這一格未縮小。
+- **非 `.py` 檔（`.json` / `.md` / template）的同路徑字面未掃。**
+- **`orchestration.py:303` `answer_state_path` 的下游消費端未追。** 「P5 最貴」是基於它是對外
+  契約欄位這個結構事實的**推論**，不是量測。修法讓它從 SSOT 衍生、值不變，所以這個推論
+  **不承重**——它只影響優先序，不影響修法正確性。
+- **`packages/` 內尚有六個檔含 `answer_state.json` basename**（`package_readiness.py`、
+  `provenance.py`、`c00_prd_docx.py`、`prd_bom_crosscheck.py`、`c01_id_package.py`、
+  `c00_prd_template.py`）。**未逐檔判定是否為第七、第八對。** 它們多為 f-string 片段或
+  `03_output` 目錄名的組合，不落在本 BR「完整路徑重複宣告」的窗口內，但**沒有做逐檔證明**。
+- **VANS 未做全 repo dual-SSOT 普查**（其自標邊界）。本 BR 收斂的是已量測的六處，
+  不宣稱 repo 內不存在第七處。
