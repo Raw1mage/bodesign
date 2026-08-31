@@ -1,6 +1,6 @@
 # BR_20260804g — guard C 的 pin-tip fallback box 對 1198 個共線腳位符號退化，判準恆為 False
 
-- **Status**: FIXED (b1fde6b) — **有 scoped remainder，歸檔判定歸 dispatcher**
+- **Status**: PARTIAL (b1fde6b 已修主路徑) — 兩項具名殘留未解，見下
 - 修法：guard C 的 `rect is None` 分支接上 `graphics_rects`（body-first，見 §9）
 - 殘留一：6 個具名符號仍退化（graphics 本身是 1-D 或不存在）
 - 殘留二：zero-pin 第三族 33 個（有二維繪圖本體，但在 `:1709` 更早出局，本修法碰不到）
