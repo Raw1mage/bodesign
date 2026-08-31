@@ -314,6 +314,42 @@ dispatcher（`ses_04db7a1c5`）在獨立重跑本 BR 的驗收數字時，自己
 > 實務推論：在字串中定位區塊起點時，**用 `index("(", ...)` 而非寫死偏移量，並加 assert 錪定**；
 > 寫死的 `+N` 會隨語料縮排風格靜默失效。
 
+#### 第三次：控制組漏掉分類器的一整條臂（dispatcher，2026-09-01 覆核 `rerun_blind_on_new_pguard`）
+
+dispatcher（`ses_04db7a1c5`）獨立重跑 blind 判定時，第一版探針**只走 `_body_rect`**，
+沒接 `_graphics_bbox` 那條臂。後果：六個 graphics 來源的已知 blind 者回 **`NOBOX`**，
+於是他的「CTRL_BLIND」在第一輪只有 **1/3** 真的說得出 blind：
+
+```
+第一版（只有 rect 臂）          第二版（rect + graphics 兩臂）
+  74LVC1GU04DRL  blind=True       74LVC1GU04DRL      w=0.0  h=15.24  blind=True
+  TestPoint      NOBOX            TestPoint          w=0.0  h=0.0    blind=True
+  NetTie_2       NOBOX            NetTie_2           w=2.54 h=0.0    blind=True
+                                  MountingHole_Pad   w=0.0  h=0.0    blind=True
+  CTRL_BLIND 1/3                  CTRL_BLIND 3/3 True · CTRL_OK 2/2 False · NEW 3/3 False
+```
+
+> **`NOBOX` 讀起來像「這個符號沒有 box」，真相是「探針沒有走到算 box 的那條路」。**
+> 若拿那一版去驗 NEW 330 並得到 0，那個 0 會有一部分來自**漏掉整條 graphics 臂**——
+> 而輸出不會說。缺席態（真的不 blind）與失敗態（那條臂從未被執行）共用了 `NOBOX`。
+
+**三次事故的共同點不是「探針寫錯」**（縮排假設、`+1` 偏移、漏臂——三個不同的錯）：
+**是探針只覆蓋了被測對象的一部分路徑，而缺的那部分回傳了一個看起來像答案的值。**
+
+> **可機械套用的判準（承 §10.5 那句「控制組只覆蓋它所在的那一層」）**：
+> **分類器有多條臂時，正向控制組必須每條臂各一個**——否則「零命中」可能只是
+> 某條臂從未被執行。套用在本家族：guard C 的來源鏈是 `rect → graphics → pin-tip` 三條臂，
+> 所以正向控制組至少要有 `74LVC1GU04DRL`（rect 臂）與 `TestPoint`（graphics 臂）各一個；
+> 只有前者時，graphics 臂的全部退化符號都會靜默地不被計入。
+
+> **「每條臂各一個」是下限不是目標；臂內若還會分岔，覆蓋數要跟著長。**
+> 實例（handler 自報，2026-09-01）：`rerun_blind_on_new_pguard` 那輪的 graphics 臂
+> **正向覆蓋只有 1 個**（`TestPoint`），其餘 5 個 graphics 退化符號都是**被測對象**而非控制組。
+> 依上面的判準它合格，但若將來 graphics 臂內部再分岔——例如 polyline 與 rectangle
+> 走不同的座標蒐集路徑——那 1 個樣本可能又只覆蓋其中一條，
+> 而另一條的零命中會再一次讀起來像「沒有這種符號」。
+> **報出覆蓋數（1 而不是 6），下一個人才知道這條臂被驗到什麼程度。**
+
 ### 10.6 本輪沒量什麼（誠實邊界）
 
 1. **§8.1 仍未量**：182 個「長度錯誤」的下游後果（是否改變 `_body_rect` / `_pin_endpoints`）。
