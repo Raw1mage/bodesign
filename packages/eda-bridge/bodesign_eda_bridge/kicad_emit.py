@@ -28,6 +28,7 @@ import subprocess
 import uuid as _uuid
 
 from .occupancy import LedgerRect, OccupancyLedger
+from .sexpr import balanced_end
 
 DEFAULT_SYMBOL_DIR = os.environ.get("KICAD_SYMBOL_DIR", "/usr/share/kicad/symbols")
 DEFAULT_PROJECT_TEMPLATE = os.environ.get("KICAD_PROJECT_TEMPLATE", "/usr/share/kicad/template/kicad.kicad_pro")
@@ -425,32 +426,29 @@ def resolve_symbol_library(lib_id: str, symbol_dir: str | Path | list = DEFAULT_
 
 
 def _extract_symbol_block(source: str, name: str) -> str | None:
+    # BR_20260901f: the scan must be string-aware. A `(` or `)` inside a
+    # property VALUE (e.g. TLP184xSE's description) used to desynchronise the
+    # depth counter, which then ran to EOF and returned None -- indistinguishable
+    # from the symbol genuinely being absent, and the caller's error message says
+    # "not found". All 150 stdlib load failures were this, not real absences.
     marker = f'(symbol "{name}"'
     start = source.find(marker)
     if start == -1:
         return None
-    depth = 0
-    for index in range(start, len(source)):
-        char = source[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return source[start : index + 1]
-    return None
+    end = balanced_end(source, start)
+    if end is None:
+        return None
+    return source[start:end]
 
 
 def _balanced_block(s: str, start: int) -> str:
-    depth = 0
-    for index in range(start, len(s)):
-        if s[index] == "(":
-            depth += 1
-        elif s[index] == ")":
-            depth -= 1
-            if depth == 0:
-                return s[start : index + 1]
-    return s[start:]
+    # BR_20260901f: string-aware. Not-found return value (`s[start:]`) is
+    # preserved deliberately -- _symbol_children advances by len(sub), so a
+    # shorter sentinel would change iteration behaviour at existing call sites.
+    end = balanced_end(s, start)
+    if end is None:
+        return s[start:]
+    return s[start:end]
 
 
 def _symbol_children(block: str) -> list[str]:

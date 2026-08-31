@@ -4,7 +4,8 @@
   - **⚠ 引用本張任何 blind 數字前必讀（口徑，不是 delta）**：`9` 與 `7` 量的是**兩個母體**，不是修法前後。**口徑 A**（每個能算出 box 的 root symbol，不過 `:1758` 閘）= **9**；**P_GUARD**（pin map 非空、HEAD 生產路徑真正審視者）= **7**。差的 2 個是 `Mechanical:Fiducial` 與 `Mechanical:MountingHole`（zero-pin，生產上永遠不會被建 box）。`7 + 2 = 9` 已由同一輪掃描坐實（§10.2）。**把兩者相減會得到一個不存在的回歸。**
   - **殘留三項的收斂結果**：C8 各頁曝險**已量**（母體 = repo 內 14 個 `.kicad_sch`、184 個已擺放元件，BLIND = **0**，附六態 codomain 控制組，§10.3）；R9 交集**已核對完畢**（9 個 blind 全數有轄區，**「兩者都不在」= 空集合**，§10.2）；N3 母體數分歧**已裁定為口徑問題**（22583 可由兩個獨立方法重現並通過交叉驗證；22431 與 21437 判為**無法重建**而非錯誤，§10.1）。
   - **⚠ 未涵蓋區，不得被 FIXED 吞掉**：`BR_20260804g §7.8`（那 6 個仍退化符號在真實頁的出現頻率）**仍未量**。本張只證明「repo 內現存 14 頁沒用到它們」，而**「現存頁面沒用到」≠「使用頻率低」**——`TestPoint` / `MountingHole` 在真實 PCB 上並不罕見。
-  - **⚠ §10 所有以 `load_fail = 150` 為母體的數字將會變動**：那 150 筆已證實不是「symbol 不存在」，而是 `_balanced_block` 括號失步造成的**假 not-found**（見 **`BR_20260901f`** §4.2/§4.3）。修好 901f 後本張的 P_ROOT 三分計數需重取。
+  - **✅ guard C 分桶已在 901f 修法後重取（2026-09-01，逐符號具名對照，見 §11）**：`P_GUARD 22214 → **22544**`、`P_ZEROPIN 219 → **39**`、`load_fail 150 → **0**`，恆等式 `22544 + 39 + 0 = 22583` 仍成立。**兩桶各增分開報**：那 150 個假 not-found 全數進 P_GUARD（非分流），另有 **180 個本來被誤判為 zero-pin 的符號也進了 P_GUARD**（+150 +180 = +330）——那 180 是 901f §4.2 「長度錯誤 182」中的一部分，區塊被截斷後 pin map 變空而落錯桶，机制已具名坐實（§11.2）。**未有任何符號反向移動。**
+  - **⚠ §10.1 的 `CHECK P_GUARD 22214 + P_ZEROPIN 219 + load_fail 150 = 22583` 是修法前的讀數**，三項均已過時（但恆等式本身成立，不刪）。引用請改用 §11 的新值。
   > **前版 Status 措辭（2026-08-05，保留不刪）**：`**PARTIAL**（2026-08-05 更正）— §1 主缺陷已修…**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 BR_20260804g 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。`
   > **原 Status 措辭（2026-08-04，保留不刪）**：`open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**`
 - **Severity**: MEDIUM-HIGH（純視覺缺陷的**檢查器**失效；受影響符號含 `Device:R`——最常用的符號）
@@ -739,3 +740,77 @@ v2 把搜尋路徑擴到 stdlib + repo 內全部 42 個本地 library，並把 e
 **誕實邊界**：母體是「repo 裡已經輸出到磁碟上的 `.kicad_sch`」。它**不等於**「任何人未來可能產生的頁」——
 若未來某頁用上上表那 9 個 blind 符號（TestPoint / MountingHole 類），曝險就不是 0。
 804g §7.8 已經指出這件事並列為未量項，**本輪也沒量**。
+
+---
+
+## 11. guard C 分桶重取（2026-09-01，`BR_20260901f` 修法後）
+
+> §10 的分桶是在 `_balanced_block` 缺陷存在時量的。901f 修法落地後，那 150 個假 not-found
+> 變成可用符號，本節重取。**母體定義逐字沿用 §10.0，未改口徑**——只有被量的 code 變了。
+
+### 11.1 三桶前後對照（母體 P_ROOT = 22583，不變）
+
+| 桶 | 口徑（§10.0） | 修法前 | 修法後 | 差 |
+|---|---|---|---|---|
+| **P_GUARD** | pin map 非空，過 `kicad_emit.py:1758` 閘，真正進 guard C | 22214 | **22544** | **+330** |
+| **P_ZEROPIN** | pin map 為空，`:1758` 即 continue，從不建 box | 219 | **39** | **−180** |
+| **load_fail** | `load_symbol` 解析不出來 | 150 | **0** | **−150** |
+| **CHECK** | 三桶相加 | 22583 ✓ | **22583 ✓** | 恆等式仍成立 |
+
+**兩桶各增分開報**——不能只報 +330，否則 804g 的 37 無法重算：
+
+```
+問：每個符號從哪個桶移到哪個桶？（逐符號具名 join，22583 列全數對上）
+
+  22214  guard                -> guard                 未動
+    150  load_fail            -> guard                 假 not-found 被修好，全數有 pin
+    180  zeropin_g_none       -> guard                 見 §11.2，機制已坐實
+     37  zeropin_g_ok         -> zeropin_g_ok          未動（804g 第三族）
+      2  zeropin_g_degenerate -> zeropin_g_degenerate  未動（Fiducial / MountingHole）
+
+  沒有任何符號反向移動（guard -> zeropin 或 -> load_fail 為 0 列）。
+```
+
+控制組：`CTRL_A` 母體枚舉器真的跑了（enumerated=22583，且 `Device:R` 確實在枚舉結果中）
+——這一格是 901f §10.5 #1 那次教訓的直接產物；`CTRL_B` 分類器能落進**兩個**桶
+（`Device:R` 有 pin ✓／`Mechanical:Fiducial` zero-pin ✓）；`CTRL_C` load_fail 桶可達
+（真的不存在的名字仍回 None ✓）。**三個桶都被證明是可到達的**，0 才有意義。
+
+### 11.2 那 180 個不是「多出來的」，是先前被誤判成 zero-pin
+
+**這是本輪最需要解釋的一格。** 150 個假 not-found 只能解釋 +150，剩下的 +180 必須有自己的機制，
+不得以「應該是因為修好了吧」帶過。實測（before/after 同一支探針，namespace 切換掃描器，不動磁碟）：
+
+```
+問：這 180 個在修法前取到的區塊與修法後一樣嗎？
+     block_differs = 180 / 180        全數不同
+問：它們的 pin map 怎麼變的？
+     pins_before_empty_after_nonempty = 180 / 180
+
+樣本（name, good_len, bad_len, good_pins, bad_pins）：
+  Connector_Generic:Conn_02x01_Row_Letter_Last  2267 -> 981   2 pins -> 0
+  Connector_Generic:Conn_02x02_Row_Letter_Last  3068 -> 981   4 pins -> 0
+  Connector_Generic:Conn_02x03_Row_Letter_Last  3863 -> 981   6 pins -> 0
+  Connector_Generic:Conn_02x04_Row_Letter_Last  4664 -> 981   8 pins -> 0
+
+CONTROL Device:R（未移動者）  len 1646 vs 1646   pins 2 vs 2   逐字相同 ✓
+```
+
+**機制鍵在 `bad_len` 恆為 981**：這些 `Conn_*_Row_Letter_Last` 都是 `(extends ...)` 衍生符號，
+區塊被截斷在同一個位置（衍生頭部），於是 `_flatten_extends` 拿不到 pin、`_pin_endpoints` 回空字典，
+`:1758 if not pmap: continue` 就把它們當成 zero-pin 排掉。
+
+> **這 180 個從來不是 zero-pin。** 它們是有 2–36 支腳的 connector，在 guard C 眼中消失了一整段時間。
+> 而「真的沒有 pin」與「區塊被截斷到拿不到 pin」**共用同一個空 pin map** ——
+> 與 901f 主缺陷同形，只是發生在下一層。
+
+這也解釋了 `zeropin_g_none` 為何從 180 降到 **0**：那個桶裡裝的全部是這批被截斷的衍生符號，
+它們沒有 graphics 是因為區塊本身就不完整。**不是一個真實的分類，是一個缺陷的殘影。**
+
+### 11.3 本節沒量什麼
+
+1. **未重跑 §10.2 的 9 個 blind 交集表與 §10.3 的 14 頁曝險。** 那 330 個新進 P_GUARD 的符號
+   **可能包含新的 blind 者**（box 退化）——本輪只重建了分桶，**沒有重跑 blind 判定**。
+   這是一個**具體、可排程**的缺口，不是一個模糊的保留。
+2. **未驗證那 180 個重新進入 guard C 後是否觸發新的 intrusion 回報**（同上，需重跑 blind 判定）。
+3. **§10.1 的 22431 / 21437 仍不可重建**，本輪未重試。

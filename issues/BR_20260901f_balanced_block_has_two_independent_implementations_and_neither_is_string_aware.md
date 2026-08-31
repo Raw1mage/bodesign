@@ -1,7 +1,7 @@
 # BR_20260901f — `_balanced_block` 有兩份獨立實作，皆無引號狀態機；332 個符號被靜默解析錯誤，其中 150 個回報成「symbol not found」
 
-- **Status**: **open** — 機制已坐實（活體重現，兩份實作皆紅）；曝險已量（生產路徑 332/22583）；**未修**（裁示為只建檔，修法另排）
-- **Severity**: **HIGH** — 不是潛在缺陷。`load_symbol` 對 **150** 個實際存在的符號拋 `KeyError: Symbol 'X' not found`，另 **182** 個回傳長度錯誤的區塊而不報錯
+- **Status**: **FIXED**（2026-09-01，未 commit，待 dispatcher 驗收）— 三份抄寫全部改為委派單一 string-aware 掃描器 `sexpr.balanced_end`。**全庫三分計數前後對照（母體 P_ROOT = 22583，見 §10）**：`長度正確 22251 → 22583`、`長度錯誤 182 → 0`、`假 not-found 150 → 0`、`真的不存在 0 → 0`，CHECK 恆等式成立。反向控制組（namespace 替換掉 string-awareness）令新測試 5 紅，證明測試有判別力。全套件 1871 測試前後比對**零回歸**（`comm -13` 空集合，控制組非空）。
+- **Severity**: **HIGH**（已解除）— 修法前 `load_symbol` 對 **150** 個實際存在的符號拋 `KeyError: Symbol 'X' not found`，另 **182** 個回傳長度錯誤的區塊而不報錯；今皆為 0。
 - **Component**:
   - `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:444-453`（`_balanced_block`）
   - `packages/eda-bridge/bodesign_eda_bridge/fidelity.py:263-274`（**第二份獨立實作**）
@@ -202,3 +202,124 @@ helper 失步後掉到字串末端執行 `return s[start:]`，**而那恰好等�
   —— **依據：同一種失效類別（探針與被測對象共用失效模式）**，見本 BR §6。
 - 失敗類別同族：`BR_20260804_bus_route_docstring_promises_a_channel_router_the_code_does_not_implement.md`
   —— **依據：同一種失效類別（機制在場但實際不執行，與「沒發現問題」共用同一個輸出）**。
+
+---
+
+## 10. 修法與驗收（2026-09-01，`ses_fa70cfaf8ffe`，未 commit）
+
+### 10.1 修法形狀：加核心掃描器，三個 wrapper 各自委派
+
+**沒有**把三處抽換成單一 helper——三個呼叫點語意不同（取子節點／取命名區塊／反向搜包圍區塊），
+強行統一會製造誰都不完全合用的介面。改為新增**掃描原語**，三個 wrapper 保留既有簽章與**各自的
+not-found 回傳值**：
+
+| wrapper | file:line | not-found 回傳 | 為何不統一 |
+|---|---|---|---|
+| `kicad_emit._balanced_block` | `kicad_emit.py:449` | `s[start:]` | `_symbol_children` 用 `i += len(sub)` 前進，較短的哨兵會改變迭代行為 |
+| `fidelity._balanced_block` | `fidelity.py:263` | `""` | `power_symbol_refs:322` 測 `if block and ...`，換哨兵會改該分支 |
+| `kicad_emit._extract_symbol_block` | `kicad_emit.py:427` | `None` | `load_symbol:404` 據此拋 `KeyError` |
+
+新增：`packages/eda-bridge/bodesign_eda_bridge/sexpr.py` → `balanced_end(s, start) -> int | None`
+（回**結束索引**而非字串，讓三個 wrapper 各自決定切片與哨兵）。引號用 `"`，跳脫用 `\`，
+**`\"` 不被當成字串結束**。
+
+### 10.2 全庫回歸：三分計數前後對照（母體 P_ROOT = 22583）
+
+**口徑**：P_ROOT = `/usr/share/kicad/symbols/*.kicad_sym`（223 檔）中每一個**根層**
+`(symbol "NAME" ...)`（stdlib 的根層縮排是**一個 tab**，巢狀 unit symbol 更深）。
+真實邊界由**獨立的** regex tokenizer 走出，非生產碼。
+
+| 桶 | 修法前（§4.2） | 修法後 | 判別意義 |
+|---|---|---|---|
+| 長度正確 | 22251 | **22583** | — |
+| 長度錯誤（靜默污染） | 182 | **0** | 驗收條件 §7.2 ✓ |
+| 回 None 而 marker 確實在檔案裡（假 not-found） | 150 | **0** | 驗收條件 §7.2 ✓ |
+| 回 None 且 marker 真的不存在 | 0 | **0** | 真缺席仍是 None，未被換成假陽性 |
+| **CHECK** | 22583 ✓ | **22583 ✓** | 恆等式成立 |
+
+控制組（分類器必須能落進不只一個桶）：`_extract_symbol_block(CTL, 'ZZ_NoSuch_9999') is None` ✓／
+`_extract_symbol_block(CTL, 'R') is not None` ✓。
+
+### 10.3 反向控制組（判別力實測，非宣稱）
+
+把 `sexpr.balanced_end` 在 **namespace 中**換成修法前的非 string-aware 走法
+（**不 mutate 磁碟**——AGENTS.md §6.3：同秒等長 mutate 會讓既有 `.pyc` 存活，
+mutant 沒被套用而測試仍綠，得到反向結論），重跑 `tests/test_sexpr_string_aware.py`：
+
+```
+RAN=11 FAILURES=5 ERRORS=0
+RED test_unpaired_open_paren_in_string_does_not_extend_the_block
+    at test_sexpr_string_aware.py:30   AssertionError: None != 62
+RED test_unpaired_close_paren_in_string_does_not_truncate_the_block
+    at test_sexpr_string_aware.py:35   AssertionError: 61 != 62
+RED test_escaped_quote_does_not_end_the_string
+    at test_sexpr_string_aware.py:40   AssertionError: None != 62
+RED test_symbol_whose_property_holds_an_open_paren_is_found
+    at test_sexpr_string_aware.py:75   AssertionError: None != '(symbol "X" (property ...'
+RED test_symbol_children_splits_correctly_across_a_quoted_paren
+    at test_sexpr_string_aware.py:87   (list mismatch)
+```
+
+**三種前置失效形狀在此同時現形**：`None != 62`（跑到 EOF ⇒ 假缺席）、
+`61 != 62`（提早關閉 ⇒ 截斷）、list mismatch（子節點切錯）。
+另 6 個測試（not-found 契約、平衡輸入、真缺席）在兩種模式下皆綠——
+**證明測試不是對什麼都紅**。
+
+### 10.4 全套件零回歸（1871 測試，前後逐字比對）
+
+`unittest discover -s tests` 在本 repo **拋 ImportError**（`tests/` 非可匯入起點），
+產出的零測試結果**外觀像乾淨執行**——改以顯式模組清單載入（142 模組，`load_errors=0`）。
+
+| | RAN | FAIL | ERR | SKIP | RED 集合大小 |
+|---|---|---|---|---|---|
+| before（注入舊走法） | 1871 | 17 | 40 | 51 | 57 |
+| after（現行） | 1871 | 12 | 40 | 51 | 52 |
+
+```
+問：有沒有測試從綠變紅（＝回歸）？   comm -13 before after  → 空
+問：有沒有測試從紅變綠（＝修好）？   comm -23 before after  → 5 筆，全部是 test_sexpr_string_aware
+CONTROL：comm 對已知有差異的一對      → 非空（印出 Y），證明 comm 分得出兩態
+```
+
+那 52 筆既有 RED **在修法前後逐字相同**，與本修法無關（c00/c01 orchestration、composer
+draftsman 幾何、mcp_server registry 等既有失敗）。
+
+### 10.5 探針缺陷（本輪三個，皆由自身控制組抓到）
+
+與 §6 同族，**再次發生在為驗證本 BR 而寫的儀器上**：
+
+1. **根層 regex 假設兩空格縮排**（stdlib 實為 tab）→ 四個桶**全部回 0**，`CHECK sum=0`，
+   而兩個控制組**仍然通過**。控制組測的是分類器，不是母體枚舉器——
+   **母體為空時，分類器的正確性完全無法揭露這件事**。
+2. **`start` 偏移量寫死 `+2`**（承 1 的兩空格假設）→ 修正縮排後每個符號都晚一個字元起算，
+   得到 `wrong_len=22583`（100% 錯誤）。這一格反而**因為太整齊而可疑**——
+   1.47% 的缺陷不可能在修法後變成 100%。
+3. **`unittest discover` 的 ImportError** → 零測試結果與乾淨執行同形（見 §10.4）。
+
+> **可重用判準**：控制組只覆蓋它所在的那一層。分類器的控制組不能證明母體枚舉器有跑；
+> 要證明母體非空，需要一個**對母體本身**的控制組（例如「已知存在的 `Device:R` 必須出現在計數中」）。
+
+#### 這個形狀在 fleet 裡獨立復現了兩次（dispatcher 覦核時自己也踩了一次）
+
+dispatcher（`ses_04db7a1c5`）在獨立重跑本 BR 的驗收數字時，自己寫的 tokenizer 踩了**上面的 #2**：
+他寫 `st = m.start()+1`，而 `\n\t\(symbol` 的 `+1` 落在 **tab** 上不是 `(`，
+得到 `ok=0 / wrong_length=22583`，樣本 `5183!=5184`、`14065!=14066` **全部差 1**。
+
+**那個輸出看起來像「修法完全失效」。** 两邊都沒有據此下結論的原因逐字相同：
+**1.47% 的缺陷不可能在修法後變成 100%**。修正成 `s.index("(", m.start())`
+並加 `assert s[st]=="("` 錪定後才得到正確數字。
+
+> **這兩次都不是靠控制組察覺的，是靠「數字太整齊」。**
+> 因為**控制組沒有覆蓋「起點錪定」這一層**——正是上面那句可重用判準自己的實例。
+> 實務推論：在字串中定位區塊起點時，**用 `index("(", ...)` 而非寫死偏移量，並加 assert 錪定**；
+> 寫死的 `+N` 會隨語料縮排風格靜默失效。
+
+### 10.6 本輪沒量什麼（誠實邊界）
+
+1. **§8.1 仍未量**：182 個「長度錯誤」的下游後果（是否改變 `_body_rect` / `_pin_endpoints`）。
+   它們現在解析正確了，但**修法前的污染是否曾經產生錯誤幾何**——未回溯。
+2. **§8.2 仍未量**：`fidelity.py` 三個呼叫點的實際錯誤率。本修法讓它 string-aware，
+   但 repo 內 `.kicad_sch` 語料曝險本來就是 0，**所以這份修法在現有語料上不可觀測**。
+3. **§8.3 仍未量**：`eda-bridge` 以外是否還有第四份抄寫。只掃了本套件兩個檔。
+4. **未量效能影響**：新掃描器逐字元帶狀態機，與舊版同為 O(n)，但**未做基準量測**。
+5. **未 commit**（裁示為等驗收授權）。

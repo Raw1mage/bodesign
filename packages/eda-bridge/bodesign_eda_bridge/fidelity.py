@@ -23,6 +23,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .sexpr import balanced_end
+
 
 @dataclass
 class FidelityReport:
@@ -261,18 +263,18 @@ def _drop_power_flags(classes, extra_refs: frozenset[str] = frozenset()):
 
 
 def _balanced_block(s: str, start: int) -> str:
-    """The parenthesised block beginning at `start` (which must be a '(')."""
-    depth = 0
-    j = start
-    while j < len(s):
-        if s[j] == "(":
-            depth += 1
-        elif s[j] == ")":
-            depth -= 1
-            if depth == 0:
-                return s[start:j + 1]
-        j += 1
-    return ""
+    """The parenthesised block beginning at `start` (which must be a '(').
+
+    BR_20260901f: string-aware -- a `(` or `)` inside a quoted property value is
+    literal text, not depth. Before that fix this returned "" on such input
+    (silent truncation), which the callers below read as "no such block".
+    The "" not-found return is preserved: `power_symbol_refs` tests `if block
+    and ...` at :322, so a different sentinel would change that branch.
+    """
+    end = balanced_end(s, start)
+    if end is None:
+        return ""
+    return s[start:end]
 
 
 def power_symbol_refs(sch_files: list[Path]) -> set[str]:
