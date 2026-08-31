@@ -1,8 +1,8 @@
 # BR_20260804 — `_bus_route` 的 docstring 承諾一個 code 沒有實作的 channel router
 
-- **Status**: open
+- **Status**: FIXED（Option C，2026-08-31，handler `ses_fa7a4e045ffeM5zWajS6JvljoT`）
 - **Severity**: MEDIUM（本體無使用者可感知傷害；傷害在**它讓兩張 BR 的 RCA 指向錯的函式**）
-- **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:2797-2850`（`_bus_route`）
+- **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:3016-3060`（`_bus_route` docstring）
 - **Family**: schematic-engine
 - **Owner**: ses_03408d1faffeKuPkQZ9Zj6gWO2
 - **Filed**: 2026-08-04
@@ -184,6 +184,88 @@ echo "CONTROL: _orthogonal_route 出現在 3 個測試檔"
 1. docstring 的每一條 `- rule:` 都能用一個可執行斷言對應，或明寫為 NOT-guaranteed
 2. 新測試在把 daisy-chain 換成任意其他實作時會紅（mutation proof 三態：before/during/after）
 3. 既有 `tests/test_kicad_emit.py` 不變綠→紅
+
+## 9. 修復紀錄（2026-08-31，Option C）
+
+**選 C：改 docstring 對齊 code + 補測試。零 executable byte 變更。**
+
+### 9.1 docstring（`kicad_emit.py:3018-3060`）
+
+刪除的虛假承諾（逐條）：
+
+| 原文 | 為什麼刪 |
+|---|---|
+| `route every pin out to a shared horizontal CHANNEL` | code 不建 channel，走 daisy-chain |
+| `channel_y = max(pin_y) + 5.08 mm` | 該賦值在檔案裡不存在（§2 已量測） |
+| `guaranteed below all pins so drops never cross a symbol` | **安全保證**，daisy-chain 給不出 |
+| `never overlaps a symbol body or the part's other pin` | 同上 |
+| `Each distinct pin.x gets one drop; shared-x pins share a drop` | 無 drop 概念 |
+
+新契約明述（每條對應一個測試，見 9.2）：
+
+- 排序去重規則 `(x, y)` ascending，hops = `zip(pts, pts[1:])`；
+- 每段 hop 委派 `_orthogonal_route`，waypoint 展開成連續 `(start, end)`；
+- junctions = `pts[1:-1]`（interior 3-way meet）；
+- **NOT guaranteed**：hop 不保證避開所有 symbol body——`_orthogonal_route`
+  fully-boxed-in 時退回 legacy H-first elbow，殘餘穿越由 `check_wire_body_clearance`
+  回報；且因為 hop 自己的兩個 host body 也在傳下去的 obstacle set 裡，hop 可能被
+  **自己的零件**圍死；
+- **NOT guaranteed**：不保證與他 net 不共線/不相接——那是呼叫端的 `_segment_fuses`
+  / `fusion_registry` 契約，不是本 router 的；
+- **NOT allowed**：對角線段、移動任何輸入 pin。
+
+### 9.2 測試（`tests/test_kicad_emit.py::BusRouteTests`，7 個）
+
+`_bus_route` 從**零覆蓋**變成 7 個測試。無 `skipUnless`（純幾何，不需 symbol lib /
+`kicad-cli`——skip 與 pass 在輸出上無法區分）。每個測試對應一條 docstring 子句，
+且**每個都自帶控制組**：
+
+| 測試 | 鎖住的子句 | 控制組（證明探針會紅） |
+|---|---|---|
+| `test_chain_order_is_sorted_and_deduplicated_not_caller_order` | 排序 + 去重 | 換一組真正不同的 endpoint 必須 `assertNotEqual` |
+| `test_segments_are_exactly_the_expanded_orthogonal_route_hops` | 幾何 == per-hop `_orthogonal_route` | L 形 net 的 segment 數 > hop 數（證明展開真的發生） |
+| `test_chain_is_connected_and_reaches_every_pin` | done-when：連通 + 端點逐字保留 | 對刻意斷開的圖走一次，必須測得不連通 |
+| `test_junctions_are_exactly_the_interior_chain_pins` | `junctions == pts[1:-1]` | 4-pin net 必須有 **2** 個 interior（否則「永遠空清單」也會通過） |
+| `test_every_segment_is_axis_aligned` | NOT-allowed 對角線 | 對真對角線 `assertFalse` |
+| `test_obstacles_are_passed_through_to_every_hop` | 避障是**委派**（行為證明，非閱讀 code） | 遠處無關 obstacle 必須不改變幾何 → 差異來自 obstacle 本身 |
+| `test_boxed_in_hop_returns_a_non_clearing_route_not_an_error` | NOT-guaranteed：fallback 會穿越 | 同一探針對遠處 obstacle 必須回報 clear |
+
+**mutation proof（§8 判準 2）**：`test_segments_are_exactly_the_expanded_orthogonal_route_hops`
+把預期值**從 `_orthogonal_route` 現場重算**，而非寫死座標。任何非 daisy-chain 實作
+（含 §7 選項 B 的 channel router）都會在此紅——它是「這個實作是 daisy-chain」的斷言，
+不是「幾何長這樣」的快照。
+
+### 9.3 驗證輸出（rc 逐項獨立捕捉）
+
+```
+$ PYTHONPATH="$PP" python3 -m unittest tests.test_kicad_emit.BusRouteTests -v
+Ran 7 tests in 0.001s
+OK                                            rc=0
+
+$ PYTHONPATH="$PP" python3 -m unittest tests.test_kicad_emit
+Ran 36 tests in 3.233s
+OK                                            rc=0        (原 29 → 36，+7)
+
+$ PYTHONPATH="$PP" python3 -m unittest tests.test_NON_EXISTENT_MODULE_CONTROL
+ModuleNotFoundError: No module named 'tests.test_NON_EXISTENT_MODULE_CONTROL'
+FAILED (errors=1)                             rc=1        ← 負控制組：runner 確實會非零
+```
+
+負控制組是必要的：`unittest` 對打錯的模組名同樣可能回 `OK`（若被當成 pattern），
+**「測試全過」與「測試根本沒跑」在輸出上會共用同一個綠燈**。rc=1 證明本次 rc=0 有意義。
+
+測試前已 `find . -name __pycache__ -prune -exec rm -rf {} +`（AGENTS.md §6.3：
+`-B` 擋不掉既有 stale `.pyc`）。
+
+### 9.4 沒有量什麼
+
+- **未量** aiguard CCM 各頁 wire 數基線（01_power=78 / 02_mcu=57）。理由：本次
+  **零 executable byte 變更**（`git diff --numstat` 對 `kicad_emit.py` 僅 docstring 行），
+  幾何不可能改變。若 dispatcher 要求，可另行執行。
+- **未修** §6 的 `fusion_registry` 註冊/檢查不對稱（power stub 1591 無對應檢查點）。
+  維持 §6.1 的 `observed-not-proven`，不在本次範圍。
+- **未修** §4 / §5 指出的 `BR_20260723e` 兩處 RCA 錯誤。那是另一張 BR 的檔案，
+  在本次派工的禁碰清單內。
 
 ## Related
 

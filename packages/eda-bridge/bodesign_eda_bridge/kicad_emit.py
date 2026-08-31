@@ -3015,31 +3015,49 @@ def check_wire_body_clearance(result: "SchematicEmitResult | object") -> list[di
 
 def _bus_route(endpoints: list[tuple[float, float]],
                obstacles: list[tuple[float, float, float, float]] | None = None) -> tuple[list[tuple[tuple[float, float], tuple[float, float]]], list[tuple[float, float]]]:
-    """Multi-node (3+ pin) net router: a routing-channel daisy-chain.
+    """Multi-node (3+ pin) net router: an ORTHOGONAL DAISY-CHAIN over sorted pins.
 
-    Rationale (root cause of the trunk approach's failure): a single horizontal trunk
-    spanning all component x-columns crosses each (vertical) part's axis, so it can
-    collide with the OTHER pin of a 2-pin part — producing phantom shorts and leaving
-    pins unconnected. Instead we route every pin out to a shared horizontal CHANNEL that
-    sits in clear space below all pins, then run ONE channel wire along it, tapping each
-    pin's drop-wire with a junction. The drops are vertical (pin.x → channel_y); the
-    channel is horizontal at a y strictly below every pin, so it never overlaps a symbol
-    body or the part's other pin.
+    Rationale: a single horizontal trunk spanning all component x-columns crosses each
+    (vertical) part's axis, so it can collide with the OTHER pin of a 2-pin part —
+    producing phantom shorts and leaving pins unconnected. Instead this router reduces
+    the multi-node problem to a sequence of INDEPENDENT 2-pin problems: sort the pins,
+    then hand each consecutive pair to the proven 2-pin router `_orthogonal_route`, whose
+    endpoint fidelity keeps the net partition unchanged. The union of the hops is
+    connected because consecutive hops share a pin, so the chain spans the whole net.
 
     Taxonomy:
-      - input  endpoints: >=3 absolute pin (x, y) on one net (duplicate x allowed).
+      - input  endpoints: >=3 absolute pin (x, y) on one net (duplicate points allowed;
+               they are de-duplicated). No ordering is required from the caller.
+      - input  obstacles: optional keep-out AABBs, passed through VERBATIM to every hop.
+               The two host bodies of a given hop are NOT excluded here — endpoints carry
+               no ref, so this function cannot identify them (see the NOT clause below).
       - output (segments, junctions):
-          segments  = vertical drop per pin (pin → channel_y) + one horizontal channel
-                      wire spanning [min_x, max_x] at channel_y. All axis-aligned.
-          junctions = a dot at every (pin_x, channel_y) tap that is interior to the
-                      channel span (the electrically-required 3-way meets); the two
-                      extreme taps are channel endpoints and need none.
-      - NOT allowed: a diagonal segment; a channel y that is not strictly below every pin.
-      - rule: channel_y = max(pin_y) + 5.08 mm (grid: 4×1.27), guaranteed below all pins
-              so drops never cross a symbol. Each distinct pin.x gets one drop; shared-x
-              pins share a drop. Junctions only at interior taps.
-      - done when: every pin reaches the channel by one vertical drop and the channel is
-              a single horizontal wire covering [min_x, max_x].
+          segments  = the concatenated waypoint pairs of each hop, in chain order:
+                      for pts[i] → pts[i+1] the hop's polyline is expanded into
+                      consecutive (start, end) pairs. All segments are axis-aligned
+                      because `_orthogonal_route` never returns a diagonal.
+          junctions = one dot at every INTERIOR chain pin, i.e. exactly `pts[1:-1]`.
+                      An interior pin has a chain wire arriving AND leaving plus the
+                      symbol pin itself → a 3-way meet, which KiCad requires a junction
+                      for. The two chain-end pins are simple 2-way joins and get none.
+      - rule: pins are de-duplicated and ordered by `(x, y)` ascending — left→right,
+              then top→bottom — so the chain is deterministic for a given endpoint set
+              regardless of caller ordering. Chain hops are `zip(pts, pts[1:])`.
+      - rule: obstacle avoidance is entirely DELEGATED to `_orthogonal_route`; this
+              function performs no geometric clearance reasoning of its own.
+      - NOT guaranteed: that a hop clears every symbol body. `_orthogonal_route` tries
+              its candidate polylines in order and, when fully boxed in, FALLS BACK to
+              the legacy H-first elbow, which may cross a body; that residual crossing
+              is reported by the machine check (`check_wire_body_clearance`), never
+              silently "fixed". Because the hop's own two host bodies are included in
+              the obstacle set passed down, a hop can also be boxed in by its OWN parts.
+      - NOT guaranteed: that segments of this net do not run collinear with, or touch,
+              segments of a DIFFERENT net. That is the caller's fusion check
+              (`_segment_fuses` / `fusion_registry`), not this router's contract.
+      - NOT allowed: a diagonal segment; moving/snapping any input pin (endpoints of
+              every hop are preserved verbatim by `_orthogonal_route` — FIDELITY).
+      - done when: every consecutive pair of the sorted, de-duplicated pin list has been
+              expanded into axis-aligned segments and every interior pin has a junction.
     """
     # Dedupe coincident pins, order left→right (then top→bottom) for a stable chain.
     pts: list[tuple[float, float]] = []

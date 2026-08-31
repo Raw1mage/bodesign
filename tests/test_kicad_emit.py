@@ -864,3 +864,202 @@ class GuardCNoRectFallbackTests(unittest.TestCase):
                          f"{graphics_ratio:.3f}) for a symbol that HAS a "
                          f"rectangle; the fallback is no longer conditional")
         del _PWR_STUB_STEP_MM
+
+
+# ---------------------------------------------------------------------------
+# BR_20260804 (_bus_route docstring promised a channel router the code does not
+# implement). Option C: the docstring was corrected to the real daisy-chain
+# contract, and THESE tests pin that contract down so a future edit cannot
+# silently reintroduce the mismatch.
+#
+# Every assertion below maps to one clause of the corrected docstring:
+#   - "sorted by (x, y) ascending, de-duplicated"  -> test_chain_order_*
+#   - "hops = zip(pts, pts[1:]) via _orthogonal_route, waypoints expanded"
+#                                                  -> test_segments_are_exactly_*
+#   - "junctions = pts[1:-1]"                      -> test_junctions_are_*
+#   - "never a diagonal"                           -> test_every_segment_is_axis_aligned
+#   - "obstacle avoidance is DELEGATED"            -> test_obstacles_are_passed_through
+#   - "NOT guaranteed: a hop clears every body"    -> test_boxed_in_hop_returns_a_*
+#
+# _bus_route is pure geometry: no symbol library and no kicad-cli, so this class
+# carries no skipUnless. A skip would be indistinguishable from a pass.
+# ---------------------------------------------------------------------------
+class BusRouteTests(unittest.TestCase):
+    # Three pins on one row; deliberately handed to the router OUT of order so a
+    # sort-free implementation cannot pass by accident.
+    ROW = [(120.0, 100.0), (100.0, 100.0), (110.0, 100.0)]
+    ROW_SORTED = [(100.0, 100.0), (110.0, 100.0), (120.0, 100.0)]
+    # An L-shaped 3-pin net: consecutive hops need elbows, so the expansion of
+    # multi-waypoint hops is exercised (the ROW case is all straight hops).
+    ELL = [(100.0, 100.0), (110.0, 120.0), (120.0, 100.0)]
+
+    @staticmethod
+    def _bus(*args, **kwargs):
+        from bodesign_eda_bridge.kicad_emit import _bus_route
+        return _bus_route(*args, **kwargs)
+
+    def test_chain_order_is_sorted_and_deduplicated_not_caller_order(self):
+        """Docstring: pins are de-duplicated and ordered by (x, y) ascending."""
+        seg_shuffled, j_shuffled = self._bus(self.ROW)
+        seg_sorted, j_sorted = self._bus(self.ROW_SORTED)
+        self.assertEqual(seg_sorted, seg_shuffled,
+                         "caller ordering leaked into the chain -- the router no "
+                         "longer sorts its endpoints")
+        self.assertEqual(j_sorted, j_shuffled)
+        # Duplicated coincident pins must not add a hop or a junction.
+        seg_dup, j_dup = self._bus([(100.0, 100.0)] + self.ROW + [(120.0, 100.0)])
+        self.assertEqual(seg_sorted, seg_dup, "duplicate pins produced extra segments")
+        self.assertEqual(j_sorted, j_dup)
+        # CONTROL: the probe CAN see an ordering difference -- a genuinely
+        # different endpoint set must not compare equal to the sorted baseline.
+        seg_other, _ = self._bus([(100.0, 100.0), (110.0, 100.0), (130.0, 100.0)])
+        self.assertNotEqual(seg_sorted, seg_other,
+                            "equality probe has no discriminating power")
+
+    def test_segments_are_exactly_the_expanded_orthogonal_route_hops(self):
+        """Docstring: each consecutive pair is routed by `_orthogonal_route` and
+        its polyline expanded into consecutive (start, end) pairs.
+
+        This is the mutation-proof clause: ANY router other than a daisy-chain
+        over `_orthogonal_route` (a channel router included) fails here.
+        """
+        from bodesign_eda_bridge.kicad_emit import _orthogonal_route
+        for pins in (self.ROW, self.ELL):
+            pts = sorted(set(pins))
+            expected = []
+            for a, b in zip(pts, pts[1:]):
+                wp = _orthogonal_route(a, b, None)
+                expected.extend(zip(wp, wp[1:]))
+            got, _ = self._bus(pins)
+            self.assertEqual([tuple(p) for p in expected], got,
+                             f"chain geometry diverged from per-hop "
+                             f"_orthogonal_route for {pins}")
+        # CONTROL: the expectation is not vacuous -- the L-shaped net really does
+        # produce more segments than hops (i.e. hops DO expand).
+        ell_segs, _ = self._bus(self.ELL)
+        self.assertGreater(len(ell_segs), len(self.ELL) - 1,
+                           "no hop expanded into multiple segments; this fixture "
+                           "can no longer discriminate expansion from pass-through")
+
+    def test_chain_is_connected_and_reaches_every_pin(self):
+        """Docstring done-when: the hops span the whole net, endpoints verbatim."""
+        for pins in (self.ROW, self.ELL, self.ROW + [(130.0, 140.0)]):
+            segs, _ = self._bus(pins)
+            nodes = {p for seg in segs for p in seg}
+            for pin in pins:
+                self.assertIn(pin, nodes, f"{pin} never appears in the chain")
+            # walk the segment graph from one pin; every pin must be reachable
+            adj = {}
+            for a, b in segs:
+                adj.setdefault(a, set()).add(b)
+                adj.setdefault(b, set()).add(a)
+            seen, stack = set(), [sorted(pins)[0]]
+            while stack:
+                cur = stack.pop()
+                if cur in seen:
+                    continue
+                seen.add(cur)
+                stack.extend(adj.get(cur, ()))
+            for pin in pins:
+                self.assertIn(pin, seen, f"{pin} is electrically isolated")
+        # CONTROL: the reachability walk can fail -- a deliberately broken graph
+        # must not report full connectivity.
+        broken = [((0.0, 0.0), (1.0, 0.0)), ((5.0, 5.0), (6.0, 5.0))]
+        adj = {}
+        for a, b in broken:
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+        seen, stack = set(), [(0.0, 0.0)]
+        while stack:
+            cur = stack.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+            stack.extend(adj.get(cur, ()))
+        self.assertNotIn((5.0, 5.0), seen, "walk cannot detect a disconnected graph")
+
+    def test_junctions_are_exactly_the_interior_chain_pins(self):
+        """Docstring: junctions = pts[1:-1]; the two chain ends get none."""
+        for pins in (self.ROW, self.ELL, self.ROW + [(130.0, 140.0), (90.0, 90.0)]):
+            pts = sorted(set(pins))
+            _, junctions = self._bus(pins)
+            self.assertEqual(pts[1:-1], junctions, f"junction set wrong for {pins}")
+            self.assertNotIn(pts[0], junctions, "leading chain end got a junction")
+            self.assertNotIn(pts[-1], junctions, "trailing chain end got a junction")
+        # CONTROL: a 4-pin net has TWO interior pins, so the assertion above is
+        # not trivially satisfied by an always-empty junction list.
+        _, four = self._bus([(100.0, 100.0), (110.0, 100.0),
+                             (120.0, 100.0), (130.0, 100.0)])
+        self.assertEqual(2, len(four), "interior-pin count is not being exercised")
+        # A junction is never emitted at a point the chain does not visit.
+        segs, junctions = self._bus(self.ELL)
+        nodes = {p for seg in segs for p in seg}
+        for j in junctions:
+            self.assertIn(j, nodes, f"junction {j} sits off the chain")
+
+    def test_every_segment_is_axis_aligned(self):
+        """Docstring NOT-allowed: a diagonal segment."""
+        pins = self.ROW + [(130.0, 140.0), (95.0, 80.0)]
+        segs, _ = self._bus(pins)
+        self.assertTrue(segs, "router produced no segments -- nothing was tested")
+        for (x1, y1), (x2, y2) in segs:
+            self.assertTrue(abs(x1 - x2) < 1e-9 or abs(y1 - y2) < 1e-9,
+                            f"diagonal segment ({x1},{y1})->({x2},{y2})")
+        # CONTROL: the predicate rejects a real diagonal.
+        dx1, dy1, dx2, dy2 = 0.0, 0.0, 10.0, 10.0
+        self.assertFalse(abs(dx1 - dx2) < 1e-9 or abs(dy1 - dy2) < 1e-9,
+                         "axis-alignment predicate accepts a diagonal")
+
+    def test_obstacles_are_passed_through_to_every_hop(self):
+        """Docstring: obstacle avoidance is DELEGATED to `_orthogonal_route`.
+
+        Proved by behaviour, not by inspection: the same endpoints must yield a
+        DIFFERENT chain once an obstacle blocks the unobstructed elbow, and that
+        chain must equal what the per-hop router returns for the same obstacles.
+        """
+        from bodesign_eda_bridge.kicad_emit import _orthogonal_route
+        # Box straddling the H-first elbow corner (110, 100) of the first hop.
+        obst = [(104.0, 116.0, 96.0, 104.0)]
+        clear_segs, _ = self._bus(self.ELL)
+        blocked_segs, _ = self._bus(self.ELL, obst)
+        self.assertNotEqual(clear_segs, blocked_segs,
+                            "obstacles changed nothing -- they are not reaching "
+                            "the per-hop router")
+        pts = sorted(set(self.ELL))
+        expected = []
+        for a, b in zip(pts, pts[1:]):
+            wp = _orthogonal_route(a, b, obst)
+            expected.extend(zip(wp, wp[1:]))
+        self.assertEqual([tuple(p) for p in expected], blocked_segs,
+                         "detoured chain is not the per-hop router's output")
+        # CONTROL: an obstacle far from every candidate leg must leave the
+        # geometry untouched, so the difference above is caused by the OBSTACLE
+        # and not merely by passing a non-empty list.
+        far = [(900.0, 910.0, 900.0, 910.0)]
+        self.assertEqual(clear_segs, self._bus(self.ELL, far)[0],
+                         "an irrelevant obstacle moved the route")
+
+    def test_boxed_in_hop_returns_a_non_clearing_route_not_an_error(self):
+        """Docstring NOT-guaranteed: a hop is not guaranteed to clear every body.
+
+        When `_orthogonal_route` is fully boxed in it falls back to the legacy
+        H-first elbow, which may cross an obstacle. This test pins the honest
+        contract: the chain is still produced (endpoint-correct), and it is NOT
+        clear -- so nobody may read the docstring as a clearance guarantee.
+        """
+        from bodesign_eda_bridge.kicad_emit import _waypoints_clear
+        boxed = [(0.0, 1000.0, 0.0, 1000.0)]      # swallows the whole sheet
+        segs, junctions = self._bus(self.ELL, boxed)
+        self.assertTrue(segs, "boxed-in net produced no wires at all")
+        self.assertEqual(sorted(set(self.ELL))[1:-1], junctions)
+        intruding = [s for s in segs if not _waypoints_clear(list(s), boxed)]
+        self.assertTrue(intruding,
+                        "no segment intrudes the all-covering obstacle; the "
+                        "fallback claim in the docstring is no longer true")
+        # CONTROL: the same probe reports CLEAR for the same net with a far-away
+        # obstacle, so "intruding" above is a measurement and not a constant.
+        far = [(900.0, 910.0, 900.0, 910.0)]
+        far_segs, _ = self._bus(self.ELL, far)
+        self.assertEqual([], [s for s in far_segs
+                              if not _waypoints_clear(list(s), far)],
+                         "clearance probe reports intrusion for a clear route")
