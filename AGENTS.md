@@ -60,12 +60,23 @@ bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端�
   `design-ir`、`gerber-core`、`eda-bridge`（KiCad adapter 邊界）、`doc-core`、`source-core`、
   `storage-core`、`component-kb`、`kicad-plugin`、`shared`。
 - `services/mcp/server.py`：MCP 工具註冊（handler `_h_*` + schema list）。新增工具 = handler + schema 兩處。
-- **跑測試的 PYTHONPATH**：要含**所有** package 子目錄，不是只有一個。慣用：
+- **跑測試（2026-09-01 起有 bootstrap，不再需要口耳相傳的 PYTHONPATH）**：
   ```
-  PP=$(ls -d packages/*/ | tr '\n' ':') && PYTHONPATH="$PP" python3 -m unittest tests.<module> -v
+  ./scripts/run_tests.sh                    # 全套（142 模組）
+  ./scripts/run_tests.sh test_layout        # 單一模組（`tests.` 前綴可省）
+  ./scripts/run_tests.sh --self-test        # 這支腳本自己的控制組
+  python3 -m unittest tests.test_layout     # 直接跑也可以，bootstrap 已生效
   ```
-  （`python` 不存在，一律 `python3`。）`bodesign_workflow_core/__init__` 會 import `bodesign_reverse_core`，
-  PYTHONPATH 不全會 `ModuleNotFoundError`。
+  （`python` 不存在，一律 `python3`。）機制在 `tests/__init__.py`：它把 `packages/*/`
+  同時放進 `sys.path`（本進程）**與** `PYTHONPATH`（子進程——有測試會 spawn fresh
+  interpreter 做隔離斷言，只設 `sys.path` 會讓它們紅）。`packages/` 不存在或為空時
+  它 `RuntimeError` 明講，不靜默注入零筆。
+- **讀測試輸出：判別欄位是 `Ran N tests` 的 N，不是 rc。** `Ran 1 test / FAILED (errors=1) / rc=1`
+  是**模組沒載入**的外觀，與「該模組不存在」逐字相同，且與「真的回歸了」共用 rc=1。
+  先看 N 再下結論。（BR_20260831a，family `G13-harness-disclosure`；bootstrap 消滅的正是
+  這三態共用同一個輸出的第一態。）
+- 舊配方 `PP=$(ls -d packages/*/ | tr '\n' ':') && PYTHONPATH="$PP" python3 -m unittest …`
+  仍可用，但不再必要——留著只為讀懂 2026-09-01 之前的 BR 與 log。
 - 文件工具（PDF/docx）走 **approved pipeline**：`bodesign_emit_doc`（markdown→docx+pdf，
   reverse-core `emit_document` / LibreOffice）或 `bodesign_mcp_call` 驅動 docxmcp。**不手工拼 PDF/OOXML bytes**。
 
@@ -79,6 +90,20 @@ bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端�
   重大決策 / RCA / 部署隨手 append。
 - **架構同步**：動到模組邊界／資料流／狀態機／觀測點 → 收尾前比對並同步 `specs/architecture.md`
   （全貌同步，非流水帳）；即使無變更也在 event 註記 `Architecture Sync: Verified (No doc changes)`。
+- **知識蒸餾（收尾硬閘，使用者裁示 2026-08-05）**：任務中若沉澱了**跨 repo 可重用**的教訓
+  （判準失效模式、揭露缺口、debug 方法論、工具陷阱——**不是** repo-local 的 bug 細節），
+  收尾前必須用 specbase runtime verb 蒸進全域 KB 並 promote 到 user tier，形狀對齊架構同步：
+  **一個收尾前的強制蒸餾動作 + 一條 event 註記證明做過**。
+  - **落點**：全域 KB 由 specbase 管（ragbase user tier）；`ragbase_*` verb 走 specbase runner
+    （`bun <specbase-abs>/skills/plan-builder/scripts/{producer,gate,lifecycle}.ts <verb> --repo <abs>`）。
+    **bodesign agent 有權用 specbase 工具處理知識**——這是知識管理，不是改別人的 repo。
+  - **建檔 ≠ 蒸餾**：`issues/` 的 BR 給人修（repo-local），全域 KB 的 concept 給人查（跨 repo）。
+    **禁止整份複製 BR 進 KB**（死鏡像比沒有更糟——本 fleet 有 149 個 `type=issue` 死鏡像前例）；
+    蒸餾是**提煉可重用判準**成 concept object，不是搬運。
+  - **event 註記**：即使本輪無可蒸的跨 repo 教訓，也在收尾 event 註記
+    `KB Distill: Verified (no cross-repo lesson this round)` + 依據，未做不得宣告完成。
+  - **判準（可機械套用）**：問「這條教訓換一個 repo、換一個題目還成立嗎？」成立 ⇒ 蒸；
+    只在本 repo 本題成立（某個檔的某個 bug）⇒ 留 BR，不蒸。
 - **Tasks 即時勾選**：`tasks.md` 每完成一項立刻 `[ ]→[x]`，不批次補。
 - **Issues local-first**：bug report / feature request 預設記在本地 `issues/`
   （`issue_<YYYYMMDD>_<slug>.md`，關閉移 `issues/closed/`）。除非使用者明確要求，不開 GitHub issue。

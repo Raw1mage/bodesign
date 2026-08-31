@@ -1,6 +1,6 @@
 # BR_20260831a — 這個 repo 沒有 test bootstrap：測試綠燈依賴一條口耳相傳的 `PYTHONPATH`，而漏掉它的紅燈與「真的回歸了」共用同一個輸出
 
-- **Status**: OPEN — 已實測定位並附雙控制組；修法未落地（本張只建檔，不做實作）
+- **Status**: FIXED — 2026-09-01 落地選項 3+4+5（`tests/__init__.py` 機制層 + `scripts/run_tests.sh` 顯式入口 + `AGENTS.md §5` 文件）；三格對照 + 反向控制組 + 零回歸集合比對均已量測，見 §修復紀錄。**已於 2026-09-01 經 dispatcher 授權後 commit（sha 由 dispatcher 於歸檔時補）。**
 - **Owner**: unassigned（filed by BRNS handler `ses_02fb3c62cffewvdN14bK1KHXbc`，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
 - **Family**: `G13-harness-disclosure`
 - **Severity**: high — 它讓「模組根本沒載入」偽裝成「測試失敗」，而下一個 cold-context 的人會據此推論「先前的修復失效」
@@ -192,3 +192,118 @@ rc=1
 - **未量 pytest。** 三個 variant 全部走 `python3 -m unittest`；`pytest` 是否有不同行為未測。
 - **時間錨**：以上全部為 2026-08-31 的快照。工作樹當時有大量 peer 未提交修改
   （見 `AGENTS.md §6.1`），故 B 的「綠」是**該時刻該工作樹**的綠，不等同於某個 commit 的綠。
+
+---
+
+## 修復紀錄（2026-09-01，BRNS handler `ses_fa68c949effejyOcL1nYr1OwHx`，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）
+
+**裁決**：選項 **3 + 4 + 5**（機制 + 顯式入口 + 文件）。選項 1（root `conftest.py`）排除，
+因為 conftest 是 pytest 專屬而本 repo 全部測試走 `python3 -m unittest`；選項 2 需新增
+`pyproject.toml`，會動到 Docker build 認知。
+
+### 落地的三個檔
+
+| 檔 | 角色 | 要點 |
+| --- | --- | --- |
+| `tests/__init__.py`（新） | **機制層** | `Path(__file__).resolve().parent.parent` 推 repo root（不寫死絕對路徑），把 `packages/*/` 每個目錄放進 `sys.path` **與** `os.environ["PYTHONPATH"]`。`packages/` 不存在或為空時 `RuntimeError` 明講。匯出 `BOOTSTRAPPED_PATHS`（可被斷言），並以 `BODESIGN_TEST_BOOTSTRAP=0` 提供停用開關供反向控制組使用 |
+| `scripts/run_tests.sh`（新） | **顯式入口** | 先清 `__pycache__`；顯式列舉模組（不用 `discover`）；`--self-test` / `--list` / `--help`；`tests.` 前綴可省 |
+| `AGENTS.md §5` | **文件** | 舊 PYTHONPATH 配方改為指向新入口，並新增一條「判別欄位是 `Ran N tests` 的 N，不是 rc」 |
+
+### 為什麼 `sys.path` 一個人不夠 —— 本輪實測發現的第二格
+
+第一版只設 `sys.path`。全套件跑完，**恰好一個測試 green→red**：
+
+```
+FAIL: test_no_pcbnew_import (tests.test_copper_geometry.NoPcbnewTests.test_no_pcbnew_import)
+AssertionError: 1 != 0 : copper_geometry pulled pcbnew: ...
+ModuleNotFoundError: No module named 'bodesign_gerber_core'
+```
+
+`tests/test_copper_geometry.py:143` 用 `subprocess.run([sys.executable, "-c", ...])` 在
+**全新 interpreter** 裡斷言 `copper_geometry` 不會 transitively import `pcbnew`（因為父進程的
+`sys.modules` 被 sibling 測試污染）。**子進程繼承的是「環境」，不是父進程的 `sys.path`。**
+舊配方靠 `PYTHONPATH` env var 的繼承讓它們**碰巧**能跑。
+
+這正是本 BR 講的同一種病，只是換一格：那個失敗訊息把「子進程 env 缺口」報成
+「被測不變量被違反」（`copper_geometry pulled pcbnew`），**成因與症狀共用同一個輸出**。
+修法是 bootstrap 同時修 `sys.path`（本進程）與 `PYTHONPATH`（子進程）。
+
+### 量測
+
+**三格對照 + 負控制組**（每格先清 `__pycache__`，跑 `tests.test_fidelity_gate`）：
+
+| variant | N (`Ran N tests`) | rc | 判讀 |
+| --- | --- | --- | --- |
+| (a) 帶 `PYTHONPATH`，bootstrap 在 | **5** | 0 | 現狀作法仍可用 |
+| (b) **`env -u PYTHONPATH`**，bootstrap **啟用** | **5** | 0 | ← **本包的答案**：無任何 env 設定即可跑 |
+| (c) `env -u PYTHONPATH` + `BODESIGN_TEST_BOOTSTRAP=0` | **1** | 1 | ← **反向控制組**：`ModuleNotFoundError` 復現 |
+| neg. 不存在的模組，bootstrap 啟用 | **1** | 1 | runner 對真不存在仍非零 |
+
+**(c) 證明 bootstrap 真的在承重**：若不是它在提供 path，(c) 也會是 N=5。
+(c) 用**環境變數開關**停用，不是 mutate-on-disk —— 後者在同秒等長編輯下會讓 stale `.pyc`
+存活、mutant 根本沒被套用而測試仍綠（`AGENTS.md §6.3`），得到的是**反向結論**而非少一格證據。
+
+**零回歸（集合比對，非計數比對）**：
+
+```
+baseline: PYTHONPATH="$PP" python3 -m unittest <142 模組>
+          → Ran 1871 tests, failures=11 errors=40 skipped=51 → 51 筆 RED
+after:    env -u PYTHONPATH ./scripts/run_tests.sh
+          → Ran 1871 tests, failures=11 errors=40 skipped=51 → 51 筆 RED
+
+comm -13 baseline.red after.red  → 0 筆（green→red 為零）
+comm -23 baseline.red after.red  → 0 筆（red→green 為零）
+cmp -s   baseline.red after.red  → rc=0（逐字節同一集合，不只是「兩個 51」）
+CONTROL: cmp baseline.red <刪掉首行的副本> → rc=1（cmp 有判別力）
+```
+
+**`scripts/run_tests.sh --self-test`：9 格控制組全綠**，每格都配對了會紅的那一半——
+bootstrap 生效 ↔ 停用即 `ModuleNotFoundError`；腳本對失敗模組非零 ↔ 對通過模組為零；
+`BOOTSTRAPPED_PATHS` 非空 ↔ 停用時為空；`list_modules()` 有輸出 ↔ 空 `tests/` 時走 FATAL 分支。
+
+### 沒量什麼
+
+- **未量容器內**（`mcpctl.sh` 起的 container）。`tests/__init__.py` 是 repo 相對計算，理應等效，但未進容器驗證。
+- **未量 pytest**。全部量測走 `python3 -m unittest`。機制上 `tests/__init__.py` 對 pytest 同樣生效（import `tests.<mod>` 時執行），但未實跑。
+- **未量 CI**。仍不確定本 repo 是否有 CI 跑測試。
+- **未動任何生產碼**。`packages/**/*.py` 零變更，`tests/test_*.py` 零變更（只新增 `__init__.py`）。
+- **時間錨**：2026-09-01，工作樹仍有大量 peer 未提交修改；51 筆 RED 是**該時刻該工作樹**的基線。
+
+### 第二輪（驗收退回後修正的兩件事）
+
+**一、self-test 第 8 格初版是裝飾。** 它宣稱是第 7 格（`list_modules()` 有輸出）的 reverse
+control，實際斷言的是一段**內嵌重寫的 bash**，不是 `list_modules()` 本尊。內嵌副本可以永遠
+正確而真函式壞掉，這格照樣綠——由獨立 VANS 指出。改為把真腳本 `cp` 進 scratch 空 repo
+skeleton（`REPO_ROOT` 由 `BASH_SOURCE` 推導，副本自然錨在 scratch）跑 `--list`。
+
+敏感度以三格突變證明（均在**副本**上突變，不碰 repo 內檔）：
+
+| 副本 | `--list` rc | 意義 |
+| --- | --- | --- |
+| pristine（真函式） | **1** + `FATAL` | 被測條件成立時會紅 |
+| mutant（`list_modules(){ return 0; }`） | **0** | 翻綠 ⇒ 這格對該函式敏感 |
+| 無關函式突變（`normalise_module`） | **1** | 仍紅 ⇒ 不是實作“腳本被動過”的 tamper-detector |
+
+第三格是決定性的：前兩格單獨成立時，“對 `list_modules()` 敏感”與“對任何改動敏感”的數字
+**完全一樣**。另補 `populated` 一格（scratch 內放一個 `test_dummy_control.py` → rc=0 且列出它），
+證明副本在 scratch 中**有能力成功列舉**，所以 pristine 的紅來自“`tests/` 真的空”而非機制故障。
+並新增 8b 格：`rm -rf` 後同時斷言 scratch 不存在 **且** `$XDG_RUNTIME_DIR` 仍在——單看“scratch 沒了”
+分不出“刪對了”與“把父目錄一起端了”。
+
+**二、realpath 被考慮並駁回。** `_bootstrap()` 對 `PYTHONPATH` 的去重是**字串**比對，等價但拼寫不同
+的路徑（相對 vs 絕對、尾斜線差異）不會合併。實害已量為零：textually_unique=22 /
+realpath_unique=11，且 gen0→gen3 巢狀子進程每一代恆為 22（**不累積**），import 解析不受影響。
+
+駁回的理由不只是“成本大於收益”，而是**同構**：realpath 會讓 `PYTHONPATH` 的內容取決於
+檔案系統當下的 symlink 狀態，同一份 repo 在 host 與容器裡會產出不同字串。那把一個純字串操作
+變成有**外部依賴**的操作——而外部依賴正是本 BR 整張在消滅的東西。**用一個新的外部依賴去修
+一個關於外部依賴的 BR，方向是反的。** 此為機制層論證，非量測（symlink 語義差異未實測）。
+註解已改寫為過去式量測事實（`code-thinker` §11）。
+
+### 本輪沒量什麼（追加）
+
+- **cell 8 的 mutant 驗證只做了一個突變點**（`list_modules` 整體替換）。未做逐分支突變——例如
+  “`mods` 非空但 `printf` 壞掉”這種壞法這格抓不到。它證明的是“對該函式的存亡敏感”，
+  不是“對它的每一種壞法敏感”。
+- **未量 symlink 語義差異**（realpath 那格是論證，非量測）。
+- **未量容器內 / pytest / CI**，同上一輪。
