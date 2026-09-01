@@ -1448,7 +1448,28 @@ def _forward_to_worker(url: str, name: str, arguments: dict, group: str = "?") -
 # Path-like arg keys resolved inside a token's doc_dir when a tool call carries
 # a `token` (docxmcp-style; G11b). Without a token they stay host paths (the
 # local same-host UDS mode).
-PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "in_path", "out_path", "output_path", "report_path", "corpus_dir", "schematic_path", "pcb_path", "gerber_dir", "drill_dir", "project_path")
+PATH_ARG_KEYS = ("folder", "out_dir", "path", "md_path", "board_path", "in_path", "out_path", "output_path", "report_path", "corpus_dir", "schematic_path", "pcb_path", "gerber_dir", "drill_dir", "project_path", "stl_path", "glb_path")
+
+
+def _resolve_token_path(doc_dir: Path, raw: str) -> str:
+    """Resolve ONE path arg against a token's doc_dir.
+
+    This is the single reference frame shared with ``preflight._classify_one``.
+    Both layers MUST agree: preflight decides whether a declared asset resolves
+    inside the token namespace, and this decides what the handler is actually
+    handed. When they disagreed, preflight said "resolved" while the handler got
+    a bare relative string it then resolved against the container CWD — the call
+    was neither blocked nor served (BR_20260901 c02_render_enclosure).
+
+    Absolute inputs are returned resolved, NOT grafted under doc_dir: an absolute
+    path is legitimate here only when it already lives inside the token namespace
+    (preflight rejects the rest with PREFLIGHT_HOST_ONLY_ABSOLUTE), and
+    ``lstrip('/')`` on such a path would build a location that exists nowhere.
+    This matches the symbol_dirs convention already used below.
+    """
+    if os.path.isabs(raw):
+        return str(Path(raw).resolve())
+    return str((doc_dir / raw.lstrip("/")).resolve())
 
 # ── Schema steering for the container boundary (client-behavior fix) ──────────
 # Transfer is solved by /files; the residual problem is CLIENT BEHAVIOR — an agent
@@ -1510,6 +1531,51 @@ def _produced(doc_dir: Path, before: dict) -> list[str]:
             if before.get(rel) != (st.st_size, st.st_mtime_ns):
                 out.append(rel)
     return sorted(out)
+
+
+# Handler-declared statuses that are a FAILURE of the requested operation. A
+# handler returning one of these did not do the thing it was asked to do, so the
+# envelope MUST NOT say ok:true (BR_20260901: c02_render_enclosure shipped
+# ok:true wrapped around result.status="error" / note="STL not found", which
+# reads as success to every caller that branches on the envelope).
+#
+# Deliberately NARROW. `no-deps` / `no-gl` / `empty` / `skipped-*` are HONEST
+# DEGRADATION — the tool ran, reached a real boundary, and said so; they keep
+# ok:true and are distinguishable via the `result_status` mirror below. Widening
+# this set would collapse "the toolchain is absent here" into "this call failed",
+# which is the same absent-vs-failed conflation in the other direction.
+_HANDLER_ERROR_STATUSES = frozenset({"error"})
+
+
+def _apply_result_status(envelope: dict) -> dict:
+    """Make the envelope `ok` agree with the handler's own declared status.
+
+    Predicate answered: "did the handler report that the requested operation
+    FAILED?" When it did, ok flips to False and the handler's status/note are
+    lifted to the envelope so a caller that only reads the envelope cannot mistake
+    a failure for a success. The inner `result` is left byte-identical — nothing is
+    swallowed, rewritten, or defaulted.
+
+    `result_status` is mirrored for EVERY dict result (not only failures) so the
+    four render outcomes — rendered / degraded (no-deps, no-gl) / empty / error —
+    stay mutually distinguishable at the envelope without re-reading `result`.
+    """
+    inner = envelope.get("result")
+    if not isinstance(inner, dict):
+        return envelope
+    status = inner.get("status")
+    if not isinstance(status, str):
+        return envelope
+    envelope["result_status"] = status
+    if status in _HANDLER_ERROR_STATUSES:
+        envelope["ok"] = False
+        note = inner.get("note") or inner.get("message") or ""
+        envelope["error"] = "TOOL_REPORTED_ERROR"
+        envelope["message"] = (
+            f"handler reported status={status!r}: {note}" if note
+            else f"handler reported status={status!r}"
+        )
+    return envelope
 
 
 # R17.2.4/.2.5 typed asset preflight + content assertion (pure functions) and
@@ -1713,7 +1779,7 @@ def run_tool(name: str, arguments: dict) -> dict:
                         "preflight": verdict, "remedy": verdict["error"]["remedy"]}
         for key in PATH_ARG_KEYS:
             if isinstance(args.get(key), str):
-                args[key] = str((doc_dir / args[key].lstrip("/")).resolve())
+                args[key] = _resolve_token_path(doc_dir, args[key])
         # symbol_dirs is NOT a plain PATH_ARG_KEYS entry (it may be a str OR a
         # list, and absolute/stdlib entries must be left untouched). A caller
         # staging a custom symbol lib under a token and passing a RELATIVE
@@ -1727,7 +1793,7 @@ def run_tool(name: str, arguments: dict) -> dict:
         if _sd is not None:
             def _resolve_sd(v):
                 if isinstance(v, str) and not os.path.isabs(v):
-                    return str((doc_dir / v.lstrip("/")).resolve())
+                    return _resolve_token_path(doc_dir, v)
                 return v
             if isinstance(_sd, str):
                 args["symbol_dirs"] = _resolve_sd(_sd)
@@ -1736,6 +1802,7 @@ def run_tool(name: str, arguments: dict) -> dict:
         before = _snapshot(doc_dir)
     try:
         result = {"ok": True, "result": _jsonable(spec["handler"](args))}
+        _apply_result_status(result)
     except KbError as error:
         # R16 typed KB errors: content first line IS the code (KB_UNAVAILABLE /
         # KB_BAD_QUERY / KB_OBJECT_NOT_FOUND) — no exception-class prefix.

@@ -28,18 +28,25 @@ REASON_UNRESOLVED = "unresolved"
 REASON_OUT_OF_NAMESPACE = "out_of_namespace"
 REASON_HOST_ONLY_ABSOLUTE = "host_only_absolute"
 REASON_MISSING_MEDIA = "missing_media"
+# A declared INPUT asset that exists but is a directory (or any non-regular file).
+# Kept distinct from `unresolved` on purpose: "you named a folder" and "the file is
+# not there" need DIFFERENT remedies, and collapsing them into one reason is exactly
+# the absent-vs-wrong-kind ambiguity this module exists to prevent (BR_20260901).
+REASON_NOT_A_FILE = "not_a_file"
 
 # Typed preflight error codes.
 CODE_UNRESOLVED = "PREFLIGHT_UNRESOLVED"
 CODE_OUT_OF_NAMESPACE = "PREFLIGHT_OUT_OF_NAMESPACE"
 CODE_HOST_ONLY_ABSOLUTE = "PREFLIGHT_HOST_ONLY_ABSOLUTE"
 CODE_MISSING_MEDIA = "PREFLIGHT_MISSING_MEDIA"
+CODE_NOT_A_FILE = "PREFLIGHT_NOT_A_FILE"
 
 _REASON_TO_CODE = {
     REASON_UNRESOLVED: CODE_UNRESOLVED,
     REASON_OUT_OF_NAMESPACE: CODE_OUT_OF_NAMESPACE,
     REASON_HOST_ONLY_ABSOLUTE: CODE_HOST_ONLY_ABSOLUTE,
     REASON_MISSING_MEDIA: CODE_MISSING_MEDIA,
+    REASON_NOT_A_FILE: CODE_NOT_A_FILE,
 }
 
 # Media extensions whose absence is classified missing_media (not merely unresolved),
@@ -83,6 +90,11 @@ def _classify_one(doc_dir: Path, asset: str, *, in_token: bool) -> Optional[str]
     if not target.exists():
         ext = target.suffix.lower()
         return REASON_MISSING_MEDIA if ext in _MEDIA_EXTS else REASON_UNRESOLVED
+    if not target.is_file():
+        # Exists but is a directory / socket / fifo: a declared input ASSET must be
+        # a readable regular file. Reported as its own reason so the caller is not
+        # told "not found" about something that demonstrably IS there.
+        return REASON_NOT_A_FILE
     return None
 
 
