@@ -1,6 +1,14 @@
 # BR_20260901_c02_render_enclosure_token_relative_path_never_resolved
 
-- **Status**: FIXED-UNCOMMITTED (verified in test layer; awaiting dispatcher authorization)
+- **Status**: CLOSED — fixed, independently verified, committed and effective in-tree.
+- **Fix commit**: `0ada3495774a15c207c0564c6143cf2fa6424c12`
+  (`fix(mcp): resolve token-relative stl_path/glb_path on the same frame as preflight`;
+  4 files changed, 625 insertions(+), 3 deletions(-)).
+  The fix is effective on import — no rebuild, restart or 3R is required for the
+  in-repo test surface. A running **container** still serves the pre-fix bytes
+  until `./mcpctl.sh restart`; that is a deployment step, not an open defect.
+- **Closed**: 2026-09-01 by ses_fa2b0134bffeO73T1So3I6KizD (handler),
+  under archive authorization from ses_04db7a1c5ffelvbxyLP1p6xlRH (duty officer).
 - **Owner**: ses_04db7a1c5ffelvbxyLP1p6xlRH (dispatcher) / handler session
 - **Family**: `G13-harness-disclosure` — success state and failure state sharing one output
 - **Related**:
@@ -158,7 +166,37 @@ tests.test_token_store                Ran  8  FAILED — identical at HEAD (pre-
 `__pycache__` cleared before every run (AGENTS.md §6.3: `-B` does not evict an
 *existing* stale `.pyc`).
 
+### 5.1 Independent verification (VANS) and commit boundary
+
+The evidence above was produced by the implementing session, so on its own it is
+self-attestation. Two things make it load-bearing:
+
+- **VANS** `ses_fa2a1a1edffe9sRNrAA0NwXAXo` — an independent adversarial session,
+  not the implementer — verified the change and returned **PASS**. The duty officer
+  `ses_04db7a1c5ffelvbxyLP1p6xlRH` read that verdict plus the diff before
+  authorizing the commit; authorization was withheld until then.
+- **The duty officer independently re-verified the landed commit**
+  `0ada3495774a15c207c0564c6143cf2fa6424c12` rather than trusting the report:
+  four files matching the authorized list, every numstat row non-`0 0`, the named
+  files clean in the worktree, and `.specbase` / `AGENTS.md` absent from the commit.
+
+Commit boundary, measured with a paired control rather than a bare empty result
+(an empty `git show -- <pathspec>` is equally what a mistyped pathspec returns):
+
+```
+git show --name-only --format='' 0ada349 -- .specbase AGENTS.md   → (empty)
+git show --name-only --format='' 0ada349 -- services/mcp
+  → services/mcp/preflight.py
+    services/mcp/server.py          ← same probe, non-empty on a path that IS there
+```
+
+The control is what licenses reading the first line as "genuinely absent" instead
+of "the probe never looked". Post-commit re-run: `Ran 51 OK (skipped=1)`.
+
 ## 6. Not measured
+
+These remain unmeasured **after** the fix, the VANS PASS and the commit — none of
+those three events converts any of them into a verified claim:
 
 - Not exercised against the live container or the real `tok_4b9f0c2ffab14a8e`
   (out of bounds: user token). The renderer boundary is mocked — trimesh/pyrender
