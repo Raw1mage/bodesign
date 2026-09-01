@@ -1,10 +1,13 @@
 # BR: `c02_render_enclosure` 無法逐件上色 —— `color()` 在 STL 那一步就已丟失
 
-Status: **FIXED-UNCOMMITTED** — 採 C（明講單色限制）。變更已 landed 在工作樹，**尚未 commit**，待 dispatcher 驗收授權。
+Status: **FIXED** — 採 C（明講單色限制）。修正已 commit 並經獨立驗收，本輪歸檔。
+Closed: 2026-09-01 by ses_04db7a1c5ffelvbxyLP1p6xlRH (dispatcher 授權；歸檔由 ses_fa272ebefffeADquqt3bPEqaG3 執行)
+Fix-SHA: `a7a01eb79d287bf0b7dfd44a0544a2b3f066e4fb`
 Filed: 2026-09-01
 Filed-by: ses_038683542ffeGuJMbvxiu9eYXI (thesmart_products 值星官，客人身分)
 Owner: bodesign 值星官 (ses_04db7a1c5ffelvbxyLP1p6xlRH)
 Resolution: C (documented limitation). Analysed + implemented by ses_fa272ebefffeADquqt3bPEqaG3, 2026-09-01.
+Verified-by: VANS `ses_fa26656f3ffeHGp2gmvSVglnSq` (PASS) + dispatcher 獨立複驗 landed bytes；四檔與授權清單一致，numstat `173/0` `14/4` `1/1` `110/0` 皆非 `0 0`，`.specbase/*.sqlite` 未進 commit。
 **Related**: `issues/closed/BR_20260804_c02_export_stl_*` —— 同一條 C02 渲染鏈的下一環；該 BR 修好 export 與 token 路徑解析後，本缺陷才浮出水面（前一個阻塞遮住了它）。同一條執行路徑，非同一根因。
 
 ## 使用者需求（thesmart_products，aiguard C02）
@@ -154,6 +157,7 @@ BR 附記的 `[-40,-40,0]~[40,40,109.62]` 與 repo 內一份同源 scad **完全
 3. **token 內的 scad 與 repo 樣本是否同源**，未驗證（禁止讀 token）。
 4. **`c02_voice_to_design`（`server.py:311-332`）在 B 之下的連動未評估。**
    它 `:322-328` 自行決定 `cmf_color` 並轉呼叫 render；若日後加 part colours，這條路徑也要一併定義。
+   （另見下方「歸檔時未關的邊界」——它也是本 BR 未涵蓋的第二個入口。）
 5. **未判定 B 屬 spec amend 還是 revise** —— 未讀 `specs/c02/voice-to-design/` 全套 artifact。
 6. **未跑全套測試。** 相鄰模組結果見驗證紀錄；`test_mcp_server` 的 5 項失敗
    **經控制組證明為既有失敗**（把 description 換回舊版，失敗集合逐字相同），與本次變更無關。
@@ -170,4 +174,18 @@ BR 附記的 `[-40,-40,0]~[40,40,109.62]` 與 repo 內一份同源 scad **完全
 - **正向控制組**：兩件不同色 → 渲染圖至少含兩個 distinct RGB，且各自涵蓋 >5% 像素。
 - **反向控制組**：兩件給**同一色** → 上述斷言必須**紅**。
   （否則測的是「有渲染出東西」，不是「顏色有差異」。）
+
+## 歸檔時未關的邊界（後續工作包，不阻本 BR 結案）
+
+本 BR 只涵蓋 `bodesign_c02_render_enclosure` 這一個入口。**第二個入口尚未同步：**
+
+- **`bodesign_c02_voice_to_design`（`services/mcp/server.py:1212-1217` 的 description）未寫單色限制。**
+  它的 handler `server.py:311-332` 在 `status == "approved"` 後會轉呼叫 `render_enclosure_model`
+  （`:325-328`），並在 `:322-324` 自行從 `plan.gen_params.cmf_color` 取色。
+  ⇒ 從這條路徑進來的呼叫端 **看不到**本輪新增的單色說明，仍可能抱持 per-part 上色的期待。
+- 本輪不處理系 **dispatcher 明示裁定**（範圍限於 C02 render tool description），
+  非遺漏。列為後續工作包，與 B（per-part identity）可合併也可分開。
+- 若單獨處理，成本極低（一句描述），且
+  `tests/test_c02_render_singlecolour_contract.py` 的 `_REQUIRED_FACTS` / `missing_facts()`
+  可直接重用於第二個工具名，不需新建判準。
 
