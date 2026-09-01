@@ -313,10 +313,20 @@ def render_enclosure_model(stl_path: str | Path, out_dir: str | Path,
     Closes the C02 'voice-to-design' loop: c02_export_stl produces a real STL,
     this turns it into a design-sketch PNG using the same pyrender/EGL backend as
     the board path. STL is already in mm (no glTF metres->mm scaling). trimesh
-    reads STL natively; faces get a neutral enclosure grey since STL carries no
-    colour — unless a CMF ``color`` (hex / named EN+中文 / RGB(A) tuple) is given,
-    in which case every face takes that single colour. An unparseable colour falls
-    back to grey and is noted (never crashes). Degrades to no-deps/no-gl otherwise.
+    reads STL natively.
+
+    SINGLE-COLOUR BY DESIGN — a stated limitation, not a bug. The STL container
+    carries NO colour, so any ``color()`` in Enclosure.scad is DISCARDED at the
+    c02_export_stl step; editing those declarations has no effect here. Every face
+    takes ONE colour for the WHOLE model: a neutral enclosure grey, or the CMF
+    ``color`` (hex / named EN+中文 / RGB(A) tuple) when given. PER-PART COLOURING
+    IS NOT SUPPORTED — ``color`` is a single value, never a per-part colour map;
+    base/lid/head cannot be coloured separately through this function
+    (BR_20260901 c02 render per-part colour: blocked on upstream per-part identity
+    that C02 does not yet emit — the ``force="mesh"`` load below also merges every
+    shell into one mesh, so no part boundary survives to colour against).
+    An unparseable colour falls back to grey and is noted (never crashes).
+    Degrades to no-deps/no-gl otherwise.
     """
     src = Path(stl_path)
     out = Path(out_dir)
