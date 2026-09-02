@@ -1,6 +1,9 @@
 # BR: `c02_voice_to_design` 是第二個 colour 入口，卻沒有揭露單色限制
 
 Status: **FIXED** — description 已補、契約測試已擴充並通過；VANS 獨立複現六格全成立（`ses_f9f944eb7`）+ dispatcher 親驗 landed bytes 後授權 commit。
+**Closed**: 2026-09-02 by ses_fa07b2259ffeD5z7ypgsboPkxj
+Fix-SHA: `26d31c44b82c3f5bd62c419a0313370e1b07354e`
+Verified-by: VANS `ses_f9f944eb7`（六格獨立複現，自跑未引用 handler 數字；另做兩條未成立的推翻路徑——交叉 mutant 證明守衛真的綁在第二入口而非 label 裝飾、AST 抽 HEAD 文字證明負控制語料逐字相符）+ dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH` 親驗 landed bytes（唯一 hunk 在 `@@ -1210,7 +1210,7 @@`，handler function 不在任何 hunk 內）。
 Filed: 2026-09-02
 Filed-by: ses_fa07b2259ffeD5z7ypgsboPkxj（BRNS handler，葉節點實作者）
 Owner: bodesign 值星官 ses_04db7a1c5ffelvbxyLP1p6xlRH
