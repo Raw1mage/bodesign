@@ -1,6 +1,6 @@
 # BR_20260804l — `issues/` 帳本沒有 Status schema：兩支合理的 sweep 對同一批檔案回不同答案，而「沒有 Status」與「Status 在我的視窗外」共用同一個輸出
 
-- **Status**: PARTIAL — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；格式收斂殘留**已於 2026-08-05 12:21 CST 完成（WARN 24 → 0；基底 commit `cf0f62f`，改動停在工作樹未 commit）**，歸檔與否待 dispatcher 裁決（見 §10）
+- **Status**: PARTIAL — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；格式收斂**已完成並已 commit（`fcd6fcc`，WARN 24 → 0）**；2026-09-02 重量測確認 49/49 全部 canonical、ERROR=0、WARN=0（§11）。**建議升 FIXED，歸檔待 dispatcher 裁決（見 §11.5）**
 
 | Field | Value |
 | --- | --- |
@@ -251,3 +251,138 @@ canonical 形式（裸 `Status:`、缺列表前綴的 `**Status**:`、或深埋 
 
 **尚未裁決**：本 BR 是否由 PARTIAL 升 FIXED、是否移 `closed/`——依權責歸 dispatcher，
 handler 不自行改語意狀態。handler 的理由見回報。
+
+---
+
+## §11 補充量測（2026-09-02，by `ses_f9e79b665ffew786CUnKAKi2jA`，BRNS handler）
+
+**本節不更正 §1–§10 的任何結論。** 起因是 dispatcher 用一支**本 BR 從未使用過的**
+pattern 盤點帳本，得到「42 張沒有 Status」，懷疑本 BR 的歸因（「ledger 沒有 schema」）
+是錯的。重量測結果：**本 BR 的歷史結論在其自身脈絡下完全成立且可逐字複現**，
+而那 42 是**第三支 pattern 的視窗效應**——正是本 BR §3 描述的同一個缺陷，
+第三次發生在本 BR 自己身上（§8 是第一次，§10 的過期快照是第二次）。
+
+### §11.1 三支 pattern 不是同一支（這是全節的關鍵）
+
+| 代號 | pattern | 出處 |
+| --- | --- | --- |
+| **P-BR** | `^[-*# ]*\**Status\**[:：]` | 本 BR §2 自己用的（容忍 list 前綴、ATX、全形冒號） |
+| **P-CANON** | `^- \*\*Status\*\*:` 且在 line 3 | `issues/README.md:13` 定的 canonical schema |
+| **P-STRICT** | `^\**Status\**:` | **dispatcher 2026-09-02 臨時寫的**，本 BR 與 checker 皆未使用 |
+
+P-STRICT **依定義排除 canonical 形式**——`- ` 前綴不在它的字元集裡。實證：
+
+```
+$ printf -- '- **Status**: OPEN — x\n' > canon.txt ; grep -c -E '^\**Status\**:' canon.txt
+0        rc=1     <- canonical 形式對 P-STRICT 是「不存在」
+$ printf -- '**Status**: OPEN — x\n'   > bare.txt   ; grep -c -E '^\**Status\**:' bare.txt
+1        rc=0     <- 只有裸形式才命中
+```
+
+所以「P-STRICT 回 7」讀作「**42 張沒有 Status**」是錯的；正確讀法是
+「**42 張是 canonical，7 張檔內另有一條裸 Status 行**」。**P-STRICT 量到的是
+schema 遵循度的補集，不是缺席。** 它把「合規」渲染成「缺席」——
+與 §3 表格裡那四列同構，只是這次視窗不是行號範圍而是**格式集合**。
+
+### §11.2 對本 BR 當時檔案集（40 張，`5e13dbe^`）的複現
+
+以 `git archive 5e13dbe^ issues/` 取出 2026-08-04 backfill 前的原始 40 張，逐字重跑：
+
+```
+files_extracted=40
+P-BR  header-only(1..10) NONE = 8      <- §2.1 記載 8   ✅ 逐字複現
+P-BR  full-file          NONE = 3      <- §2.1 記載 3   ✅ 逐字複現
+P-STRICT full-file       NONE = 23     <- 第三支 pattern，本 BR 從未主張過這個數
+CONTROL  含 ATX heading 的檔 = 40/40    <- 40 個檔都真的被讀到
+CONTROL  假 pattern '^ZZZNOSUCHTOKEN' = 0/40  <- 探針不是什麼都 match
+```
+
+**§2.1 的 8 與 3 在其原始語料上逐字成立。** 兩個控制組分別排除了
+「其中一支沒讀到檔」與「探針無牙」兩個替代解釋。
+
+### §11.3 對現況檔案集（49 張，HEAD）的量測
+
+```
+total=49
+P-STRICT  命中 = 7
+P-BR/loose 命中 = 49        <- 零張真的沒有 Status
+P-CANON（'- **Status**:' 且在 line 3）= 49/49   <- 100% 遵循 schema
+genuinely_none（loose 掃全檔）= 0
+```
+
+**控制組（這一格 dispatcher 的版本無效，見 §11.6）**：
+
+```
+repo-root README.md  → 0  rc=1   ✅ 有效負控制
+issues/README.md     → 1  rc=0   ❌ 無效——它是 schema 定義文件，第 13 行就是範例
+```
+
+正控制：對本檔跑 loose → 1、rc=0。負控制對 `../README.md` / `../CHANGELOG.md` /
+`../AGENTS.md` 皆 0/rc=1。**探針兩側都有牙。**
+
+### §11.4 那 7 張裸 Status 行是什麼
+
+逐檔查證：**7 張的 line 3 全部是 canonical**，P-STRICT 命中的是檔案**深處**
+另一條裸 Status——即 §10「收斂手法」第二類（4 張結構化 State 區塊鏡射）
+與其他 3 張的 RCA 段落內舊狀態記錄。行號：210 / 25 / 26 / 25 / 28 / 421 / 437。
+
+**這些是刻意保留的**：`fcd6fcc` 的收斂原則是「line 3 新增 canonical，
+區塊原封不動」（§10 明載）。所以 P-STRICT 的 7 不是殘留缺陷，是**設計決定的痕跡**。
+
+### §11.5 checker 現況與 Status 建議
+
+`scripts/check_issue_headers.sh` 於 2026-09-02 實測：
+
+```
+self-test: no-status fixture     -> ERROR （控制組有牙）
+self-test: canonical fixture     -> OK
+self-test: duplicate-id fixtures -> ERROR naming BR_29991231z (rc=1)
+self-test: collision-free dir    -> clean (rc=0)
+scanned 49 file(s) in issues, window=full-file
+status ERROR = 0 · status WARN = 0 · status_check_rc=0
+```
+
+§10 記載的「改動停在工作樹未 commit」**已不成立**：`fcd6fcc`
+（`docs(issues): converge 24 BR Status lines to canonical + correct BR_20260804l stale counts`）
+已把那 24 張連同本 BR 的更正一起提交，涵蓋 25 個 `issues/BR_*.md`。
+
+**handler 的 Status 建議（不自行歸檔）**：**PARTIAL → FIXED**。三面都已收斂——
+寫入側 schema（`issues/README.md`）、讀取側 checker（含永久 fixture 控制組）、
+存量格式（49/49 canonical，已 commit）。**是否移 `issues/closed/` 授權在 dispatcher。**
+
+### §11.6 本節的元教訓：這是同一缺陷的第三次自我復發
+
+§8 記過一次「一張主張需要統一格式的 BR 自己用了第 8 種格式」；
+§10 的更正框記過第二次「記錄快照缺陷的帳本自己留了無時間錨的快照」。
+**這是第三次**，而且踩坑的是 dispatcher 自己：
+
+| 誰 | 動作 | 得到的輸出 | 它其實意謂 |
+| --- | --- | --- | --- |
+| dispatcher | `grep -E '^\**Status\**:'` | 42 張「無」 | 42 張**合規**（canonical 被 pattern 排除） |
+| dispatcher | 控制組打 `README.md` | 宣稱回 0 | 從 `issues/` cwd 打到的是 `issues/README.md`，實回 **1**——**該控制組當下無效** |
+
+第二列尤其值得記：**控制組自己失效了，而它的輸出形狀與有效時完全相同。**
+本 BR §9 早已寫過「一支從未在真實資料上紅過的 checker，與一支壞掉的 checker
+共用同一個輸出」——這次是它在**負控制組**上的實例。`README.md` 這個檔名在
+repo root 與 `issues/` 各有一份，而 `grep` 不會告訴你它讀的是哪一個。
+
+**判準沉澱**：負控制組的選擇必須**先驗證它確實不含目標**，不能靠檔名直覺。
+「這個檔應該沒有 Status」與「這個檔剛好是 Status schema 的定義文件」
+在 `grep` 的輸出上分不出來——**除非你先看它 match 到哪一行**。
+
+### §11.7 §11 量了什麼 / 沒量什麼
+
+**量了**：三支 pattern 的定義差異（含 fixture 反證）、40 張歷史集的 P-BR 雙視窗複現
+（8/3，兩組控制）、49 張現況集的三支 pattern 命中數（正負控制各一）、
+7 張裸 Status 的逐檔行號與 line-3 內容、checker 全量自測、`fcd6fcc` 的 numstat 涵蓋。
+
+**沒量**：
+- `issues/closed/` 的 Status 格式分佈——**與 §6「沒量」欄同一格，仍未量**。
+  checker 的 status 掃描仍只涵蓋頂層（dup-scan 才跨 `closed/`）。
+- `41 → 47 → 49` 的檔數增長逐張成因——只確認了 epoch 邊界計數
+  （`5e13dbe^`=40、`5e13dbe`=41、`d63566d`=41、`fcd6fcc`=47、HEAD=49），
+  未逐張追誰新增。§10 更正框留的「`41 → 47` 差額成因未查」**依然未查**。
+- 那 7 張深處裸 Status 與其 line 3 canonical 值**是否語意一致**——只比對了
+  存在性與行號，未逐字比對狀態詞是否矛盾。**這是一個真實的殘留風險**：
+  §10 自承 `BR_20260730` 的 line 3 是「同語意縮寫」而非逐字複寫。
+- pre-commit hook 是否真的在 commit time 觸發——只跑了 checker 本體，未實測 hook 接線。
