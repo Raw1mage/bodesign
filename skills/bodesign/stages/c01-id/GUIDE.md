@@ -22,6 +22,13 @@ that human approves it, and the handoff doc states this plainly. Treat C01 as *"
 honest substitute for a designer's brief"* — enough to unblock C02–C05, not a pretence of
 finished design. This boundary is non-negotiable; see *Honesty notes* below.
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Stage-ownership boundary — the *electrical* host architecture is C03's, not C01's.** C01 owns the
 *mechanical / user-facing* projection (ID skeleton, CMF, exposed-component faces via the
 `c01_emit_id_visual_package` landing verb, run via `gate.py`). The **host / MCU-centric functional
@@ -313,6 +320,11 @@ conflict as risk*, but only a human can, and that acceptance is recorded back in
   "must be stunning" mandate.
 - **docxmcp** MCP (`docxmcp_pptx_*`) / **pptx** / **docx** / **pdf** — package the handoff as a
   deck or doc for the ID designer / product owner when a human-facing artifact is wanted.
+- **`bodesign_emit_doc`** (`md_path`, `out_dir` → docx+pdf, needs LibreOffice on the worker) —
+  the shortest markdown→document path for the *un-templated* C01 write-ups (CMF notes, UX flow,
+  interface-constraint summary) when no house template or deck layout is required. For the
+  house-style 繁體中文 deliverable or anything with a pptx layout, stay on docxmcp. Either way
+  never hand-edit OOXML (`doctrine.md:201-203`).
 - **foundation-persona** — if the target user/visual tone is thin in C00, generate an
   evidence-calibrated persona to ground the visual-tone decision (mark assumptions).
 - No KiCad/kidoc engine work happens at C01 — those engines (`../../engines/kicad`,

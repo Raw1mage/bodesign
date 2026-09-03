@@ -816,8 +816,40 @@ def _list_envelope():
         {"verb": name, "module": mod, "callable": fn, "required_args": list(req), "summary": summary}
         for name, (mod, fn, req, summary) in sorted(VERBS.items())
     ]
+    # BR_20260903a: the roster used to print `ok:true count:61` regardless of
+    # whether packages/ was resolvable, so "this verb exists" and "this verb can
+    # run here" shared one reassuring output. --list now asks _resolve_src() --
+    # the SAME call the verb path makes in main() -- and reports the answer in
+    # this same envelope. Deliberately NOT a hard failure: the roster stays
+    # complete and rc stays 0, because a cold-context agent needs the names to
+    # plan even on a host where nothing is runnable. The defect was silence, not
+    # availability. No fallback is attempted on failure -- the error object is
+    # the verbatim LandingError from _resolve_src(), same code/message/hint a
+    # caller would get from an actual verb invocation.
+    packages_resolved = False
+    packages_root = None
+    packages_error = None
+    try:
+        packages_root = _resolve_src()
+    except LandingError as error:
+        packages_error = {"code": error.code, "message": error.message}
+        if error.hint:
+            packages_error["hint"] = error.hint
+        packages_error["impact"] = (
+            "every verb listed below will fail with %s in this environment; the "
+            "roster is accurate but nothing in it is runnable until packages/ resolves"
+            % error.code
+        )
+    else:
+        packages_resolved = True
     return {"ok": True, "verb": "--list",
-            "result": {"count": len(verbs), "verbs": verbs,
+            "result": {"count": len(verbs),
+                       # BR_20260903a disclosure: read this BEFORE planning work
+                       # off `count`. False means the roster is unrunnable here.
+                       "packages_resolved": packages_resolved,
+                       "packages_root": packages_root,
+                       "packages_error": packages_error,
+                       "verbs": verbs,
                        # BR_20260730 round 7: `--repo` is enforced for EVERY verb
                        # (_build_args, unconditionally, before per-verb checks),
                        # but it never appears in any `required_args` -- so a caller

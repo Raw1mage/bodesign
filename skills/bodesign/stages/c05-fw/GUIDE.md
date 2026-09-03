@@ -42,6 +42,13 @@ that is honest, but every required file must still be present.
 | 5 | Pin-map bridge | `Pin_Map_Bridge.json` (**derived from C03's pin map — zero invented pins**) |
 | 6 | Build notes | `Firmware_Build_Notes.md` (→ stage root) |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Self-verify:** run the landing verb `c05_readiness` (`gate.py c05_readiness --repo <abs-project>`
 — NOT an MCP tool); validate `Pin_Map_Bridge.json` parses; every
 signal must trace to a C03 pinmap row. Model: `thesmart_products/rockbox/c05-fw/`.
@@ -264,5 +271,10 @@ Cross-links upstream: `../c00-prd/GUIDE.md` (PRD §7), `../c01-id/GUIDE.md` (UX 
   `miatdiagram` helps decompose requirements/repos into the JSON those renderers consume.
 - **docx / pptx / pdf / xlsx + the `docxmcp` MCP** — only if the spec must be delivered as a formatted
   document/deck for a review. Author the markdown first (source of truth), then render.
+- **`bodesign_emit_doc`** (`md_path`, `out_dir` → docx+pdf, needs LibreOffice on the worker) —
+  the shortest markdown→document path for that render when no house template or deck layout is
+  needed (`Firmware_Architecture.md`, `Task_Breakdown.md`, `Firmware_Build_Notes.md`). Use docxmcp
+  when house style / a deck / embedded figures matter. Both are doctrine-approved
+  (`doctrine.md:201-203`); a caller-side `zip`/`python-docx` script is not.
 - **No KiCad engine here** — C05 consumes C03's *exported* pinmap, it does not re-run schematic/PCB
   analysis. If the pinmap looks wrong, fix it in C03, not by editing the bridge.

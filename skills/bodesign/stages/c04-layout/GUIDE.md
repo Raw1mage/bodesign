@@ -59,6 +59,13 @@ the board is frozen, which is honest, not missing.
 | 6 | Per-layer copper PNGs + fab view | `copper_layers/`, `renders/` | `02_build/` |
 | 7 | Length-match + SI reports | `<board>.lengthmatch.json`, `<board>.si.json` | stage root (high-speed only) |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Placement-first contract (row 0):** placement is a **first-stage deliverable**, not an
 internal step. After net2pcb (or any placement pass), emit the review package with
 `gate.py c04_placement_review` (`board_pcb`, `out_dir`, `board_name`), show it to the owner,
@@ -437,3 +444,8 @@ These remain `pending` against the C04-freeze gate until the gate (`layout_drc_g
   design-review/manufacturing package.
 - **`docx` / `pdf` / `xlsx` / `pptx` + `docxmcp` MCP** — for the stackup drawing, fab notes, and
   assembly-drawing document artifacts.
+- **`bodesign_emit_doc`** (`md_path`, `out_dir` → docx+pdf, needs LibreOffice on the worker) —
+  the shortest markdown→document path when a C04 write-up (stackup notes, fab notes, the
+  placement-review narrative) only needs to become a shareable docx/pdf with no house template.
+  Use docxmcp when the house style or embedded layer figures matter. Both are doctrine-approved
+  (`doctrine.md:201-203`); a caller-side `zip`/`python-docx` script is not.

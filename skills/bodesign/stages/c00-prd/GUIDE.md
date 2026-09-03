@@ -53,6 +53,13 @@ status with a reason + owner — silent absence is not allowed.
 | 7 | Capability/gap table | `C00-PRD/03_output/Capability_Gap_Table.md` | baseline capability vs net-new, with provenance + downstream owner |
 | 8 | Rich-media adjudication ledger | `C00-PRD/01_refs/Adjudication_Ledger.md` | every concept image explicitly adjudicated (§0c); unadjudicated media must not be consumed downstream |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Self-verify:** run the landing verb `c00_readiness` (`python3 <skill>/scripts/gate.py
 c00_readiness --repo <abs-project>` — NOT an MCP tool; see SKILL.md § "Landing / compute routing
 contract") and report which fields/sections are still
@@ -279,6 +286,13 @@ do not replace it):
 
 - For a `.docx` deliverable, go through the **docxmcp** MCP (Mode A: decompose a template → edit package
   markdown → assemble; or author fresh). Never hand-edit OOXML.
+- **Which render path (BR_20260903b).** The house-style 繁體中文 PRD deliverable goes through
+  `c00_emit_prd_docx` → **docxmcp assemble** — that path carries the cover, revision-history table,
+  `numPr` 壹/一/（一） numbering and the stored Word architecture. **`bodesign_emit_doc`
+  (`md_path`, `out_dir` → docx+pdf, LibreOffice) is a *different* path**: a plain markdown render
+  with no house template. Use it for the un-templated companions (e.g. a shareable
+  `C00_Handoff_Report.pdf`), **not** for the PRD deliverable itself. Both are doctrine-approved
+  (`doctrine.md:201-203`); the caller-side `zip`/`python-docx` script is not.
 - Write `C00_Handoff_Report.md`: readiness %, blocked/ready, the next blocking question, human_approved
   flag, field counts, document gates, downstream handoff gates. This is the one-glance status the rest of
   the program reads.

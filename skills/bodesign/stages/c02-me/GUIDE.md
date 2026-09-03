@@ -57,6 +57,13 @@ gap.)
 | 7 | Vendor handoff | `Vendor_Handoff.md` | |
 | 8 | SketchUp import guide | `SketchUp_Import_Guide.md` | |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Self-verify:** run the landing verb `c02_readiness` (`gate.py c02_readiness --repo <abs-project>
 [--arg constraints=…]` — NOT an MCP tool) and pass the step-8 self-check;
 the STEP/STL status in the package must match what actually ran. Model:
@@ -341,6 +348,12 @@ Apply `../../references/honesty-model.md` here as follows:
 - **docxmcp** MCP (`docxmcp_pptx_*` / `docxmcp_document`) / **docx** / **pdf** / **xlsx** — produce
   the vendor handoff doc, an RFQ, or a tolerance/opening table. Do everything *through* the tools;
   never hand-edit OOXML.
+- **`bodesign_emit_doc`** (`md_path`, `out_dir` → docx+pdf, needs LibreOffice on the worker) —
+  the shortest markdown→document path when the C02 handoff (`Vendor_Handoff.md`,
+  `STEP_Draft_Handoff.md`, `Print_Settings.md`) just needs to become a shareable docx/pdf with no
+  house template. Use docxmcp instead when the house style, a table layout, or embedded figures
+  matter. Both are doctrine-approved (`doctrine.md:201-203`); a caller-side `zip`/`python-docx`
+  script is not.
 - **Optional product render (CAD → marketing image)** — to turn `Enclosure.scad`/`.stl` into a
   polished "boss/marketing" image (the *viewable* artifact the C02 plan wants), a CAD→AI-render
   pipeline (e.g. CadQuery/OpenSCAD → ComfyUI, after `edhahn/agent-skills` product-illustrator) is an

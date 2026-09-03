@@ -46,6 +46,13 @@ missing.
 | 3 | Manufacturing BOM / CPL | `mfg_bom.csv` + CPL | stage root (only after C04 fab export) |
 | 4 | Cost / qty / cert targets + DFM checklist | within `Manufacturing_Transfer.md`, cited to C00 | stage root |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Self-verify:** confirm the C04 freeze via `fab_release_gate.py` (there is no `c07_readiness` verb)
 and the `package_readiness` landing verb (`gate.py package_readiness --repo <abs-project>` — NOT an
 MCP tool) for the roll-up; every fab item must list its owning gate + honest
@@ -269,3 +276,4 @@ C07 is the last bodesign stage; its handoff is **out of the lifecycle**:
 | `bom` (+ `digikey`/`mouser`/`lcsc`/`element14`) | Produce + cost the manufacturing BOM once C04 has placed parts; reconcile against the C00 cost target. |
 | `jlcpcb` / `pcbway` | Fab/assembly handoff format: basic vs extended parts, CPL/centroid, house DFM rules, ordering workflow. |
 | `docx` / `pptx` / `pdf` / `xlsx` + `docxmcp` MCP | Package the transfer record into shareable document artifacts when a reviewer needs them. |
+| `bodesign_emit_doc` (`md_path`, `out_dir`) | Shortest markdown→docx+pdf render (LibreOffice on the worker) for `Manufacturing_Transfer.md` / the DFM checklist when no house template is needed — SKILL.md lists it in C07's verb set. Use `kidoc` for the manufacturing-package PDF and docxmcp when house style or embedded figures matter. Never a caller-side `zip`/`python-docx` script (`doctrine.md:201-203`). |

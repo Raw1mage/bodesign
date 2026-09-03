@@ -46,6 +46,13 @@ required file must be present and the statuses must agree across files.
 | 4 | Reference cross-check run | `analysis/<run>/cross_verify.json` (→ `02_build/`) |
 | 5 | EVT bring-up findings | `EVT_Bringup_Findings.md` (when a board was actually brought up) |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Self-verify:** run the landing verb `c06_readiness` (`gate.py c06_readiness --repo <abs-project>`
 — NOT an MCP tool) and the cross-check; the summary's
 pass/warn/fail must match the test plan and checkbox states verbatim (no checklist that is 1/8 done
@@ -342,3 +349,9 @@ remain owned by an external lab or a future EVT/DVT build.
 - **`kidoc`** (`../../engines/kidoc/`) — `kidoc_scaffold.py --type design_review --analyze` →
   `kidoc_generate.py` for the rolled-up verification design-review doc + PDF.
 - **`docx` / `pdf` / `xlsx` + `docxmcp` MCP** — for any document-formatted test plan / review export.
+- **`bodesign_emit_doc`** (`md_path`, `out_dir` → docx+pdf, needs LibreOffice on the worker) —
+  the shortest markdown→document path when the test plan / `Bring_Up_Checklist.md` /
+  `EVT_Bringup_Findings.md` only needs to become a shareable docx/pdf with no house template.
+  Use `kidoc` for the rolled-up design-review PDF, docxmcp when house style or embedded figures
+  matter. All three are doctrine-approved (`doctrine.md:201-203`); a caller-side
+  `zip`/`python-docx` script is not.

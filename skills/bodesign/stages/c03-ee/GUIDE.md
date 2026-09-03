@@ -46,6 +46,13 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 | 9 | PRD-BOM crosscheck report | `prd_bom_crosscheck.report.json` | `gate: PASS` required; report absent = gate **not run** (never presume PASS) — § 3b |
 | 10 | C03 stage-entry gate report | `check_c03.report.json` | `gate: PASS` required — R1 schema / R2 readiness / R3 symbol-source **claim** / R4 SSOT / R5 BOM↔netlist / R6 pin-spec polarity (`bodesign_check_c03`); absent = **not run** — § 3c |
 
+> **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
+> tree. When the skill is projected outside the bodesign checkout (XDG install at
+> `~/.local/share/opencode/skills/bodesign/`, which ships **no** `packages/`), export
+> `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
+> otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
+> the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+
 **Self-verify:** run `analyze_schematic.py` and clear (or explicitly justify) every `high` finding —
 no open DS-001 / SS-001 / PP-001 / RS-002. There is **no `c03_readiness` verb**; the analyzer's gate
 is your self-check, plus the `package_readiness` landing verb (`gate.py package_readiness --repo
