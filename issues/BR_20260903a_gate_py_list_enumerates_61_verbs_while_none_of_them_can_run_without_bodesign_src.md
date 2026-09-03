@@ -1,6 +1,8 @@
 # BR_20260903a — `gate.py --list` 列出 61 個 verb 且 rc=0，而在同一個環境下這 61 個 verb 一個都跑不起來
 
-- **Status**: FIXED-UNDEPLOYED — A+B 兩者已在 repo SSOT 實作並驗證（見 §7）。**發佈副本 `~/.local/share/opencode/skills/bodesign/` 尚未同步**，客人環境仍為舊行為；部署授權在值星官。
+- **Status**: FIXED — A+B 兩者已實作、驗證、commit **且已部署**至發佈副本（見 §7 與 §8）。
+- **Closed**: 2026-09-03 by `ses_f9b321defffekP04rBeQBFoKdl`（裁決與部署授權：值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`；VANS 獨立驗收：`codex/gpt-5.6-sol`）
+- **Fix-SHA**: `8fbad9a4dc2ab742f24ef2c487b4fc3f65ac3a50`（修法）、`f4500540035560e3b0ae27ca1cdb098aa5fa5642`（BR 記錄）
 
 | Field | Value |
 | --- | --- |
@@ -220,12 +222,79 @@ GUIDE 側（兩種 pattern 寬度 + 正負控制組）：`BODESIGN_SRC` 8/8、`L
 
 `cmp <repo>/gate.py <deployed>/gate.py` → **rc=1**（修改前為 rc=0）。這正是「已修但未部署」的正確狀態。
 
+### 新欄位的語意邊界（VANS `ses_f9b26a377` 自設攻擊 2，本 handler 獨立重現）
+
+這一格的來源是 **VANS 自己設計的攻擊路徑**，非 handler 宣稱、亦非派工單列的四格之一。
+它**沒有**推翻 ACCEPT（有效輸入範圍內行為正確），但劃出了新欄位的語意邊界。
+
+量測（本 handler 用 `$XDG_RUNTIME_DIR` 下的假樹獨立重跑，非引用其數字）：
+
+```
+mkdir -p $XDG_RUNTIME_DIR/br903a-attack2/fake/packages/workflow-core   # 存在但內容空
+
+env BODESIGN_SRC=<fake> gate.py --list
+  → rc=0  count=61  packages_resolved=TRUE  root=<fake>
+
+env BODESIGN_SRC=<fake> gate.py agent_registry --repo <repo>
+  → rc=1  VERB_RUNTIME_ERROR
+     ModuleNotFoundError: No module named 'bodesign_workflow_core'
+
+控制組：同一探針對**真實** repo root → rc=0 ok:true（不重現該不一致）
+```
+
+控制組是決定性的：它排除了「這支探針本來就會報 mismatch」這個競爭解釋。
+
+**所以 `packages_resolved` 的精確語意是：**
+
+- ✅ 它證明 **`packages/workflow-core` 這個目錄可解析**。
+- ❌ 它**不是**執行前健康檢查，**不代表**這 61 個 verb 必然可執行，**不代表**環境健康。
+
+**給未來讀者的判準：`packages_resolved: true` 不得作為「所有 verb 可執行」的依據。**
+要那個保證，得**實際跑一個 verb**。
+
+為何這格必須入檔：本張的主張就是「不要把一個令人安心的輸出讀成比它實際涵蓋更多的東西」。
+新裝的 `packages_resolved: true` 若被下一個 agent 讀成「環境 OK，可以放心派工」，
+**就是同一個缺陷換個欄位重演一次** —— 而且是我們自己親手裝上去的。
+
+**措辭稽核（派工單要求，已查）**：`gate.py` 成功路徑只做 `packages_resolved = True`（`:844`），
+無任何「true = 可以跑了」的措辭；`impact` 字串只在**失敗**分支組成（`:838-842`），措辭正確。
+但原 `:847-848` 的欄位註解只寫了 false 的含義、**未限縮 true 的含義** —— 已補寫（commit B2），
+逐字寫明 true 只證明目錄可解析、並指向本節的攻擊 2。
+
 ### 這一輪沒量什麼
 
 - **未部署**。發佈副本未動（派工單明令部署授權在值星官），故客人環境行為不變。
+  （↑ 上述為 §7 撰寫當下的狀態；後續已經值星官裁決部署，見 §8。保留原文以免改寫當時的量測情境。）
 - 未實測其餘 59 個 verb 在新 `--list` 下的行為（`--list` 不 dispatch verb，路徑不經過它們）。
 - 未量測容器內 MCP tool 路徑（§6 已記，本輪未改變該結論）。
 - 未跑 `./scripts/run_tests.sh`——`skills/` 不在 `tests/` 覆蓋範圍，且本次改動無對應既有測試模組；未新增測試檔。
+
+## 8. 部署與結案（2026-09-03）
+
+值星官裁決部署（理由：客人撞的就是發佈副本，不部署等於修了沒人受益；本次變更為純增量揭露 + markdown，無行為破壞面）。
+同步範圍嚴格限於本次變更的 **9 個檔**（逐檔 `cp`，**未整棵 rsync** —— repo 內有 42+ 筆他 session 未提交實驗檔）。
+
+### 部署後驗證
+
+| # | 問題 | 結果 |
+| --- | --- | --- |
+| D1 | 兩份 bytes 現在一致嗎？ | `cmp` **rc=0** |
+| **D2（決定性）** | 發佈副本真的有新行為嗎？ | `env BODESIGN_SRC=/home/pkcs12 python3 <deployed> --list` → rc=0 count=61 **`packages_resolved=false`** `LANDING_PACKAGES_NOT_FOUND` |
+| D3 | 兩態判別力存活過部署嗎？ | `env BODESIGN_SRC=<repo> …` → rc=0 count=61 **`packages_resolved=true`** |
+| D4 | 8 份發佈 GUIDE 都帶前置條件了嗎？ | `BODESIGN_SRC` **8/8**、`emit_doc` **8/8** |
+| D4 負控制 | 探針不是什麼都 match？ | `zzq_bogus_token_xyz` 對同一批檔 rc=1、空 ✅ |
+
+**為什麼 D1 單獨不夠（本案最容易共用輸出的一格）**：`cmp rc=0` 現在是好消息，
+而**部署前它也曾經是 rc=0**（兩份原本就逐字相同）。
+「已部署」與「從未修過」共用同一個 `rc=0` —— 這正是本 BR family 的形狀。
+所以 **D2 才是證據**：新 bytes 生效的唯一證明是發佈副本自己跑出了修改前不可能存在的 `packages_resolved` 欄位。
+
+### 本次（部署輪）沒量什麼
+
+- **容器內 MCP tool 路徑未量**（§6 已記）。landing verb 與容器 tool 是兩條路徑，本次只動 landing 側。
+- **未驗證其他 session 實際載入時拿到新版**。我能證的是磁碟上的 bytes 已換、且直接執行發佈副本會跑出新行為；
+  **不能證**已載入舊 skill 文本的 session 會不會重讀——那取決於 harness 的 skill 快取策略，不在我可量測範圍。
+- 未 push（未授權）。
 
 **Related**:
 - `issues/BR_20260902_status_checker_reads_line_3_only_so_warn_zero_means_line_3_conforms_not_ledger_consistent.md`

@@ -1,6 +1,8 @@
 # BR_20260903b — `bodesign_emit_doc` 只在 8 份 stage GUIDE 的 1 份出現，於是 7 個 stage 的 caller 在原理上讀不到 doctrine 指定的文件產出路徑
 
-- **Status**: FIXED-UNDEPLOYED — 8 份 GUIDE 已在 repo SSOT 補上（見 §7）。**發佈副本 `~/.local/share/opencode/skills/bodesign/` 尚未同步**，部署授權在值星官。
+- **Status**: FIXED — 8 份 GUIDE 已補上、驗證、commit **且已部署**至發佈副本（見 §7 與 §8）。
+- **Closed**: 2026-09-03 by `ses_f9b321defffekP04rBeQBFoKdl`（裁決與部署授權：值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`；VANS 獨立驗收：`codex/gpt-5.6-sol`）
+- **Fix-SHA**: `8fbad9a4dc2ab742f24ef2c487b4fc3f65ac3a50`（修法）、`f4500540035560e3b0ae27ca1cdb098aa5fa5642`（BR 記錄）
 
 | Field | Value |
 | --- | --- |
@@ -168,6 +170,29 @@ c00 GUIDE 的插入段逐字寫明這個區別（「the PRD deliverable itself�
 - 未驗證「補上之後 caller 真的會讀到」（§6 已記為修法後驗收，仍不在本輪）。
 - 未改 `references/` / `assets/` / `docs/` 的覆蓋率（§6 列為未量，本輪也未量）。
 - 未實際跑一次 `bodesign_emit_doc` 驗證 LibreOffice 可用性——本輪是文件修正，不涵蓋 runtime 可用性。
+
+## 8. 部署與結案（2026-09-03）
+
+與 BR_20260903a 同一批部署（同 9 個檔，逐檔 `cp`，未整棵 rsync）。
+
+### 部署後驗證（本張那一格）
+
+問題：**發佈副本的 8 份 GUIDE 現在都提及 `emit_doc` 了嗎？**
+
+```
+grep -l emit_doc      ~/.local/share/opencode/skills/bodesign/stages/*/GUIDE.md   → 8/8
+grep -l BODESIGN_SRC  同上                                                        → 8/8   （903a-B）
+grep -l zzq_bogus_token_xyz 同一批檔                                              → 空，rc=1  ← 負控制組
+```
+
+部署前發佈副本為 **1/8**（§2 實測），現為 8/8。負控制組證明這 8 個命中不是「grep 什麼都 match」。
+
+### 本次（部署輪）沒量什麼
+
+- **未驗證其他 session 實際載入 skill 時拿到新 GUIDE**。磁碟 bytes 已換可證；已載入舊文本的 session 會不會重讀，取決於 harness 快取策略，不在我可量測範圍。
+- 未實際跑一次 `bodesign_emit_doc` 驗證 LibreOffice 可用性（§7 已記）。
+- §6 列的 `references/` / `assets/` / `docs/` 覆蓋率仍未量。
+- 未 push（未授權）。
 
 **Related**:
 - `issues/BR_20260903a_gate_py_list_enumerates_61_verbs_while_none_of_them_can_run_without_bodesign_src.md`

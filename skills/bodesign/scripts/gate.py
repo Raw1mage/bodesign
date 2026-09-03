@@ -846,6 +846,15 @@ def _list_envelope():
             "result": {"count": len(verbs),
                        # BR_20260903a disclosure: read this BEFORE planning work
                        # off `count`. False means the roster is unrunnable here.
+                       # TRUE PROVES ONLY THAT packages/workflow-core RESOLVED as
+                       # a directory -- it is NOT a pre-flight health check and
+                       # NOT a guarantee that the 61 verbs will run. A tree that
+                       # merely CONTAINS that path but ships no importable module
+                       # yields resolved:true here and VERB_RUNTIME_ERROR /
+                       # ModuleNotFoundError at the first invocation (BR_20260903a
+                       # §7 attack 2). Reading true as "environment OK" repeats
+                       # this BR's own defect on the field that fixed it: the only
+                       # evidence a verb runs is running one.
                        "packages_resolved": packages_resolved,
                        "packages_root": packages_root,
                        "packages_error": packages_error,
