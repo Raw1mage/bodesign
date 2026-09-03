@@ -300,3 +300,52 @@ and the `report-generation.md` evidence-basis vocabulary all remain the single s
 what they define. The inference-leap table's L1 hardware instance (a BT module datasheet stating
 "supports Classic BT" with no concurrency data) is cited by permission of the originating fleet's
 duty officer; L2–L8 are induced from this repo's own documented failures where noted.
+
+## 9. How this file's own citations were checked — and how that check failed first
+
+This file is almost entirely `file:line` citations, so the audit of those citations *is* the audit of
+the file. That audit had two defects during review (2026-09-03). Both are recorded here because the
+next person to extend this file will write the same probe.
+
+**Defect 1 — the probe's corpus was smaller than the probe believed.** Round 1's citation audit
+reported `TOTAL_CITATIONS=53 BAD=0`. The `BAD=0` was true *of the corpus the probe built*. That
+corpus came from a regex matching `` `path.md:NN` ``, which silently excluded the bare continuation
+form `` `:NN` `` used when a citation reuses the preceding path. Actual occurrences: **78**. Five
+citations were never examined, and one of them was wrong — report-generation.md line 51 (a section
+heading) cited where line 49 (the prohibition on the word "verified") was meant. A
+narrowed corpus and a genuinely clean result produce the **same output**: a small number next to
+`BAD=0`, which reads as thoroughness.
+
+**Defect 2 — a positional correction applied as a batch translation.** Inserting the entry pointer
+added 12 lines to `../SKILL.md` above line 156, so citations below that point needed +12. That offset
+was applied to the batch instead of re-resolving each citation against the file. One citation —
+`../SKILL.md:144-154`, the `dod_ok` / `guide_compliance` block — sits *above* the insertion and was
+already correct; it was pushed to lines 156-166, which is the newly inserted pointer paragraph itself.
+The file then cited "go read this file" as its evidence that the existing DoD checks only existence.
+A reader following it lands back where they started, and every step of the path looks valid.
+
+**What to do instead, when auditing citations here:**
+
+- **Report the corpus size beside the result.** `BAD=0` alone has no discriminating power; `78
+  occurrences / 56 unique / BAD=0` does. A count that cannot state what it counted is not a
+  measurement.
+- **Enumerate both citation forms** — full `` `path.md:NN` `` and bare `` `:NN` `` (which inherits the
+  nearest preceding path on the same line). A bare form with no preceding path is a defect, not
+  something to skip.
+- **Give the probe a negative control that must fail** — e.g. honesty-model.md with an absurd line
+  number, plus a non-existent file. If the probe does not flag both, its clean result means nothing.
+  (Written without the `path:line` punctuation on purpose: a live citation here would be a phantom
+  the next audit has to explain away, and a checker that cries wolf gets ignored.)
+- **Read the target text, not only the line range.** Both defects above passed "file exists and the
+  range is in bounds" while pointing at the wrong content.
+- **Never batch-translate line numbers after an edit.** Re-resolve each citation against the file:
+  citations above an insertion point do not move, and one that was already correct is exactly the one
+  a blanket offset will break.
+- **Use `wc -l` / line-count comparison to test range validity, never `sed -n 'NNp'`** — `sed` exits 0
+  on an out-of-range line and prints nothing, so it cannot distinguish "line absent" from "line
+  empty".
+
+The general lesson, stated once: **an audit probe's corpus must itself be audited.** Both defects
+are the absence-versus-failure collision this whole file is written against (§ 4, L7), occurring in
+the instrument rather than in the document under review — which is where it is hardest to notice,
+because a verification tool that under-reports failures still looks like it is working.
