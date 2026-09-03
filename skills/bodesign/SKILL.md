@@ -153,6 +153,18 @@ done — go produce it. Only after it passes do you announce completion or cross
 > the deliverables do not yet meet the GUIDE — fix what `guide_compliance.missing_blocking` / the
 > `fake_complete_fields` list names, or record an honest status; never report done on a fake green.
 
+### Handing over a *document*? Read the content criteria.
+
+The Definition of Done above is an **existence + placeholder** check (`dod_ok` / `guide_compliance`
+below). It cannot tell a generated document that says something from one that says nothing. Before a
+**document deliverable** leaves the building — HDD · CE technical file · ICD · design-review package ·
+manufacturing-transfer package (PRD too) — apply
+**`references/deliverable-content-criteria.md`**: per-document content rows in auditable form, the
+inference-leap patterns that turn a sound source into an unsound claim, and the index of human DECIDE
+nodes an AI may never mark satisfied. It borrows the review machinery (forced-find, finding schema,
+severity, verdict) from `stages/c04-layout/references/layout-review-method.md` — that file reviews *a
+board*, this one reviews *a finished document*.
+
 ## Router — "which stage am I in?"
 
 | If the task is about… | Go to |
