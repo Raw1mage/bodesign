@@ -450,6 +450,10 @@ it asserts engpatch is absent (fail-loud if recreated) and proves
 hand-roll `docker cp`. `bodesign_compose_schematic` returns `engine_rev` in its
 result; if "which copy is live?" is ever in doubt, that stamp answers it.
 
+> That paragraph covers the ENGINE (in-container). This file itself ships by a
+> DIFFERENT path: see AGENTS.md §3.2 — skill 投影走 `opencode skill resync`，
+> 不是 `cp`、不是 `rebuild`。
+
 ### Built-in fidelity + render gates (use them, don't reinvent)
 
 - **`compose_schematic(..., fidelity=True)`** runs a post-emit partition-fidelity

@@ -34,7 +34,14 @@ bodesign = 獨立的 **MCP server**，把 C00–C07 硬體設計（PCB）生命�
    = BLOCKING，不臆測。
 5. **不主動新增 fallback mechanism**，除非使用者明確批准（見全域 AGENTS.md §11）。
 
-## 3. Runtime / 啟動（唯一入口）
+## 3. Runtime / 啟動
+
+**本節涵蓋兩條各自獨立的上線路徑：容器（`mcpctl.sh` / `webctl.sh`）與 skill 投影
+（`opencode skill resync`）。兩者互不觸發** —— `rebuild` 不會更新 published skill，
+`resync` 不會重建容器。改了 `services/` / `packages/` 走前者，改了 `skills/` 走後者，
+兩邊都改就兩邊都要跑。
+
+### 3.1 容器
 
 bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端，per-user project `bodesign-${USER}`）：
 - `./mcpctl.sh start | restart | rebuild | stop | status | log`
@@ -44,6 +51,27 @@ bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端�
   `BODESIGN_WORKERS=1`。**STICKY**：一旦以 workers 模式啟動，`.run/.workers` marker 讓後續 restart/rebuild
   維持 workers 模式（避免 rebuild 悄悄退回 monolith 並 orphan workers）。`BODESIGN_WORKERS=0` 強制退回。
 - 禁止手工 `docker run` / 直接起 server 繞過 `mcpctl.sh`。
+
+### 3.2 skill 投影
+
+`skills/bodesign/`、`skills/bodesign-kb/` 是 repo SSOT，上線路徑是 **capability projection**，
+**不是** `mcpctl.sh rebuild`：
+
+```
+opencode skill status bodesign                    # 唯讀：current | stale | drifted | missing
+opencode skill resync bodesign --accept-source    # drifted 時：repo 為準
+```
+
+> 先跑 status 再跑 resync；status 是唯讀的，沒有理由跳過。
+
+**禁止手動 `cp` 進 `~/.local/share/opencode/skills/`** —— bytes 會生效，但
+`.capability-installed.json` 的 `projectionHash` 不會更新，於是 `skill status` 回報
+`drifted`，後續自動同步停手。（2026-09-03 實測：手寫兩檔進 published 後 marker 六欄
+逐字未變、`projectionHash` 停在六週前的投影值；詳見
+`docs/events/event_20260903_capsync-specimen-consumed.md`。）
+
+⚠ `<target>` 同時匹配 **app id 與 skill name**，且無 `--dry-run`
+⇒ 執行前無法分辨自己會碰幾顆（`bodesign` 會一併處理同 app 的 `bodesign-kb`）。
 
 ## 4. Core vs Worker 邊界
 
