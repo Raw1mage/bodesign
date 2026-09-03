@@ -1,6 +1,6 @@
 # BR_20260903b — `bodesign_emit_doc` 只在 8 份 stage GUIDE 的 1 份出現，於是 7 個 stage 的 caller 在原理上讀不到 doctrine 指定的文件產出路徑
 
-- **Status**: OPEN — 已由 bodesign handler 獨立重驗（5 種 pattern 寬度＋正負控制組），修法未裁示。
+- **Status**: FIXED-UNDEPLOYED — 8 份 GUIDE 已在 repo SSOT 補上（見 §7）。**發佈副本 `~/.local/share/opencode/skills/bodesign/` 尚未同步**，部署授權在值星官。
 
 | Field | Value |
 | --- | --- |
@@ -118,6 +118,56 @@ G13 的判準是「**系統當下握有那格資訊卻不揭露**」——BR_202
 - 未量測 bodesign repo 內 `docs/` 的覆蓋率。
 - 未驗證「補上之後 caller 真的會讀到」——那是修法後的驗收，不在本輪。
 - 未修改任何 GUIDE.md（派工單明令 step 3 不修）。
+
+## 7. 修法記錄（2026-09-03，handler `ses_f9b321defffekP04rBeQBFoKdl`，未 commit）
+
+單一派工包連同 BR_20260903a-B 一併做（同一批 `stages/*/GUIDE.md`，拆兩個工作包會撞檔）。
+
+### 適用性審查（先讀 `doctrine.md:201-203` 與 `references/stage-structure.md`）
+
+`bodesign_emit_doc` 的 schema 是 `{md_path, out_dir, formats}`（`services/mcp/server.py:1181-1183`）——
+「markdown → docx+pdf」的**無範本**渲染路徑，靠 worker 端 LibreOffice。
+而 `stage-structure.md:116-131` 規定的 house-style 交付物（`C0N_*.docx`、繁體中文、壹/一/（一）numPr 編號、內嵌圖表）走的是 **docxmcp assemble**。
+
+結論：**8 個 stage 都有適用面，但不是取代 docxmcp**——每個 stage 都有「純 markdown 寫完、只需變成可分享 docx/pdf」的交付物（c00 Handoff Report、c01 CMF/UX 寫作、c02 Vendor_Handoff、c04 stackup/fab notes、c05 Firmware_Architecture、c06 test plan / Bring_Up_Checklist、c07 Manufacturing_Transfer）。
+因此補的是「**這是另一條路、何時該走它**」，不是「把 docxmcp 換成 emit_doc」。
+
+尤其遵守 §5 的警告：**C00 的 `.docx` 走 `c00_emit_prd_docx` → docxmcp assemble，與 `emit_doc` 是兩條不同路徑**。
+c00 GUIDE 的插入段逐字寫明這個區別（「the PRD deliverable itself」不走 emit_doc），避免製造新的誤導。
+
+### 逐檔插入點
+
+| GUIDE | 插入位置 | 形式 |
+| --- | --- | --- |
+| c00-prd | §"6. Emit optional .docx" 的 docxmcp 項下 | 新一項，明寫兩條路徑的分工 |
+| c01-id | 工具清單 docxmcp 項下 | 新一項 |
+| c02-me | 工具清單 docxmcp 項下 | 新一項 |
+| c03-ee | 已存在（`:414` Render path） | **未動** — 原本就是唯一命中且描述正確 |
+| c04-layout | 工具清單 docxmcp 項下 | 新一項 |
+| c05-fw | 工具清單 docxmcp 項下 | 新一項 |
+| c06-verify | 工具清單 docxmcp 項下 | 新一項 |
+| c07-mfg | 工具表格 | 新一列（該 GUIDE 的工具段是表格不是清單） |
+
+### 驗證（兩種 pattern 寬度 + 正負控制組）
+
+問題：**8 份 GUIDE 是否都提及 `emit_doc`？**
+
+| 探針 | 命中 |
+| --- | --- |
+| `grep -lc 'emit_doc'`（客人原本用的寬度） | **8/8**（修改前 1/8） |
+| `grep -lciE 'emit[_ -]?doc'`（§2 最寬的 P5） | **8/8** — 未多撈到任何東西，收斂 |
+| `grep -lc 'bodesign_emit_doc'`（P4） | **8/8** |
+| 正控制：必然存在的字串 | 8/8 — 探針讀得到全部 8 個檔 |
+| 負控制：`zzq_bogus_token_xyz` | 0/8 — 探針不是什麼都 match |
+
+逐檔 `emit_doc` 計數皆為 1（c03 本來就是 1，其餘 7 份從 0 → 1）。
+
+### 這一輪沒量什麼
+
+- **未部署**。發佈副本 `stages/*/GUIDE.md` 未動，客人從 XDG 副本進場仍讀不到。
+- 未驗證「補上之後 caller 真的會讀到」（§6 已記為修法後驗收，仍不在本輪）。
+- 未改 `references/` / `assets/` / `docs/` 的覆蓋率（§6 列為未量，本輪也未量）。
+- 未實際跑一次 `bodesign_emit_doc` 驗證 LibreOffice 可用性——本輪是文件修正，不涵蓋 runtime 可用性。
 
 **Related**:
 - `issues/BR_20260903a_gate_py_list_enumerates_61_verbs_while_none_of_them_can_run_without_bodesign_src.md`

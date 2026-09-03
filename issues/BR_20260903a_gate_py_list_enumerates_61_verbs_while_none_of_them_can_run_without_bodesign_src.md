@@ -1,6 +1,6 @@
 # BR_20260903a — `gate.py --list` 列出 61 個 verb 且 rc=0，而在同一個環境下這 61 個 verb 一個都跑不起來
 
-- **Status**: OPEN — 已由 bodesign handler 獨立重驗（三格＋四組控制組），修法未裁示。
+- **Status**: FIXED-UNDEPLOYED — A+B 兩者已在 repo SSOT 實作並驗證（見 §7）。**發佈副本 `~/.local/share/opencode/skills/bodesign/` 尚未同步**，客人環境仍為舊行為；部署授權在值星官。
 
 | Field | Value |
 | --- | --- |
@@ -172,6 +172,60 @@ grep -rln 'LANDING_PACKAGES_NOT_FOUND' <skill>    → SKILL.md, scripts/gate.py,
 - 未量測容器內 MCP tool 路徑是否有同類問題（landing verb 與容器 tool 是兩條路徑）。
 - 未量測其餘 59 個 verb（只測 `agent_registry` 與 `package_readiness` 兩個）。tried 清單相同、失敗發生在 verb dispatch 之前，但**逐一實測未做**。
 - 未修改任何檔案（派工單明令 step 3 不修）。
+
+## 7. 修法記錄（2026-09-03，handler `ses_f9b321defffekP04rBeQBFoKdl`，未 commit）
+
+裁決採 **A + B 兩者**（dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）。
+
+### A — `--list` 自我揭露（`skills/bodesign/scripts/gate.py:814`，+33/-1）
+
+`_list_envelope()` 現在呼叫 **同一個** `_resolve_src()`（即 `main():908` 用的那一個），把結果放進同一個 JSON envelope：
+
+```
+result.packages_resolved : bool
+result.packages_root     : str | null
+result.packages_error    : {code, message, hint, impact} | null
+```
+
+三項設計約束，逐條對應派工單：
+
+- **不讓 `--list` 跟著壞掉**：解析失敗時 rc 仍為 0、`ok:true`、`count` 仍為 61，名冊完整。要修的是「它不說」，不是「讓它也壞掉」—— cold-context agent 仍需要名冊來理解有哪些 verb。
+- **零新 fallback**：失敗時不猜任何路徑。`packages_error` 是 `_resolve_src()` 拋出的 `LandingError` 逐字轉錄（同一個 `code` / `message` / `hint`），措辭沿用既有 hint，未發明第二種說法。
+- **`impact` 欄**把「名冊準確」與「名冊可執行」明確拆開，避免讀者只讀 `count` 就規劃工作。
+
+### B — 8 份 GUIDE 的前置條件（每份 +6～7 行）
+
+8 份 `stages/*/GUIDE.md` **全部適用**（無一不適用）：實測每份都在 landing verb 語境提及 `gate.py`
+（c03 的形式是 `package_readiness`、c07 是 `package_readiness` + `fab_release_gate.py`，仍屬 landing verb 語境）。
+在每份**首次出現 landing verb 之處**（`Self-verify:` / `Stage-ownership boundary` / `Placement-first contract` 之前）插入同一段 blockquote 前置條件，指明 `BODESIGN_SRC`、`LANDING_PACKAGES_NOT_FOUND`、以及新的 `result.packages_resolved` 欄位（並明寫「read the field, not `count`」）。
+
+### 驗證（每格附它回答的問題 + 控制組）
+
+清 `__pycache__` 後執行（`-B` 擋不掉既有 stale pyc，AGENTS.md §6.3）。
+
+| # | 問題 | 指令 | 結果 |
+| --- | --- | --- | --- |
+| A-fail | repo 版在 packages 解析失敗時，`--list` 會不會揭露？ | `env BODESIGN_SRC=/home/pkcs12 python3 <repo>/skills/bodesign/scripts/gate.py --list` | rc=0, count=61, `packages_resolved=false`, `code=LANDING_PACKAGES_NOT_FOUND`, hint 逐字沿用 |
+| A-ok | 解析成功時輸出是否不同？ | `env BODESIGN_SRC=<repo> … --list` | rc=0, count=61, `packages_resolved=true`, `root=<repo>`, `error=null` |
+| **判別力** | 兩格輸出是否真的不同？ | 字串比對 | **DIFFERENT** — 這是整張 BR 的核心：修改前兩者逐字相同 |
+| in-tree | §6 記為未實測的那格 | `env -u BODESIGN_SRC python3 <repo>/…/gate.py --list` | `packages_resolved=true`, `root=<repo>` — **§6「按邏輯會往上走到 repo root 而成功」的推測經此實測成立** |
+| 未部署控制組 | 我改的是不是 repo 那份？ | `env -u BODESIGN_SRC python3 ~/.local/share/opencode/skills/bodesign/scripts/gate.py --list` | rc=0, count=61, **欄位不存在**（舊行為）。證明 repo 版與發佈版行為已分歧 |
+| 未壞掉 | 原本能跑的還能跑嗎？ | `env BODESIGN_SRC=<repo> gate.py agent_registry --repo <repo>` | rc=0, `ok:true` |
+| 無 fallback A | 發佈版未設變數仍是 typed 失敗？ | `env -u BODESIGN_SRC <deployed>/gate.py agent_registry --repo <repo>` | rc=1, `LANDING_PACKAGES_NOT_FOUND` |
+| 無 fallback B | repo 版指向無 packages 的目錄也不猜路徑？ | `env BODESIGN_SRC=/home/pkcs12 <repo>/gate.py agent_registry --repo <repo>` | rc=1, `LANDING_PACKAGES_NOT_FOUND` |
+| 負控制組 | 探針有牙嗎？ | `env BODESIGN_SRC=<repo> gate.py zzz_bogus_verb --repo <repo>` | rc=1, `VERB_UNKNOWN`（≠ packages code） |
+
+GUIDE 側（兩種 pattern 寬度 + 正負控制組）：`BODESIGN_SRC` 8/8、`LANDING_PACKAGES_NOT_FOUND` 8/8；
+正控制（必然存在的字串）8/8；負控制（`zzq_bogus_token_xyz`）0/8。
+
+`cmp <repo>/gate.py <deployed>/gate.py` → **rc=1**（修改前為 rc=0）。這正是「已修但未部署」的正確狀態。
+
+### 這一輪沒量什麼
+
+- **未部署**。發佈副本未動（派工單明令部署授權在值星官），故客人環境行為不變。
+- 未實測其餘 59 個 verb 在新 `--list` 下的行為（`--list` 不 dispatch verb，路徑不經過它們）。
+- 未量測容器內 MCP tool 路徑（§6 已記，本輪未改變該結論）。
+- 未跑 `./scripts/run_tests.sh`——`skills/` 不在 `tests/` 覆蓋範圍，且本次改動無對應既有測試模組；未新增測試檔。
 
 **Related**:
 - `issues/BR_20260902_status_checker_reads_line_3_only_so_warn_zero_means_line_3_conforms_not_ledger_consistent.md`
