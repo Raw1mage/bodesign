@@ -369,3 +369,137 @@ netlist_crosscheck / pin_polarity / mandated_passives / switch_node_shorts = not
 
 **我的建議是其一**，理由是 §2.7 已證實上游拓樸完整，且 bodesign 引擎現在有帶驗收測試的實線能力，而本地 emitter 沒有也不會有。但這是建議不是裁決。
 
+---
+
+## §11 接軌實作被 fidelity gate 擋下，且它擋對了（2026-09-05，採納「其一」後）
+
+值星官裁決採納「其一」，廢除本地 `mk_sch.py` 改接 `compose_schematic`。bridge 已寫成並執行，**結果是 fidelity gate `raise FidelityError`，而那一拒是正確的**。
+
+### §11.1 gate 報什麼
+
+```
+baseline nets=27 nodes=135 | candidate nets=54 nodes=164 | shared=133
+FIDELITY FAIL moved=10 only_baseline=2 only_candidate=2
+  MOVED      ['D1.1','F1.1','J1.A4','J1.A5','J1.A9','J1.B4','J1.B5','J1.B9','R1.1','R2.1']
+  ONLY_BASELINE  ['D1.3','D1.4']
+  ONLY_CANDIDATE ['D1.5','U2.17']
+```
+
+10 個 MOVED 節點分屬三個 net：`VBUS_CON`（6 節點）、`CC1`、`CC2`（各 3 節點）。
+
+### §11.2 不是我的轉譯造成的，四組變因實驗
+
+| 變體 | `kind` 宣告 | `nc` 提供 | fidelity | 結果 |
+|---|---|---|---|---|
+| A | 否 | 是 | 開 | **FAIL moved=10** |
+| B | 是（`PWR_FLAG_NETS`→power） | 是 | 開 | **FAIL moved=10** |
+| C | 是 | 否 | 開 | **FAIL moved=10** |
+| D | 是 | 是 | **關** | OK（wired=11 labelled=16 junctions=7） |
+
+**失敗對我所有轉譯選擇都不變。** 只有關掉 gate 才會「成功」——而那只是把短路寫進磁碟。
+
+### §11.3 決定性判別：不是 drawn-wire 路徑
+
+`spec["all_label"]=True` 讓每條 net 都走 label，完全繞開 `_bus_route` 與 junction 發射：
+
+```
+ALL_LABEL  FIDELITY FAIL moved=10 only_baseline=2 only_candidate=1
+DRAWN      FIDELITY FAIL moved=10 only_baseline=2 only_candidate=2
+```
+
+**連一條實線都不畫的情況下仍然 moved=10**，所以根因不在 `95d6241` 改的那兩支檔，在更上游。
+
+### §11.4 根因：`load_symbol` 把 multi-unit 符號壓平，導致引腳座標重合
+
+`D1 = Power_Protection:PESD5V0L4UF`，它是 `(extends "PESD3V3L4UF")`，幾何住在父符號。父符號是 **multi-unit**：
+
+```
+PESD3V3L4UF 子符號 unit 編號 = [0, 1, 2, 3, 4]   => multi_unit = True
+  unit=1  pin 1 at (-2.54, 0)      unit=2  pin 3 at (-2.54, 0)
+  unit=1  pin 2 at ( 2.54, 0)      unit=3  pin 4 at (-2.54, 0)
+  unit=1  pin 5 at ( 2.54, 0)      unit=4  pin 6 at (-2.54, 0)
+```
+
+四個 unit 共用同一組局部座標，這在 KiCad 是正常的，因為每個 unit 會被放在圖面上不同位置。
+
+**但 `load_symbol` 完全不處理 unit**——函式本體提及 `unit` 的行數為 **0**（控制組：同一段落 `pin` 出現 7 次）。於是四個 unit 的 pin 被展平進同一個 `{pin_number: (x, y, angle)}` dict，四支腳全部落在 `(-2.54, 0)`。
+
+實測全專案元件的重合分組：
+
+| ref | 重合的 pin | 它們分屬的 net | 判定 |
+|---|---|---|---|
+| **D1** | `['1','3','4','6']` | `<NC>` / **CC1** / **CC2** / **VBUS_CON** | **SHORT** |
+| D1 | `['2','5']` | `<NC>` / GND | benign |
+| J1 | `['A1','A12','B1','B12']` | GND | benign |
+| J1 | `['A4','A9','B4','B9']` | VBUS_CON | benign |
+| U2 | `['13','18','23','28','3','38','8','D2']` | GND | benign |
+
+**只有 D1 那一組是真短路**，其餘四組的成員本來就同網（USB-C 四支 VBUS、Pico 八支 GND），融合無害。這一格是控制組：**假說「重合就會出事」會讓五組全部報錯，實際只有一組，所以判準有區別力。**
+
+用 union-find 從「重合 pin」推出預測的融合集合，再與 gate 實報比對：
+
+```
+預測受影響 net : ['CC1', 'CC2', 'GND', 'VBUS_CON']
+gate 實報       : ['CC1', 'CC2', 'VBUS_CON']
+實報 ⊆ 預測 ?    : True
+```
+
+**預測包含實報，假說成立。**（GND 不在實報裡，因為 `D1.2/D1.5` 那組本來就同網，融合不改變分割。）
+
+### §11.5 呼叫端無法自行解決
+
+`spec["components"]` 只讀 `ref` / `symbol` / `value` / `footprint` / `group` / `x` / `y` / `type`，**沒有 `unit` 欄**；emitter 端同樣無 unit 概念。所以呼叫端無法告訴引擎「D1 要放四個 unit」。
+
+可行的繞道只有兩條，兩條都有代價：把 D1 拆成四個獨立 ref（與 BOM / PCB 不一致），或自建一個單-unit 本地符號（重複維護標準庫，且同族元件未來會再碰一次）。**兩條都是在呼叫層打地鼠，正是 §5 警告的形狀。**
+
+### §11.6 同一個缺陷已經在已出貨的交付物裡，只是沒有 gate 照出來
+
+**這一格是內容軸發現，比接軌本身更要緊。**
+
+旧 emitter 已產出並交付的 netlist（`02_build/generated/sch/solo_*.net`），拿 `design.NETS` 逐節點比對：
+
+```
+spec 宣告節點數 = 135
+netlist 實際出現 = 132
+MISSING (3)      = ['D1.3', 'D1.4', 'U2.35']
+控制組 R1.1 命中 = True；造假節點 ZZ9.99 命中 = False
+```
+
+逐腳看 D1：
+
+```
+舊 netlist 裡的 D1 -> {'1': 'VBUS_CON', '2': 'GND', '5': 'GND'}   只有 3 支
+實際 CC1 -> ['J1.A5','R1.1']        spec 說 ['J1.A5','R1.1','D1.3']
+實際 CC2 -> ['J1.B5','R2.1']        spec 說 ['J1.B5','R2.1','D1.4']
+```
+
+**已交付的 C03 netlist 裡，CC1 與 CC2 的 ESD 保護根本沒接上。** 舊 emitter 不會 fuse（它只拉短樁不畫實線），但它也沒有 fidelity gate，於是重合的 pin 直接少了兩支而沒人知道。
+
+換句話說，**新引擎把一個一直存在的缺陷從「靜默地少接兩支腳」變成「大聲地拒絕寫出」。** 這是 gate 在尽它的職責。
+
+### §11.7 我的建議
+
+這不是「接軌失敗」，是「接軌揭露了上游一個真缺陷」。建議 `schematic-engine` owner 將 multi-unit 支援視為 `95d6241` 的後續項：`load_symbol` 需保留 unit 歸屬，放置層需能把同一 ref 的多個 unit 當成多個圖形實例。**在那之前，btdongle 接軌卡住，而我不建議用 `fidelity=False` 繞過去**——那等於把一個已知短路寫進交付物。
+
+### §11.8 `U2.35` 是另一個成因，與重合無關（2026-09-05 補量，關掉 §11.7 自陳的未量項）
+
+先排除重合假說。`U2` 的 pin 35 座標 `(22.86, -7.62, 180)`，pin 36 座標 `(5.08, 38.1, 270)`，兩者不重合；`U2` 全符號只有一組重合，成員全是 GND。控制組，pin 3 取得座標 `(0.0, -35.56, 90)`，不存在的 pin 99 回 `None`。
+
+再看圖面。`btdongle_mcu.kicad_sch` 的 `+3V3` 有 5 個 global_label、5 條 wire 各接其一，逐條反查非 label 端的落點：
+
+```
+(62.23, 52.07) -> U2.35
+(44.45,  6.35) -> U2.36
+(191.77, 40.64) -> R8.1
+(140.97, 78.74) -> C10.1
+(191.77, 78.74) -> C11.1
+```
+
+**圖面五個端點齊全，`U2.35` 的 wire 與 label 都在。** 但同一個專案匯出的 netlist 只有四個，`['C10.1','C11.1','R8.1','U2.36']`。
+
+所以遺失發生在 netlist 匯出階段，不在發射階段，**與 §11.4 的 multi-unit 壓平是兩個不同的成因**。`mk_sch.py:95-96` 自陳過一個相關風險，pin 的 `length` 是往元件本體內延伸，wire 該碰的是 `(at)` 本身，多加 `length` 會讓 wire 落在 pin 外側 2.54 mm。若某個朝向的換算差一格，圖面看起來相接而 KiCad 判定不相接。**這是線索不是結論，我沒有跑 KiCad 自己的連通性解析去坐實它。**
+
+不論成因為何，結果一致，**已交付的 netlist 少了一個 `+3V3` 端點，而圖面看起來是齊的**。這一格對消費端的意義是，肉眼核對圖面不足以驗證 netlist。
+
+另外附註，`+3V3` 這個 net 跨了 `mcu` 與 `io` 兩張分頁（`R9.1`、`R12.1` 在 io），而三份 `solo_*.net` 是逐頁獨立匯出的，所以跨頁的 net 在每一份裡都只看得到自己那一頁的成員。**上面的比對是把三份合併後再比的，故該現象不影響本節結論。**
+
