@@ -1741,16 +1741,68 @@ def solve_paper_first(
         f"scan={' | '.join(scan)}")
 
 
-def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placements: dict[str, EmitComponent], pin_resolvable, emit: SchematicEmitResult, multi_node_to_label: bool = False) -> RouteStats:
+# BR_20260905 (multi-node draw policy). The blanket `len(nodes) >= 3 => label`
+# switch this replaces made `_bus_route` and every `(junction ...)` emit path 100%
+# dead code on the default draftsman route, so the deliverable carried 0 pin-to-pin
+# wires and 0 junctions (BR §2.1-§2.3: 124 wires, 124 of them 5.08 mm label stubs).
+#
+# The replacement mirrors the user-supplied reference schematic (BR §3.1): net
+# labels are reserved for the GLOBAL POWER rails whose fan-out is large, and every
+# other multi-node net is DRAWN as an orthogonal daisy-chain with junction dots at
+# its interior pins. A net is labelled iff it is >=3-node AND one of:
+#   - the spec declares kind power/bus, or
+#   - its NAME is power/ground shaped (`_power_net_kind`), or
+#   - its endpoint count exceeds MULTI_NODE_DRAW_MAX_FANOUT.
+# 2-node behaviour is untouched (byte-stable).
+#
+# 6 is the fan-out line: a decoupling / pull-up star (3-5 endpoints) is exactly the
+# RC/RL/LC structure the user says must be visible as drawn copper, while a 7+
+# endpoint rail (BR §2.7: BATT=7, SYS=9, GND~50) is the "扇出極多的全域電源節點"
+# the reference figure itself keeps on labels.
+MULTI_NODE_DRAW_MAX_FANOUT = 6
+
+
+def _net_power_kind_names(nets: list[EmitNet], net_kinds: dict[str, str]) -> set[str]:
+    """Net names that are GLOBAL POWER/BUS rails, by declaration or by name shape.
+
+    Taxonomy:
+      - input nets      : the parsed EmitNet list.
+      - input net_kinds : {net name -> spec-declared `kind`} (may be partial).
+      - output          : the subset of net NAMES that are power/ground/bus rails.
+      - rule: a net qualifies iff spec `kind` is "power"/"bus", OR its name matches
+              the emitter's own `_power_net_kind` classifier (GND/VCC/+3V3/...).
+              The name test is DELEGATED to kicad_emit so composer and emitter
+              cannot disagree about what "a power net" is -- a second local regex
+              here is exactly the drift BR_20260905 was caused by.
+      - NOT: a signal net that merely has many endpoints (that is the separate
+             MULTI_NODE_DRAW_MAX_FANOUT test at the call site).
+    """
+    from .kicad_emit import _power_net_kind
+    out: set[str] = set()
+    for net in nets:
+        if net_kinds.get(net.name, "") in ("power", "bus"):
+            out.add(net.name)
+        elif _power_net_kind(net.name) is not None:
+            out.add(net.name)
+    return out
+
+
+def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placements: dict[str, EmitComponent], pin_resolvable, emit: SchematicEmitResult, label_nets: set[str] | frozenset | None = None, label_reasons: dict[str, str] | None = None) -> RouteStats:
     """Derive route statistics deterministically from the resolved IR.
 
-    A net is wired iff: not power/bus kind, all nodes resolve, and >=2 distinct
-    resolvable endpoints. Otherwise it is labelled (with an explicit reason).
+    A net is wired iff: not power/bus kind, all nodes resolve, >=2 distinct
+    resolvable endpoints, and it is not in `label_nets`. Otherwise it is labelled
+    (with an explicit reason).
 
-    multi_node_to_label (T3): when the composer routes multi-node (>=3 endpoint)
-    nets via labels by default, count them as labelled with reason "multi-node"
-    so the stats mirror what was actually emitted.
+    label_nets / label_reasons (BR_20260905, replaces the old `multi_node_to_label`
+    boolean): the EXACT set the emitter was handed, plus the per-net reason the
+    composer chose it. Passing the set itself (rather than re-deriving a rule here)
+    is what keeps stats and emission from drifting -- the old boolean re-derived
+    ">=3 nodes" locally and would have silently disagreed the moment the policy
+    stopped being a pure node-count test, which is precisely what it now is.
     """
+    label_nets = set(label_nets) if label_nets else set()
+    label_reasons = label_reasons or {}
     stats = RouteStats()
     unresolved_set = set(emit.unresolved_pins)
     for net in nets:
@@ -1768,9 +1820,10 @@ def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placement
             stats.labelled_nets += 1
             stats.label_fallback_reasons.append({"net": net.name, "reason": "single-pin"})
             continue
-        if multi_node_to_label and len(resolvable) >= 3:
+        if net.name in label_nets:
             stats.labelled_nets += 1
-            stats.label_fallback_reasons.append({"net": net.name, "reason": "multi-node"})
+            stats.label_fallback_reasons.append(
+                {"net": net.name, "reason": label_reasons.get(net.name, "forced-label")})
             continue
         stats.wired_nets += 1
         if len(resolvable) >= 3:
@@ -2057,7 +2110,8 @@ def compose_schematic(
     nc_list = [str(n) for n in spec.get("nc", [])]
 
     # T3: per-net label override — only in the derived (non-explicit) draftsman
-    # default. Multi-node (>=3 node) nets go to labels (reason "multi-node").
+    # default. HISTORY (do not restore): this used to send EVERY >=3-node net to a
+    # label with reason "multi-node"; BR_20260905 removed that. See the block below.
     #
     # T3b (all_label): connector-dense boards (product board) pack dozens of pins
     # on tight x columns; the 2-node drawn-wire route runs COLLINEAR on such
@@ -2066,14 +2120,30 @@ def compose_schematic(
     # labels — zero drawn wire, collinearity-free by construction. Electrical
     # definition is untouched; only the drawn-vs-label rendering decision changes.
     label_nets: set[str] | None = None
-    multi_node_to_label = False
+    label_reasons: dict[str, str] = {}
     all_label = bool(spec.get("all_label", False))
     if all_label:
-        multi_node_to_label = True
         label_nets = {net.name for net in nets}
+        label_reasons = {net.name: "all-label" for net in nets}
     elif style == "draftsman" and not explicit_conn:
-        multi_node_to_label = True
-        label_nets = {net.name for net in nets if len(net.nodes) >= 3}
+        # BR_20260905: was `{n for n in nets if len(n.nodes) >= 3}` -- a blanket
+        # node-count switch that labelled EVERY multi-node net, which made
+        # kicad_emit._bus_route and the whole `(junction ...)` emit path dead code
+        # and reduced the deliverable to pin-label stubs. Now only the
+        # high-fan-out GLOBAL POWER rails go to labels (the reference schematic's
+        # own convention, BR §3.1); a 3..MULTI_NODE_DRAW_MAX_FANOUT signal star --
+        # decoupling, pull-up, divider, RC/RL/LC -- is DRAWN with junctions.
+        _power_like = _net_power_kind_names(nets, net_kinds)
+        label_nets = set()
+        for net in nets:
+            if len(net.nodes) < 3:
+                continue
+            if net.name in _power_like:
+                label_nets.add(net.name)
+                label_reasons[net.name] = "power-rail"
+            elif len(net.nodes) > MULTI_NODE_DRAW_MAX_FANOUT:
+                label_nets.add(net.name)
+                label_reasons[net.name] = "high-fanout"
         # M6-8d (user 03a ruling): cross-IC bus policy. When >=2 signals cross the
         # SAME pair of ICs, every cross-IC signal between them is forced to a global
         # label (all-label for that IC pair) — this kills the 12+ unordered wire
@@ -2534,7 +2604,8 @@ def compose_schematic(
         def _pin_resolvable(ref: str, pin: str) -> bool:
             return ref in placements
 
-        route_stats = _build_route_stats(nets, net_kinds, placements, _pin_resolvable, emit, multi_node_to_label=multi_node_to_label)
+        route_stats = _build_route_stats(nets, net_kinds, placements, _pin_resolvable, emit,
+                                         label_nets=label_nets, label_reasons=label_reasons)
 
         # DD-11: the anti-fusion guard may have down-graded some nets from drawn
         # wire to label AFTER _build_route_stats counted them as wired. Reconcile

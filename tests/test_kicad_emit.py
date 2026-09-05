@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -363,15 +364,44 @@ class CollinearFusionMinimalTests(unittest.TestCase):
         # CONTROL: a far-away segment must NOT hit the same box.
         self.assertFalse(_seg_hits_box((50.0, 50.0), (50.0, 60.0), box))
 
-    def test_jog_retry_is_a_silent_noop_beyond_three_waypoints(self):
-        """_guard_route retries 3x; on a 5-waypoint route every retry is identical."""
-        from bodesign_eda_bridge.kicad_emit import _jog_free_axis
+    def test_jog_retry_is_effective_beyond_three_waypoints(self):
+        """The 5-waypoint jog must MOVE the route (BR_20260905).
+
+        HISTORY — this test previously asserted the OPPOSITE, pinning the silent
+        no-op as observed behaviour under the name
+        `test_jog_retry_is_a_silent_noop_beyond_three_waypoints`, and its own
+        failure message said "jog now handles 5 waypoints -- update this test".
+        That inversion is performed here deliberately: `_jog_free_axis` returned
+        its input unchanged for len>=4, and since `_orthogonal_route` adds pin
+        escape stubs, essentially EVERY real route is >=4 points. So every
+        anti-fusion retry re-tested identical geometry and the guard down-graded
+        routable nets to label stubs — the emitter-side half of BR_20260905
+        (0 pin-to-pin wires, 0 junctions on every delivered page).
+
+        The fixture is kept verbatim so the two revisions are directly comparable.
+        """
+        from bodesign_eda_bridge.kicad_emit import _jog_free_axis, _seg_axis
         five = [(199.39, 109.22), (199.39, 110.49), (101.6, 110.49),
                 (101.6, 114.3), (101.6, 113.03)]
         for offset in (-3.81, 2.54, 1.27):
-            self.assertEqual(five, _jog_free_axis(five, offset),
-                             "jog now handles 5 waypoints -- update this test")
-        # CONTROL: the two documented arities DO change, so the probe has power.
+            out = _jog_free_axis(five, offset)
+            self.assertNotEqual(five, out,
+                                f"offset={offset}: the 5-waypoint jog is a no-op "
+                                f"again; the anti-fusion retry budget is decorative")
+            # A jog that moved the route must still be a legal route: pins fixed,
+            # every segment axis-aligned. Otherwise "it changed" is worthless.
+            self.assertEqual(five[0], out[0], f"offset={offset}: start pin moved")
+            self.assertEqual(five[-1], out[-1], f"offset={offset}: end pin moved")
+            self.assertTrue(all(_seg_axis(a, b) is not None
+                                for a, b in zip(out, out[1:])),
+                            f"offset={offset}: jog emitted a diagonal/zero-length "
+                            f"segment: {out}")
+        # CONTROL: the probe can still report "unchanged" — a zero offset must be
+        # a no-op, else assertNotEqual above would pass for any input whatsoever.
+        self.assertEqual(five, _jog_free_axis(five, 0.0),
+                         "zero offset changed the route; the equality probe has "
+                         "no discriminating power")
+        # CONTROL: the two originally-supported arities still change.
         two = [(100.0, 100.0), (100.0, 110.0)]
         three = [(100.0, 100.0), (110.0, 100.0), (110.0, 120.0)]
         self.assertNotEqual(two, _jog_free_axis(two, 2.54))
@@ -1063,3 +1093,254 @@ class BusRouteTests(unittest.TestCase):
         self.assertEqual([], [s for s in far_segs
                               if not _waypoints_clear(list(s), far)],
                          "clearance probe reports intrusion for a clear route")
+
+
+# ---------------------------------------------------------------------------
+# BR_20260905 — the emitter produced pin-label stubs only: 0 pin-to-pin wires and
+# 0 junctions on every delivered page, so no RC/RL/LC/LRC subcircuit could exist
+# in the file at all (BR §2.1-§2.3).
+#
+# TWO independent defects produced that one symptom, and each class below pins ONE
+# of them. They are separated on purpose: a single end-to-end test would go green
+# if either were fixed, and the composer-side fix alone leaves the emitter-side
+# no-op in place (it did, measurably, until the second was found).
+#
+#   JogFreeAxisAppliesToRealRoutes  — `_jog_free_axis` silently returned its input
+#       UNCHANGED for len(waypoints) >= 4. Real routes carry pin escape stubs, so
+#       they are always >= 4 points: every anti-fusion retry re-tested identical
+#       geometry and the guard reported "exhausted" without having jogged once.
+#       "Jogged N times and still colliding" and "never jogged at all" shared one
+#       output, which is why the retry budget looked healthy while doing nothing.
+#
+#   DrawnConnectivityIsReachable    — the composer forced EVERY >=3-node net onto
+#       a global label, making `_bus_route` and the whole `(junction ...)` emit
+#       path dead code.
+# ---------------------------------------------------------------------------
+class JogFreeAxisAppliesToRealRoutes(unittest.TestCase):
+    """`_jog_free_axis` must actually move geometry for EVERY waypoint count.
+
+    Pure geometry: no symbol library, no kicad-cli, so no skipUnless — a skip here
+    would be indistinguishable from a pass, and this is the defect that hid behind
+    a passing-looking retry loop.
+    """
+
+    # Deliberately ORTHOGONAL fixtures. An earlier version of this probe used
+    # diagonal points and reported "not axis aligned" for correct output; the
+    # offset-0 control failing too is what exposed the fixture as the fault.
+    FIXTURES = {
+        2: [(100.0, 100.0), (100.0, 120.0)],
+        3: [(100.0, 100.0), (120.0, 100.0), (120.0, 130.0)],
+        4: [(100.0, 100.0), (100.0, 105.0), (120.0, 105.0), (120.0, 130.0)],
+        5: [(100.0, 100.0), (100.0, 105.0), (115.0, 105.0), (115.0, 125.0),
+            (140.0, 125.0)],
+        6: [(100.0, 100.0), (100.0, 105.0), (115.0, 105.0), (115.0, 125.0),
+            (140.0, 125.0), (140.0, 150.0)],
+    }
+
+    @staticmethod
+    def _axis_aligned(wp) -> bool:
+        from bodesign_eda_bridge.kicad_emit import _seg_axis
+        return all(_seg_axis(a, b) is not None for a, b in zip(wp, wp[1:]))
+
+    def test_jog_moves_geometry_for_every_waypoint_count(self):
+        """THE regression: len>=4 used to return the input unchanged."""
+        from bodesign_eda_bridge.kicad_emit import _jog_free_axis
+        for n, wp in sorted(self.FIXTURES.items()):
+            self.assertTrue(self._axis_aligned(wp),
+                            f"fixture n={n} is not orthogonal; the probe would "
+                            f"be measuring its own input, not the function")
+            out = _jog_free_axis(wp, 2.54)
+            self.assertNotEqual(wp, out,
+                                f"n={n}: jog returned the input UNCHANGED. Every "
+                                f"anti-fusion retry now re-tests identical "
+                                f"geometry, so a routable net is down-graded to "
+                                f"a label stub (BR_20260905)")
+
+    def test_jog_preserves_pin_endpoints_and_orthogonality(self):
+        """FIDELITY: a jog may bend the interior, never move a pin or go diagonal."""
+        from bodesign_eda_bridge.kicad_emit import _jog_free_axis
+        for n, wp in sorted(self.FIXTURES.items()):
+            for offset in (1.27, -2.54, 7.62):
+                out = _jog_free_axis(wp, offset)
+                self.assertEqual(wp[0], out[0], f"n={n} off={offset}: start pin moved")
+                self.assertEqual(wp[-1], out[-1], f"n={n} off={offset}: end pin moved")
+                self.assertTrue(self._axis_aligned(out),
+                                f"n={n} off={offset}: emitted a diagonal segment")
+
+    def test_jog_emits_no_zero_length_segments(self):
+        """A zero-length segment opts itself OUT of every collision test.
+
+        `_seg_axis` classifies it as neither horizontal nor vertical, so the
+        anti-fusion guard cannot reason about it — it would be an invisible hole
+        in the guard rather than a cosmetic blemish.
+        """
+        from bodesign_eda_bridge.kicad_emit import _jog_free_axis
+        for n, wp in sorted(self.FIXTURES.items()):
+            for offset in (0.0, 1.27, -1.27, 5.08):
+                out = _jog_free_axis(wp, offset)
+                dupes = [(a, b) for a, b in zip(out, out[1:]) if a == b]
+                self.assertEqual([], dupes,
+                                 f"n={n} off={offset}: zero-length segment(s) "
+                                 f"{dupes} in {out}")
+
+    def test_probe_can_detect_a_no_op_jog(self):
+        """CONTROL for test_jog_moves_geometry.
+
+        Without this, "moved" might be a constant the probe can never report
+        False for — in which case the regression test above would pass against
+        the very code it is meant to catch.
+        """
+        from bodesign_eda_bridge.kicad_emit import _jog_free_axis
+        wp = self.FIXTURES[3]
+        self.assertEqual(wp, _jog_free_axis(wp, 0.0),
+                         "a zero offset changed the route; the equality probe "
+                         "cannot distinguish moved from unmoved")
+
+    def test_jog_ladder_escalates_and_stays_deterministic(self):
+        """The retry budget must reach offsets the first three attempts cannot.
+
+        Retrying inside the same 1..3-step window is what made extra attempts
+        worthless; the ladder has to widen or the budget is decorative.
+        """
+        from bodesign_eda_bridge.kicad_emit import (
+            _net_jog_steps, _ROUTE_JOG_ATTEMPTS)
+        offsets = [_net_jog_steps("NETX", a) for a in range(_ROUTE_JOG_ATTEMPTS)]
+        self.assertGreater(len(set(offsets)), 3,
+                           f"ladder collapses to {sorted(set(offsets))}")
+        self.assertGreater(max(abs(o) for o in offsets), 3 * 1.27,
+                           "ladder never exceeds the original 3-grid window, so "
+                           "the raised attempt count buys nothing")
+        # Deterministic: same net, same ladder, every time.
+        self.assertEqual(offsets,
+                         [_net_jog_steps("NETX", a) for a in range(_ROUTE_JOG_ATTEMPTS)])
+        # CONTROL: a different net must get a different ladder, else the probe is
+        # reading a global constant rather than a per-net hash.
+        self.assertNotEqual(
+            offsets, [_net_jog_steps("NETY", a) for a in range(_ROUTE_JOG_ATTEMPTS)],
+            "two different nets share one ladder; jogs cannot diverge")
+
+
+@unittest.skipUnless(HAS_SYMBOLS, "KiCad symbol libraries are not installed")
+class DrawnConnectivityIsReachable(unittest.TestCase):
+    """BR_20260905 §7 acceptance: `pin_to_pin > 0` AND `junction > 0`.
+
+    The delivered pages carried 124 wires of which 124 were 5.08 mm label stubs,
+    0 pin-to-pin and 0 junctions — so no RC/RL/LC subcircuit could be expressed.
+    These tests measure the EMITTED FILE, not an internal counter, because the
+    counter and the emission are exactly what drifted apart before.
+    """
+
+    # A divider tap + an LC switch node: two 3-node signal stars, i.e. precisely
+    # the structures the BR says are structurally impossible today.
+    SPEC = {
+        "components": [
+            {"ref": "U1", "symbol": "Device:R"}, {"ref": "R1", "symbol": "Device:R"},
+            {"ref": "R2", "symbol": "Device:R"}, {"ref": "C1", "symbol": "Device:C"},
+            {"ref": "C2", "symbol": "Device:C"}, {"ref": "L1", "symbol": "Device:L"},
+        ],
+        "nets": [
+            {"name": "MID", "nodes": ["R1.2", "R2.1", "C1.1"], "kind": "signal"},
+            {"name": "SW_NODE", "nodes": ["U1.1", "L1.1", "C2.1"], "kind": "signal"},
+            {"name": "OUT", "nodes": ["L1.2", "U1.2"], "kind": "signal"},
+            {"name": "GND", "nodes": ["R2.2", "C1.2", "C2.2"], "kind": "power"},
+        ],
+    }
+
+    def setUp(self):
+        PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(prefix="bodesign-br905-", dir=PRIVATE_BASE))
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def _compose(self, name, **kw):
+        from bodesign_eda_bridge import compose_schematic
+        out = self.work / name
+        r = compose_schematic(out, name, self.SPEC, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman", **kw)
+        return r, Path(r.emit.schematic_path).read_text(encoding="utf-8")
+
+    def test_multi_node_signal_nets_emit_junctions(self):
+        """junction > 0 — BR §7. Was structurally 0: every >=3-node net was
+        label-forced, so `_bus_route` and the junction emit path were dead code."""
+        _r, sch = self._compose("junc")
+        self.assertGreater(sch.count("(junction "), 0,
+                           "no (junction ...) emitted for a 3-node signal star")
+
+    def test_multi_node_signal_nets_are_drawn_not_labelled(self):
+        """A 3-node signal star must be DRAWN; only power rails keep labels."""
+        r, sch = self._compose("drawn")
+        reasons = {d["net"]: d["reason"] for d in r.route_stats.label_fallback_reasons}
+        self.assertNotIn("multi-node", set(reasons.values()),
+                         "the blanket >=3-node label switch is back")
+        # GND is a power rail: labelling it is the REFERENCE behaviour (BR §3.1),
+        # not a degradation. Asserting it stays labelled keeps this test from
+        # passing for the wrong reason (i.e. by drawing everything).
+        self.assertEqual("power", reasons.get("GND"),
+                         "the global power rail should stay on labels")
+        self.assertNotIn('(global_label "MID"', sch,
+                         "a 3-node signal star was pushed onto global labels")
+
+    def test_emitted_wires_include_pin_to_pin_not_only_label_stubs(self):
+        """pin_to_pin > 0 — BR §7, measured the BR's own way.
+
+        BR §2.2 classifies a wire as a label stub iff an endpoint coincides with
+        a global_label anchor. Reproduced here so this test and the BR's field
+        measurement answer the SAME question.
+        """
+        _r, sch = self._compose("p2p")
+        label_pts = {
+            (round(float(x), 2), round(float(y), 2))
+            for x, y in re.findall(
+                r'\(global_label\s+"[^"]*"(?:[^()]|\([^()]*\))*?\(at\s+([-\d.]+)\s+([-\d.]+)',
+                sch)
+        }
+        wires = [
+            ((round(float(a), 2), round(float(b), 2)),
+             (round(float(c), 2), round(float(d), 2)))
+            for a, b, c, d in re.findall(
+                r'\(wire \(pts \(xy ([-\d.]+) ([-\d.]+)\) \(xy ([-\d.]+) ([-\d.]+)\)\)', sch)
+        ]
+        self.assertTrue(wires, "no wires at all; the probe has nothing to classify")
+        pin_to_pin = [w for w in wires
+                      if w[0] not in label_pts and w[1] not in label_pts]
+        self.assertGreater(len(pin_to_pin), 0,
+                           f"every one of {len(wires)} wires touches a label "
+                           f"anchor — the sheet is a netlist, not a schematic")
+
+    def test_drawn_wires_do_not_cross_component_bodies(self):
+        """Unlocking the router must not reintroduce BR_20260708 (wire through
+        a symbol body). Guarding against trading one defect for another."""
+        r, _sch = self._compose("clear")
+        self.assertEqual([], list(r.wire_body_intrusions),
+                         "a drawn wire crosses a non-host component body")
+
+    def test_explicit_all_label_still_suppresses_routed_connectivity(self):
+        """CONTROL / no-regression: the deliberate escape hatch must still work.
+
+        This is what proves the junction assertion above is a MEASUREMENT rather
+        than a constant — the same probe must report ZERO on a sheet that is
+        legitimately label-only.
+
+        The discriminator is `junction`, NOT `wire`. An all_label sheet still
+        emits short POWER-PORT STUB wires (one per power-port glyph), and it does
+        so at HEAD too — measured: wire=4 / junction=0 / global_label=8 both
+        before and after this BR's change. An earlier draft of this test asserted
+        `wire == 0` and failed for that reason, which also exposed that the
+        pin-to-pin probe counts those stubs. So `wire`/`pin_to_pin` cannot
+        separate "label-only sheet" from "routed sheet"; `junction` can.
+        """
+        from bodesign_eda_bridge import compose_schematic
+        out = self.work / "alllabel"
+        spec = dict(self.SPEC, all_label=True)
+        r = compose_schematic(out, "alllabel", spec, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman")
+        sch = Path(r.emit.schematic_path).read_text(encoding="utf-8")
+        self.assertEqual(0, sch.count("(junction "),
+                         "all_label sheet emitted junctions; the junction probe "
+                         "is not measuring routed connectivity")
+        self.assertEqual(0, r.route_stats.wired_nets,
+                         "all_label sheet reports drawn nets")
+        self.assertGreater(sch.count("(global_label "), 0,
+                           "all_label sheet has no labels either — the probe is "
+                           "reading an empty file, so its zeros mean nothing")

@@ -202,6 +202,11 @@ Fleet SSOT: `opencode/specs/mcp-integration-standard` R2.0 (transfer modes) + R1
   `.xlsx` go through `bodesign_emit_doc` (markdown → docx+pdf) or `bodesign_mcp_call`
   driving docxmcp — not a caller-side `zip`/`ElementTree`/`python-docx` script. A
   single Word/PowerPoint repair warning is a delivery failure, not a nuisance.
+- **Deliverable docx formatting and layout discipline (2026-09-04 user mandate):**
+  - Cover page MUST use '置中大大' (Title), '置中大' (Subtitle), '置中' (Metadata) styles, and MUST include `cms-logo.jpg` for thesmart brand template.
+  - Body text MUST NOT duplicate the cover title as its first paragraph; start directly into section content.
+  - Heading hierarchy MUST start from '標題 1' (Heading 1) for top-level chapters (not Heading 2), with subsequent subheadings cascading down accordingly.
+  - Architecture and interconnect diagrams MUST adhere to the three layout constraints: diagram width fixed to 170mm (17cm), text font size fixed to 12pt, and box dimensions dynamically best-fitted to content text.
 - **`readiness_pct: 0` ≠ "deliverables missing".** On the container it usually means
   the project root is outside the mount (`root_visible:false`). Check `root_visible`
   before concluding anything is absent.

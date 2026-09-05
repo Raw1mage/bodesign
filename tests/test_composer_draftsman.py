@@ -302,9 +302,21 @@ class DraftsmanComposerTests(unittest.TestCase):
         self.assertNotIn("(wire (pts", sch)
         self.assertIn("(global_label", sch)
 
-    # T3: multi-node (>=3 node) signal net defaults to label (reason=multi-node);
-    # 2-node nets stay wired; explicit connection_style="wire" is honoured in full.
-    def test_t3_multi_node_net_defaults_to_label(self):
+    # T3 (REVISED by BR_20260905): a multi-node SIGNAL net is DRAWN with junctions.
+    #
+    # HISTORY — this test was named `test_t3_multi_node_net_defaults_to_label` and
+    # asserted the exact opposite: that every >=3-node net is forced onto global
+    # labels with reason "multi-node". That switch made `_bus_route` and the whole
+    # `(junction ...)` emit path DEAD CODE, so delivered pages carried 0 pin-to-pin
+    # wires and 0 junctions and no RC/RL/LC subcircuit could be expressed at all.
+    # The inversion below is the point of the BR, not collateral damage: labels are
+    # now reserved for GLOBAL POWER rails and very-high-fan-out nets.
+    #
+    # The spec is kept VERBATIM from the old test so the two revisions are directly
+    # comparable. Note `GNDISH` is deliberately a 4-node net whose `kind` is
+    # "signal" and whose NAME is not power-shaped (`_power_net_kind("GNDISH")` is
+    # None, vs "GND" -> "gnd") — so it exercises the drawn path, not the rail path.
+    def test_t3_multi_node_signal_net_is_drawn_with_junctions(self):
         spec = {
             "components": [
                 {"ref": "U1", "symbol": "Device:R"},
@@ -318,16 +330,30 @@ class DraftsmanComposerTests(unittest.TestCase):
                 {"name": "SIG2", "nodes": ["U1.1", "R1.1"], "kind": "signal"},
             ],
         }
+        # PRECONDITION: the fixture only tests what it claims if GNDISH is NOT
+        # classified as a power rail. Asserted, not assumed.
+        from bodesign_eda_bridge.kicad_emit import _power_net_kind
+        self.assertIsNone(_power_net_kind("GNDISH"),
+                          "fixture invalid: GNDISH now reads as a power rail, so "
+                          "this test would exercise the label path by accident")
+        self.assertEqual("gnd", _power_net_kind("GND"),
+                         "CONTROL: the classifier no longer recognises a real rail")
+
         r = compose_schematic(self.work, "t3a", spec, symbol_dirs=SYMBOL_DIR, style="draftsman")
         reasons = {(d["net"], d["reason"]) for d in r.route_stats.label_fallback_reasons}
-        self.assertIn(("GNDISH", "multi-node"), reasons)
-        self.assertEqual(1, r.route_stats.wired_nets)      # SIG2 still wired
-        self.assertEqual(1, r.route_stats.labelled_nets)   # GNDISH labelled
+        self.assertNotIn(("GNDISH", "multi-node"), reasons,
+                         "the blanket >=3-node label switch is back; _bus_route "
+                         "and every junction are dead code again (BR_20260905)")
+        self.assertEqual(2, r.route_stats.wired_nets)      # BOTH nets drawn
+        self.assertEqual(0, r.route_stats.labelled_nets)
+        self.assertGreater(r.route_stats.junctions, 0)
         sch = Path(r.emit.schematic_path).read_text(encoding="utf-8")
-        self.assertIn('(global_label "GNDISH"', sch)       # actually emitted as labels
+        self.assertNotIn('(global_label "GNDISH"', sch)    # drawn, not label-forced
+        self.assertGreater(sch.count("(junction "), 0,
+                           "a 4-node star emitted no junction dot")
         self.assertIn('(label "SIG2"', sch)                # 2-node net still drawn wire
 
-        # explicit connection_style="wire" → honoured, multi-node net drawn again.
+        # explicit connection_style="wire" → still honoured, still fully drawn.
         w2 = Path(tempfile.mkdtemp(prefix="bodesign-t3b-", dir=PRIVATE_BASE))
         try:
             r2 = compose_schematic(w2, "t3b", spec, symbol_dirs=SYMBOL_DIR,
@@ -339,6 +365,36 @@ class DraftsmanComposerTests(unittest.TestCase):
             self.assertNotIn('(global_label "GNDISH"', sch2)
         finally:
             shutil.rmtree(w2, ignore_errors=True)
+
+    # BR_20260905 companion: the label path must still EXIST for the cases the
+    # reference schematic itself keeps on labels. Without this, the test above
+    # could be satisfied by a composer that simply draws everything -- which would
+    # reintroduce the cross-IC wire-crossing mess the label policy was built for.
+    def test_power_rails_and_high_fanout_nets_still_take_labels(self):
+        from bodesign_eda_bridge.composer import MULTI_NODE_DRAW_MAX_FANOUT
+        fanout = MULTI_NODE_DRAW_MAX_FANOUT + 1
+        comps = [{"ref": "U1", "symbol": "Device:R"}]
+        comps += [{"ref": f"C{i}", "symbol": "Device:C"} for i in range(1, fanout + 1)]
+        comps += [{"ref": f"R{i}", "symbol": "Device:R"} for i in range(1, fanout + 1)]
+        spec = {
+            "components": comps,
+            "nets": [
+                # name-shaped power rail -> label even at only 3 nodes
+                {"name": "+3V3", "nodes": ["U1.1", "C1.1", "C2.1"], "kind": "signal"},
+                # plain signal, but fan-out ABOVE the draw ceiling -> label
+                {"name": "WIDE",
+                 "nodes": [f"R{i}.1" for i in range(1, fanout + 1)] + ["U1.2"],
+                 "kind": "signal"},
+            ],
+        }
+        r = compose_schematic(self.work, "rails", spec, symbol_dirs=SYMBOL_DIR,
+                              style="draftsman")
+        reasons = {d["net"]: d["reason"] for d in r.route_stats.label_fallback_reasons}
+        self.assertIn("+3V3", reasons,
+                      "a named power rail was drawn instead of labelled")
+        self.assertEqual("high-fanout", reasons.get("WIDE"),
+                         f"a {fanout + 1}-endpoint net was drawn; the fan-out "
+                         f"ceiling ({MULTI_NODE_DRAW_MAX_FANOUT}) is not applied")
 
     # T1: spec-level nc declaration flows through compose → emit.
     def test_t1_nc_declaration_via_spec(self):

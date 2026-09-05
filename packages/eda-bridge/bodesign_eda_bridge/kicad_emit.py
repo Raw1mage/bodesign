@@ -1383,20 +1383,37 @@ def emit_kicad_schematic(
     def _segments_of(waypoints: list[tuple[float, float]]) -> list[tuple]:
         return [(waypoints[i], waypoints[i + 1]) for i in range(len(waypoints) - 1)]
 
-    def _guard_route(net_name: str, base_waypoints: list[tuple[float, float]]):
+    def _guard_route(net_name: str, base_waypoints: list[tuple[float, float]],
+                     extra_ok=None):
         """Return (waypoints, jogged: bool) whose segments clear every other net,
-        or (None, False) when ≤ 3 deterministic jogs still fuse (→ caller down-
-        grades to label). Guard only mutates geometry when a collision exists, so
-        collision-free input is byte-equivalent (R6)."""
+        or (None, False) when _ROUTE_JOG_ATTEMPTS deterministic jogs still fuse
+        (→ caller down-grades to label). Guard only mutates geometry when a
+        collision exists, so collision-free input is byte-equivalent (R6).
+
+        extra_ok (BR_20260905, optional): an ADDITIONAL acceptance predicate
+        (waypoints -> bool) evaluated on every candidate, used by the caller to
+        fold the ledger-clearance gate INTO the jog loop. Before this, the ledger
+        gate ran AFTER the loop had already committed to one geometry, so a route
+        that merely grazed a label box was down-graded to a label stub with zero
+        retries -- the loop had a budget of 8 and the ledger gate a budget of 0,
+        and it was the budget-0 gate that decided the deliverable. A candidate is
+        accepted only when BOTH the fusion test AND extra_ok pass, so this cannot
+        admit any route the old code would have rejected; it can only keep
+        searching where the old code gave up.
+        """
         others = _other_net_segments(net_name)
-        segs = _segments_of(base_waypoints)
-        if not any(_segment_fuses(s, others) for s in segs):
+
+        def _ok(wp) -> bool:
+            if any(_segment_fuses(s, others) for s in _segments_of(wp)):
+                return False
+            return True if extra_ok is None else bool(extra_ok(wp))
+
+        if _ok(base_waypoints):
             return base_waypoints, False        # clean → untouched (byte-stable)
-        for attempt in range(3):
+        for attempt in range(_ROUTE_JOG_ATTEMPTS):
             offset = _net_jog_steps(net_name, attempt)
             jogged = _jog_free_axis(base_waypoints, offset)
-            jsegs = _segments_of(jogged)
-            if not any(_segment_fuses(s, others) for s in jsegs):
+            if _ok(jogged):
                 return jogged, True
         return None, False
 
@@ -1510,11 +1527,27 @@ def emit_kicad_schematic(
             # outward unit vector per endpoint (BR four-edge pin placement).
             _escape = [endpoint_sides[0], endpoint_sides[1]]
             waypoints = _orthogonal_route(endpoints[0], endpoints[1], _obst, escape=_escape)
-            guarded, jogged = _guard_route(net.name, waypoints)
+            # BR_20260905: the ledger clearance gate is folded INTO the jog search
+            # (extra_ok) instead of running once after it. Same predicate, same
+            # rejection criteria -- but a route that grazes a label box now gets the
+            # jog ladder tried against it, rather than being down-graded to a label
+            # stub on the first graze. A net still labelled after the full ladder is
+            # reported below with the reason the LAST candidate failed on.
+            guarded, jogged = _guard_route(
+                net.name, waypoints,
+                extra_ok=lambda wp: _route_clears_ledger(wp, endpoint_refs))
             if guarded is None:
                 # DD-11 fallback: jog exhausted → down-grade this net to label
-                # (collinearity-free by construction). Recorded, never silent.
-                fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
+                # (collinearity-free by construction). Recorded, never silent. The
+                # reason distinguishes WHICH gate the exhausted route last failed,
+                # so "fused with another net" and "crossed an existing label/wire"
+                # never share one output (they need different fixes).
+                _last_fuse = any(
+                    _segment_fuses(s, _other_net_segments(net.name))
+                    for s in _segments_of(waypoints))
+                fusion_label_fallbacks.append({
+                    "net": net.name,
+                    "reason": "anti-fusion" if _last_fuse else "ledger-collision"})
                 kind = _power_net_kind(net.name) if power_ports else None
                 for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                     if kind is not None:
@@ -1523,18 +1556,6 @@ def emit_kicad_schematic(
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
             waypoints = guarded
-            # M6-1 (DD-12): final ledger clearance gate. A route that dodges bodies
-            # (guard C) and other-net fusion (guard A) but still crosses a pin-name
-            # box or an already-drawn wire is REJECTED here → down-grade to label.
-            if not _route_clears_ledger(waypoints, endpoint_refs):
-                fusion_label_fallbacks.append({"net": net.name, "reason": "ledger-collision"})
-                kind = _power_net_kind(net.name) if power_ports else None
-                for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
-                    if kind is not None:
-                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
-                    else:
-                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
-                continue
             if jogged:
                 fusion_jogged_nets.append(net.name)
             fusion_registry[net.name] = _segments_of(waypoints)
@@ -1547,14 +1568,40 @@ def emit_kicad_schematic(
             _place_local_label(net.name, mid[0], mid[1], waypoints)
         elif drawn and not force_label and not net_unresolved and len(endpoints) >= 3:
             _obst = _obstacles_excluding(endpoint_refs)
-            segments, junctions = _bus_route(endpoints, _obst)
-            # Register the multi-node net's segments and check cross-net fusion.
-            others = _other_net_segments(net.name)
-            fuses = any(_segment_fuses(s, others) for s in segments)
-            if fuses:
-                # Multi-node bus geometry has no single free axis to jog
-                # deterministically → down-grade to label fallback (visible).
-                fusion_label_fallbacks.append({"net": net.name, "reason": "anti-fusion"})
+            # BR_20260905: the multi-node bus used to be all-or-nothing -- ONE
+            # grazing hop down-graded the WHOLE net to per-pin label stubs, with no
+            # jog retry at all (the 2-pin path had 3, this path had 0). Since the
+            # composer now sends real multi-node signal nets down here instead of
+            # labelling them wholesale, that zero budget would have re-created the
+            # reported defect one layer down. Route the daisy-chain HOP BY HOP and
+            # give each hop the SAME jog ladder + ledger predicate the 2-pin path
+            # uses. Endpoints are preserved verbatim by _jog_free_axis, so a jogged
+            # hop keeps the chain connected and the net partition unchanged.
+            #
+            # Failure semantics are UNCHANGED and deliberately strict: if any hop is
+            # still blocked after the full ladder, the ENTIRE net falls back to
+            # labels. A partially-drawn chain would be an OPEN CIRCUIT that looks
+            # wired -- strictly worse than an honest label.
+            _chain_pts = _bus_chain_points(endpoints)
+            _hop_segments: list[tuple] = []
+            _hop_failed_reason: str | None = None
+            for _ha, _hb in zip(_chain_pts, _chain_pts[1:]):
+                _hw = _orthogonal_route(_ha, _hb, _obst)
+                # Hops already accepted for THIS net are legal neighbours (same net,
+                # they meet at shared pins by construction), so they are excluded
+                # from the fusion test -- only OTHER nets' segments are collisions.
+                _hg, _ = _guard_route(
+                    net.name, _hw,
+                    extra_ok=lambda wp: _route_clears_ledger(wp, endpoint_refs))
+                if _hg is None:
+                    _last_fuse = any(
+                        _segment_fuses(s, _other_net_segments(net.name))
+                        for s in _segments_of(_hw))
+                    _hop_failed_reason = "anti-fusion" if _last_fuse else "ledger-collision"
+                    break
+                _hop_segments.extend(_segments_of(_hg))
+            if _hop_failed_reason is not None:
+                fusion_label_fallbacks.append({"net": net.name, "reason": _hop_failed_reason})
                 kind = _power_net_kind(net.name) if power_ports else None
                 for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                     if kind is not None:
@@ -1562,22 +1609,12 @@ def emit_kicad_schematic(
                     else:
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
-            # M6-1 (DD-12): final ledger clearance gate for the multi-node bus. Flatten
-            # every segment into one polyline sample; if ANY segment crosses a ledger
-            # rect (body / pin_extent / label / earlier wire) that is not a host, the
-            # whole bus down-grades to per-pin labels (fail-safe).
-            _bus_clear = all(
-                _route_clears_ledger([a, b], endpoint_refs) for (a, b) in segments
-            )
-            if not _bus_clear:
-                fusion_label_fallbacks.append({"net": net.name, "reason": "ledger-collision"})
-                kind = _power_net_kind(net.name) if power_ports else None
-                for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
-                    if kind is not None:
-                        power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
-                    else:
-                        label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
-                continue
+            segments = _hop_segments
+            # Junctions stay exactly the _bus_route contract: one dot at every
+            # INTERIOR chain pin (a wire arrives AND leaves there, plus the symbol
+            # pin itself = a 3-way meet KiCad requires a junction for). Jogging only
+            # moves interior waypoints, never a chain pin, so this is unaffected.
+            junctions = list(_chain_pts[1:-1])
             fusion_registry[net.name] = list(segments)
             for (a, b) in segments:
                 _reserve_wire([a, b], net.name)
@@ -2733,42 +2770,106 @@ def _segment_fuses(seg: tuple, other_net_segs: list[tuple]) -> bool:
     return False
 
 
+# BR_20260905: how many deterministic jogs a colliding route may try before it is
+# down-graded to a label. Was a bare literal 3 inside _guard_route. Three attempts
+# only ever reach 1..3 grid steps, so a route boxed in by a neighbouring net gave
+# up while a 4-grid detour was still free -- and giving up meant a label stub, i.e.
+# the very degradation this BR is about. Raising the ceiling cannot loosen
+# correctness: the ACCEPTANCE predicates (_segment_fuses + the ledger clearance
+# callback) are unchanged, so a route admitted at attempt 7 has passed exactly the
+# same tests as one admitted at attempt 0. It can only convert a give-up into a
+# provably-clear drawn wire.
+_ROUTE_JOG_ATTEMPTS = 8
+
+
 def _net_jog_steps(net_name: str, attempt: int) -> float:
-    """Deterministic jog offset (mm) for a net, by net-name hash. Returns 1..3
-    grid steps (1.27 mm multiples). `attempt` (0-based) rotates the magnitude so
-    successive retries try distinct offsets. Sign is folded into the hash so
-    different nets deterministically diverge instead of all jogging one way."""
+    """Deterministic jog offset (mm) for a net, by net-name hash. `attempt`
+    (0-based) rotates the magnitude so successive retries try distinct offsets.
+    Sign is folded into the hash so different nets deterministically diverge
+    instead of all jogging one way.
+
+    attempts 0-2 return 1..3 grid steps and are BYTE-IDENTICAL to the pre-
+    BR_20260905 formula (every existing golden route is preserved). From attempt 3
+    the ladder ESCALATES -- band = attempt//3, so the magnitude window widens to
+    4..6, then 7..9 grid steps -- because a route still colliding after three
+    1-3 step nudges is boxed in by something wider than three grids, and retrying
+    inside the same window is what made the extra attempts worthless before.
+    """
     import hashlib
     h = int(hashlib.sha256(f"{net_name}#{attempt}".encode()).hexdigest(), 16)
-    steps = (h % 3) + 1                      # 1, 2, or 3 grid steps
+    steps = (h % 3) + 1 + 3 * (attempt // 3)   # 1..3, then 4..6, then 7..9
     sign = 1.0 if (h >> 2) & 1 else -1.0
     return round(sign * steps * 1.27, 4)
 
 
+def _dedupe_waypoints(waypoints: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Drop CONSECUTIVE duplicate points from a polyline.
+
+    A repeated point is a ZERO-LENGTH segment. It is not merely cosmetic: it emits
+    a degenerate `(wire (pts (xy X Y) (xy X Y)))` into the sheet, and `_seg_axis`
+    classifies it as neither horizontal nor vertical, so the anti-fusion guard
+    cannot reason about it at all -- a zero-length segment silently opts itself OUT
+    of every collision test. Both jog base cases can produce one whenever the
+    offset collapses an elbow onto an endpoint, so they are filtered at the source.
+
+    Endpoint fidelity: the first and last points are always retained (a duplicate
+    is only ever dropped in favour of the identical point already kept).
+    """
+    out: list[tuple[float, float]] = []
+    for p in waypoints:
+        if out and abs(p[0] - out[-1][0]) < _FUSION_EPS and abs(p[1] - out[-1][1]) < _FUSION_EPS:
+            continue
+        out.append(p)
+    return out
+
+
 def _jog_free_axis(waypoints: list[tuple[float, float]], offset: float) -> list[tuple[float, float]]:
-    """Shift an L-route's elbow along its FREE axis by `offset`, keeping both pin
+    """Shift a route's interior along its FREE axis by `offset`, keeping both pin
     endpoints fixed. For a 2-waypoint straight run this inserts a jog so the
     middle no longer lies on the original line. For a 3-waypoint L, it moves the
-    elbow's swing so the two legs shift off the colliding column/row.
+    elbow's swing so the two legs shift off the colliding column/row. For a route
+    with MORE waypoints (an escape-stub route, a Z-detour) the two outermost legs
+    are held and the interior is jogged recursively.
 
     A horizontal-first L [p1,(x2,y1),p2] has its VERTICAL leg on column x2; jog
     it to (x2+offset). A collinear straight [p1,p2] (dx==0 or dy==0) is split
     into a 3-segment jog so it detours off the shared line.
+
+    INVARIANT (relied on by the recursion and by FIDELITY): the returned polyline
+    always begins with waypoints[0] and ends with waypoints[-1] verbatim, and every
+    segment stays axis-aligned. No pin is ever moved.
+
+    BR_20260905 -- this function used to `return waypoints` UNCHANGED for any
+    len >= 4, and that silent no-op is the mechanism behind the reported defect.
+    `_orthogonal_route` prepends/appends a pin ESCAPE stub (M6-8), so essentially
+    every real route is 4+ waypoints; the anti-fusion guard therefore re-tested the
+    IDENTICAL geometry on every retry, concluded the net was unroutable, and
+    down-graded it to a label stub. "Jogged N times and still colliding" and "never
+    jogged at all" produced the same output, so the retry budget looked like it was
+    working while doing nothing. Handling the general case is what makes the retry
+    loop above mean what it says.
     """
+    if len(waypoints) < 2:
+        return waypoints
     if len(waypoints) == 2:
         (x1, y1), (x2, y2) = waypoints
         if abs(x1 - x2) < _FUSION_EPS:       # vertical run → detour x
             mx = round(x1 + offset, 4)
-            return [(x1, y1), (mx, y1), (mx, y2), (x2, y2)]
+            return _dedupe_waypoints([(x1, y1), (mx, y1), (mx, y2), (x2, y2)])
         # horizontal run → detour y
         my = round(y1 + offset, 4)
-        return [(x1, y1), (x1, my), (x2, my), (x2, y2)]
+        return _dedupe_waypoints([(x1, y1), (x1, my), (x2, my), (x2, y2)])
     if len(waypoints) == 3:
         (x1, y1), (ex, ey), (x2, y2) = waypoints
         # horizontal-first elbow: vertical leg on column ex → move the column.
         nex = round(ex + offset, 4)
-        return [(x1, y1), (nex, y1), (nex, y2), (x2, y2)]
-    return waypoints
+        return _dedupe_waypoints([(x1, y1), (nex, y1), (nex, y2), (x2, y2)])
+    # len >= 4: hold the first and last LEG (the pin escape stubs, which must stay
+    # straight out of the pin) and jog the interior sub-polyline. Because the base
+    # cases preserve their own first/last point verbatim, the spliced result still
+    # joins waypoints[0] and waypoints[-1] with the original axis-aligned legs.
+    inner = _jog_free_axis(waypoints[1:-1], offset)
+    return _dedupe_waypoints([waypoints[0], *inner, waypoints[-1]])
 
 
 # ---------------------------------------------------------------------------
@@ -3011,6 +3112,34 @@ def check_wire_body_clearance(result: "SchematicEmitResult | object") -> list[di
     return list(getattr(result, "wire_body_intrusions", []) or [])
 
 
+def _bus_chain_points(endpoints: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """The canonical daisy-chain pin ORDER for a multi-node net.
+
+    Taxonomy:
+      - input  endpoints: >=1 absolute pin (x, y) on ONE net; duplicates allowed,
+               caller ordering irrelevant.
+      - output: the de-duplicated pins ordered by (x, y) ascending — left→right,
+               then top→bottom. Chain hops are `zip(pts, pts[1:])`; the interior
+               pins `pts[1:-1]` are exactly the points that need a junction.
+      - rule: deterministic for a given endpoint SET regardless of caller order.
+      - NOT: any geometry. This function routes nothing and never moves a pin.
+
+    BR_20260905: extracted from `_bus_route` so the emitter's per-hop routing loop
+    and `_bus_route` itself derive the chain from ONE implementation. They had to
+    agree on both the hop sequence AND the junction points; two copies of a sort
+    would have been free to drift, and a drifted junction set is an invisible
+    defect (the dots land on points the chain does not visit).
+    """
+    pts: list[tuple[float, float]] = []
+    seen: set[tuple[float, float]] = set()
+    for p in sorted(endpoints, key=lambda q: (q[0], q[1])):
+        if p in seen:
+            continue
+        seen.add(p)
+        pts.append(p)
+    return pts
+
+
 def _bus_route(endpoints: list[tuple[float, float]],
                obstacles: list[tuple[float, float, float, float]] | None = None) -> tuple[list[tuple[tuple[float, float], tuple[float, float]]], list[tuple[float, float]]]:
     """Multi-node (3+ pin) net router: an ORTHOGONAL DAISY-CHAIN over sorted pins.
@@ -3057,14 +3186,7 @@ def _bus_route(endpoints: list[tuple[float, float]],
       - done when: every consecutive pair of the sorted, de-duplicated pin list has been
               expanded into axis-aligned segments and every interior pin has a junction.
     """
-    # Dedupe coincident pins, order left→right (then top→bottom) for a stable chain.
-    pts: list[tuple[float, float]] = []
-    seen: set[tuple[float, float]] = set()
-    for p in sorted(endpoints, key=lambda q: (q[0], q[1])):
-        if p in seen:
-            continue
-        seen.add(p)
-        pts.append(p)
+    pts = _bus_chain_points(endpoints)
 
     segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
     junctions: list[tuple[float, float]] = []
