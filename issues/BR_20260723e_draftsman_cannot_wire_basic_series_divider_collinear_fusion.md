@@ -208,3 +208,17 @@ repro fixture 必須鎖住 **`_orthogonal_route` 路徑上的幾何前提**，�
 不可達」在儀器上長得一樣——缺席態與失敗態共用輸出。
 
 **Status**: open（RCA 部分過期，已於本節逐項更正；fix#1 撤銷、fix#2/#3/#4 待逐條重驗）
+
+---
+
+## 2026-09-05 實例補充：04.btdongle 13 元件充電子電路實測共線熔合重現
+
+在 04.btdongle C03 接軌 `compose_schematic(style="draftsman")` 驗證中（排除 multi-unit D1 與連接器 J1/J2 後的 13 元件充電子電路：ETA6003、電阻、電容、電感、開關、LED）：
+
+1. **Symptom 復現**：
+   - 仍觸發 `FidelityError`，11 個節點被搬移（moved=11）。
+   - 幾何探針量測到 6 組共線重疊（collinear overlapping wires）與 7 個未打點 T 接觸（unconnected T-intersections）。
+2. **與 BR_20260905 關聯說明**：
+   - `95d6241` 解除了 >=3 節點強制降級為 global label 的限制，讓信號網進入實線繪製菊花鏈。
+   - 實線一旦發射，隨即流進本 BR 尚未封閉的 anti-fusion 避障盲區與串聯鏈共線熔合漏洞。
+   - 本案證實共線熔合問題不僅存在於 3-part 最小分壓鏈，亦普遍存在於 10+ 元件之真實電源/類比子電路排版中。本 BR 維持 OPEN，作為後續 schematic-engine 走線幾何重構之主要追蹤件。
