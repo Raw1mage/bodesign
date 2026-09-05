@@ -1,6 +1,6 @@
 # BR_20260905 — schematic emitter 產出的是「pin 掛 label」的接線表，不是電路原理圖：pin-to-pin 實線 0 條、junction 0 個
 
-- **Status**: OPEN
+- **Status**: OPEN — **修法已落地（bodesign `95d6241`）但消費端零效果。見 §10，本 BR 存在 venue 誤判**
 - **Severity**: **P0 — 立身能力缺陷**。交付物在客戶眼中不是原理圖，這是本產品線 C03 的核心可交付物
 - **Filed**: 2026-09-05 by `ses_f95148a02ffenF83aJE6hX1paA`（thesmart_products handler，04.btdongle C03 交付線）
 - **Filed for**: bodesign 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`（`[★]main`）
@@ -274,4 +274,98 @@ label 承擔的連通比例                    < 20 %（基準圖約 5 %）
 - **沒有跑 KiCad 自己的 netlist / ERC。** 本 BR 全部量在檔案文字結構上，**沒有證明「同名 global_label 在 eeschema 語意下是否真的匯流成同一個 net」**。所以本 BR 主張的是**圖面不可讀、不表達拓樸**，不是主張最終 netlist 錯誤。若要斷言後者，需跑 `kicad-cli sch export netlist` 與 `design.NETS` 比對。**這是本 BR 最大的未驗證邊界，不得被讀成已排除。**
 - **`pin_to_pin` 判準的已知寬鬆處。** 判定方式是「wire 兩端座標皆不落在任一 label 的 `(at x y)` 上」。它不區分「端點落在某個 symbol pin 上」與「端點懸空」，也未處理 grid 誤差；本 repo 未觀察到誤差，且若有誤差會使 `pin_to_pin` 反向膨脹而非縮小，故不影響「btdongle 為 0」這個方向的結論。
 - **沒有判斷修法。** 本 BR 是取證與規格定義，修法歸 `schematic-engine` owner。
+
+---
+
+## §10 修法後複驗：消費端零效果，且本 BR 存在 venue 誤判（2026-09-05 實測）
+
+bodesign 於 `95d6241` 落地修法並通知複驗。**複驗結果是不通過，而根因不在那次修法。**
+
+### §10.1 §7 判準複驗，四項全部維持修法前的數值
+
+在 `04.btdongle/C03-EE/02_build/sch_gen` 重跑 `mk_sch.py`（`rc=0`，輸出 `OK: 3 sheets, 45 components, 27 nets`），再對產物量 §7：
+
+| 分頁 | wire | junction | global_label | 短樁 | pin-to-pin |
+|---|---|---|---|---|---|
+| `btdongle_io` | 26 | **0** | 26 | 26 | **0** |
+| `btdongle_mcu` | 29 | **0** | 29 | 29 | **0** |
+| `btdongle_power` | 69 | **0** | 69 | 69 | **0** |
+| 合計 | 124 | **0** | 124 | **124** | **0** |
+
+正控制組（同一支探針、同一輪執行）：`03.aiguard` 三檔回 junction **2 / 46 / 48**，pin-to-pin **0 / 63 / 58**。探針有判別力，btdongle 的 0 是測量值。
+
+**§7 四項判準逐項未達成**：`pin_to_pin > 0` 未達成、`junction > 0` 未達成、被動件兩腳跨接未達成、label 承擔連通比例仍為 100 %（目標 < 20 %）。
+
+### §10.2 產物在結構上零改變，不只是「數字碰巧一樣」
+
+把重跑產物與 committed 版各自做 UUID 正規化後逐位元比對：
+
+```
+btdongle_power   uuid_normalised_identical = True
+btdongle_mcu     uuid_normalised_identical = True
+btdongle_io      uuid_normalised_identical = True
+CONTROL (mcu vs io，應為 False) = False
+```
+
+**除了每次執行必然重生的 UUID 之外，重跑產物與修法前逐位元相同。** 所以這不是「修法有效但這份 spec 剛好不觸發」，是這條路徑完全沒有經過修法。
+
+### §10.3 根因：btdongle C03 不經過 bodesign 引擎，本 BR 的 fix venue 判錯了
+
+**這一格是我 filed 這張 BR 時的錯誤，不是 bodesign 的。**
+
+`04.btdongle/C03-EE/02_build/sch_gen/mk_sch.py` 是**本地自寫的 emitter**，證據三路：
+
+- AST 列舉全部 import：`{os, re, sys, uuid, design, symlib}`，其中 `design` 與 `symlib` 解析到同目錄本地 `.py`。
+- AST 掃 escape call（`system`/`popen`/`exec`/`spawn`/`run`/`Popen`/`urlopen`/`import_module` 等）：命中三處，逐行檢視全部是 `dict.get`（`mk_sch.py:77,80,229`）。無 subprocess、無網路、無容器呼叫。控制組：同一次走訪找得到已知存在的 `wire` / `write` 呼叫共 5 處。
+- `bodesign_eda_bridge` 在本機 python 環境 `ModuleNotFoundError`（控制組 `import json` 成功）。
+
+檔案時間也一致：`mk_sch.py` mtime `2026-09-05 01:58`，`95d6241` 的 commit time 是 `2026-09-05 14:18`。**修法落地時，這支 emitter 已經十二小時沒被動過，之後也沒有。**
+
+而 `95d6241` 改的是 `packages/eda-bridge/bodesign_eda_bridge/{composer,kicad_emit}.py`。**那兩支檔案與 btdongle 這條產線之間沒有任何呼叫關係。**
+
+所以 §1 那句「`compose_schematic` 產出的 `.kicad_sch`」是錯的。**產出它的是消費端 repo 內的本地腳本。** §2 的全部量測仍然成立（那些是對產物量的），§3 的基準規格仍然成立，錯的是 §0 抬頭的 **Fix venue** 那一行。
+
+### §10.4 bodesign 的修法在它自己的軌上是有效的，這一格要分開講
+
+不要因為消費端零效果就推論修法無效，兩者是不同的問題。
+
+- `tests/test_kicad_emit.py`：**46 passed**，其中含本次新增、逐字寫明「BR_20260905 §7 acceptance: `pin_to_pin > 0` AND `junction > 0`」的驗收測試。
+- `tests/test_composer_draftsman.py`：11 failed / 64 passed。**但這 11 個不是本次造成的** —— 用 `git archive 95d6241^` 匯出父 commit 到 scratch 跑同一支測試，得 **11 failed / 63 passed**。既有紅燈，與本次修法無關。
+
+**所以 bodesign 側的判定是：修法在引擎軌上有效且帶驗收測試；它對 btdongle 無效的原因是 btdongle 從來不呼叫那個引擎。**
+
+### §10.5 `check_c03` gate 的結果，以及它為什麼不能拿來判本 BR
+
+依指示跑了 gate（`PYTHONPATH=<bodesign>/packages/workflow-core`）：
+
+```
+GATE: FAIL
+blocking: R3_DRAWABILITY — no symbol-source column found in BOM header
+          (looked for: symbol_source, symbol, sym_source, drawability, deck_status)
+bom_rows=45  active_parts=8  ssot_checked=False
+netlist_crosscheck / pin_polarity / mandated_passives / switch_node_shorts = not_run
+  （理由一致：netlist_path 未提供）
+```
+
+**這個 FAIL 與本 BR 無關**，它擋的是 BOM 表頭缺欄位。而且它有五格 `not_run`，gate 自己逐格寫明「a PASS here does not mean …」——**即使它回 PASS，也不構成 §7 判準的通過證據，因為它根本不量 junction 與 pin-to-pin。**
+
+### §10.6 我這一輪的兩個探針缺陷，一併記錄
+
+第一次量測時我的 label 正則寫成 `\(global_label "[^"]*" [^)]*?\(at ...`，`[^)]*?` 跨不過 `(shape bidirectional)` 裡的 `)`，於是 label 座標集合是空的，**每條 wire 都被誤判為 pin-to-pin，回報 `pin_to_pin=124`**。那個數字看起來正是「修好了」的樣子。
+
+抓到它的是同一輪輸出裡的矛盾：`pin_to_pin` 從 0 跳到 124 的同時 `global_label` 從 124 掉到 0，**兩個數字共用同一個成因**。再回頭數原始位元組，`global_label` 字串出現 69 次而 `junction` 出現 0 次，才確認是探針壞了不是產物變了。
+
+教訓寫在這裡供後續複驗者參考：**在這份檔案上，`pin_to_pin` 與 `label 計數` 必須一起看。** 只看 `pin_to_pin > 0` 會把「正則沒命中」讀成「修好了」，而那正是本 BR 從頭到尾在防的那種假綠燈。
+
+### §10.7 尚待裁決
+
+本 BR 的 §2 / §3 / §7 全部有效，錯的只有 fix venue。三條路可走，**選哪一條是 bodesign 與消費端共同的決定，不是我單方面可裁的**：
+
+**其一，btdongle 改為呼叫 bodesign 引擎。** `design.py` 的 `NETS` 已是完整拓樸（§2.7），理論上可以餵給 `compose_schematic`。這樣 `95d6241` 的修法立即生效，且未來同族修法自動涵蓋這條線。代價是要接一層轉換，且要驗 45 個元件的 symbol 對應。
+
+**其二，修消費端的本地 emitter。** 在 `mk_sch.py` 內實作 pin-to-pin 走線與 junction。代價是把同一個問題在第二個地方再解一次，而這正是 §5「引擎層問題不在呼叫層打地鼠」警告的形狀。
+
+**其三，本 BR 在 bodesign 側改判為 partially-invalid 並結案，另在消費端 repo 開一張新 BR。** 這一條最誠實但最慢。
+
+**我的建議是其一**，理由是 §2.7 已證實上游拓樸完整，且 bodesign 引擎現在有帶驗收測試的實線能力，而本地 emitter 沒有也不會有。但這是建議不是裁決。
 
