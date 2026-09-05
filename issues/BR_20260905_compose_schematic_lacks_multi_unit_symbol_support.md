@@ -1,6 +1,6 @@
 # BR_20260905 — compose_schematic 缺乏 multi-unit symbol 支援，壓平符號致引腳座標重合與短路
 
-- **Status**: OPEN
+- **Status**: FIXED（2026-09-05 · multi-unit 壓平貢獻的 moved 項已清零，真板實測 moved 10→0；驗收見 §4）
 - **Severity**: HIGH（立身能力缺陷 · 無法支援標準庫 multi-unit 元件）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`、`kicad_symbol.py`、`composer.py`
 - **Filed**: 2026-09-05 by bodesign 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`（依 thesmart_products C03 handler `ses_f95148a02ffenF83aJE6hX1paA` 取證立案）
@@ -50,3 +50,88 @@ FIDELITY FAIL moved=10 only_baseline=2 only_candidate=2
    - 放置器將同一 ref 的不同 unit 視為獨立圖形區塊分別排版與走線。
 3. **發射器讀取 `component.unit`**：
    - 將寫死的 `(unit 1)` 改為動態發射對應的 `(unit {component.unit})`。
+
+---
+
+## 4. 真板實驗結論（2026-09-05，handler `ses_f8e45aabdffeS6jd3hxBkjf5fV` 實測）
+
+語料：`thesmart_products/04.btdongle/C03-EE/02_build/sch_gen/design.py`（D1 = `Power_Protection:PESD5V0L4UF`，
+4-unit ESD 陣列，extends PESD3V3L4UF）。唯讀複製進 scratch 轉 spec 測，guest repo 未寫入。
+
+### 4.1 落地修改
+
+`packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`（+199/−2，單檔）：
+
+- 新增 `_unit_children` / `_pin_unit_map` / `_unit_stride` / `_unit_offsets` / `_translate_block_y` / `_stack_units`。
+- `load_symbol` 在 `_flatten_extends` 之後、`_scale_symbol_geometry` 之前插入 `_stack_units`，
+  把 N 個 unit 投影成單一 body 的垂直堆疊（unit u 下移 u×stride，**stride 由各 unit 實際繪製範圍量出**，非假設常數）。
+- `_symbol_instance_block` 的寫死 `(unit 1)` 改讀 `component.unit`。
+- `_pwr_flag_instance` / `_power_symbol_instance` 的 4 處 `(unit 1)` **刻意保留**（PWR_FLAG / power port 本質單 unit）。
+
+### 4.2 四格驗證與控制組
+
+- **G1（`component.unit` 真的被讀了嗎）**：改前 grep 0 hit；改後 2 hit（`:2184` `:2193` `:2200`）。
+  正控制 `component.lib_id`=25；**負控制** `component.zzznotafield`=0（證明 grep 不會亂回非零）。
+- **G2（D1 四 unit 座標還重合嗎）**：改前 distinct 2/6，pin 1/3/4/6 全在 `(-2.54, 0)`；
+  改後 distinct 5/6，pin3 `(-2.54,-7.62)` / pin4 `(-2.54,-15.24)` / pin6 `(-2.54,-22.86)`。
+  控制組 A：`Device:R` `Device:C` 座標與改前**逐字相同**（single-unit 未被弄壞）。
+  控制組 C：**突變控制** — in-process 把 `_stack_units` 換 no-op → distinct 掉回 2/6；還原 → 5/6。
+- **G3（既有測試回歸）**：`test_kicad_emit` Ran 46 OK、`test_composer` Ran 5 OK、
+  `test_generic_symbol` Ran 3 OK、四顆 `test_fidelity_*` Ran 5/19/12/7 全 OK。
+  判別欄位取 `Ran N` 而非 rc；跑前清 `__pycache__`。
+- **G4（kicad-cli 接受這份檔嗎）**：`validate=True` 未 raise、`symbol_load_failures=[]`、
+  gate `intra_overlap=0 label_overlap=0 rects=263 PASS`。額外做的：本修改重寫了 symbol s-expr 區塊，
+  需證明不只自家 parser 讀得懂。
+
+G2 的**突變控制組是決定性的**：它排除了「數字是環境或其他改動造成」這個解釋——
+關掉 `_stack_units` 立刻退回 2/6，證明位移確實由本修改承重。
+
+### 4.3 電氣軸結果（本 BR 核心判準）
+
+```
+改前  baseline nets=27 nodes=135 | candidate nets=54 nodes=164 | shared=133
+      FIDELITY FAIL moved=10 only_baseline=2 only_candidate=2
+        MOVED          ['D1.1','F1.1','J1.A4','J1.A5','J1.A9','J1.B4','J1.B5','J1.B9','R1.1','R2.1']
+        ONLY_BASELINE  ['D1.3','D1.4']
+        ONLY_CANDIDATE ['D1.5','U2.17']
+
+改後  baseline nets=27 nodes=135 | candidate nets=57 nodes=167 | shared=135
+      FIDELITY FAIL moved=0 only_baseline=0 only_candidate=2
+        ONLY_CANDIDATE ['D1.5','U2.17']
+```
+
+逐項對照（非裸數字）：**MOVED 10 項全清、ONLY_BASELINE `['D1.3','D1.4']` 全清**，shared 133→135。
+
+### 4.4 ⭐ 關鍵發現：修復序列的路標（留給後續 handler）
+
+立案時的假設是「moved 由多缺陷疊加，修完 multi_unit 仍會有 BR_20260723e collinear fusion 的殘留」。
+**實測推翻此假設**，兩點皆已量測：
+
+1. **真板 moved 直接歸零（10 → 0），不是遞減。**
+   那 10 項 MOVED **全部由 multi-unit 壓平單獨造成**。BR_20260723e（collinear fusion）
+   **在這塊板上不貢獻任何 moved**——它以既有 anti-fusion guard 的降級形式被吸收：
+   `anti-fusion guard down-graded 3 net(s) to label: ['CHG_LED_A','LED_WIFI','VBAT_SENSE']`。
+   ⇒ 723e 的優先序在此板可下修；它不是真板 fidelity gate 的 blocker。
+
+2. **殘留的 gate FAIL 成因已換人，是第三條獨立缺陷。**
+   `ONLY_CANDIDATE ['D1.5','U2.17']` 改前改後**逐字相同**，未被本修改觸碰。
+   查 `design.py:271`（`("D1","5"), ("D1","6")` spare ESD 通道）與 `:278`（`("U2","17")`），
+   兩者都在 `NO_CONNECT` 清單中 ⇒ **NC 節點未被排除在 fidelity 的 spec 母體之外**，
+   與 multi_unit 無關、與 723e 亦無關。真板 gate 要 PASS，下一張要開的是這條，不是 723e。
+
+### 4.5 修法邊界（誠實標記）
+
+`_stack_units` 是**投影法，不是 KiCad 原生 multi-unit 實例化**。
+原生做法是發射 N 個 `(symbol ... (unit u))` 實例、各自獨立擺放；那需要放置層把 `(ref, unit)`
+當作 entity key，屬**放置器改寫**，超出本 BR 邊界，故未做。
+兩者**電氣等價**，差別僅在製圖慣例（一顆高 body vs N 顆可各自擺放的 body）。
+此差異已寫進 `_stack_units` docstring，不靠這張 BR 記住。
+
+### 4.6 未量邊界
+
+- **視覺軸完全未量**：未轉圖、未做 fresh-eyes subagent 覆核。D1 現為 4 unit 垂直堆疊的高 body，觀感未知。
+- **ERC 告警內容未逐條讀**：只證明 kicad-cli 未拒絕檔案，未審視個別 violation。
+- **三 sheet 拆分未做**：仍 `content exceeds largest standard sheet`（A0）——改前即存在，非本次回歸。
+- **僅驗此一顆 multi-unit 符號**：雙運放 / 多邏輯閘等其他 multi-unit 家族未測。
+- **未跑全套 142 模組**，只跑上述 7 顆。
+- 幾何/座標綠燈**不授權**「電路對了」的宣稱；電氣軸證據僅 moved 10→0 一項。

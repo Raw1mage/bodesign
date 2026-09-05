@@ -405,6 +405,13 @@ def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR,
     if block is None:
         raise KeyError(f"Symbol {name!r} not found in {lib_path}")
     block = _flatten_extends(block, name, source)
+    # BR_20260905: a multi-unit symbol's units are laid out as a vertical stack
+    # BEFORE scaling, so every pin gets a DISTINCT symbol-local coordinate. The
+    # legacy loader merged the units without offsetting them, leaving e.g. all four
+    # PESD5V0L4UF cathodes at (-2.54, 0); coincident pins on different nets fuse
+    # downstream into one node (measured: VBUS_CON/CC1/CC2 shorted, moved=10).
+    # Single-unit symbols are returned unchanged, so this is a no-op for them.
+    block = _stack_units(block, name)
     if page_scale != 1.0:
         block = _scale_symbol_geometry(block, page_scale)
     embedded = block.replace(f'(symbol "{name}"', f'(symbol "{lib_id}"', 1)
@@ -492,6 +499,195 @@ def _flatten_extends(block: str, name: str, source: str, _depth: int = 0) -> str
                   if c.startswith(f'(symbol "{base_name}_')]
     body = "\n".join(base_attrs + derived_props + base_units)
     return f'(symbol "{name}"\n{body}\n)'
+
+
+# BR_20260905 (multi-unit): a KiCad multi-unit symbol carries its pins in child
+# sub-symbols named "<NAME>_<UNIT>_<BODYSTYLE>". UNIT==0 is the COMMON block drawn
+# for every unit (usually graphics only); UNIT>=1 is one schematic unit. Different
+# units routinely reuse the SAME symbol-local coordinates (a 4-channel ESD array
+# puts every cathode at (-2.54, 0)), so a loader that flattens all sub-symbols into
+# one {pin_number: (x, y, rot)} map yields several pins at ONE point. Downstream
+# that reads as "these pins are the same node" and the emitted schematic fuses
+# unrelated nets (the measured D1 pins 1/3/4/6 -> VBUS_CON/CC1/CC2 short).
+_SUBSYM_UNIT_RE = re.compile(r'^\(symbol\s+"(.+)_(\d+)_(\d+)"')
+# Vertical clear space (mm, symbol-local) left between two stacked unit blocks.
+_UNIT_GAP_MM = 2.54
+# Floor on the stride so two units never land closer than one KiCad grid pair even
+# when a unit's own drawn extent is degenerate (a single pin, zero height).
+_UNIT_STRIDE_MIN_MM = 7.62
+
+
+def _unit_children(block: str) -> dict[int, list[str]]:
+    """{unit_index: [child sub-symbol block, ...]} of a flattened symbol block.
+
+    Unit 0 is the COMMON block (drawn for every unit). A symbol with no
+    `_<u>_<s>` children at all returns {} — the caller then treats it as a plain
+    single-unit symbol and every offset is 0.0 (byte-identical to the legacy
+    loader, which is what keeps every existing single-unit caller stable).
+    """
+    out: dict[int, list[str]] = {}
+    for child in _symbol_children(block):
+        m = _SUBSYM_UNIT_RE.match(child)
+        if m is None:
+            continue
+        out.setdefault(int(m.group(2)), []).append(child)
+    return out
+
+
+def _pin_unit_map(block: str) -> dict[str, int]:
+    """{pin_number: unit_index} for a flattened symbol block.
+
+    A pin declared in the COMMON block (unit 0) is drawn once per unit; it is
+    attributed to unit 1 so it gets exactly ONE placement (drawing it N times
+    would re-create the coincident-pin defect this map exists to remove).
+    Pins outside any `_<u>_<s>` child (a malformed / hand-written symbol) are
+    absent from the map and the caller defaults them to unit 1.
+    """
+    units: dict[str, int] = {}
+    for unit, children in _unit_children(block).items():
+        for child in children:
+            for pin_match in PIN_RE.finditer(child):
+                number_match = NUMBER_RE.search(child, pin_match.end())
+                if number_match is None:
+                    continue
+                units.setdefault(number_match.group(1), max(unit, 1))
+    return units
+
+
+def _unit_stride(block: str) -> float:
+    """Vertical stride (mm) between consecutive unit blocks of a multi-unit symbol.
+
+    Measured, not assumed: the tallest single unit's drawn extent (its own pins +
+    the common block's graphics) plus `_UNIT_GAP_MM`, floored at
+    `_UNIT_STRIDE_MIN_MM`. Using the MAX over units keeps the stack uniform, so a
+    consumer can recover a pin's unit from its offset by division.
+    """
+    children = _unit_children(block)
+    if not children:
+        return 0.0
+    common = "\n".join(children.get(0, []))
+    stride = 0.0
+    for unit, blocks in children.items():
+        if unit == 0:
+            continue
+        merged = common + "\n" + "\n".join(blocks)
+        ys: list[float] = [float(m.group(2)) for m in PIN_RE.finditer(merged)]
+        for m in _PT_RE.finditer(merged):
+            ys.append(float(m.group(2)))
+        for m in _ARC_PT_RE.finditer(merged):
+            ys.append(float(m.group(2)))
+        for m in _RECT_RE.finditer(merged):
+            ys.extend((float(m.group(2)), float(m.group(4))))
+        if ys:
+            stride = max(stride, max(ys) - min(ys))
+    return round(max(stride + _UNIT_GAP_MM, _UNIT_STRIDE_MIN_MM), 4)
+
+
+def _unit_offsets(block: str) -> dict[int, float]:
+    """{unit_index: symbol-local y shift} laying the units out as a vertical stack.
+
+    Unit 1 keeps offset 0.0 so a single-unit symbol is byte-identical to the
+    legacy loader. Unit u is shifted DOWN by (u-1)*stride; symbol-local y grows
+    UP, so the shift is negative and maps to sheet +y (downward) via the usual
+    `sheet_y = comp.y - local_y`.
+    """
+    children = _unit_children(block)
+    real_units = sorted(u for u in children if u >= 1)
+    if len(real_units) <= 1:
+        return {u: 0.0 for u in real_units} or {1: 0.0}
+    stride = _unit_stride(block)
+    return {u: round(-(i * stride), 4) for i, u in enumerate(real_units)}
+
+
+_TRANSLATE_AT_RE = re.compile(r'\(at\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s+(-?[\d.]+))?\)')
+_TRANSLATE_PT_RE = re.compile(r'\((start|end|mid|center|xy)\s+(-?[\d.]+)\s+(-?[\d.]+)\)')
+
+
+def _translate_block_y(block: str, dy: float) -> str:
+    """Shift every symbol-local coordinate in a sub-symbol block by `dy` on y.
+
+    Only `(at x y [rot])` and `(start|end|mid|center|xy x y)` carry positions.
+    `(size w h)` / `(length n)` / `(radius n)` are EXTENTS, not positions, and are
+    deliberately left alone — scaling them here would deform the glyph. `dy==0.0`
+    returns the block unchanged (byte-identical), which is what makes the
+    single-unit path a no-op.
+    """
+    if dy == 0.0:
+        return block
+
+    def _at(m: "re.Match") -> str:
+        x = _fmt_num(round(float(m.group(1)), 4))
+        y = _fmt_num(round(float(m.group(2)) + dy, 4))
+        rot = m.group(3)
+        return f"(at {x} {y}" + (f" {rot})" if rot is not None else ")")
+
+    def _pt(m: "re.Match") -> str:
+        x = _fmt_num(round(float(m.group(2)), 4))
+        y = _fmt_num(round(float(m.group(3)) + dy, 4))
+        return f"({m.group(1)} {x} {y})"
+
+    return _TRANSLATE_PT_RE.sub(_pt, _TRANSLATE_AT_RE.sub(_at, block))
+
+
+def _stack_units(block: str, name: str) -> str:
+    """Project a MULTI-UNIT symbol onto one single-unit body, units stacked on y.
+
+    BR_20260905. KiCad draws a multi-unit part as N independent sheet symbols, one
+    per unit, each placed by the user. This emitter's placement layer keys every
+    entity by REF (one position per ref), so it can only place ONE body per ref —
+    and the legacy loader answered that by flattening all units into one map,
+    which stacked every unit's pins on the SAME symbol-local coordinate (a
+    4-channel ESD array puts all four cathodes at (-2.54, 0)). Coincident pins on
+    different nets are read downstream as one node, so the emitted schematic
+    SHORTED VBUS_CON / CC1 / CC2 (measured: moved=10 on the 04.btdongle board).
+
+    This projection keeps the one-body-per-ref contract but makes it geometrically
+    honest: every unit's own block is translated DOWN by `unit_index * stride` and
+    the results are merged into a single `<name>_1_1`, with the common (`_0_1`)
+    graphics replicated at each unit's offset. The result is a valid single-unit
+    symbol whose pins all sit at DISTINCT coordinates, so no two nets can fuse
+    through coincident geometry.
+
+    What this is NOT: true KiCad multi-unit instancing (N `(symbol ... (unit u))`
+    instances at independently placed sheet positions). That needs the placement
+    layer to treat (ref, unit) as its entity key, which is a placer change, not a
+    loader change. The emitted part is electrically identical either way; only the
+    draughting idiom differs (one tall body vs N placeable bodies).
+
+    A symbol with 0 or 1 real units is returned UNCHANGED (byte-identical), so
+    every single-unit caller is unaffected.
+    """
+    children = _unit_children(block)
+    real_units = sorted(u for u in children if u >= 1)
+    if len(real_units) <= 1:
+        return block
+
+    offsets = _unit_offsets(block)
+    header_end = block.index('"', block.index('"') + 1) + 1
+    header = block[:header_end]
+    keep = [c for c in _symbol_children(block) if not c.startswith('(symbol "')]
+
+    common = children.get(0, [])
+    common_body: list[str] = []
+    unit_body: list[str] = []
+    for unit in real_units:
+        dy = offsets.get(unit, 0.0)
+        for child in common:
+            # strip the child's own (symbol "..") wrapper; keep its primitives.
+            inner = child[child.index('"', child.index('"') + 1) + 1:].rstrip()
+            if inner.endswith(")"):
+                inner = inner[:-1]
+            common_body.append(_translate_block_y(inner, dy))
+        for child in children[unit]:
+            inner = child[child.index('"', child.index('"') + 1) + 1:].rstrip()
+            if inner.endswith(")"):
+                inner = inner[:-1]
+            unit_body.append(_translate_block_y(inner, dy))
+
+    merged_common = f'(symbol "{name}_0_1"' + "".join(common_body) + "\n\t\t)"
+    merged_unit = f'(symbol "{name}_1_1"' + "".join(unit_body) + "\n\t\t)"
+    body = "\n".join([*keep, merged_common, merged_unit])
+    return f"{header}\n{body}\n)"
 
 
 def _pin_endpoints(block: str) -> dict[str, tuple[float, float, float]]:
@@ -1985,6 +2181,7 @@ def _symbol_instance_block(component: EmitComponent, project_name: str, root_uui
     they fall back to the legacy fixed offset so callers that don't need collision
     avoidance stay byte-stable."""
     ref_uuid = _uid()
+    unit = int(getattr(component, "unit", 1) or 1)
     pin_uuids = "\n".join(f'    (pin "{number}" (uuid "{_uid()}"))' for number in ("1", "2"))
     rx = component.x + 2.54 if rx is None else rx
     ry = component.y - 1.27 if ry is None else ry
@@ -1993,14 +2190,14 @@ def _symbol_instance_block(component: EmitComponent, project_name: str, root_uui
     return f'''  (symbol
     (lib_id "{component.lib_id}")
     (at {component.x} {component.y} 0)
-    (unit 1)
+    (unit {component.unit})
     (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
     (uuid "{ref_uuid}")
     (property "Reference" "{component.ref}" (at {round(rx, 4)} {round(ry, 4)} 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Value" "{component.value}" (at {round(vx, 4)} {round(vy, 4)} 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "{component.footprint}" (at {component.x} {component.y} 0) (effects (font (size 1.27 1.27)) (hide yes)))
 {pin_uuids}
-    (instances (project "{project_name}" (path "/{root_uuid}" (reference "{component.ref}") (unit 1))))
+    (instances (project "{project_name}" (path "/{root_uuid}" (reference "{component.ref}") (unit {unit}))))
   )'''
 
 
