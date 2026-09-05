@@ -8,6 +8,7 @@
   - **⚠ §10.1 的 `CHECK P_GUARD 22214 + P_ZEROPIN 219 + load_fail 150 = 22583` 是修法前的讀數**，三項均已過時（但恆等式本身成立，不刪）。引用請改用 §11 的新值。
   > **前版 Status 措辭（2026-08-05，保留不刪）**：`**PARTIAL**（2026-08-05 更正）— §1 主缺陷已修…**殘留（故為 PARTIAL 而非 closed）**：§6 的「各頁曝險」仍 **UNMEASURED**（只量 1 頁）；HEAD 殘留 9 個 blind 中 8 個為 graphics 來源、轄區在 BR_20260804g 但**未核對是否已在其名單內**；母體數三方分歧未裁定。逐項見 §9。`
   > **原 Status 措辭（2026-08-04，保留不刪）**：`open — 機制 ACCEPTED；量值 disputed；**§8 浮點邊界已修（打擊半徑實測 1 個，非原記載 14/15，見 §8.2 更正）；§1/§6 主缺陷仍 OPEN**`
+- **Closed**: 2026-09-05 by ses_04db7a1c5ffelvbxyLP1p6xlRH（landed 驗收：commit 05dce34+d64bbd0 存在且改 kicad_emit.py，控制組 deadbee→fatal 反證）
 - **Severity**: MEDIUM-HIGH（純視覺缺陷的**檢查器**失效；受影響符號含 `Device:R`——最常用的符號）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:1645-1661`（guard C / `_port_intrusions`）
 - **Family**: schematic-engine

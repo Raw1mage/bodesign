@@ -10,6 +10,7 @@
   - `issues/closed/BR_20260706_methodology_in_session_engine_rnd_antipattern.md` — 警告「短路修好一處重產又冒一處，因為根因在引擎層，session 卻在呼叫層打地鼠」→ 本 BR 走 BRNS 正是為此
   - `issues/closed/BR_20260708_draftsman_wire_routing_no_obstacle_avoidance_label_only_fallback.md` — draftsman 全頁退回 label-only 的相鄰缺陷
   - `issues/closed/BR_20260703_e2e_workflow_gaps_nc_paths_env.md` §T3 — ≥3 節點 net wire 不可靠
+  - `issues/BR_20260905_draftsman_connection_strategy_degenerates_to_label_farm_on_non_label_friendly_topology.md`（OPEN，同一 anti-fusion guard 的**降級面**：本 BR 是 guard 攔截後 raise FidelityError，該 BR 是 guard 主動降級改掛 label）
 
 ---
 

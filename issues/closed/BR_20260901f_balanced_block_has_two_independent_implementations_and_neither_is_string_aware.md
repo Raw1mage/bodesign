@@ -1,6 +1,7 @@
 # BR_20260901f — `_balanced_block` 有兩份獨立實作，皆無引號狀態機；332 個符號被靜默解析錯誤，其中 150 個回報成「symbol not found」
 
-- **Status**: **FIXED**（2026-09-01，未 commit，待 dispatcher 驗收）— 三份抄寫全部改為委派單一 string-aware 掃描器 `sexpr.balanced_end`。**全庫三分計數前後對照（母體 P_ROOT = 22583，見 §10）**：`長度正確 22251 → 22583`、`長度錯誤 182 → 0`、`假 not-found 150 → 0`、`真的不存在 0 → 0`，CHECK 恆等式成立。反向控制組（namespace 替換掉 string-awareness）令新測試 5 紅，證明測試有判別力。全套件 1871 測試前後比對**零回歸**（`comm -13` 空集合，控制組非空）。
+- **Status**: **FIXED（已 commit 於 1052831，2026-09-05 dispatcher 驗收 landed）**（2026-09-01 修法）— 三份抄寫全部改為委派單一 string-aware 掃描器 `sexpr.balanced_end`。**全庫三分計數前後對照（母體 P_ROOT = 22583，見 §10）**：`長度正確 22251 → 22583`、`長度錯誤 182 → 0`、`假 not-found 150 → 0`、`真的不存在 0 → 0`，CHECK 恆等式成立。反向控制組（namespace 替換掉 string-awareness）令新測試 5 紅，證明測試有判別力。全套件 1871 測試前後比對**零回歸**（`comm -13` 空集合，控制組非空）。
+- **Closed**: 2026-09-05 by ses_04db7a1c5ffelvbxyLP1p6xlRH（header「未 commit」宣稱過時已更正：實已 commit 1052831，工作區對相關檔 git status 全空，runtime 重現 4 格 correct=True）
 - **Severity**: **HIGH**（已解除）— 修法前 `load_symbol` 對 **150** 個實際存在的符號拋 `KeyError: Symbol 'X' not found`，另 **182** 個回傳長度錯誤的區塊而不報錯；今皆為 0。
 - **Component**:
   - `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:444-453`（`_balanced_block`）

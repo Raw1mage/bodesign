@@ -1,6 +1,7 @@
 # BR_20260804h — `C0x_OUTPUTS` 常數身兼兩職，使「stage 前綴只在一處推導」這句宣稱不成立
 
 - **Status**: FIXED-AS-DOCUMENTED — 错誤宣稱已改寫為事實（三個角色各帶 file:line），且其中可機械斷言的不變量已由 `tests/test_stage_prefix_invariant.py` 釘住（含四組實測過的反向控制組）。**雙前綴模型本身仍存在且是刻意保留**（選項 A 被否決，理由見 §10）——不是遺漏，是裁決。還原為單一前綴模型的工作追蹤於 §11。
+- **Closed**: 2026-09-05 by ses_04db7a1c5ffelvbxyLP1p6xlRH（landed 驗收：假宣稱已包在「That was false」更正註解，雙前綴刻意保留，test_stage_prefix_invariant 13 綠）
 **Severity**: medium — 不是當下的錯誤行為，是**一句錯誤的單一真相來源宣稱**
 **Owner**: `readiness-contract` family（`issues/OWNERS.md`）
 **Filed by**: `ses_0330e7869ffev0nZL0XqoXSp78`（BRNS handler，dispatcher `ses_04db7a1c5ffelvbxyLP1p6xlRH`）

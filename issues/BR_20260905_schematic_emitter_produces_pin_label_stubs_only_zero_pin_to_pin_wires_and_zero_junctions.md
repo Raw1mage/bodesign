@@ -7,6 +7,8 @@
 - **Family**: `schematic-engine`（owner `ses_03408d1faffeKuPkQZ9Zj6gWO2`，依 `issues/OWNERS.md`）
 - **Reporter venue**: 消費端 repo `thesmart_products`，產物 `04.btdongle/C03-EE/02_build/generated/sch/`
 - **Fix venue**: bodesign repo 內修。**本 BR 只做取證與規格定義，不含修法**
+- **Related**:
+  - `issues/BR_20260905_draftsman_connection_strategy_degenerates_to_label_farm_on_non_label_friendly_topology.md`（OPEN，引擎原生連線策略退化；本 BR 是消費端 mk_sch.py 硬編碼短樁、已改判 venue，該 BR 是引擎 compose_schematic 原生 label farm）
 
 ---
 

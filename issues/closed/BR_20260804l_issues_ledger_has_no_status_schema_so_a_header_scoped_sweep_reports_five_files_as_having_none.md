@@ -1,6 +1,7 @@
 # BR_20260804l — `issues/` 帳本沒有 Status schema：兩支合理的 sweep 對同一批檔案回不同答案，而「沒有 Status」與「Status 在我的視窗外」共用同一個輸出
 
-- **Status**: PARTIAL — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；格式收斂**已完成並已 commit（`fcd6fcc`，WARN 24 → 0）**；2026-09-02 重量測確認 49/49 全部 canonical、ERROR=0、WARN=0（§11）。**建議升 FIXED，歸檔待 dispatcher 裁決（見 §11.5）**
+- **Status**: FIXED — schema 已定、checker 已落地並帶內建控制組（`d63566d`，實作選項 1+3）；格式收斂**已完成並已 commit（`fcd6fcc`，WARN 24 → 0）**；2026-09-02 重量測確認 49/49 全部 canonical、ERROR=0、WARN=0（§11）。**2026-09-05 dispatcher 裁定 PARTIAL→FIXED（三面收斂可驗），歸檔（見 §11.5）**
+- **Closed**: 2026-09-05 by ses_04db7a1c5ffelvbxyLP1p6xlRH（PARTIAL→FIXED：commit d63566d+fcd6fcc 存在，checker ERROR=0/WARN=0，控制組證分類器三態可辨）
 
 | Field | Value |
 | --- | --- |

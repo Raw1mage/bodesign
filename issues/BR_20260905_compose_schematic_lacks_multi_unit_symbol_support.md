@@ -8,6 +8,7 @@
 - **Related**:
   - `issues/closed/BR_20260706_left_pin_stub_orientation_blind_draws_inside_symbol_body.md`（§48 附註曾將 multi-unit 標記為 future work）
   - `issues/BR_20260905_schematic_emitter_produces_pin_label_stubs_only_zero_pin_to_pin_wires_and_zero_junctions.md`（§11 實測揭露）
+  - `issues/BR_20260905_draftsman_connection_strategy_degenerates_to_label_farm_on_non_label_friendly_topology.md`（OPEN，schematic-engine 家族第四獨立成因；本 BR 是座標壓平，該 BR 是連線策略降級，兩條獨立修復線）
 
 ---
 
