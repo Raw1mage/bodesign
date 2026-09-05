@@ -1578,12 +1578,25 @@ def emit_kicad_schematic(
             # uses. Endpoints are preserved verbatim by _jog_free_axis, so a jogged
             # hop keeps the chain connected and the net partition unchanged.
             #
-            # Failure semantics are UNCHANGED and deliberately strict: if any hop is
-            # still blocked after the full ladder, the ENTIRE net falls back to
-            # labels. A partially-drawn chain would be an OPEN CIRCUIT that looks
-            # wired -- strictly worse than an honest label.
+            # BR_20260905 (label-farm): failure semantics used to be all-or-nothing
+            # -- ONE blocked hop threw away every OTHER hop of the net and emitted
+            # per-pin label stubs. That is a large part of the reported degradation:
+            # a 4-pin net whose single crowded hop failed lost all 3 of its drawn
+            # hops, including the local RC/divider structure that WAS routable.
+            #
+            # The old reasoning ("a partially-drawn chain is an OPEN CIRCUIT that
+            # looks wired") is correct ONLY for a bare fragment. It stops applying
+            # once each fragment is NAMED: a local label carrying the net name makes
+            # KiCad join the fragments by name, which is precisely how the wholesale
+            # fallback connected those same pins. So a blocked hop now SPLITS the
+            # chain and every fragment gets its own net-name label, and any pin left
+            # in no fragment keeps the per-pin label it would have had anyway. The
+            # net partition is therefore identical to the old fallback's, while the
+            # routable structure survives as drawn copper instead of being discarded.
             _chain_pts = _bus_chain_points(endpoints)
-            _hop_segments: list[tuple] = []
+            _sig_frags: list[dict] = []
+            _cur_pts: list[tuple[float, float]] = [_chain_pts[0]] if _chain_pts else []
+            _cur_segs: list[tuple] = []
             _hop_failed_reason: str | None = None
             for _ha, _hb in zip(_chain_pts, _chain_pts[1:]):
                 _hw = _orthogonal_route(_ha, _hb, _obst)
@@ -1597,11 +1610,36 @@ def emit_kicad_schematic(
                     _last_fuse = any(
                         _segment_fuses(s, _other_net_segments(net.name))
                         for s in _segments_of(_hw))
-                    _hop_failed_reason = "anti-fusion" if _last_fuse else "ledger-collision"
-                    break
-                _hop_segments.extend(_segments_of(_hg))
+                    # Record the reason for the FIRST blocked hop (unchanged
+                    # observability); the net is no longer discarded because of it.
+                    if _hop_failed_reason is None:
+                        _hop_failed_reason = (
+                            "anti-fusion" if _last_fuse else "ledger-collision")
+                    if _cur_segs:
+                        _sig_frags.append({"pts": _cur_pts, "segs": _cur_segs})
+                    _cur_pts = [_hb]
+                    _cur_segs = []
+                    continue
+                _hop = _segments_of(_hg)
+                _cur_segs.extend(_hop)
+                _cur_pts.append(_hb)
+                # Register accepted hops IMMEDIATELY so LATER hops of this same net
+                # are tested against them. The old code registered the whole net
+                # once at the end, so two hops of one net could be laid collinearly
+                # on top of each other without the guard ever seeing it.
+                fusion_registry.setdefault(net.name, []).extend(_hop)
+                for (_ha2, _hb2) in _hop:
+                    _reserve_wire([_ha2, _hb2], net.name)
+            if _cur_segs:
+                _sig_frags.append({"pts": _cur_pts, "segs": _cur_segs})
             if _hop_failed_reason is not None:
-                fusion_label_fallbacks.append({"net": net.name, "reason": _hop_failed_reason})
+                fusion_label_fallbacks.append({
+                    "net": net.name, "reason": _hop_failed_reason,
+                    # Distinguish "lost the whole net" from "lost one hop": these
+                    # need different fixes and must never share one output.
+                    "drawn_fragments": len(_sig_frags)})
+            if not _sig_frags:
+                # Nothing routable at all -> the historical wholesale fallback.
                 kind = _power_net_kind(net.name) if power_ports else None
                 for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                     if kind is not None:
@@ -1609,12 +1647,26 @@ def emit_kicad_schematic(
                     else:
                         label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
                 continue
-            segments = _hop_segments
+            segments = [s for _f in _sig_frags for s in _f["segs"]]
             # Junctions stay exactly the _bus_route contract: one dot at every
             # INTERIOR chain pin (a wire arrives AND leaves there, plus the symbol
             # pin itself = a 3-way meet KiCad requires a junction for). Jogging only
             # moves interior waypoints, never a chain pin, so this is unaffected.
-            junctions = list(_chain_pts[1:-1])
+            # Applied PER FRAGMENT: a fragment's own end points are 2-way joins.
+            junctions = [p for _f in _sig_frags for p in _f["pts"][1:-1]]
+            # Pins that ended up in NO fragment are electrically joined by name --
+            # give them the per-pin label they would have had under the wholesale
+            # fallback, so no pin is left floating.
+            _in_frag = {p for _f in _sig_frags for p in _f["pts"]}
+            _orphan_kind = _power_net_kind(net.name) if power_ports else None
+            for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
+                if abs_pt in _in_frag:
+                    continue
+                if _orphan_kind is not None:
+                    power_endpoints.append(
+                        (net.name, _orphan_kind, abs_pt[0], abs_pt[1], edge, ep_ref))
+                else:
+                    label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
             fusion_registry[net.name] = list(segments)
             for (a, b) in segments:
                 _reserve_wire([a, b], net.name)

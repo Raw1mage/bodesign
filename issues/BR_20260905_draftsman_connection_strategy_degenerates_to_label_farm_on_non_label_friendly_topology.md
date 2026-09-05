@@ -106,6 +106,87 @@ gate 已關，但連線策略**自己主動**把 3 個串聯鏈 net 降級回 la
 4. **route_stats junctions=7 vs emit 落地 5** 的 2 個落差未深究來源。
 5. **未獨立重證前兩個已知缺陷**（採信 bodesign 值星官既有裁決）。
 
+## 8.5 真板實驗結論（2026-09-05，engine handler `ses_f8e7c4f04ffe`，dispatcher 裁決後定案）
+
+這一節是**給未來 handler 的路標**。上面 §3-§7 是立案時的觀察；這一節是拿真 spec
+（`04.btdongle/C03-EE/02_build/sch_gen/design.py` — **注意有 `sch_gen/` 一層**，
+少這層會 rc=1，而「查錯路徑」與「檔案不存在」共用同一個輸出）實測後的裁決。
+
+### 8.5.1 探針與語料的正控制組（先證明量測本身可信）
+
+HEAD 引擎 + 真 spec + fidelity OFF（＝§3 v2/v3 的方法學），獨立重現 §4(c) 四格：
+
+| 量 | 本輪實測 | §4(c) 原文 |
+|---|---|---|
+| wire | 111 | 110 |
+| junction | 5 | 5 |
+| 短樁佔比 | 73.0% | 74% |
+| anti-fusion 降級 net | 3 | 3 |
+
+四格獨立吻合 ⇒ 探針有判別力、語料是對的。**後續數字才有資格拿來比。**
+
+### 8.5.2 被否決的修法：power clustering（open-circuit 缺陷）
+
+嘗試過的修法：把同一 power net 的 pin 依鄰近度分群，每群畫成實線 daisy-chain
+共用一顆 port glyph（意圖直接對應 §6.5 QA 提的「本地 GND 符號」方向）。
+
+**幾何上全面成功，電氣上把電路接錯：**
+
+| | junction | 短樁% | 子電路 | fidelity `moved` |
+|---|---|---|---|---|
+| HEAD | 5 | 73.0% | 3 | **10** |
+| clustering 開 | 43 | 32.7% | 11 | **67**（多出 `open circuit` 機制）|
+
+決定性隔離（同一份 code，只切 `_POWER_CLUSTER_MM`）：
+- `R=0`（clustering 關）→ `moved=10`，與 HEAD **逐字相同**
+- `R=200`（clustering 開）→ `moved=67`
+
+⇒ regression **100% 來自 power clustering**，signal 片段化無辜。
+
+**RCA（根因，留給未來那一單）**：cluster hop 只對其他 net 的**已註冊 wire segment**
+做防護（`_guard_route` / `fusion_registry`），對其他 net 的 **pin 座標**沒有防護。
+一個還沒長出 wire 的 pin 對 fusion registry 是隱形的，但 **KiCad 仍會把穿過該 pin 的
+wire 熔進那個 net**。所以「沒有已註冊線段相撞」與「電氣上安全」**不是同一個謂詞**，
+而合約要的是後者。試加 foreign-pin guard（拒絕穿過任何非本 net pin 的 hop）後
+`moved 67→58`，仍遠差於 10 ⇒ **殘餘成因未定位，需要動 anti-fusion 幾何本身**。
+
+**這一格的教訓比修法本身重要**：這個缺陷讓**每一個幾何判準都變漂亮**
+（§7 判準 1/2/4 全部大幅達標）**同時把 net 接錯**。若驗收只看 §7 的 1/2/4，
+這會是一份漂亮的綠燈交付。**判準 5（fidelity）是唯一擋住它的東西**——
+這正是「格式/幾何綠燈不授權任何內容/電氣正確性宣稱」的實例。
+
+### 8.5.3 被保留的修法：signal 多節點片段化
+
+`_bus_route` 消費端路徑原本是 all-or-nothing：**一個 hop 被擋就丟棄整個 net**
+（含已成功繞出的其他 hop），退回 per-pin label。改為斷點切片段、每片段掛 net 名
+local label（未進任何片段的 pin 保留 per-pin label）。net partition 與舊 fallback
+**完全相同**（都靠同名連通），差別只在可繞的結構被保留成實線。
+
+真板實測：`moved=10`（與 HEAD 逐字相同，**不引入 regression**），
+junction 5→6、短樁 73.0%→70.4%、子電路 3→4。**效果小但乾淨。**
+
+附帶的判別力改善：`fusion_label_fallbacks` 新增 `drawn_fragments` 欄，
+把「整個 net 丟光」（=0）與「只丟一個 hop」（>0）分成不同輸出——
+兩者需要不同的修法，原本共用同一則 warning。
+
+### 8.5.4 真板 fidelity 永遠不會因本 BR 轉綠
+
+**HEAD 在真板上本來就 fidelity FAIL**（`moved=10`），signature 是
+`MOVED: D1.1 F1.1 J1.A4/A5/A9 J1.B4/B5/B9 R1.1 R2.1`（VBUS/CC 熔合）
++ `ONLY_BASELINE: D1.3 D1.4`（multi-unit 壓平）——**逐字就是 §4(a) 的 v1**，
+也就是**另外兩張 BR**（`multi_unit_symbol_support` 與 `BR_20260723e`）。
+
+⇒ **§7 判準 5 在真板上與本 BR 的修法無關，必須先解掉那兩張 BR 才可能轉綠。**
+未來 handler 不要試圖在本 BR 範圍內讓真板 fidelity PASS，那不是本 BR 能達成的。
+本 BR 的幾何數字（判準 1/2/4）在真板上一律是 **fidelity OFF** 下量的。
+
+### 8.5.5 門檻的 scale 依賴（立案時未預期）
+
+§7 門檻（junction>20、短樁<40%）是照真板 45/27 校的。用 28/21 的合成語料測會得到
+**假未達標**（clustering 版：合成 junction 21/短樁 41.5% 看似擦邊未達，真板卻是
+43/32.7% 大幅達標）。**驗收語料規模不對，會讓判準說謊。**
+未來驗收一律用真 spec，合成語料只能當補充。
+
 ## 9. 建議
 
 這是引擎 `schematic-engine` 的連線策略問題，不是消費端能修的。thesmart_products C03 交付依 owner 裁決**暫時阻斷、等引擎修**，不在消費端繞道、不粉飾。修好後 consumer 端會依 §7 判準跑驗收（每項配控制組）。
