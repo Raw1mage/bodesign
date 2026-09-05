@@ -1644,6 +1644,35 @@ def emit_kicad_schematic(
         skip = set(host_refs)
         return [box for ref, box in wire_obstacle_boxes.items() if ref not in skip]
 
+    # BR_20260905 (§4.2): absolute sheet point of EVERY placed pin. The body
+    # keep-out boxes above cannot serve this purpose -- a pin sticks OUT of its
+    # body, so its tip lies outside the box the router avoids, and a corner landing
+    # on that tip clears every existing gate while welding the two nets together.
+    _all_pin_points: list[tuple[str, tuple[float, float]]] = []
+    for component in components:
+        for pin_num, endpoint in (pin_maps.get(component.lib_id) or {}).items():
+            _all_pin_points.append(
+                (f"{component.ref}.{pin_num}",
+                 (round(component.x + endpoint[0], 4),
+                  round(component.y - endpoint[1], 4))))
+
+    def _foreign_pin_points(net_nodes) -> list[tuple[float, float]]:
+        """Pin points this net's wire must NOT touch: every pin except its own.
+
+        Excluding the net's own nodes is obvious (the wire must land on them).
+        Excluding any pin that SHARES a coordinate with one of them is the subtle
+        half, and it is what keeps this from breaking stock symbols: a KiCad
+        library may place two package pins of ONE electrical node at the SAME
+        symbol coordinate (measured: 24137 such same-name pairs across 223 stock
+        libraries, e.g. PESD5V0L4UF pins 2 and 5 are both the anode "A" at
+        (2.54,0)). Those pins are not foreign -- they ARE the node the wire is
+        landing on -- so forbidding their point would make the net unroutable.
+        """
+        own_nodes = {f"{r}.{p}" for r, p in net_nodes}
+        own_pts = {pt for nid, pt in _all_pin_points if nid in own_nodes}
+        return [pt for nid, pt in _all_pin_points
+                if nid not in own_nodes and pt not in own_pts]
+
     # M6-1 (DD-12, 使用者鐵律「routing 不得碰到任何其他元素」): a drawn route is
     # ACCEPTED only if its polyline clears the shared ledger's FULL occupancy
     # (body / pin_extent / label / wire / power), not just the body-only keep-out
@@ -1729,9 +1758,11 @@ def emit_kicad_schematic(
             # jog ladder tried against it, rather than being down-graded to a label
             # stub on the first graze. A net still labelled after the full ladder is
             # reported below with the reason the LAST candidate failed on.
+            _avoid_pts = _foreign_pin_points(net.nodes)
             guarded, jogged = _guard_route(
                 net.name, waypoints,
-                extra_ok=lambda wp: _route_clears_ledger(wp, endpoint_refs))
+                extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs)
+                                     and _route_clears_points(wp, _avoid_pts)))
             if guarded is None:
                 # DD-11 fallback: jog exhausted → down-grade this net to label
                 # (collinearity-free by construction). Recorded, never silent. The
@@ -1764,6 +1795,7 @@ def emit_kicad_schematic(
             _place_local_label(net.name, mid[0], mid[1], waypoints)
         elif drawn and not force_label and not net_unresolved and len(endpoints) >= 3:
             _obst = _obstacles_excluding(endpoint_refs)
+            _avoid_pts = _foreign_pin_points(net.nodes)
             # BR_20260905: the multi-node bus used to be all-or-nothing -- ONE
             # grazing hop down-graded the WHOLE net to per-pin label stubs, with no
             # jog retry at all (the 2-pin path had 3, this path had 0). Since the
@@ -1801,7 +1833,8 @@ def emit_kicad_schematic(
                 # from the fusion test -- only OTHER nets' segments are collisions.
                 _hg, _ = _guard_route(
                     net.name, _hw,
-                    extra_ok=lambda wp: _route_clears_ledger(wp, endpoint_refs))
+                    extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs)
+                                         and _route_clears_points(wp, _avoid_pts)))
                 if _hg is None:
                     _last_fuse = any(
                         _segment_fuses(s, _other_net_segments(net.name))
@@ -3186,6 +3219,41 @@ def _waypoints_clear(waypoints: list[tuple[float, float]],
             if _seg_hits_box(a, b, box):
                 return False
     return True
+
+
+def _route_clears_points(waypoints: list[tuple[float, float]],
+                         avoid_points) -> bool:
+    """True iff no VERTEX of `waypoints` lands on a pin the route must not join.
+
+    BR_20260905 (§4.2). The router chose its elbow corner from geometry ALONE, so
+    a corner could land exactly on a pin belonging to a DIFFERENT net. Measured on
+    the 04.btdongle board: the /RUN route ran (1023.62,335.28)->(1092.2,335.28)
+    then turned up to U2.30, and the turn at (1092.2,335.28) sat exactly on U2.17
+    (GPIO13, a declared no-connect), welding U2.17 onto /RUN. The fidelity gate
+    reported `only_candidate ['U2.17']` -- correctly; the defect was here.
+
+    VERTEX ONLY, and that boundary is measured rather than assumed. KiCad joins a
+    pin to a wire at a wire VERTEX; a wire that merely passes ACROSS a pin point
+    mid-span does NOT connect to it. Control (2 resistors, HEAD geometry): the
+    NET_X wire crosses R2.2 mid-span and `kicad-cli` still exports R2.2 as
+    `unconnected-(R2-Pad2)`, while R2.1 -- a vertex -- is on the net. Same pattern
+    on the real board: 20 no-connect pins sit mid-span under /RUN-column wires and
+    exactly 2 (the vertex cases) became extra nodes.
+
+    So a closed-segment test here would be WRONG, not merely conservative: it
+    would reject harmless crossings, and the router would jog geometry that was
+    already electrically correct. Measured cost of getting this wrong: two
+    regressions in tests/test_kicad_emit.py (a clean route needlessly jogged, and
+    the BR_20260723e fusion fixture stopping reproducing because its geometry had
+    been perturbed).
+
+    `avoid_points` must already EXCLUDE the routed net's own pins -- those are the
+    points the wire is supposed to land on. See `_foreign_pin_points`.
+    """
+    if not avoid_points:
+        return True
+    avoid = set(avoid_points)
+    return not any(pt in avoid for pt in waypoints)
 
 
 def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
