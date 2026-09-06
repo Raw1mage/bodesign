@@ -1645,7 +1645,7 @@ def emit_kicad_schematic(
         return [(waypoints[i], waypoints[i + 1]) for i in range(len(waypoints) - 1)]
 
     def _guard_route(net_name: str, base_waypoints: list[tuple[float, float]],
-                     extra_ok=None):
+                     extra_ok=None, *, interior_retry: bool = False):
         """Return (waypoints, jogged: bool) whose segments clear every other net,
         or (None, False) when _ROUTE_JOG_ATTEMPTS deterministic jogs still fuse
         (→ caller down-grades to label). Guard only mutates geometry when a
@@ -1664,19 +1664,32 @@ def emit_kicad_schematic(
         """
         others = _other_net_segments(net_name)
 
-        def _ok(wp) -> bool:
-            if any(_segment_fuses(s, others) for s in _segments_of(wp)):
+        def _ok(wp, *, exempt: bool = False) -> bool:
+            if any(_segment_fuses(s, others, exempt_interior=exempt)
+                   for s in _segments_of(wp)):
                 return False
             return True if extra_ok is None else bool(extra_ok(wp))
 
-        if _ok(base_waypoints):
-            return base_waypoints, False        # clean → untouched (byte-stable)
-        for attempt in range(_ROUTE_JOG_ATTEMPTS):
-            offset = _net_jog_steps(net_name, attempt)
-            jogged = _jog_free_axis(base_waypoints, offset)
-            if _ok(jogged):
-                return jogged, True
-        return None, False
+        def _search(exempt: bool):
+            if _ok(base_waypoints, exempt=exempt):
+                return base_waypoints, False    # clean → untouched (byte-stable)
+            for attempt in range(_ROUTE_JOG_ATTEMPTS):
+                offset = _net_jog_steps(net_name, attempt)
+                jogged = _jog_free_axis(base_waypoints, offset)
+                if _ok(jogged, exempt=exempt):
+                    return jogged, True
+            return None, False
+
+        # STRICT FIRST, ALWAYS. The exempt pass runs only after the strict search
+        # has exhausted every jog, so no route that is drawable today can move --
+        # the exemption can only convert a LABEL DOWN-GRADE into drawn copper,
+        # never re-route an accepted wire. That ordering is what makes this
+        # change byte-stable for every net that was already being drawn, and it
+        # is why the A/B geometry diff is the right acceptance test.
+        result = _search(False)
+        if result[0] is not None or not interior_retry:
+            return result
+        return _search(True)
 
     # BR_20260708 wire keep-out: absolute SHEET body AABB per component ref, from
     # the symbol's own (rectangle ...) (the TRUE body extent — same source guard C
@@ -1903,7 +1916,8 @@ def emit_kicad_schematic(
             guarded, jogged = _guard_route(
                 net.name, waypoints,
                 extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
-                                     and _route_clears_points(wp, _avoid_pts)))
+                                     and _route_clears_points(wp, _avoid_pts)),
+                interior_retry=True)
             if guarded is None:
                 # DD-11 fallback: jog exhausted → down-grade this net to label
                 # (collinearity-free by construction). Recorded, never silent. The
@@ -1973,6 +1987,25 @@ def emit_kicad_schematic(
                 # Hops already accepted for THIS net are legal neighbours (same net,
                 # they meet at shared pins by construction), so they are excluded
                 # from the fusion test -- only OTHER nets' segments are collisions.
+                # interior_retry is deliberately NOT passed here (round 25, measured).
+                # The 2-pin site above CAN take the exemption because its route has no
+                # interior chain point, so an exempted contact never becomes a junction.
+                # THIS site cannot: `:2046` places a junction at EVERY interior chain
+                # point unconditionally, and a hop endpoint IS a chain pin -- so an
+                # exempted contact here is not merely "might get a junction later", it
+                # is "will", which reconstructs experiment T2 (junction on a foreign
+                # net's mid-span => KiCad merges the nets).
+                #
+                # Measured, not reasoned. Enabling it here made
+                # `test_m6_8_label_avoids_power_symbol` raise CROSS_NET_JUNCTION_SHORT
+                # on GND junctions at (137.16, 96.52) and (160.02, 96.52) sitting on a
+                # VDD wire; a spy over the full suite counted became_junction=2 at those
+                # exact points with the site on, and 0 with it off.
+                #
+                # So "is a junction knowable at decision time?" has DIFFERENT truth
+                # values at the two call sites: genuinely unknowable at the 2-pin site,
+                # already determined here. A predicate name cannot carry that context --
+                # the call site must.
                 _hg, _ = _guard_route(
                     net.name, _hw,
                     extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
@@ -3349,16 +3382,63 @@ def _point_on_segment(pt: tuple[float, float], seg: tuple) -> bool:
     return lo - _FUSION_EPS <= pt[1] <= hi + _FUSION_EPS
 
 
-def _segment_fuses(seg: tuple, other_net_segs: list[tuple]) -> bool:
+def _point_strictly_interior(pt: tuple[float, float], seg: tuple) -> bool:
+    """True iff `pt` lies on `seg` STRICTLY BETWEEN its endpoints (mid-span).
+
+    The complement of interest is a shared ENDPOINT, which KiCad really does
+    merge -- so this predicate exists solely to separate the two cases that
+    `_point_on_segment` deliberately lumps together (see its docstring).
+    """
+    if not _point_on_segment(pt, seg):
+        return False
+    a, b = seg
+    at_a = abs(pt[0] - a[0]) < _FUSION_EPS and abs(pt[1] - a[1]) < _FUSION_EPS
+    at_b = abs(pt[0] - b[0]) < _FUSION_EPS and abs(pt[1] - b[1]) < _FUSION_EPS
+    return not (at_a or at_b)
+
+
+def _segment_fuses(seg: tuple, other_net_segs: list[tuple],
+                   *, exempt_interior: bool = False) -> bool:
     """True iff `seg` would electrically fuse with any segment belonging to a
     DIFFERENT net: collinear interval overlap, or either endpoint on the other
-    segment (and vice versa, to catch a foreign endpoint on THIS segment)."""
+    segment (and vice versa, to catch a foreign endpoint on THIS segment).
+
+    exempt_interior (round 25, OPT-IN, default False):
+        Treat a bare END-ON-MIDSPAN contact as NOT fusing. KiCad merges such a
+        contact only when an EXPLICIT junction sits at that point -- measured,
+        round 17 experiment T1/T2, recorded in `_point_on_segment`'s docstring.
+        The predicate itself stays strict for every existing caller; a caller
+        that wants KiCad's ACTUAL (looser) rule opts in HERE and carries the
+        justification, exactly as that docstring instructs.
+
+        NARROW BY CONSTRUCTION -- all three still fuse under the exemption:
+          * collinear interval overlap  (a real merge; unrelated to junctions)
+          * endpoint-to-endpoint touch  (a real merge; T1/T2 never tested it)
+          * anything a junction lands on (enforced separately, see below)
+
+        The whole safety argument rests on "no junction at that point", whose
+        ONLY enforcer is `_assert_no_cross_net_junction()` at end of emit
+        (`ded8b95`): it raises CROSS_NET_JUNCTION_SHORT when any emitted
+        junction lands on a foreign net's segment. That is a fail-fast, not a
+        guarantee this router can make locally -- junction placement is
+        DOWNSTREAM of the routing decision, so at this point the answer is not
+        yet knowable. Removing that assert removes this exemption's only
+        enforcement.
+    """
     for o in other_net_segs:
         if _collinear_overlap(seg, o):
             return True
-        if _point_on_segment(seg[0], o) or _point_on_segment(seg[1], o):
+        for _pt, _other in ((seg[0], o), (seg[1], o)):
+            if not _point_on_segment(_pt, _other):
+                continue
+            if exempt_interior and _point_strictly_interior(_pt, _other):
+                continue
             return True
-        if _point_on_segment(o[0], seg) or _point_on_segment(o[1], seg):
+        for _pt, _other in ((o[0], seg), (o[1], seg)):
+            if not _point_on_segment(_pt, _other):
+                continue
+            if exempt_interior and _point_strictly_interior(_pt, _other):
+                continue
             return True
     return False
 
