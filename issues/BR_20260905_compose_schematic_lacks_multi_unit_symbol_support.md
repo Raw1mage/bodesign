@@ -1,6 +1,6 @@
 # BR_20260905 — compose_schematic 缺乏 multi-unit symbol 支援，壓平符號致引腳座標重合與短路
 
-- **Status**: FIXED（2026-09-05 · multi-unit 壓平貢獻的 moved 項已清零，真板實測 moved 10→0；驗收見 §4）
+- **Status**: **PARTIAL**（2026-09-06 改判 · 原記 FIXED。§4 的 moved 10→0 成立且未被推翻，但修復只落在 emitter 讀取端；composer 寫入端從未填 `unit`，見 §5）
 - **Severity**: HIGH（立身能力缺陷 · 無法支援標準庫 multi-unit 元件）
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`、`kicad_symbol.py`、`composer.py`
 - **Filed**: 2026-09-05 by bodesign 值星官 `ses_04db7a1c5ffelvbxyLP1p6xlRH`（依 thesmart_products C03 handler `ses_f95148a02ffenF83aJE6hX1paA` 取證立案）
@@ -135,3 +135,45 @@ G2 的**突變控制組是決定性的**：它排除了「數字是環境或其�
 - **僅驗此一顆 multi-unit 符號**：雙運放 / 多邏輯閘等其他 multi-unit 家族未測。
 - **未跑全套 142 模組**，只跑上述 7 顆。
 - 幾何/座標綠燈**不授權**「電路對了」的宣稱；電氣軸證據僅 moved 10→0 一項。
+
+---
+
+## 5. §5 殘留：修落在讀取端，寫入端從未填（2026-09-06 改判 FIXED → PARTIAL）
+
+**§4 的結論沒有被推翻。** `5599793f`（`Fix BR_20260905 compose_multi_unit: load_symbol reads
+component.unit, stack multi-unit symbols`）確實讓 emitter **讀** `unit`，真板 moved 10→0 也
+確實發生。改判的理由不是那格量錯，是那格**只覆蓋了半條路**。
+
+### 量測（2026-09-06 一手複驗）
+
+| 探針 | 結果 | 讀法 |
+| --- | --- | --- |
+| `grep -c 'unit=' composer.py` | **0** | 三個建構點沒有任何一個傳 `unit` |
+| `grep -n 'EmitComponent(' composer.py` | **3**（`:2251` / `:2262` / `:2377`） | 建構點確實有三個，不是檔案讀不到 |
+| CONTROL：`grep -c 'unit' kicad_emit.py` | **90** | emitter 端大量處理 `unit` —— 所以 composer 的 0 是「這一側沒有」，不是「這個詞不存在於本專案」 |
+
+控制組是決定性的：同一個詞在隔壁檔案有 90 次命中，於是 composer 的 0 不可能是探針壞掉或
+拼寫錯誤，只可能是真的沒填。
+
+### 為什麼這是「修落在平行段」的又一例
+
+`EmitComponent.unit` 現在是一個 **emitter 會認真讀、而唯一的生產者從不寫**的欄位。它的預設
+值於是成為實際行為的全部，而 `5599793f` 的修復只在「呼叫端自己填了 `unit`」時才會被走到——
+P1 交付路徑（`composer.py` → `kicad_emit.py`）不填。
+
+這與 `tooling-failmodes.failure-mode.fix-lands-on-parallel-pipeline-off-delivery-path`
+同形：修復真實存在、測試真的綠、而交付路徑不經過它。也與本 repo
+`BR_20260906_gate_unit_fixtures_blind_to_emission_site_mutation.md` 同形——**生產端與消費端
+各自正確，接縫沒人驗**。
+
+### 未量
+
+- **`unit` 的預設值在 P1 路徑上會產生什麼幾何**：未跑。所以本節不宣稱「今天的圖是錯的」，
+  只宣稱「emitter 的 multi-unit 分支在 P1 上不可能被觸發」。
+- **三個建構點該不該都填**：`:2262` 與另外兩處的上下文未逐一讀，可能只有部分需要。
+- **根因**：未追。與 `BR_20260906_occupancy_ledger_wire_reserves_never_survive_to_final_ledger.md`
+  同樣停在量測。
+
+> 立案脈絡：`/home/pkcs12/products/thesmart_products/issues/BR_20260906_c03_schematic_chain_delivered_label_stub_pinout_instead_of_circuit.md`
+> §3.2 與 fanout 建議 **B-8**（`:376`）。該報告本身也標明「舊描述（never read）已被 `5599793` 取代」——
+> 本節補的是它的另一半：讀取端修好了，寫入端還沒。
