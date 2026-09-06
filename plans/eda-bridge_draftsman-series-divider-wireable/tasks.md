@@ -182,3 +182,57 @@ verb 可達（非僅字串存在）                   NEGCTRL 回顯我送的假
 - [ ] 4.4 KB 蒸餾判定：本包的跨 repo 教訓是
       「入口缺完整性檢查時，下游每個關卡各自發明容錯，而每種容錯的失效各自成為一張 BR」
       —— 這條換 repo 換題目都成立，應蒸
+
+## 5. 觀察項（不在本包修，但下一個人需要知道）
+
+### 5.1 繞線拒絕是零和的，不是 router 能力不足（round 24 量測，dispatcher 裁定延後）
+
+btdongle 真板上 `wire_reserve_rejected` 的 3 條（`ISET2` / `STAT` / `BT_LED_A`），
+把它們各自移到 net list 最前面（最早繞線）：
+
+| 實驗 | 該 net 結果 | 代價 |
+|---|---|---|
+| `ISET2` 提前 | **畫出來了** | `ok` 68→60、wire 116→**107**（總線數反而變少） |
+| `STAT` 提前 | **畫出來了** | **`SW_NODE` 改被拒 ×2**，rejected 3→4 |
+| `BT_LED_A` 提前 | **畫出來了** | **`LED_BT` 改被拒**，rejected 仍 3 |
+
+**控制組**：整份 net list 反轉 → rejected 變成 `[ISET2, LED_BT, RUN×4]`、wire 116→124。
+順序確實有作用，探針不是恆真。
+
+> **拒絕會轉移給後到的人，不會消失。**
+
+`fusion_jogged_nets=['ISET2']` 與此一致：jog 機制有跑、對 ISET2 生效過，最後仍撞上先佔者。
+
+**為什麼不在本包修**（dispatcher round 25）：這把問題從「router 能力不足」改寫成
+「缺全域繞線順序／重試策略」，**那是設計題不是修 bug**——需要新的判準
+（什麼叫「好的順序」？最大化畫線數？最小化交叉？），現在動它會變成沒有驗收標準的重構。
+
+**未量**：沒有搜尋「存在一個順序讓 0 條被拒」；三個實驗各只跑一種排列。
+
+### 5.2 22 筆「pin 不屬於任何宣告 net」——不同的病，另立一格
+
+round 22 修正後的 B=34 裡，**22 筆是「這支 pin 沒有任何宣告 net」**，
+不是 defect 1（pin 落在他 net 線上）。那是 **spec 完整性問題（宣告漏了）**，
+與本包的繪圖層缺陷分屬不同族。dispatcher round 23 裁定：另立觀察項，本線不查。
+
+### 5.3 `slot_observe` 是不被消費的觀察層 → 已立 BR
+
+`issues/BR_20260907_slot_observe_skips_reads_like_a_drawing_failure_cause_but_the_layer_is_never_consumed.md`
+
+一句話：`slot_observe_skips` 的欄位名讀起來像「這條 net 沒被畫的原因」，
+但 neuter 整層後 `WIRE_GEOM_SHA` 逐字不變——**它與畫不畫得出來無因果**。
+實害已發生：值星官 round 24 派工單據此寫下錯誤因果，花了一整輪才證偽。
+
+## 6. round 25 自我更正（給下一個人看的，不是記過）
+
+- **round 24 我建議「兩個 anti-fusion 呼叫點都加豁免」是錯的。**
+  `:1994`（bus-chain hop）開了之後造出**真的跨 net 短路**，被 `ded8b95`
+  那顆 assert 當場抓住（`CROSS_NET_JUNCTION_SHORT`，GND junction 在
+  `(137.16,96.52)`、`(160.02,96.52)` 落在 VDD 線上）。最終只開 `:1920`。
+- **dispatcher round 21 否決 (a) 的理由只對一半。**
+  「junction 在決策點不可知」在 `:1920` 成立，在 `:1994` **不成立**
+  （`:2046` 無條件放 junction，hop 端點就是 chain pin，當下就可預測）。
+  詳見 `design.md` §同一個豁免，兩個呼叫點。
+- **`ded8b95` 那顆 assert 抓到了它的作者本人。**
+  這是「先 commit 儀器、再 commit 修法」這個順序的直接證據：
+  反過來就是一次靜默的跨 net 短路進 main。

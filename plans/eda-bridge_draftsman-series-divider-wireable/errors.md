@@ -294,3 +294,31 @@ bytes 落進 `verify_b/run/user/1000/…` 這條垃圾路徑，**目標檔根本
 **兩格的共同教訓**：`errors.md` 前面幾節管的是「量測工具會騙人」。
 這兩格說的是**防護措施也會**，而且更難察覺——探針的錯誤當輪就會影響結論，
 防護措施的錯誤要等到未來有人依賴它時才爆，那時沒有人在看。
+
+### 探針有假陽性時，差值仍可用、絕對值不可用（round 26）
+
+`LED_WIFI` 的 fragment label 覆蓋檢查回報 `fragments_with_no_label=50`。
+那個數字**是錯的**：`#PWR` power-port symbol 會為銅箔命名，但不發出 `(label` block，
+所以我的解析器把每一段這樣的銅箔都算成「無標籤 fragment」。
+
+**但那格證據仍然成立，因為我沒有用絕對值**：
+
+```
+HEAD    fragments_with_no_label = 50
+A-1     fragments_with_no_label = 50      ← 差值 0，無回歸
+LED_WIFI 具名 fragment          0 → 1     ← 這才是被主張的東西
+```
+
+**判準**：一支探針若有**與 treatment 無關的系統性假陽性**，該假陽性在 base 與 treatment
+上等量出現，於是**差值把它消掉**。所以：
+
+- **可用**：`Δ = treatment − base`（假陽性同時出現在兩邊，相減歸零）
+- **不可用**：`treatment` 的絕對值（它含有一個與被測命題無關的常數項）
+
+**前提是那個假陽性真的與 treatment 無關**——若改動本身會改變假陽性的數量，
+差值也會被污染。本格的理由：`#PWR` symbol 的數量由 placement 決定，
+而本次改動不碰 placement（⑦ 已證元件座標逐字不變）。
+
+**權威判準另有其人**：這格只用來說「沒有回歸」，
+「net 成員對不對」由 `kicad-cli` netlist export 按 size 仲裁，不由這支探針決定。
+**一支已知有假陽性的探針，不得升格為權威判準，只能當差分感測器。**
