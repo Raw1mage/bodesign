@@ -15,44 +15,44 @@ mechanism is disabled). A negative control that cannot fail is not a control.
 
 ## 1. WP1 — C03 delivery contract rewrite (`GUIDE.md`)
 
-- [ ] 1.1 Rewrite deliverable table rows 3/5/7 (`GUIDE.md:40,42,44`) so the frozen
+- [x] 1.1 Rewrite deliverable table rows 3/5/7 (`GUIDE.md:40,42,44`) so the frozen
       netlist is the electrical deliverable and the docx is named as its
       projection; the schematic row points at the netlist as its export target —
       artifact: `skills/bodesign/stages/c03-ee/GUIDE.md`
-- [ ] 1.2 Add a `Netlist freeze rule (MANDATORY)` section stating the file shape
+- [x] 1.2 Add a `Netlist freeze rule (MANDATORY)` section stating the file shape
       and location from DD-05: `<stage>/C03_<product>.net` plus
       `<stage>/C03_Netlist_Freeze.json` carrying, per emitted `.net`, `sha256`,
       `nets_parsed`, emitting revision, and the `bodesign_verify_netlist_fidelity`
       verdict; both tracked in version control —
       artifact: `skills/bodesign/stages/c03-ee/GUIDE.md`
-- [ ] 1.3 Narrow the `02_build/` out-of-scope clause at `GUIDE.md:447-450` to
+- [x] 1.3 Narrow the `02_build/` out-of-scope clause at `GUIDE.md:447-450` to
       exclude build/intermediate artifacts **except** the two promoted freeze
       artifacts named in 1.2; the `C03_` prefix rule is unchanged and the promoted
       copies carry it — artifact: `skills/bodesign/stages/c03-ee/GUIDE.md:447`
-- [ ] 1.4 Move MANDATORY placement: the netlist freeze section (1.2) and the
+- [x] 1.4 Move MANDATORY placement: the netlist freeze section (1.2) and the
       existing Vault-Absent Substitution Protocol (`:199`) carry MANDATORY; the
       document-consolidation section (`:399`) is retitled
       `Document consolidation rule (reference)` and loses the marker; the
       file-naming rule (`:437`) keeps it —
       artifact: `skills/bodesign/stages/c03-ee/GUIDE.md:399`
-- [ ] 1.5 Demote the docx row `GUIDE.md:396` from bold to plain and change its
+- [x] 1.5 Demote the docx row `GUIDE.md:396` from bold to plain and change its
       Notes column to name the netlist it projects; the 37-line docx production
       detail at `:399-435` stays in the file as reference material, unbolded and
       unmarked — artifact: `skills/bodesign/stages/c03-ee/GUIDE.md:396`
-- [ ] 1.6 Add the frozen netlist and the freeze JSON to the Gate / done-criteria
+- [x] 1.6 Add the frozen netlist and the freeze JSON to the Gate / done-criteria
       list (`:454-494`), each with the "report absent = gate has not run, never
       presume PASS" wording already used for the two report JSONs —
       artifact: `skills/bodesign/stages/c03-ee/GUIDE.md:454`
-- [ ] 1.7 POSITIVE CONTROL: count MANDATORY markers within the netlist-freeze
+- [x] 1.7 POSITIVE CONTROL: count MANDATORY markers within the netlist-freeze
       section — must be `>= 1`. Question answered: *does the rewritten GUIDE mark
       the netlist as mandatory at all?* —
       artifact: none (measurement recorded in the WP1 handoff note)
-- [ ] 1.8 NEGATIVE CONTROL: enumerate the bolded rows of the deliverables table;
+- [x] 1.8 NEGATIVE CONTROL: enumerate the bolded rows of the deliverables table;
       the assertion is that `.docx` is **not** the only bolded row. This control is
       RED on the current file — measured today, `:396` is the single bolded row, so
       the check fails before the work and can only pass after it —
       artifact: none (measurement recorded in the WP1 handoff note)
-- [ ] 1.9 State in the WP1 handoff note that `skills/` changes reach consumers via
+- [x] 1.9 State in the WP1 handoff note that `skills/` changes reach consumers via
       `opencode skill resync bodesign --accept-source` and **not** via
       `mcpctl.sh rebuild` (AGENTS.md §3.2); run `opencode skill status bodesign`
       (read-only) and record the reported state —

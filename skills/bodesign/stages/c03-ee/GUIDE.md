@@ -37,11 +37,11 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 |---|---|---|---|
 | 1 | Design definition + architecture | `Design_Definition.md` / `EE_Design_Specification.md` + `Architecture.md` (or a merged `Architecture_and_BOM.md`) | `draft` until a named EE owner signs off |
 | 2 | Power tree | `Power_Tree.md` (+ `..._power_frontend.svg`) | rails, decoupling, budget |
-| 3 | Schematic | `generated/sch*/*.kicad_sch` | or the honest interface subset; MPNs on properties |
+| 3 | Schematic | `generated/sch*/*.kicad_sch` | the authoring artifact, **not** the deliverable — its deliverable form is the frozen netlist in row 5, which it must export to; MPNs on properties |
 | 4 | Complete BOM | `BOM.csv` / `..._完整BOM.xlsx` | exported from the *verified* analyzer JSON |
-| 5 | Netlist | `..._網路表.xlsx` / `.net` | full, or honest subset |
+| **5** | **Frozen netlist (the C03 electrical deliverable)** | **`C03_<product>.net` + `C03_Netlist_Freeze.json`** | **both at the stage root, both tracked in version control; freeze JSON carries `sha256` / `nets_parsed` / emitting revision / `bodesign_verify_netlist_fidelity` verdict per emitted `.net`. Absent freeze JSON = the netlist was never frozen or verified; never presume it was — see "Netlist freeze rule" below** |
 | 6 | GPIO/interface pinmap | `..._GPIO_pinout.xlsx` / `Pin_Allocation.csv` | drives C05 |
-| 7 | Netlist status | `Netlist_Status.md` | required **iff** a full netlist is not recoverable |
+| 7 | Netlist status | `Netlist_Status.md` | required **iff** the frozen netlist of row 5 is an honest subset rather than the full connectivity — it documents what row 5 does *not* cover, and is not an alternative to row 5 |
 | 8 | Mechanical bridge | `Mechanical_Constraint_Export.json` | `approval=false` |
 | 9 | PRD-BOM crosscheck report | `prd_bom_crosscheck.report.json` | `gate: PASS` required; report absent = gate **not run** (never presume PASS) — § 3b |
 | 10 | C03 stage-entry gate report | `check_c03.report.json` | `gate: PASS` required — R1 schema / R2 readiness / R3 symbol-source **claim** / R4 SSOT / R5 BOM↔netlist / R6 pin-spec polarity (`bodesign_check_c03`); absent = **not run** — § 3c |
@@ -393,10 +393,48 @@ Source-of-truth = markdown/CSV/JSON you author or export; generated = engine/dia
 | Pinmap | `C03_..._GPIO_pinout.xlsx`, `C03_Pin_Allocation.csv` | exported | ball→GPIO→function |
 | Netlist status | `Netlist_Status.md` | source | the honest connectivity boundary (when full netlist is blocked) |
 | Mechanical bridge | `C03_Mechanical_Constraint_Export.json` | exported | C03→C02/C04; `approval=false` |
-| **Consolidated EE document** | **`<product>_電路設計文件.docx` / `C03_Circuit_Design.docx`** | **generated** | **ONE merged Word doc — see "Document consolidation rule" below** |
+| **Frozen netlist (electrical deliverable)** | **`C03_<product>.net` + `C03_Netlist_Freeze.json`** | **exported + frozen** | **the artifact C03 actually owes; tracked, hashed, fidelity-verified — see "Netlist freeze rule" below** |
+| Consolidated EE document | `<product>_電路設計文件.docx` / `C03_Circuit_Design.docx` | generated | ONE merged Word doc — a **projection of** the frozen netlist and its companion markdown, never the electrical source of truth; see "Document consolidation rule" below |
 | Analyzer runs | `analysis/<run>/*.json` + `manifest.json` | generated | keep; gitignored, manifest tracked |
 
-### Document consolidation rule (the single-doc + `img/` workflow — MANDATORY)
+### Netlist freeze rule (MANDATORY)
+
+**The C03 deliverable is a frozen, version-controlled, independently verified netlist.** The
+`.kicad_sch` is how it is authored and the `.docx` is how it is read; neither is the thing being
+delivered. A stage that ships a beautiful document over an unfrozen netlist has delivered nothing
+electrical.
+
+Two files are promoted to the stage root and **tracked in version control**:
+
+1. **`<stage>/C03_<product>.net`** — the merged netlist across every sheet of the design. Nets of
+   the same name on different sheets are one net. This is a copy promoted out of the build area,
+   carrying the `C03_` prefix like every other stage-root deliverable.
+2. **`<stage>/C03_Netlist_Freeze.json`** — the freeze record. One entry per emitted `.net` that fed
+   the merge, each carrying:
+   - `path` — the emitted file, relative to the stage root;
+   - `sha256` — of that exact file's bytes;
+   - `nets_parsed` — how many nets were read out of it. **`0` is never a pass**: a parse that
+     yielded nothing is indistinguishable from an export that failed, so it is recorded and treated
+     as `indeterminate`, not as "no differences found";
+   - `emitting_revision` — the engine revision that produced it (`engine_rev` from the compose
+     result, or the commit sha when authored by hand);
+   - `fidelity_verdict` — the `bodesign_verify_netlist_fidelity` status for that file, one of
+     `ok` / `failed` / `not-run` / `indeterminate`. **`not-run` and `indeterminate` are not
+     passes.** A missing verdict field means the check never ran; do not read it as `ok`.
+
+Both files are in scope for the `C03_` prefix rule below, and both are exempt from the `02_build/`
+out-of-scope clause precisely because they are promoted out of it.
+
+A delivery is incomplete when `C03_Netlist_Freeze.json` is absent, when any entry's `sha256` does
+not match the file on disk, when any `nets_parsed` is `0`, or when any `fidelity_verdict` is
+anything other than `ok`. Each of those is a distinct failure and must be reported as itself —
+folding them into one "netlist not ready" line loses the information that says which fix applies.
+
+### Document consolidation rule (the single-doc + `img/` workflow — reference)
+
+> This section is **reference material** for producing the docx projection. It is not a definition
+> of what C03 delivers — that is the netlist freeze rule above. A conforming docx over a
+> non-conforming netlist does not make the stage complete.
 
 The C03 Word deliverable is **one consolidated document**, not a scatter of per-section `.docx`
 files. An earlier C03 emitted nine separate `C03_架構.docx` / `C03_電源樹.docx` / `C03_介面定義.docx` …
@@ -448,6 +486,11 @@ Scope of the rule:
 - **Out of scope:** build/intermediate artifacts under `02_build/` and external source under
   `01_refs/` (and `img/` figure-library members, which are already grouped by folder). These are not
   user-facing deliverables, so they are not required to carry the prefix.
+  **Exception — the two freeze artifacts.** `C03_<product>.net` and `C03_Netlist_Freeze.json` are
+  *promoted out of* `02_build/` to the stage root and are therefore **in scope**: they carry the
+  `C03_` prefix and are tracked in version control. The exclusion above covers what stays in
+  `02_build/`, not a copy that has been promoted out of it. Promoting these two is not a licence to
+  track `02_build/` wholesale — everything else in it stays out of scope.
 - When renaming an existing deliverable to add the prefix, `git mv` it and update every reference
   (README delivery list, source markdown, sibling `.md`) in the same change — no dangling links.
 
@@ -483,8 +526,18 @@ C03 is genuinely complete when:
   - `ssot_crosscheck.status` — `not_run` + `active_parts_unverified` lists what R4 could not verify.
   - **R3 vs R5 are not interchangeable**: R3 asserts the row *claims* a symbol source; R5 asserts the
     symbol was *actually drawn*. R3 passing alone never means the part exists in the schematic.
+- **The frozen netlist `C03_<product>.net` exists at the stage root and is tracked** ("Netlist
+  freeze rule" above). An untracked or build-area-only netlist is not a delivery: it cannot be
+  cited, diffed, or handed to C04 as a fixed artifact.
+- **`C03_Netlist_Freeze.json` exists, is tracked, and every entry passes.** Each entry's `sha256`
+  matches the file on disk, `nets_parsed > 0`, and `fidelity_verdict` is `ok`. A missing
+  `C03_Netlist_Freeze.json` means the netlist **was never frozen or verified**: say so explicitly;
+  never presume it was. A `fidelity_verdict` of `not-run` or `indeterminate` is likewise **not** a
+  pass — it says the check could not decide, which is a different claim from "no differences".
 - `Mechanical_Constraint_Export.json` is produced with `approval=false`.
-- If a full netlist is not recoverable, `Netlist_Status.md` documents the source-data limit.
+- If the frozen netlist covers only an honest subset rather than full connectivity,
+  `Netlist_Status.md` documents the source-data limit. It supplements the freeze; it never
+  substitutes for it.
 - **Schematic fidelity gate PASS** (when the schematic is engine-composed): `compose_schematic(..., fidelity=True)` returns `fidelity.ok` / diff 0/0 — the emitted net partition matches the spec. ERC passing is NOT sufficient; it is blind to collinear-wire net FUSION. A connector-dense sheet with no fidelity check is `draft`.
 - **Render-layer text QA violation = 0** on every schematic page: `render_qa.qa_svg_text(<page.svg>)` over the kicad-cli SVG export. Model-layer / anchor-only QA passing does NOT satisfy this — it has a structural blind spot for pin-name/refdes/value glyphs.
 - **One fresh-eyes visual QA pass** after the machine gates are 0: a review subagent reads the rendered PNGs and confirms no smears/black-blocks/broken nets. The machine gate gets you to the door; a human-equivalent look confirms it. (Learned 2026-07-06: 2 rounds shipped "QA passed" that fresh eyes then failed.)
