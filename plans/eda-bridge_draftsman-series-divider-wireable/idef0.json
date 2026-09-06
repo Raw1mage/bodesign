@@ -1,0 +1,52 @@
+{
+  "diagram_title": "declare_circuit: agent 宣告的電路拓樸 → 完整性已驗證的 compose spec",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "驗證宣告輸入",
+      "description": "檢查 schema、解析 ref/pin 引用。任何未宣告的 ref 在此擋下，展開器尚未被呼叫（status=not_run 的排放點）。",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "展開宣告為 net",
+      "description": "六個原語各自展開：connect/bridge 直接落 node；series/divider 產生中間節點並以宣告 id 衍生穩定名（DD-3）；rail 收下 render hint；no_connect 落 nc[]。",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "建立 provenance",
+      "description": "每個 net node 記錄產生它的宣告 id。set(all_nodes) == set(provenance.keys()) 為內部斷言，違反即 E_PROVENANCE_ORPHAN（DD-6，天條 No fabrication 的機檢形式）。",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "完整性 gate 判定",
+      "description": "對每支已宣告元件的每支腳，檢查恰好出現在某條 net 或 nc[] 中一次。回三態 pass/fail/unknown——不回 bool，因為 fail 與 unknown 需要不同修法（DD-5）。",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "組裝結果並判定 status",
+      "description": "收斂為封閉值域 {ok, rejected, not_run, empty, indeterminate}。empty 與 ok 不共用值；indeterminate 不塌成二值。",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {"id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "declarations[] + components[]"},
+    {"id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "data-schema.json 契約"},
+    {"id": "AR3", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "MCP verb bodesign_declare_circuit"},
+    {"id": "AR4", "source": "A1:output", "target": "A2:input", "type": "input", "label": "已解析的宣告"},
+    {"id": "AR5", "source": "A1:output", "target": "EXTERNAL", "type": "output", "label": "status=not_run + offending_refs[]"},
+    {"id": "AR6", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "六原語展開規則（DD-2）+ 衍生命名規則（DD-3）"},
+    {"id": "AR7", "source": "A2:output", "target": "A3:input", "type": "input", "label": "nets[] + nc[]"},
+    {"id": "AR8", "source": "A3:output", "target": "A4:input", "type": "input", "label": "nets[] + provenance map"},
+    {"id": "AR9", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "load_symbol（取 pin 清單；失敗 => unknown）"},
+    {"id": "AR10", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "完整性判準：每支腳恰好一次（DD-5）"},
+    {"id": "AR11", "source": "A4:output", "target": "A5:input", "type": "input", "label": "gate verdict 三態 + 缺項清單"},
+    {"id": "AR12", "source": "EXTERNAL", "target": "A5:control", "type": "control", "label": "Outcome Codomain 五值（errors.md）"},
+    {"id": "AR13", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "spec{components,nets,nc} → compose_schematic"},
+    {"id": "AR14", "source": "A5:output", "target": "EXTERNAL", "type": "output", "label": "status + errors[] + completeness + render_plan + provenance"}
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "$comment": "declare_circuit I/O contract. Six declaration primitives (DD-2), provenance (DD-6), closed status codomain (errors.md).",
+  "schemas": [
+    {
+      "name": "DeclareCircuitRequest",
+      "kind": "message",
+      "fields": [
+        {"name": "components", "type": "Component[]", "notes": "與 compose_schematic spec.components 同形。ref/symbol 必填。"},
+        {"name": "declarations", "type": "Declaration[]", "notes": "六個原語的任意混合，順序不影響結果。空陣列 => status=empty，不是 ok。"},
+        {"name": "symbol_dirs", "type": "string[]", "notes": "選填。缺席時完整性 gate 拿不到 pin 清單 => status=indeterminate（不是 ok）。"},
+        {"name": "strict", "type": "bool", "notes": "預設 true。false 時 E_PIN_UNASSIGNED 降為 warning，其餘不變。用於漸進遷移。"}
+      ]
+    },
+    {
+      "name": "Component",
+      "kind": "json",
+      "fields": [
+        {"name": "ref", "type": "string", "notes": "R1 / U2 / C13"},
+        {"name": "symbol", "type": "string", "notes": "Lib:Part，如 Device:R"},
+        {"name": "value", "type": "string", "notes": "10k / 100nF。本包不驗證合理性（DD-7）。"},
+        {"name": "footprint", "type": "string", "notes": "透傳給 compose spec"},
+        {"name": "group", "type": "string", "notes": "功能分群，透傳給引擎 cluster placement"},
+        {"name": "unit", "type": "int?", "notes": "預留欄。現行 spec 缺此欄正是 BR_20260905 multi-unit 的成因之一；本包不實作 multi-unit，但先讓它可被表達。"}
+      ]
+    },
+    {
+      "name": "Declaration",
+      "kind": "json",
+      "fields": [
+        {"name": "id", "type": "string", "notes": "宣告識別碼，如 decl_007。provenance 與衍生節點名都由它導出，必須穩定（DD-3）。"},
+        {"name": "kind", "type": "enum", "notes": "connect | bridge | series | divider | rail | no_connect"},
+        {"name": "...", "type": "per-kind", "notes": "各 kind 的欄位見下方五個 schema"}
+      ]
+    },
+    {
+      "name": "Decl_connect",
+      "kind": "json",
+      "fields": [
+        {"name": "endpoints", "type": "string[2]", "notes": "[\"R1.2\",\"C3.1\"]。恰好兩個。"},
+        {"name": "net", "type": "string?", "notes": "選填的 net 名。缺席時衍生為 <id>_n1。"}
+      ]
+    },
+    {
+      "name": "Decl_bridge",
+      "kind": "json",
+      "fields": [
+        {"name": "part", "type": "string", "notes": "被動件 ref，如 C8。必須是兩腳件。"},
+        {"name": "between", "type": "string[2]", "notes": "兩條 net 名，如 [\"+3V3\",\"GND\"]。這是去耦/上拉/限流的共同形狀。"},
+        {"name": "pins", "type": "string[2]?", "notes": "選填。缺席時取 symbol 的兩支腳，順序對應 between。極性件必須明給。"}
+      ]
+    },
+    {
+      "name": "Decl_series",
+      "kind": "json",
+      "fields": [
+        {"name": "chain", "type": "string[]", "notes": "[\"+3V3\",\"R9\",\"D3\",\"GND\"]。頭尾是 net 名，中間是元件 ref。>=1 個中間元件。"},
+        {"name": "pins", "type": "object?", "notes": "{\"D3\":[\"A\",\"K\"]} 指定極性件的進出腳。SKiDL 的 d1['A,K'] 對應物。"},
+        {"name": "$note", "type": "-", "notes": "中間節點自動具名 <id>_n1, <id>_n2...（DD-3，刻意與 SKiDL N$1 / atopile 匿名不同）"}
+      ]
+    },
+    {
+      "name": "Decl_divider",
+      "kind": "json",
+      "fields": [
+        {"name": "top", "type": "string", "notes": "上端 net 名"},
+        {"name": "bottom", "type": "string", "notes": "下端 net 名"},
+        {"name": "tap", "type": "string", "notes": "抽頭 net 名。等於 top 或 bottom => E_DIVIDER_TAP_DEGENERATE。"},
+        {"name": "r_top", "type": "string", "notes": "上臂元件 ref"},
+        {"name": "r_bottom", "type": "string", "notes": "下臂元件 ref"},
+        {"name": "load", "type": "string?", "notes": "選填。抽頭同時接到的第三個節點，如 U2.31。分壓通常要接給某支 ADC 腳。"}
+      ]
+    },
+    {
+      "name": "Decl_rail",
+      "kind": "json",
+      "fields": [
+        {"name": "name", "type": "string", "notes": "GND / +3V3 / VBUS"},
+        {"name": "nodes", "type": "string[]", "notes": "掛在這條 rail 上的全部 pin"},
+        {"name": "render", "type": "enum?", "notes": "global_label | local_star | daisy_chain。DD-4。缺席時 => global_label 且 render_source=\"default\"（不與顯式給值共用輸出）。"},
+        {"name": "scope", "type": "string[]?", "notes": "local_star / daisy_chain 時，這一群要就地成 rail 的 ref。global_label 時無意義。"}
+      ]
+    },
+    {
+      "name": "Decl_no_connect",
+      "kind": "json",
+      "fields": [
+        {"name": "pins", "type": "string[]", "notes": "[\"U2.35\"]。刻意不接，完整性 gate 認它。"}
+      ]
+    },
+    {
+      "name": "DeclareCircuitResult",
+      "kind": "message",
+      "fields": [
+        {"name": "status", "type": "enum", "notes": "ok | rejected | not_run | empty | indeterminate。封閉值域，見 errors.md §Outcome Codomain。"},
+        {"name": "spec", "type": "object?", "notes": "{components, nets, nc}，可直接餵 compose_schematic。status 非 ok/empty 時為 null。"},
+        {"name": "provenance", "type": "object", "notes": "\"<net>.<ref>.<pin>\" -> decl id。DD-6。任何無主 node => E_PROVENANCE_ORPHAN。"},
+        {"name": "completeness", "type": "object", "notes": "{verdict: pass|fail|unknown, assigned: int, unassigned: string[], multi_net: string[]}。刻意不叫 valid——完整不等於正確。"},
+        {"name": "render_plan", "type": "object", "notes": "net 名 -> {render, source: \"declared\"|\"default\"}。讓「宣告的」與「引擎猜的」不共用輸出。"},
+        {"name": "errors", "type": "Error[]", "notes": "{code, detail, refs[]}。rejected 時非空。全部缺項一次列出，不只第一個。"},
+        {"name": "unknown", "type": "string[]", "notes": "indeterminate 時說明哪些格判不出來、為什麼。"}
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "$label": "1. 兩點連接",
+      "id": "decl_001", "kind": "connect",
+      "endpoints": ["R1.2", "C3.1"], "net": "CC1"
+    },
+    {
+      "$label": "2. 去耦電容跨 +3V3/GND（bridge 同時覆蓋上拉與限流）",
+      "id": "decl_002", "kind": "bridge",
+      "part": "C8", "between": ["+3V3", "GND"]
+    },
+    {
+      "$label": "3. 串聯鏈：LED 限流 +3V3 -> R9 -> D3 -> GND",
+      "id": "decl_003", "kind": "series",
+      "chain": ["+3V3", "R9", "D3", "GND"],
+      "pins": {"D3": ["A", "K"]},
+      "$expands_to": "net decl_003_n1 = [R9.2, D3.A]；R9.1 掛 +3V3；D3.K 掛 GND"
+    },
+    {
+      "$label": "4. 分壓（btdongle 電池電壓偵測，BR §3.2 點名的驗收範例）",
+      "id": "decl_004", "kind": "divider",
+      "top": "BATT", "bottom": "GND", "tap": "VBAT_SENSE",
+      "r_top": "R13", "r_bottom": "R14", "load": "U2.31"
+    },
+    {
+      "$label": "5a. 電源宣告 — 全域掛旗（今天的行為）",
+      "id": "decl_005", "kind": "rail",
+      "name": "GND", "nodes": ["U2.13", "U2.18", "U2.23"], "render": "global_label"
+    },
+    {
+      "$label": "5b. 電源宣告 — 就地 daisy-chain（round 1 的 61 顆 glyph 問題的解，Phase 3）",
+      "id": "decl_006", "kind": "rail",
+      "name": "GND", "nodes": ["U1.9", "C2.2", "C3.2"],
+      "render": "daisy_chain", "scope": ["U1", "C2", "C3"]
+    },
+    {
+      "$label": "6. 刻意不接",
+      "id": "decl_007", "kind": "no_connect", "pins": ["U2.35"]
+    }
+  ]
+}

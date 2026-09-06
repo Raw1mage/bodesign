@@ -1,0 +1,54 @@
+[
+  {
+    "title": "Phase 1 主線：agent 宣告分壓 → 畫成帶 junction 的實線子電路",
+    "participants": ["Agent", "declare_circuit", "load_symbol", "compose_schematic", "kicad_emit"],
+    "messages": [
+      {"from": "Agent", "to": "declare_circuit", "label": "declarations=[divider BATT/VBAT_SENSE/GND, R13, R14, load U2.31] + components[]"},
+      {"from": "declare_circuit", "to": "declare_circuit", "label": "A1 驗證引用；全部可解析 => 繼續（否則 status=not_run）"},
+      {"from": "declare_circuit", "to": "declare_circuit", "label": "A2 展開：3 條 net（BATT / VBAT_SENSE / GND）"},
+      {"from": "declare_circuit", "to": "declare_circuit", "label": "A3 provenance：每個 node -> d1；斷言無無主 node"},
+      {"from": "declare_circuit", "to": "load_symbol", "label": "取 R13/R14/U2 的 pin 清單（完整性判定所需）"},
+      {"from": "load_symbol", "to": "declare_circuit", "label": "pin maps（失敗則 gate 回 unknown => status=indeterminate）"},
+      {"from": "declare_circuit", "to": "declare_circuit", "label": "A4 完整性 gate：每支腳恰好一次 => pass"},
+      {"from": "declare_circuit", "to": "Agent", "label": "status=ok + spec{components,nets,nc} + provenance + render_plan"},
+      {"from": "Agent", "to": "compose_schematic", "label": "spec 原封轉交（DD-1：無轉換層）"},
+      {"from": "compose_schematic", "to": "kicad_emit", "label": "VBAT_SENSE 三端點、非 power-rail、fanout<=6 => 走 drawn 路徑"},
+      {"from": "kicad_emit", "to": "compose_schematic", "label": "daisy-chain 實線 + junction"},
+      {"from": "compose_schematic", "to": "Agent", "label": "ComposeResult：該子電路 junction > 0（Phase 1 完成判準）"}
+    ]
+  },
+  {
+    "title": "控制組：抽頭接回自己 => 入口擋下（證明主線的 ok 有判別力）",
+    "participants": ["Agent", "declare_circuit", "compose_schematic"],
+    "messages": [
+      {"from": "Agent", "to": "declare_circuit", "label": "declarations=[divider top=BATT, tap=BATT, bottom=GND]"},
+      {"from": "declare_circuit", "to": "declare_circuit", "label": "A2 展開期偵測 tap == top"},
+      {"from": "declare_circuit", "to": "Agent", "label": "status=rejected + E_DIVIDER_TAP_DEGENERATE"},
+      {"from": "Agent", "to": "compose_schematic", "label": "（不會發生：spec 為 null，沒有東西可以餵）"}
+    ]
+  },
+  {
+    "title": "完整性 gate 攔截：漏接的腳一次全部列出",
+    "participants": ["Agent", "declare_circuit", "load_symbol"],
+    "messages": [
+      {"from": "Agent", "to": "declare_circuit", "label": "宣告 8 腳的 U1，但只指派 U1.1 到 GND"},
+      {"from": "declare_circuit", "to": "load_symbol", "label": "取 U1 pin 清單"},
+      {"from": "load_symbol", "to": "declare_circuit", "label": "8 支腳"},
+      {"from": "declare_circuit", "to": "declare_circuit", "label": "A4 gate：7 支未出現在任何 net 或 nc[]"},
+      {"from": "declare_circuit", "to": "Agent", "label": "status=rejected + E_PIN_UNASSIGNED + unassigned[7 項全列]"}
+    ]
+  },
+  {
+    "title": "Phase 3（前置未達成前不實作）：render hint 改變 GND 的畫法",
+    "participants": ["Agent", "declare_circuit", "compose_schematic", "kicad_emit", "OccupancyLedger"],
+    "messages": [
+      {"from": "Agent", "to": "declare_circuit", "label": "rail GND render=daisy_chain scope=[U1,C2,C3]"},
+      {"from": "declare_circuit", "to": "Agent", "label": "render_plan={GND:{render:daisy_chain, source:declared}}"},
+      {"from": "Agent", "to": "compose_schematic", "label": "spec + render_plan"},
+      {"from": "compose_schematic", "to": "kicad_emit", "label": "GND 不走 global_label，改走就地 daisy-chain"},
+      {"from": "kicad_emit", "to": "OccupancyLedger", "label": "try_reserve(wire rect)"},
+      {"from": "OccupancyLedger", "to": "kicad_emit", "label": "【現況阻斷】ok=False（71/71 失敗，wire 層恆空）=> anti-fusion 防護失效"},
+      {"from": "kicad_emit", "to": "Agent", "label": "【現況阻斷】fidelity moved 10 -> 67（BR_20260905 §8.5.2 實測）。故 Phase 3 有硬前置：先修 try_reserve。"}
+    ]
+  }
+]

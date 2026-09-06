@@ -1,0 +1,192 @@
+[
+  {
+    "id": "TV-1",
+    "description": "分壓正常展開（Phase 1 主線）。btdongle 電池電壓偵測 R13/R14/C13。",
+    "input": {
+      "components": [
+        {"ref": "R13", "symbol": "Device:R", "value": "100k"},
+        {"ref": "R14", "symbol": "Device:R", "value": "100k"},
+        {"ref": "U2", "symbol": "MCU_RaspberryPi:Pico2W"}
+      ],
+      "declarations": [
+        {"id": "d1", "kind": "divider", "top": "BATT", "bottom": "GND",
+         "tap": "VBAT_SENSE", "r_top": "R13", "r_bottom": "R14", "load": "U2.31"}
+      ]
+    },
+    "expected": {
+      "status": "ok",
+      "nets_contain": {"VBAT_SENSE": ["R13.2", "R14.1", "U2.31"]},
+      "provenance_all_from": "d1",
+      "$note": "抽頭三端點 => 下游 compose 應畫出 junction。這是 BR_20260905 §3.2 點名的驗收形狀。"
+    }
+  },
+  {
+    "id": "TV-2",
+    "description": "CONTROL for TV-1：抽頭接回自己的上端 => 必須 rejected。這格證明 TV-1 的 ok 有判別力。",
+    "input": {
+      "components": [{"ref": "R13", "symbol": "Device:R"}, {"ref": "R14", "symbol": "Device:R"}],
+      "declarations": [
+        {"id": "d1", "kind": "divider", "top": "BATT", "bottom": "GND",
+         "tap": "BATT", "r_top": "R13", "r_bottom": "R14"}
+      ]
+    },
+    "expected": {"status": "rejected", "error_code": "E_DIVIDER_TAP_DEGENERATE"}
+  },
+  {
+    "id": "TV-3",
+    "description": "去耦電容跨兩條 rail（bridge，Phase 1 主線）。",
+    "input": {
+      "components": [{"ref": "C8", "symbol": "Device:C", "value": "100nF"}],
+      "declarations": [{"id": "d2", "kind": "bridge", "part": "C8", "between": ["+3V3", "GND"]}]
+    },
+    "expected": {
+      "status": "ok",
+      "nets_contain": {"+3V3": ["C8.1"], "GND": ["C8.2"]},
+      "$note": "上拉、限流、去耦共用這個形狀；不需要三個原語。"
+    }
+  },
+  {
+    "id": "TV-4",
+    "description": "完整性 gate 抓到漏接的腳。這是本包存在的主要理由之一。",
+    "input": {
+      "components": [{"ref": "U1", "symbol": "Regulator:TP4056", "$pins": 8}],
+      "declarations": [{"id": "d3", "kind": "rail", "name": "GND", "nodes": ["U1.1"]}]
+    },
+    "expected": {
+      "status": "rejected",
+      "error_code": "E_PIN_UNASSIGNED",
+      "unassigned_lists_all": true,
+      "$note": "必須一次列出全部 7 支未指派的腳，不是只報第一支。"
+    }
+  },
+  {
+    "id": "TV-5",
+    "description": "同一支腳被宣告在兩條 net => 電氣矛盾。直接對應 BR_20260802_spec_declares_six_pins_in_multiple_nets。",
+    "input": {
+      "components": [{"ref": "R1", "symbol": "Device:R"}],
+      "declarations": [
+        {"id": "d4", "kind": "connect", "endpoints": ["R1.1", "R2.1"], "net": "CC1"},
+        {"id": "d5", "kind": "connect", "endpoints": ["R1.1", "R3.1"], "net": "VBUS_CON"}
+      ]
+    },
+    "expected": {
+      "status": "rejected",
+      "error_code": "E_PIN_MULTI_NET",
+      "detail_names_both_nets": ["CC1", "VBUS_CON"],
+      "$note": "在入口擋掉它，那張 BR 的整個因果鏈（fidelity 基準不是分割）就不會啟動。"
+    }
+  },
+  {
+    "id": "TV-6",
+    "description": "空宣告 => empty，不是 ok。直接對應 BR_20260730b「空 spec 四閘齊綠」。",
+    "input": {"components": [], "declarations": []},
+    "expected": {
+      "status": "empty",
+      "$note": "若這格回 ok，本包就複製了它想修的那張 BR。"
+    }
+  },
+  {
+    "id": "TV-7",
+    "description": "symbol 載不到 => indeterminate，不是 ok 也不是 rejected。",
+    "input": {
+      "components": [{"ref": "U9", "symbol": "NoSuchLib:NoSuchPart"}],
+      "declarations": [{"id": "d6", "kind": "rail", "name": "GND", "nodes": ["U9.1"]}],
+      "symbol_dirs": ["/nonexistent"]
+    },
+    "expected": {
+      "status": "indeterminate",
+      "unknown_names_ref": "U9",
+      "$note": "拿不到 pin 清單 => 無法判定完整性。假裝 ok 是說謊，判 rejected 是冤枉。"
+    }
+  },
+  {
+    "id": "TV-8",
+    "description": "provenance 覆蓋全部 node（DD-6 的機檢形式）。",
+    "input": {
+      "components": [{"ref": "R13", "symbol": "Device:R"}, {"ref": "R14", "symbol": "Device:R"}],
+      "declarations": [
+        {"id": "d1", "kind": "divider", "top": "BATT", "bottom": "GND",
+         "tap": "VBAT_SENSE", "r_top": "R13", "r_bottom": "R14"}
+      ]
+    },
+    "expected": {
+      "assertion": "set(all_nodes) == set(provenance.keys())",
+      "orphan_count": 0,
+      "$note": "任何無主 node => E_PROVENANCE_ORPHAN。這讓天條『No fabrication』從人工審查變成一行斷言。"
+    }
+  },
+  {
+    "id": "TV-9",
+    "description": "串聯鏈：LED 限流，中間節點自動具名（DD-3）。Phase 2。",
+    "input": {
+      "components": [{"ref": "R9", "symbol": "Device:R"}, {"ref": "D3", "symbol": "Device:LED"}],
+      "declarations": [
+        {"id": "d7", "kind": "series", "chain": ["+3V3", "R9", "D3", "GND"], "pins": {"D3": ["A", "K"]}}
+      ]
+    },
+    "expected": {
+      "status": "ok",
+      "nets_contain": {"+3V3": ["R9.1"], "d7_n1": ["R9.2", "D3.A"], "GND": ["D3.K"]},
+      "$note": "中間節點名是 d7_n1，穩定且可被下游引用——刻意不同於 SKiDL 的 N$1 與 atopile 的匿名。"
+    }
+  },
+  {
+    "id": "TV-10",
+    "description": "衍生節點名撞上使用者宣告的 net 名。",
+    "input": {
+      "components": [{"ref": "R9", "symbol": "Device:R"}, {"ref": "D3", "symbol": "Device:LED"}],
+      "declarations": [
+        {"id": "d7", "kind": "series", "chain": ["+3V3", "R9", "D3", "GND"]},
+        {"id": "d8", "kind": "connect", "endpoints": ["R1.1", "R2.1"], "net": "d7_n1"}
+      ]
+    },
+    "expected": {"status": "rejected", "error_code": "E_NET_NAME_COLLISION"}
+  },
+  {
+    "id": "TV-11",
+    "description": "render hint 缺席 => 預設 global_label，且 source 標記為 default（不與顯式給值共用輸出）。",
+    "input": {
+      "components": [{"ref": "U2", "symbol": "MCU_RaspberryPi:Pico2W"}],
+      "declarations": [{"id": "d9", "kind": "rail", "name": "GND", "nodes": ["U2.13", "U2.18"]}]
+    },
+    "expected": {
+      "render_plan": {"GND": {"render": "global_label", "source": "default"}},
+      "$note": "『宣告者要求掛旗』與『沒人說所以掛旗』必須可分辨，否則 Phase 3 無從判斷 hint 有沒有生效。"
+    }
+  },
+  {
+    "id": "TV-12",
+    "description": "render hint 顯式給值 => source 為 declared。TV-11 的對照組。",
+    "input": {
+      "components": [{"ref": "U1", "symbol": "Regulator:TP4056"}],
+      "declarations": [
+        {"id": "d10", "kind": "rail", "name": "GND", "nodes": ["U1.9"],
+         "render": "daisy_chain", "scope": ["U1", "C2", "C3"]}
+      ]
+    },
+    "expected": {"render_plan": {"GND": {"render": "daisy_chain", "source": "declared"}}}
+  },
+  {
+    "id": "TV-13",
+    "description": "no_connect 的腳算作已指派，完整性 gate 不報它。",
+    "input": {
+      "components": [{"ref": "U2", "symbol": "MCU_RaspberryPi:Pico2W"}],
+      "declarations": [{"id": "d11", "kind": "no_connect", "pins": ["U2.35"]}]
+    },
+    "expected": {
+      "nc_contains": ["U2.35"],
+      "unassigned_excludes": ["U2.35"]
+    }
+  },
+  {
+    "id": "TV-14",
+    "description": "端到端：declare_circuit 的輸出直接餵 compose_schematic 不需轉換（DD-1 的驗證）。",
+    "input": {"$ref": "TV-1 的輸出 spec"},
+    "expected": {
+      "compose_accepts_without_transform": true,
+      "vbat_sense_is_drawn_not_labelled": true,
+      "junction_count_gt": 0,
+      "$note": "這格是 DD-1 的判準：若需要任何轉換層，接縫設計就是錯的。"
+    }
+  }
+]
