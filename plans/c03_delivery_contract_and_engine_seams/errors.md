@@ -110,7 +110,27 @@ distinguishable from a small denominator.
 | `readability_gate` | `failed` | failed | ≥1 threshold unmet; the report names which, and still carries `does_not_authorize` | gate report, fail arm |
 | `readability_gate` | `not-run` | not-run | no `route_stats` on the compose result — e.g. `connection_style="netlist"`, where `route_stats` is `None` (`composer.py:281` declares it `RouteStats \| None`). A missing `route_stats` must never read as a pass | gate report, precondition arm; `composer.py:2600` |
 | `readability_gate` | `empty` | empty | `route_stats` present but records zero nets (nothing routed or labelled) — ran, nothing to score; thresholds are undefined on an empty denominator and are not evaluated | gate report, zero-net arm |
-| `readability_gate` | `indeterminate` | indeterminate | `route_stats` internally inconsistent with the emitted drawing — BR_20260905 §8.5 measured `route_stats junctions=7` against 5 landed, cause untraced (§8 boundary 4). When the two disagree the gate reports indeterminate rather than picking the flattering number | gate report, reconciliation-mismatch arm; `composer.py:2611-2621` |
+| `readability_gate` | `indeterminate` | indeterminate | **amended 2026-09-06 DD-11.** The emitter that produced these stats predates task 6.0 — it carries no `wire_runs` / `junctions_emitted` — while `wired_nets > 0`, so the stats cannot be vouched for against what was drawn. The report names the missing emitter fields | gate report, stale-emitter arm |
+
+**`indeterminate` was amended, not tuned (DD-11, 2026-09-06).** The original arm
+fired when `route_stats.junctions` disagreed with the landed `(junction` count,
+citing BR_20260905 §8.5's "7 vs 5". Re-measured this round: 7 vs **6** — and the
+cause is structural, not untraced. `composer.py:1830` computed `junctions` as
+`max(0, len(resolvable) - 2)` summed over wired nets: a **fan-out proxy**, never a
+junction count. Comparing a proxy against a count is always-true, so the arm fired
+on every real board and 6.2c's MEASURE step could never obtain a ratio. A check
+that cannot come back clean has zero discriminating power and is worse than no
+check, because it reads as a defence that works. Under DD-11 `junctions` is
+overwritten post-reconciliation from `SchematicEmitResult.junctions_emitted` (the
+old value stays visible as `fanout_proxy`), the consistency check is **deleted** as
+guaranteed-by-construction, and `indeterminate` asks the question above, which has
+two answers. Both branches are controlled in `tests/test_readability_gate.py`
+`IndeterminateArmTests`.
+
+`does_not_authorize` is `["electrical_correctness", "fidelity"]` in every status.
+`fidelity` is named explicitly because BR_20260905 §8.5.2's counterexample was
+caught by the fidelity axis specifically; naming only the general term would let a
+reader assume the specific one was covered.
 
 ## Error Catalogue
 

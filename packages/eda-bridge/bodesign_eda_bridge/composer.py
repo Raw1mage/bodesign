@@ -99,6 +99,16 @@ _BASE_TEXT_HEIGHT_MM = 1.27
 # label-name reach is handled by the label-aware gap math elsewhere, not here.
 PORT_CLEARANCE_MM = 12.7  # DD-22/23 straight-port: 2×2.54 stub + 7.62 clear gap
 
+# WP6 (BR_20260905 §7 criterion 2): the length at or below which an emitted run is
+# a "stub" -- a pin escaping to a label rather than reaching another pin. Sourced
+# from the BR, which measured the label-farm degradation as "≤5.2mm pin→label"
+# runs at 73.0% of all wires on the btdongle real board. It is NOT derived from
+# _STUB_MM (2.54) or _LABEL_STUB_STEP_MM (5.08): those are what the emitter DRAWS,
+# and a threshold equal to a drawn constant would classify by construction rather
+# than measure. 5.2 sits just above both so either kind of stub counts, while the
+# shortest real pin-to-pin run on the corpus (6.35mm) does not.
+STUB_LEN_MM = 5.2
+
 
 # ---------------------------------------------------------------------------
 # DD-10 (A7): page density budget. Text-overlap's治本 layer is placement density —
@@ -220,15 +230,52 @@ class Cluster:
 class RouteStats:
     wired_nets: int = 0
     labelled_nets: int = 0
+    # DD-11 (2026-09-06): AFTER the :2611-2621 reconciliation this holds the count
+    # of `(junction` blocks the emitter actually WROTE (SchematicEmitResult.
+    # junctions_emitted). Before DD-11 it held max(0, len(resolvable)-2) summed
+    # over wired nets -- a FAN-OUT PROXY, never a junction count. errors.md's
+    # `indeterminate` arm compared that proxy against the landed count and so was
+    # structurally always-true (measured 7 vs 6 on the btdongle real board): a
+    # check with zero discriminating power, which is worse than no check because
+    # it reads as a defence. The proxy is NOT dropped -- it stays observable as
+    # `fanout_proxy` -- because "we stopped computing it" and "it was always this
+    # number" must not share an output.
     junctions: int = 0
     label_fallback_reasons: list[dict] = field(default_factory=list)
+    # DD-11: the pre-DD-11 value of `junctions`, retained so the change is visible
+    # rather than silent. Same formula, same emission site (_build_route_stats).
+    fanout_proxy: int = 0
+    # WP6 task 6.0 -- the two quantities the readability form gate scores.
+    # Both are None on a path that drew nothing (connection_style="netlist"),
+    # which is NOT the same as 0.0/0: `None` means no run was measurable, `0.0`/`0`
+    # means runs existed and none qualified. The gate must not collapse the two.
+    #   stub_share        -- fraction of EMITTED pin->label runs whose length is
+    #                        <= STUB_LEN_MM, computed from emit.wire_runs (the
+    #                        emitter's own record of what it wrote), never from a
+    #                        re-parse of the .kicad_sch (DD-10).
+    #   drawn_subcircuits -- count of connected wired-component groups spanning
+    #                        >=2 distinct component refs, counted AFTER the
+    #                        :2611-2621 reconciliation so it mirrors actual
+    #                        emission rather than pre-reconciliation intent.
+    #                        0 with wired_nets > 0 is the label-farm shape
+    #                        (BR_20260905): a real measurement, reported as
+    #                        `empty`, never folded into `not-run`.
+    stub_share: float | None = None
+    drawn_subcircuits: int | None = None
 
     def to_dict(self) -> dict:
+        # DD-10: every field added to this dataclass is added to this dict in the
+        # SAME change. A field present on the dataclass but absent here would be
+        # invisible to the gate while reading as implemented -- the gate would then
+        # report `not-run` on a working emitter and nobody would know why.
         return {
             "wired_nets": self.wired_nets,
             "labelled_nets": self.labelled_nets,
             "junctions": self.junctions,
             "label_fallback_reasons": list(self.label_fallback_reasons),
+            "fanout_proxy": self.fanout_proxy,
+            "stub_share": self.stub_share,
+            "drawn_subcircuits": self.drawn_subcircuits,
         }
 
 
@@ -1827,6 +1874,12 @@ def _build_route_stats(nets: list[EmitNet], net_kinds: dict[str, str], placement
             continue
         stats.wired_nets += 1
         if len(resolvable) >= 3:
+            # DD-11: this is the FAN-OUT PROXY, not a junction count. It is written
+            # to `fanout_proxy`; `junctions` is overwritten after reconciliation
+            # with the emitter's own count of `(junction` blocks written. Both are
+            # assigned here so a caller reading either one pre-reconciliation gets
+            # the historical number rather than a silently-zero field.
+            stats.fanout_proxy += max(0, len(resolvable) - 2)
             stats.junctions += max(0, len(resolvable) - 2)
     return stats
 
@@ -2622,6 +2675,69 @@ def compose_schematic(
             warnings.append(
                 f"anti-fusion guard down-graded {len(downgraded)} net(s) to label "
                 f"to avoid cross-net collinear wire fusion: {sorted(downgraded)}")
+
+        # --- WP6 task 6.0 / DD-11: the two form-gate emissions --------------
+        # Everything below runs AFTER the reconciliation above, so both figures
+        # mirror what was actually emitted rather than pre-reconciliation intent.
+
+        # (1) junctions: replace the fan-out proxy with the emitter's own count of
+        # `(junction` blocks written. `fanout_proxy` keeps the old number visible.
+        # getattr with a sentinel, NOT a 0 default: an OLD emitter that never wrote
+        # the field and a NEW emitter that wrote 0 must not share an output. When
+        # the field is absent we leave `junctions` holding the proxy and say so.
+        _emitted_j = getattr(emit, "junctions_emitted", None)
+        if _emitted_j is not None:
+            route_stats.junctions = _emitted_j
+        else:
+            warnings.append(
+                "[route_stats] emitter has no junctions_emitted; `junctions` still "
+                "holds the pre-DD-11 fan-out proxy (max(0,nodes-2) summed). Do not "
+                "read it as a junction count.")
+
+        # (2) stub_share: fraction of EMITTED runs at or below STUB_LEN_MM.
+        # Source is emit.wire_runs -- the emitter's record of what it wrote -- so
+        # this is not a second parse of the .kicad_sch (DD-10). None (not 0.0) when
+        # no run was measurable: "nothing was drawn" and "nothing drawn was short"
+        # are different facts and get different values.
+        _runs = getattr(emit, "wire_runs", None)
+        if _runs is None:
+            route_stats.stub_share = None
+            warnings.append(
+                "[route_stats] emitter has no wire_runs; stub_share is not-run "
+                "(absent input), NOT 0.0 (no stubs).")
+        elif not _runs:
+            route_stats.stub_share = None
+        else:
+            _short = sum(1 for r in _runs if r["len_mm"] <= STUB_LEN_MM)
+            route_stats.stub_share = round(_short / len(_runs), 6)
+
+        # (3) drawn_subcircuits: connected groups of component refs joined by nets
+        # that are STILL wired after reconciliation, counting only groups spanning
+        # >=2 distinct refs. A single-ref group is one part's own pins, not a
+        # subcircuit a reader can recognise.
+        _labelled_now = {d["net"] for d in route_stats.label_fallback_reasons}
+        _wired_now = [n for n in nets if n.name not in _labelled_now]
+        _parent: dict[str, str] = {}
+
+        def _find(x: str) -> str:
+            _parent.setdefault(x, x)
+            while _parent[x] != x:
+                _parent[x] = _parent[_parent[x]]
+                x = _parent[x]
+            return x
+
+        for _n in _wired_now:
+            _refs = sorted({r for r, _p in _n.nodes})
+            for _r in _refs:
+                _find(_r)
+            for _r in _refs[1:]:
+                _ra, _rb = _find(_refs[0]), _find(_r)
+                if _ra != _rb:
+                    _parent[_ra] = _rb
+        _groups: dict[str, set] = {}
+        for _r in _parent:
+            _groups.setdefault(_find(_r), set()).add(_r)
+        route_stats.drawn_subcircuits = sum(1 for g in _groups.values() if len(g) >= 2)
 
     result = ComposeResult(
         emit=emit,

@@ -126,6 +126,28 @@ class SchematicEmitResult:
     # silent). Empty when clusters is None (byte-identical legacy path).
     slot_observe_wires: list[dict] = field(default_factory=list)
     slot_observe_skips: list[dict] = field(default_factory=list)
+    # WP6/DD-11 (2026-09-06): the two quantities the readability form gate scores,
+    # emitted HERE rather than re-parsed from the .kicad_sch (DD-10 forbids the
+    # second parser: it reintroduces the composer/emitter drift the label_nets
+    # hand-off removed). Both mirror what was actually WRITTEN:
+    #   wire_runs        -- one entry {"net", "len_mm"} per `(wire` block emitted,
+    #                       appended beside every wire_blocks.append. So
+    #                       len(wire_runs) == the number of `(wire` in the file,
+    #                       and stub_share is a measurement of the drawing rather
+    #                       than of pre-emission intent.
+    #   junctions_emitted -- count of `(junction` blocks written. NOT the same
+    #                       quantity as RouteStats.junctions was before DD-11:
+    #                       that was max(0, len(resolvable)-2) summed over wired
+    #                       nets, a FAN-OUT PROXY. Comparing the proxy against the
+    #                       landed count made errors.md's `indeterminate` arm
+    #                       structurally always-true (measured 7 vs 6 on btdongle),
+    #                       i.e. a check with zero discriminating power. DD-11
+    #                       replaces the proxy as the value of `junctions` and
+    #                       keeps the proxy visible under `fanout_proxy`.
+    # Empty on the label-only / netlist path == nothing was drawn (a real state),
+    # which is why the gate reads ABSENCE OF THE FIELD, not emptiness, as not-run.
+    wire_runs: list[dict] = field(default_factory=list)
+    junctions_emitted: int = 0
 
 
 @dataclass(slots=True)
@@ -1355,6 +1377,20 @@ def emit_kicad_schematic(
     wire_blocks: list[str] = []
     junction_blocks: list[str] = []
     unresolved: list[str] = []
+    # WP6/DD-11 (2026-09-06): per-run length record for the readability form gate.
+    # Appended at EVERY site that appends to `wire_blocks`, so `len(wire_runs)`
+    # is the count of `(wire` actually written -- the gate's stub_share is then a
+    # measurement of the EMITTED drawing, not of pre-emission intent, and needs no
+    # second parser over the .kicad_sch (DD-10 forbids that re-parse).
+    # Purely additive: no geometry is read back from this list by the emitter.
+    wire_runs: list[dict] = []
+
+    def _record_run(x1: float, y1: float, x2: float, y2: float, net_name: str) -> None:
+        """Record one emitted wire run's length. Called beside each wire_blocks append."""
+        wire_runs.append({
+            "net": net_name,
+            "len_mm": round(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5, 4),
+        })
     # (net_name, x, y) endpoints routed to global-label fallback; emitted after
     # the net loop with a per-column anti-overlap pass so dense same-side pin
     # stacks (e.g. a large BGA drawn as a per-page subset) do not collide.
@@ -1790,6 +1826,7 @@ def emit_kicad_schematic(
             _hosts = frozenset(endpoint_refs)
             for a, b in zip(waypoints, waypoints[1:]):
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
+                _record_run(a[0], a[1], b[0], b[1], net.name)
                 routed_segments.append(((a, b), _hosts))
             mid = waypoints[len(waypoints) // 2]
             _place_local_label(net.name, mid[0], mid[1], waypoints)
@@ -1902,6 +1939,7 @@ def emit_kicad_schematic(
             _hosts = frozenset(endpoint_refs)
             for (a, b) in segments:
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
+                _record_run(a[0], a[1], b[0], b[1], net.name)
                 routed_segments.append(((a, b), _hosts))
             for (jx, jy) in junctions:
                 junction_blocks.append(_junction_block(jx, jy))
@@ -2038,6 +2076,7 @@ def emit_kicad_schematic(
             port_y = round(anchor_y + ny * _STUB_MM, 4)
             final_stub_segs = [((anchor_x, anchor_y), (port_x, port_y))]
             wire_blocks.append(_wire_segment_block(anchor_x, anchor_y, port_x, port_y))
+            _record_run(anchor_x, anchor_y, port_x, port_y, net_name)
             fusion_registry.setdefault(net_name, []).extend(final_stub_segs)
             pwr_rot = _power_symbol_rotation(kind, (nx, ny))
             symbol_blocks.append(_power_symbol_instance(lib_id, net_name, port_x, port_y, project_name, root_uuid, rotation=pwr_rot, edge=(nx, ny)))
@@ -2061,6 +2100,7 @@ def emit_kicad_schematic(
                 flag_x = round(port_x + nx * _STUB_MM, 4)
                 flag_y = round(port_y + ny * _STUB_MM, 4)
                 wire_blocks.append(_wire_segment_block(port_x, port_y, flag_x, flag_y))
+                _record_run(port_x, port_y, flag_x, flag_y, net_name)
                 symbol_blocks.append(_pwr_flag_instance(flag_x, flag_y, project_name, root_uuid))
 
     # Post-emit bbox assert (BR: left-pin stub orientation blind, guard C). Every
@@ -2203,6 +2243,10 @@ def emit_kicad_schematic(
         power_port_intrusions=list(_port_intrusions),
         slot_observe_wires=slot_observe_wires,
         slot_observe_skips=slot_observe_skips,
+        # WP6/DD-11: assigned unconditionally, so an empty list means "no runs were
+        # drawn" and never "nobody wrote the field" (the BR_20260804f shape).
+        wire_runs=wire_runs,
+        junctions_emitted=len(junction_blocks),
     )
 
 

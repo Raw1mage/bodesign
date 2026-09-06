@@ -266,6 +266,45 @@ The last row is new information this package produced, and it changes WP3's shap
   `.kicad_sch` — that reads the emitter's output through a second parser and
   reintroduces the drift the `label_nets`-passing comment at `:1790` explicitly
   removed.
+- **DD-11 — `RouteStats.junctions` becomes the LANDED junction count, the fan-out
+  proxy is retained under `fanout_proxy`, and WP6's `indeterminate` arm is
+  replaced rather than tuned.** (Dispatcher ruling, round 8, 2026-09-06.)
+  `errors.md:113` originally made the gate `indeterminate` when `route_stats`
+  disagreed with the emitted drawing, citing BR_20260905 §8.5's "junctions=7 vs 5
+  landed". Measured this round on the same real board: `route_stats.junctions=7`
+  against **6** landed `(junction` blocks. The discrepancy is **structural, not
+  incidental**: `composer.py:1830` computes `junctions` as
+  `max(0, len(resolvable) - 2)` summed over wired nets — a **fan-out proxy**,
+  never a count of junction glyphs. Comparing a proxy against a count makes that
+  arm always-true, so the gate would report `indeterminate` on every real board
+  and 6.2c's MEASURE step could never obtain a ratio. A check that cannot come
+  back clean has **zero discriminating power**, and is worse than no check because
+  it reads to a later maintainer as a defence that works.
+  Resolution: (1) after the `:2611-2621` reconciliation, `junctions` is overwritten
+  from the new `SchematicEmitResult.junctions_emitted`; the pre-DD-11 value stays
+  observable as `fanout_proxy`, because "we stopped computing it" and "it was
+  always this number" must not share an output. (2) The junction-consistency check
+  is **deleted** — after (1) it is guaranteed by construction. (3) `indeterminate`
+  now asks a question with two answers: *does the emitter carry the task-6.0
+  emissions at all?* An emitter lacking `wire_runs` / `junctions_emitted` while
+  `wired_nets > 0` yields `indeterminate`; a current emitter does not. Both
+  branches are controlled in `IndeterminateArmTests`.
+  Rejected alternatives: a bypass for the MEASURE step (concedes the gate can
+  never adjudicate) and a tolerance `K` on the mismatch (picks a tolerance for a
+  comparison that should not exist).
+  Consequence for DD-10: `stub_share`'s emission point is **inside
+  `kicad_emit.py`** — measured, not assumed. `SchematicEmitResult` carried no wire
+  geometry (all 17 slots enumerated; both coordinate-bearing fields empty), the
+  shared `OccupancyLedger` held zero `wire` rects on this path (71 `wire` reserves
+  attempted against the composer's instance, 0 survived; control: the same spy saw
+  all 45 `body` reserves), and the short-run count matched no combination of the
+  counts that do cross the seam. The boundary was therefore widened to **purely
+  additive** emitter fields, which honours DD-10's actual prohibition (a second
+  parser over the `.kicad_sch`) rather than its incidental location.
+  `ledger: spec_record_decision #12` (the runner-assigned number, read back from
+  its response — not predicted; the earlier `#13` in this file was a guess and was
+  wrong by one).
+
 - **DD-02 amendment (implementation round, 2026-09-06)** — recorded in the event
   ledger as `spec_record_decision #11`. This file keeps DD-01..DD-10 as its
   numbering; #11 is the ledger's running sequence for the same DD-02, not an
@@ -280,6 +319,20 @@ The last row is new information this package produced, and it changes WP3's shap
   Implemented: `power` (`suggested`) and `analog-reference` (`indeterminate`
   always). Real-board figures and the annotation limit behind the seven
   zero-subject results are in §"WP5 real-board measurement".
+- **DD-12 (ledger sequence) = DD-11 (this file's numbering)** — appended by
+  `spec_record_decision` on 2026-09-06. Same relationship as the DD-02/#11 entry
+  above: this file numbers its own decisions `DD-01..DD-11`, while the ledger runs
+  a repo-wide sequence that reached 12 here. It is NOT a twelfth decision.
+  Verbatim ledger text: RouteStats.junctions is overwritten post-reconciliation
+  with SchematicEmitResult.junctions_emitted (the emitter's actual `(junction`
+  count), and the former `max(0, len(resolvable)-2)` fan-out proxy is preserved
+  under the new key `fanout_proxy` rather than silently dropped. The
+  `readability_gate` junction-consistency check in `errors.md` is DELETED: it
+  compared a fan-out proxy against a landed junction count, so its `indeterminate`
+  arm was structurally always-true (measured 7 vs 6) and had zero discriminating
+  power. The `indeterminate` arm now asks a question with two answers: did the
+  emitter carry the task-6.0 emissions at all (`SchematicEmitResult` lacking
+  `wire_runs`/`junctions_emitted` while `wired_nets > 0`).
 
 ## WP5 KB coverage — measured, not assumed
 
