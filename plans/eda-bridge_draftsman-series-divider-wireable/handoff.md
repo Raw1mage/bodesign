@@ -223,3 +223,150 @@ BASELINE 的取得方式：把 `tests/test_declare_circuit.py` 搬到 `$XDG_RUNT
   未把 series 產出的 spec 餵 `compose_schematic` 量 junction——那不在 2.1–2.7 範圍內。
 - **電氣正確性未驗，也驗不了**。`ok` 的讀法依舊是「宣告內部一致且完整」，
   不是「這個電路是對的」（`errors.md` §語法合法但電路錯誤 的最後三列）。
+
+---
+
+## Round 9 — ERC 實測與 T 接觸判定
+
+### B — `kicad-cli sch erc`（三格判準）
+
+`kicad-cli` **在 host 上可用**（`/usr/bin/kicad-cli`, 9.0.9），本輪在 host 跑。
+（未量：core 容器內是否有 kicad-cli。本輪 compose 與 ERC 皆在 host。）
+
+**① t3 放行交叉後的 sheet（逐字）**
+
+```
+Found 9 violations   rc=5
+  error    pin_not_connected   x4   (C3.1, C1.1, C2.1, R1.2)
+  warning  lib_symbol_issues   x5   ("configuration does not include the symbol library 'Device'")
+```
+
+route_stats: `wired=2 labelled=0 junctions=2 reasons=[]`
+
+**注意：9 個 violation 全部與交叉無關。** 4 個 `pin_not_connected` 是 fixture
+本身沒接的腳（t3 只宣告 2 條 net，其餘腳本來就懸空），5 個 warning 是 symbol
+library 路徑未寫進 project config。**ERC 對放行的交叉本身零意見**——這正是
+`.kicad_sch` 顯式連接語意的預期行為：交叉點無 junction ⇒ 不成 net。
+
+**② 與「交叉被擋」狀態的比對 — 差集為空**
+
+比對基線的取得**修正了 dispatch 的一格前提**：`edc6cd8` **不是**「交叉被擋」的狀態。
+實測 `edc6cd8` 對同一份 spec 回 `wired=2 labelled=0 junctions=2 reasons=[]`，
+與 HEAD 逐字相同——因為 `edc6cd8` 早於 round 7 的 `_reserve_wire` 修復，
+帳本 wire 層是空集，**根本沒有東西擋得下來**。
+
+真正的「交叉被擋」狀態 = HEAD 且 `_PERPENDICULAR_OK_KINDS = frozenset()`
+（round 7 落點）。以該狀態實跑：
+
+```
+ROUND7 (exemption OFF): wired=1 labelled=1 junctions=2
+                        reasons=[{'net':'SIG2','reason':'ledger-collision'}]
+HEAD   (exemption ON) : wired=2 labelled=0 junctions=2  reasons=[]
+```
+
+兩者的 ERC 差集：
+
+```
+ROUND7 sheet: 9 violations   (error pin_not_connected x4, warning lib_symbol_issues x5)
+HEAD   sheet: 9 violations   (error pin_not_connected x4, warning lib_symbol_issues x5)
+only in ROUND7: (empty)
+only in HEAD  : (empty)
+common: 9
+```
+
+**放行交叉沒有引入任何新的 ERC violation，也沒有消除任何一個。**
+SIG2 從 global label 改成實線走線，對 ERC 而言電氣拓樸不變（label 與 wire
+都能構成同一條 net），所以差集為空是正確結果而非探針失效——見 ③。
+
+**③ NEGCTRL：`kicad-cli` 在該紅的時候會紅**
+
+兩格，方向相反：
+
+```
+ACCEPTING CONTROL  結構合法的空 sheet          → Found 0 violations   rc=0
+NEGCTRL (SHORT)    t3 + 在交叉點注入 junction  → Found 12 violations  rc=5
+```
+
+NEGCTRL 的注入點是實測出來的交叉座標：t3 的 8 條 wire 中，
+seg2 `(121.92,83.82)-(172.72,83.82)` H 與 seg6 `(168.91,74.93)-(168.91,124.46)` V
+在 **(168.91, 83.82)** 交叉；原 sheet 的兩個 junction 在 (121.92,83.82) 與
+(172.72,83.82)，**都不在交叉點上**（所以不短路）。把 junction 注到交叉點後：
+
+```
+ONLY IN SHORTED SHEET (差集，即注入 junction 造成的):
+  + ('warning', 'multiple_net_names', "Label 'GNDISH'")
+  + ('warning', 'multiple_net_names', "Label 'SIG2'")
+  + ('error',   'pin_not_connected',  'Symbol R1 Pin 1 [Passive, Line]')
+  + ('warning', 'unconnected_wire_endpoint', 'Vertical Wire, length 0.0127 mm')
+ONLY IN CLEAN SHEET: (empty)
+```
+
+**`multiple_net_names` 同時出現在 GNDISH 與 SIG2 上，逐字就是跨 net 合併的簽名。**
+這格證明：(a) ERC 真的在讀這張圖而不是空轉，(b) 它抓得到本修法唯一的危險
+失效模式，(c) ① 的「9 個 violation 與交叉無關」是真的無關，不是 ERC 沒檢查。
+
+**未量**：core 容器內的 ERC（本輪 host 跑）；密板組的 ERC（dense fixture 產出
+0 junction，無交叉可驗，故 ERC 對它無判別力，未列為證據）。
+
+### C — T 接觸判定：**已被擋，且是電氣理由**
+
+結論：**不是缺陷，不需要在 perp 豁免裡加 X-interior 條件。**
+
+`path_clear` 的 perp 豁免確實只判軸向（dispatcher 讀 code 讀對了），但它
+**不是 accept path 的唯一關卡**。`_segment_fuses`（kicad_emit.py:3283）在
+`_guard_route` 的 `extra_ok` 之前先跑（:1668 / :1914 / :1982），而它明確檢查
+端點落點。
+
+**逐格量測（同一組幾何，兩層謂詞各跑一次）**
+
+net A = 水平 `(100,80)-(150,80)`；net B 三種候選：
+
+| 候選 | 幾何 | `_segment_fuses` | `path_clear`(perp on) | 被誰擋 |
+|---|---|---|---|---|
+| T 接觸 | `(125,60)-(125,80)` 端點落在 A 上 | **True（擋）** | True（放行） | `_point_on_segment` |
+| X 交叉 | `(125,60)-(125,100)` 穿越內部 | False（放行） | True（放行） | 無（正確） |
+| 共線疊合 | `(120,80)-(170,80)` | **True（擋）** | **False（擋）** | `_collinear_overlap` |
+
+**指名擋它的謂詞**：`_point_on_segment(seg_endpoint, other_seg)` —— 這是
+**電氣理由**，不是碰巧的 body keep-out：該函式的 docstring 逐字寫
+"A shared endpoint between two nets is itself a fusion (KiCad merges a wire END
+that touches another wire)"，判斷依據是端點座標與對方線段的幾何關係，
+與 body / pin_extent / label 等任何佈局元素無關。換一份佈局仍然成立。
+
+**控制組（證明它不是全面拒絕）**：同一支謂詞對 X 交叉回 False。
+若 `_segment_fuses` 對 T 與 X 都回 True，那它只是在擋所有正交線段，
+指認不了任何東西——實測 `T=True and X=False` 為真，故有判別力。
+
+**真實路徑證實**：12 顆 R、12 條 net 的密板 fixture 走完整 `compose_schematic`，
+`label_fallback_reasons` 回 `[{'net':'N7','reason':'anti-fusion'},
+{'net':'N9',...},{'net':'N11',...}]` —— **`anti-fusion` 這個 reason 在真實
+compose 路徑上真的排放了**，不是只在單元謂詞層可觸發。
+
+**兩層謂詞的分工（給下一個人）**：
+
+- `_segment_fuses`：**電氣**層。管 net-vs-net 的融合（共線疊合 + 端點落點）。
+  T 接觸由它擋。
+- `path_clear` perp 豁免：**版面**層。管候選線段與帳本 rect 的碰撞。
+  它不判 X-interior 是**可接受的**，因為電氣層已先擋掉 T。
+
+**但這個分工是隱性的**：`path_clear` 的 docstring 沒說「T 接觸由上游擋」。
+若未來有呼叫端**只**用 `path_clear` 而不經 `_guard_route`，T 接觸就會漏。
+目前 `_PERPENDICULAR_OK_KINDS` 只有一個呼叫端（kicad_emit.py:1796）且在
+`_guard_route` 之後，所以現況安全——**這是一個依賴呼叫順序的保證，不是
+謂詞自身的保證**。
+
+### 回歸
+
+```
+TREATMENT (HEAD 7af9f71)  test_composer_draftsman: 11 failing ids
+BASELINE  (edc6cd8 tree)  test_composer_draftsman: 11 failing ids
+NEW_failures_caused_by_round9: (empty)
+CONTROL: id 擷取器回非空（前三筆已列印）  ← 否則 empty 是空洞為真
+full suite: Ran 2063 tests  FAILED (failures=12, errors=40, skipped=52)  ← 與既有基線同
+tests/test_wire_crossing_guard.py 單獨: Ran 9 tests  OK
+```
+
+BASELINE tree 的真實性已逐位元證明：`sha256(before/kicad_emit.py)` 前 16 碼
+`373471f8b2b914a3` == `git show edc6cd8:` 同值，且 != HEAD 的 `3ee256f5cea1349e`；
+round-8 標記 `perpendicular_ok_kinds` 在 before tree 計數 0、在 HEAD 計數 7。
+兩側 run 前均清 `__pycache__`（AGENTS.md §6.3）。
