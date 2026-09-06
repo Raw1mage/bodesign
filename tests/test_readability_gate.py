@@ -519,5 +519,110 @@ class ScoredSubjectTests(unittest.TestCase):
                             report["scored_subject"]["source"].get("value"))
 
 
+_SERVER_PY = Path(__file__).parent.parent / "services" / "mcp" / "server.py"
+
+# Parameters that deliberately do NOT cross the MCP facade, each with the reason.
+# An exemption is only safe while it is self-invalidating: a test below asserts
+# every key here still names a real parameter, so a rename or removal turns this
+# dict red instead of leaving a stale excuse that quietly widens over time.
+_FACADE_EXEMPT = {
+    "emit": "a live compose-result OBJECT read by attribute (hasattr on "
+            "wire_runs / junctions_emitted). It has no JSON form, so an MCP "
+            "caller cannot supply it and its absence is not a coverage gap.",
+}
+
+
+class FacadeReachabilityTests(unittest.TestCase):
+    """Can an MCP caller reach every scoring path this gate implements?
+
+    WHY THIS EXISTS, and why it is not the skip reason round=8 asked for.
+    The dispatch assumed the live-compose path was carried by a skipped test and
+    asked for a skip reason naming the gap. Measured on this host: HAS_SYMBOLS is
+    True, all six LiveEmissionTests execute (`live_ok=6 live_skipped=0`) and the
+    module reports `skipped` zero times. There is no skip to annotate, and a skip
+    reason nobody reaches is not a carrier. Worse, unittest prints skip reasons
+    only at -v (measured with a marker probe: default 0 hits, -v 1 hit), so the
+    stated audience -- someone reading `Ran N / skipped=52` -- would never see it.
+
+    The gap that IS real and IS red-capable sits one layer over, and it is the
+    same shape BR_20260906 is about: a path that exists in the function but not
+    where the caller stands. `check_c03` already paid for this once -- netlist_path
+    and covers_boards were added to the function and never to the facade, so R5/R6
+    were unreachable for every MCP caller while the direct-call tests stayed green.
+    This gate is now exposed on two planes, so it inherits that failure mode: when
+    the `.kicad_sch` reader lands (BR_20260906 §8), it will add a parameter, and
+    nothing but this class would notice it never reached the schema.
+
+    Paired with test_on_disk_is_refused, which goes red the day that reader lands.
+    That one says the capability is absent; this one says the door is wired.
+    """
+
+    def _params(self) -> list[str]:
+        import inspect
+        return [p for p in inspect.signature(readability_gate).parameters]
+
+    def _facade(self) -> tuple[str, str]:
+        """(schema_properties_fragment, handler_source) for bodesign_readability_gate."""
+        src = _SERVER_PY.read_text(encoding="utf-8")
+        i = src.find('"name": "bodesign_readability_gate"')
+        self.assertNotEqual(i, -1, "bodesign_readability_gate is not registered")
+        # Bound the entry at the NEXT tool rather than a magic byte count: a
+        # fixed window is the fixed-line-window failure this round already hit
+        # once -- it truncates silently and the truncation reads like absence.
+        j = src.find('{"name": "bodesign_', i + 10)
+        entry = src[i:j if j != -1 else len(src)]
+        m = re.search(r'"schema":\s*\{"type": "object", "properties": \{(.*?)\},\s*"required"',
+                      entry, re.S)
+        self.assertIsNotNone(m, "could not locate the tool's schema properties")
+        h_start = src.find("def _h_readability_gate")
+        self.assertNotEqual(h_start, -1, "_h_readability_gate handler not found")
+        h_end = src.find("\ndef ", h_start + 1)
+        return m.group(1), src[h_start:h_end]
+
+    def test_the_scans_actually_find_something(self):
+        # Reverse discrimination for BOTH scans. If either returned empty, every
+        # assertion below would pass vacuously forever -- a green row asserting
+        # nothing, which is the one outcome worse than no row at all.
+        params = self._params()
+        self.assertIn("route_stats", params)
+        self.assertIn("scored_subject", params)
+        self.assertGreaterEqual(len(params), 5, f"suspiciously few params: {params}")
+        props, handler = self._facade()
+        self.assertIn("route_stats", props)
+        self.assertIn("readability_gate(", handler)
+
+    def test_every_parameter_is_declared_in_the_facade_schema(self):
+        props, _ = self._facade()
+        missing = [p for p in self._params()
+                   if p not in _FACADE_EXEMPT and f'"{p}"' not in props]
+        self.assertEqual(
+            missing, [],
+            f"readability_gate accepts {missing} but the MCP inputSchema does not "
+            f"declare them -- an MCP caller cannot discover or pass them, so those "
+            f"paths are unreachable through the facade exactly as check_c03's "
+            f"netlist_path was. Declare them, or add a justified _FACADE_EXEMPT entry.")
+
+    def test_every_parameter_is_forwarded_by_the_handler(self):
+        # Declaring a parameter in the schema while the handler drops it is the
+        # same defect with a friendlier face: discoverable, accepted, ignored.
+        _, handler = self._facade()
+        dropped = [p for p in self._params()
+                   if p not in _FACADE_EXEMPT and f'"{p}"' not in handler]
+        self.assertEqual(
+            dropped, [],
+            f"_h_readability_gate does not forward {dropped}; a caller supplying "
+            f"them would be silently ignored and get the derived default instead.")
+
+    def test_each_exemption_still_names_a_real_parameter(self):
+        # Guards the exemption list itself. Without this, deleting `emit` would
+        # leave a permanent licence to omit a name that no longer means anything,
+        # and the list only ever grows.
+        params = self._params()
+        stale = [k for k in _FACADE_EXEMPT if k not in params]
+        self.assertEqual(stale, [],
+                         f"_FACADE_EXEMPT still excuses {stale}, which readability_gate "
+                         f"no longer accepts -- a stale exemption is a silent widening.")
+
+
 if __name__ == "__main__":
     unittest.main()
