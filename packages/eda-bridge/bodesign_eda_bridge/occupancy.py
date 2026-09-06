@@ -330,19 +330,66 @@ class OccupancyLedger:
 
     # ---- 查詢 ----------------------------------------------------------
 
-    def query(self, rect: LedgerRect) -> list[LedgerRect]:
+    def query(
+        self,
+        rect: LedgerRect,
+        exempt_owners: "frozenset[str] | set[str]" = frozenset(),
+        kinds: "frozenset[str] | set[str] | None" = None,
+        perpendicular_ok_kinds: "frozenset[str] | set[str]" = frozenset(),
+    ) -> list[LedgerRect]:
         """回傳帳本中與 rect 真衝突的既有矩形（owner-aware：同 owner 不算衝突）。
 
         M4-3a-2 前：純幾何相交（同符號內部文字框被誤判為衝突 → 71% 假衝突）。
         M4-3a-2 後：owner-aware，同符號 body/pin_extent/prop 共存，只留跨實體真衝突。
+
+        exempt_owners（round 7）：額外豁免的 owner 集合，語義與 `path_clear` 的
+        `host_owners` 逐字相同——一條 wire 的兩端就長在它 host 元件的 pin 上，與該
+        元件的 body / pin_extent 幾何相交是**構造上必然**的合法貼靠，不是衝突。
+        `_conflicts_with` 的同-owner 豁免救不了 wire（wire 的 owner 是 net 名，host
+        的 owner 是 ref，兩者永不相等），所以查詢端必須能宣告這組豁免。預設空集 →
+        既有呼叫端行為逐字不變。
+
+        kinds（round 7）：若給定，只對這些 kind 的既有 rect 做衝突測試，語義與
+        `path_clear(kinds=...)` 相同。預設 None（全 kind）→ 既有呼叫端不變。
         """
-        return [r for r in self._rects if self._conflicts_with(r, rect)]
+        skip = set(exempt_owners)
+        want = set(kinds) if kinds is not None else None
+        perp_ok = set(perpendicular_ok_kinds)
+        out: list[LedgerRect] = []
+        for r in self._rects:
+            if r.owner in skip:
+                continue
+            if want is not None and r.kind not in want:
+                continue
+            if not self._conflicts_with(r, rect):
+                continue
+            if r.kind in perp_ok and rect.kind in perp_ok:
+                ra, rb = self._rect_axis(r), self._rect_axis(rect)
+                # round 8: 落帳端必須與 accept-gate 同謂詞。`path_clear` 已放行的
+                # 垂直交叉，這裡也要放行——否則那條線會被畫出來卻進不了帳本，
+                # 後續 net 就看不見它（逐字是 round 7 修掉的那個缺陷，低一層）。
+                # 軸向不可判定時保守地當成衝突。
+                if ra != "?" and rb != "?" and ra != rb:
+                    continue
+            out.append(r)
+        return out
 
     # ---- 落帳 ----------------------------------------------------------
 
-    def try_reserve(self, rect: LedgerRect) -> ReserveResult:
-        """不拋例外版本：衝突則回 ok=False + conflicts，成功則入帳回 ok=True。"""
-        conflicts = self.query(rect)
+    def try_reserve(
+        self,
+        rect: LedgerRect,
+        exempt_owners: "frozenset[str] | set[str]" = frozenset(),
+        kinds: "frozenset[str] | set[str] | None" = None,
+        perpendicular_ok_kinds: "frozenset[str] | set[str]" = frozenset(),
+    ) -> ReserveResult:
+        """不拋例外版本：衝突則回 ok=False + conflicts，成功則入帳回 ok=True。
+
+        exempt_owners / kinds 直通 `query`（round 7）；兩者皆預設「不豁免、全 kind」，
+        故未帶參數的既有呼叫端行為逐字不變。
+        """
+        conflicts = self.query(rect, exempt_owners=exempt_owners, kinds=kinds,
+                               perpendicular_ok_kinds=perpendicular_ok_kinds)
         if conflicts:
             return ReserveResult(ok=False, conflicts=conflicts)
         self._rects.append(rect)
@@ -380,11 +427,35 @@ class OccupancyLedger:
             return lo < r.y1 and hi > r.y0 and (min(hi, r.y1) - max(lo, r.y0)) > 1e-6
         return False
 
+    @staticmethod
+    def _seg_axis(a: tuple[float, float], b: tuple[float, float]) -> str:
+        """'H' / 'V' / '?' — 軸對齊線段的軸向（round 8）。"""
+        if abs(a[1] - b[1]) < 1e-6 and abs(a[0] - b[0]) >= 1e-6:
+            return "H"
+        if abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) >= 1e-6:
+            return "V"
+        return "?"
+
+    @staticmethod
+    def _rect_axis(r: "LedgerRect") -> str:
+        """'H' / 'V' / '?' — wire rect 的軸向（round 8）。
+
+        `_reserve_wire` 把一條線段膨脆成厚 0.2mm 的細長矩形，所以較長的那一軸
+        就是原線段的軸向。兩軸等長（點狀）回 '?'，由呼叫端当成不可判定處理。
+        """
+        w, h = r.x1 - r.x0, r.y1 - r.y0
+        if w > h + 1e-6:
+            return "H"
+        if h > w + 1e-6:
+            return "V"
+        return "?"
+
     def path_clear(
         self,
         waypoints: list[tuple[float, float]],
         host_owners: "frozenset[str] | set[str]" = frozenset(),
         kinds: "frozenset[str] | set[str] | None" = None,
+        perpendicular_ok_kinds: "frozenset[str] | set[str]" = frozenset(),
     ) -> tuple[bool, "LedgerRect | None"]:
         """router 沿線淨空查詢（M6-1 / DD-12，使用者鐵律：routing 不得碰到任何其他元素）。
 
@@ -401,17 +472,46 @@ class OccupancyLedger:
           clear=False 時 first_hit=第一個被穿越的 rect（供 RCA / 降級決策）。
         - NOT：不修改帳本、不落帳（純查詢）；wire 落帳由呼叫端在確認 clear 後自行 reserve。
         - 完成條件：對每段線段掃畢所有符合 kind 的 rect 後回傳。
+
+        perpendicular_ok_kinds（round 8）：記在這個集合裡的 kind，若候選線段與
+        rect **軸向正交**（一水平一垂直）則放行；**同軸且投影重疊仍然拒絕**。
+
+        為什麼需要區分這兩類：它們的**電氣風險完全不同**，而純 rect 相交測試把兩者
+        損成同一個輸出：
+
+        - **共線疊合**（同軸、投影重疊）：兩條線在畫面上不可分辨，KiCad 也可能將它們
+          歸並。這是 anti-fusion 要擋的東西，**必須継續拒絕**。
+        - **垂直交叉**（正交、只相交於一點）：這是原理圖的**正常畫法**。`.kicad_sch`
+          的連接語意是顯式的——兩條線交叉而該點沒有 junction ⇒ 電氣上不相連。
+          擋下它會讓任何稍密的板子畫不出來。
+
+        安全前提（由呼叫端負責，見 `kicad_emit._assert_no_cross_net_junction`）：
+        放行交叉的**唯一**前提是那個交叉點上不會出現 junction。一旦出現，
+        兩條不同 net 會**靜默短路**——幾何數字漂亮而電路接錯。
+
+        預設空集 ⇒ 既有呼叫端行為逐字不變（全部相交皆拒）。
+        軸向不可判定（'?'，點狀 rect 或非軸對齊線段）時**保守地拒絕**，
+        不把不可判定當成安全。
         """
         skip = set(host_owners)
         want = set(kinds) if kinds is not None else None
+        perp_ok = set(perpendicular_ok_kinds)
         for a, b in zip(waypoints, waypoints[1:]):
             for r in self._rects:
                 if r.owner in skip:
                     continue
                 if want is not None and r.kind not in want:
                     continue
-                if self._seg_hits_rect(a, b, r):
-                    return (False, r)
+                if not self._seg_hits_rect(a, b, r):
+                    continue
+                if r.kind in perp_ok:
+                    sa = self._seg_axis(a, b)
+                    ra = self._rect_axis(r)
+                    # 正交且兩者軸向皆可判定 ⇒ 交叉，放行。
+                    # 任一為 '?' ⇒ 不可判定，落回拒絕（不静默放行）。
+                    if sa != "?" and ra != "?" and sa != ra:
+                        continue
+                return (False, r)
         return (True, None)
 
     # ---- dry-run（DD-3 pitch-scan 預檢）--------------------------------

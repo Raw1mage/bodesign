@@ -77,6 +77,31 @@ A4 回 `rejected`（跑了、判定不過）。合併它們就會讓「根本沒
 **A3 在 A4 之前不是排版順序，是依賴**：完整性判定需要知道每個 node 的來源，
 才能在報錯時指名是哪一條宣告造成的缺項。
 
+### GRAFCET step 11 → step 0 那條邊沒有語意（validator 逼出來的建模妥協）
+
+**不要照著它推論 `declare_circuit` 有迴圈。它沒有。** `declare_circuit` 是純函式：
+呼叫進來、算完、回傳、結束。`grafcet.json` 裡 step 11（A5 送出回應）連回
+step 0（A1 待命接收）的那條 `LinkOutputNumber: [0]`，**是為了通過 validator
+而加的，不是我們的建模意圖**。
+
+成因：drawmiat 的 legacy `validate_grafcet` 對每個 step 要求有出邊，
+否則報 `MISSING_STEP_OUTPUT`。canonical 路徑有一格 `StepType == "terminal"`
+的豁免（`vendor/drawmiat/webapp/service.py:1009`），但**我們這份 `grafcet.json`
+是 legacy list 形式**，走的是 `:522-857` 那條、在 `:566` 做 StepType 值域檢查的
+路徑，而 `terminal` 不在該值域內。於是「終止」在這條路徑上無法宣告，
+只能把出口畫成回到待命態的閉環。
+
+**現在不要把它改回去。** 移除該邊會讓本包從 PASS 變 FAIL——
+`plan-validate` 會擋在 diagram 這一關，而那不是本包能修的東西。
+
+**修法方向若要動，歸屬在 specbase 那側**（`[OWNS specbase/drawmiat-flowchart-defects]`），
+不在 bodesign。round 7 已由 dispatcher 轉交，裁決為 **UNDECIDABLE、零 code 改動**：
+刪掉 `:1009` 的豁免會讓目前能過的 canonical 圖開始噴 `MISSING_STEP_OUTPUT`，
+而 IEC 60848 條文是付費標準、取不到（**「查過取不到」不等於「沒查」**）。
+
+**為什麼要寫這段**：validator 攔得住「圖不合法」，攔不住「圖合法但語意是假的」。
+下一個讀圖的人會以為那個閉環代表某種輪詢或重入——只有文字擋得住這個誤讀。
+
 ## Decisions
 
 ### DD-1：新入口是 spec 的**產生器**，不是 compose 的替代品

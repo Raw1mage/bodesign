@@ -143,3 +143,24 @@ pin list 只用在**一件事**：完整性 gate（DD-5「每支腳恰好出現�
 **「這份宣告內部一致且完整」**，不是「這個電路是對的」。
 result 物件的欄位命名必須反映這件事（用 `completeness` 不用 `valid`），
 否則下一個讀它的 agent 會把「完整」讀成「正確」——而那正是第 41 張 BR。
+
+## 驗證 ledger 行為必須走 `compose_schematic`，不可走 `emit_kicad_schematic` 直呼
+
+**這兩條路徑對同一個缺陷會給出相反的讀數，而兩者都叫「跑了一次 emit」。**
+
+`emit_kicad_schematic(..., ledger=None)`（每一個非 composer 呼叫端）會**自建**一個空帳本，
+裡面**沒有任何 `body` rect**——body 是 composer 在擺件階段落的。於是任何
+「wire rect 與元件 body 相撞」類的缺陷，在直呼路徑上**天生不可能重現**。
+
+round 7 實測（同一份 HEAD、同一支探針，只換入口）：
+
+| 入口 | `reserve_wire_ok` | `ledgergate_FALSE` | 讀起來像 |
+|---|---|---|---|
+| `emit_kicad_schematic` 直呼 | 4（FAIL 2） | 9 | **一切正常** |
+| `compose_schematic` | **0**（FAIL 20，conflicts `{body: 20, pin_extent: 4}`） | **0** | 帳本 wire 層全空、碰撞偵測是死的 |
+
+下面那行才是真相；上面那行令人安心且完全錯誤。
+
+**結論**：任何只走 emit 直呼的測試，對「帳本 / 佔用 / 碰撞」這一整類缺陷是**結構性盲**的
+——它不是覆蓋率不足，是那條路徑上根本不存在被測的那個條件。
+要驗 ledger 行為，入口必須是 `compose_schematic`（或自行注入帶 body 的外部 ledger）。

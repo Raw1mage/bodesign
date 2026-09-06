@@ -125,6 +125,23 @@ class SchematicEmitResult:
     # fail-fasts caught in observation mode (net/gap unplannable — explicit, never
     # silent). Empty when clusters is None (byte-identical legacy path).
     slot_observe_wires: list[dict] = field(default_factory=list)
+    # round 7 (Phase 3 hard prerequisite): wire-layer ledger accounting.
+    # wire_reserve_ok holds one net name per wire SEGMENT that successfully
+    # entered the ledger; wire_reserve_rejected holds the refused segments with
+    # the {kind, owner} of the rects that refused them.
+    #
+    # Why this exists: before round 7 `_reserve_wire` reserved with neither a
+    # host exemption nor a kind filter, so every wire rect collided with its own
+    # host component's body/pin_extent and was silently refused (measured via
+    # compose_schematic at HEAD edc6cd8: ok=0, FAIL=20, conflicts
+    # {'body': 20, 'pin_extent': 4}). The refusals were invisible because
+    # try_reserve's ReserveResult was discarded at every call site. The
+    # downstream consequence was NOT a visible failure but a LOOSER gate: the
+    # ledger's wire layer stayed empty, so `_route_clears_ledger`'s
+    # {label, wire} query degenerated to label-only and wire-vs-wire collision
+    # detection could never fire (ledgergate_FALSE == 0).
+    wire_reserve_ok: list[str] = field(default_factory=list)
+    wire_reserve_rejected: list[dict] = field(default_factory=list)
     slot_observe_skips: list[dict] = field(default_factory=list)
     # WP6/DD-11 (2026-09-06): the two quantities the readability form gate scores,
     # emitted HERE rather than re-parsed from the .kicad_sch (DD-10 forbids the
@@ -1376,6 +1393,11 @@ def emit_kicad_schematic(
     label_blocks: list[str] = []
     wire_blocks: list[str] = []
     junction_blocks: list[str] = []
+    # round 8: (x, y, net_name) for every junction dot emitted, parallel to
+    # junction_blocks. Needed because a junction is only safe while it sits on ONE
+    # net; the cross-net assertion below cannot be written from the rendered
+    # strings alone.
+    junction_points: list[tuple[float, float, str]] = []
     unresolved: list[str] = []
     # WP6/DD-11 (2026-09-06): per-run length record for the readability form gate.
     # Appended at EVERY site that appends to `wire_blocks`, so `len(wire_runs)`
@@ -1598,6 +1620,13 @@ def emit_kicad_schematic(
     fusion_label_fallbacks: list[dict] = []
     fusion_jogged_nets: list[str] = []
     label_local_downgrades: list[dict] = []
+    # round 7: wire-layer ledger accounting, emitted so "the wire layer is empty"
+    # is distinguishable from "nothing was drawn" without monkey-patching the
+    # ledger. wire_reserve_ok holds one net name per ACCEPTED segment reserve
+    # (len == number of segments that entered the ledger); wire_reserve_rejected
+    # holds the refused ones with the conflicting kind/owner that refused them.
+    wire_reserve_ok: list[str] = []
+    wire_reserve_rejected: list[dict] = []
     # BR_20260708 machine check: every DRAWN wire segment paired with the set of
     # host refs that segment's net legitimately touches (its own pin bodies). The
     # post-emit assertion tests each segment against every body box EXCEPT its own
@@ -1725,10 +1754,46 @@ def emit_kicad_schematic(
     # detour that already clears the inflated body box from being false-rejected
     # by a pin-name box that pokes a hair past the body edge.
     _ROUTE_GUARD_KINDS = frozenset({"label", "wire"})
+    # round 8: a candidate segment that crosses an already-drawn wire PERPENDICULARLY
+    # is a normal schematic X-crossing, not a defect. `.kicad_sch` connectivity is
+    # EXPLICIT -- two wires crossing with no junction at that point are electrically
+    # separate -- so rejecting crossings makes any non-trivial board undrawable.
+    # COLLINEAR overlap (same axis, overlapping projection) stays rejected: that is
+    # visually indistinguishable and is what the anti-fusion guard exists for.
+    #
+    # Measured on the t3 fixture before this change: 8/8 rejected candidates were
+    # perpendicular crossings (segV vs rectH), 0 collinear -- i.e. the guard was
+    # rejecting only the safe class and none of the dangerous one.
+    #
+    # `label` is deliberately NOT in this set: a wire crossing a label's text box
+    # is a legibility defect regardless of angle, so the whole box stays keep-out.
+    #
+    # SAFETY PRECONDITION, enforced below by `_assert_no_cross_net_junction`:
+    # crossing is safe ONLY while no junction lands on the crossing point. A
+    # junction there silently shorts two nets -- geometry clean, circuit wrong.
+    _PERPENDICULAR_OK_KINDS = frozenset({"wire"})
 
-    def _route_clears_ledger(waypoints, host_refs) -> bool:
+    def _route_clears_ledger(waypoints, host_refs, net_name=None) -> bool:
+        """round 7: the exemption set must include the net's OWN name.
+
+        Ledger rects are owned by their source: a body/pin_extent by the component
+        REF, a wire by the NET name. Before the wire layer actually held anything
+        this distinction was inert. Now that wires DO enter the ledger, a net's
+        own earlier segments would block its later ones -- a multi-node net is
+        routed hop by hop, and hop 2 legitimately meets hop 1 at their shared
+        chain pin. That is the same reasoning `_other_net_segments` already
+        encodes for the anti-fusion test (a net cannot fuse with itself), so the
+        two guards must agree or a 3-node star gets pushed onto global labels.
+
+        net_name=None keeps the pre-round-7 exemption set for any caller that has
+        no net in hand.
+        """
+        _exempt = set(host_refs)
+        if net_name is not None:
+            _exempt.add(net_name)
         clear, _hit = ledger.path_clear(
-            waypoints, host_owners=frozenset(host_refs), kinds=_ROUTE_GUARD_KINDS)
+            waypoints, host_owners=frozenset(_exempt), kinds=_ROUTE_GUARD_KINDS,
+            perpendicular_ok_kinds=_PERPENDICULAR_OK_KINDS)
         return clear
 
     def _observe_wire_slot(waypoints, net_name) -> None:
@@ -1744,9 +1809,36 @@ def emit_kicad_schematic(
         if rec.get("has_slot"):
             slot_observe_wires.append(rec)
 
-    def _reserve_wire(waypoints, net_name) -> None:
-        """Register each accepted wire segment as a thin rect so later routes avoid it."""
+    def _reserve_wire(waypoints, net_name, host_refs=()) -> None:
+        """Register each accepted wire segment as a thin rect so later routes avoid it.
+
+        round 7 (Phase 3 hard prerequisite). The reserve predicate MUST be the same
+        predicate the accept-gate `_route_clears_ledger` just applied, or the two
+        disagree and the ledger's wire layer stays empty:
+
+          - `host_owners=host_refs` -- a wire's endpoints ARE the pins of its host
+            components, so its rect necessarily overlaps those components' `body`
+            and `pin_extent` rects. The ledger's same-owner exemption cannot help
+            here (a wire's owner is the NET name, a body's owner is the REF), so
+            without this exemption every wire that touches a placed body is
+            rejected. Measured at HEAD via compose_schematic: wire_reserve ok=0
+            FAIL=20, conflicts {'body': 20, 'pin_extent': 4}.
+          - `kinds=_ROUTE_GUARD_KINDS` ({label, wire}) -- body / pin_extent
+            avoidance is the router's own keep-out job (the verified golden path);
+            re-guarding it here is what produced those 20 body conflicts.
+
+        Consequence of the empty wire layer: `_route_clears_ledger` queries
+        {label, wire} against a ledger that never held a wire, so wire-vs-wire
+        collision detection degenerated to label-only and the gate could not
+        reject anything (ledgergate_FALSE == 0, directly observed). That made the
+        output LOOSER, not safer -- the DD-11 anti-fusion protection downstream
+        was reading a guard that had never once fired.
+
+        Rejections are recorded in `wire_reserve_rejected` rather than dropped:
+        "reserved fine" and "was refused" must not share one silent output.
+        """
         _observe_wire_slot(waypoints, net_name)
+        _hosts = frozenset(host_refs)
         for a, b in zip(waypoints, waypoints[1:]):
             x0, x1 = sorted((a[0], b[0]))
             y0, y1 = sorted((a[1], b[1]))
@@ -1756,7 +1848,20 @@ def emit_kicad_schematic(
                 x0 -= 0.1; x1 += 0.1
             if y1 - y0 < 0.2:
                 y0 -= 0.1; y1 += 0.1
-            ledger.try_reserve(LedgerRect(x0, y0, x1, y1, net_name, "wire"))
+            _rr = ledger.try_reserve(
+                LedgerRect(x0, y0, x1, y1, net_name, "wire"),
+                exempt_owners=_hosts,
+                kinds=_ROUTE_GUARD_KINDS,
+            )
+            if _rr.ok:
+                wire_reserve_ok.append(net_name)
+            else:
+                wire_reserve_rejected.append({
+                    "net": net_name,
+                    "seg": [[a[0], a[1]], [b[0], b[1]]],
+                    "conflicts": [{"kind": c.kind, "owner": c.owner}
+                                  for c in _rr.conflicts],
+                })
 
     for net in nets:
         force_label = label_nets is not None and net.name in label_nets
@@ -1797,7 +1902,7 @@ def emit_kicad_schematic(
             _avoid_pts = _foreign_pin_points(net.nodes)
             guarded, jogged = _guard_route(
                 net.name, waypoints,
-                extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs)
+                extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
                                      and _route_clears_points(wp, _avoid_pts)))
             if guarded is None:
                 # DD-11 fallback: jog exhausted → down-grade this net to label
@@ -1822,7 +1927,7 @@ def emit_kicad_schematic(
             if jogged:
                 fusion_jogged_nets.append(net.name)
             fusion_registry[net.name] = _segments_of(waypoints)
-            _reserve_wire(waypoints, net.name)
+            _reserve_wire(waypoints, net.name, endpoint_refs)
             _hosts = frozenset(endpoint_refs)
             for a, b in zip(waypoints, waypoints[1:]):
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
@@ -1870,7 +1975,7 @@ def emit_kicad_schematic(
                 # from the fusion test -- only OTHER nets' segments are collisions.
                 _hg, _ = _guard_route(
                     net.name, _hw,
-                    extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs)
+                    extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
                                          and _route_clears_points(wp, _avoid_pts)))
                 if _hg is None:
                     _last_fuse = any(
@@ -1895,7 +2000,7 @@ def emit_kicad_schematic(
                 # on top of each other without the guard ever seeing it.
                 fusion_registry.setdefault(net.name, []).extend(_hop)
                 for (_ha2, _hb2) in _hop:
-                    _reserve_wire([_ha2, _hb2], net.name)
+                    _reserve_wire([_ha2, _hb2], net.name, endpoint_refs)
             if _cur_segs:
                 _sig_frags.append({"pts": _cur_pts, "segs": _cur_segs})
             if _hop_failed_reason is not None:
@@ -1935,7 +2040,7 @@ def emit_kicad_schematic(
                     label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
             fusion_registry[net.name] = list(segments)
             for (a, b) in segments:
-                _reserve_wire([a, b], net.name)
+                _reserve_wire([a, b], net.name, endpoint_refs)
             _hosts = frozenset(endpoint_refs)
             for (a, b) in segments:
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
@@ -1943,6 +2048,7 @@ def emit_kicad_schematic(
                 routed_segments.append(((a, b), _hosts))
             for (jx, jy) in junctions:
                 junction_blocks.append(_junction_block(jx, jy))
+                junction_points.append((jx, jy, net.name))
             # one local label on the trunk's left end to name the net
             trunk = segments[0]
             _place_local_label(net.name, trunk[0][0], trunk[0][1], [trunk[0], trunk[1]])
@@ -1961,6 +2067,48 @@ def emit_kicad_schematic(
                     power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
                 else:
                     label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
+
+    def _assert_no_cross_net_junction() -> None:
+        """round 8 safety gate for perpendicular crossing pass-through.
+
+        Allowing a wire to CROSS another net's wire is safe for exactly one
+        reason: `.kicad_sch` connectivity is explicit, so two wires meeting at a
+        point with NO junction there are electrically separate. The moment a
+        junction dot lands on such a crossing, KiCad reads it as a connection and
+        the two nets are SHORTED -- with clean geometry, a plausible-looking
+        drawing, and nothing anywhere reporting a problem. That is precisely the
+        failure shape this repo has been chasing: the numbers look right and the
+        circuit is wrong.
+
+        So this is fail-loud (ValueError), not a warning and not a label
+        down-grade. A warning would let a shorted schematic reach `files`, and a
+        down-grade would silently redraw the net -- both leave the caller unable
+        to distinguish "no short" from "short we papered over".
+
+        Predicate: for every emitted junction at P owned by net N, P must not lie
+        on any segment belonging to a net other than N.
+        """
+        if not junction_points:
+            return
+        # The predicate itself lives at module level (`cross_net_junction_shorts`)
+        # so it can be exercised directly. That matters here: the router's own
+        # guards make a cross-net junction hard to provoke through natural input,
+        # and an assertion nobody can fire is indistinguishable from one that
+        # cannot fail -- the exact defect shape flagged in specbase's grafcet
+        # validator (an exemption branch guarded by an enum that never admits it).
+        shorts = cross_net_junction_shorts(junction_points, fusion_registry)
+        if shorts:
+            _detail = "; ".join(
+                f"junction of {s['junction_net']!r} at ({s['at'][0]}, {s['at'][1]}) "
+                f"sits on a wire of {s['shorted_to']!r}"
+                for s in shorts[:8])
+            raise ValueError(
+                f"CROSS_NET_JUNCTION_SHORT: {len(shorts)} junction(s) land on a "
+                f"DIFFERENT net's wire, which KiCad reads as an electrical "
+                f"connection -- these nets would be silently shorted. {_detail}"
+                + (f" (+{len(shorts) - 8} more)" if len(shorts) > 8 else ""))
+
+    _assert_no_cross_net_junction()
 
     # DD-14: sheet-abs AABBs of every component's drawn body graphics, threaded
     # into the label placer so L6 avoidance keeps labels CLEAR of arcs/plates
@@ -2247,6 +2395,14 @@ def emit_kicad_schematic(
         # drawn" and never "nobody wrote the field" (the BR_20260804f shape).
         wire_runs=wire_runs,
         junctions_emitted=len(junction_blocks),
+        # round 7: assigned unconditionally (BR_20260804f shape), so an empty
+        # wire_reserve_ok means "no wire segment entered the ledger" and never
+        # "nobody wrote the field". Together the two lists separate three states
+        # that a bare count cannot: no wires drawn at all (both empty), wires
+        # drawn and accounted (ok non-empty), wires drawn but REFUSED entry
+        # (rejected non-empty -- the defect this round fixed).
+        wire_reserve_ok=wire_reserve_ok,
+        wire_reserve_rejected=wire_reserve_rejected,
     )
 
 
@@ -3000,6 +3156,48 @@ def _wire_segment_block(x1: float, y1: float, x2: float, y2: float) -> str:
         f'  (wire (pts (xy {round(x1, 4)} {round(y1, 4)}) (xy {round(x2, 4)} {round(y2, 4)}))\n'
         f'    (stroke (width 0) (type default)) (uuid "{_uid()}"))'
     )
+
+
+def cross_net_junction_shorts(junction_points, net_segments) -> list[dict]:
+    """Junctions that land on a DIFFERENT net's wire (round 8 safety predicate).
+
+    Allowing a wire to CROSS another net's wire is safe for exactly one reason:
+    `.kicad_sch` connectivity is EXPLICIT, so two wires meeting at a point with
+    NO junction there are electrically separate. The moment a junction dot lands
+    on such a crossing, KiCad reads it as a connection and the two nets are
+    SHORTED -- with clean geometry, a plausible drawing, and nothing reporting a
+    problem. That is the failure shape this repo has been chasing: the numbers
+    look right and the circuit is wrong.
+
+    - junction_points: [(x, y, net_name)] -- one per emitted junction dot.
+    - net_segments: {net_name: [((x1,y1),(x2,y2)), ...]}.
+    - returns: [] when clean; otherwise one dict per short, naming BOTH nets and
+      the offending segment (so the error can quote what it rejected).
+
+    Module level and pure so it is testable WITHOUT having to manoeuvre the
+    router into emitting a short -- see the note in the caller about why the
+    natural path currently cannot produce one.
+    """
+    shorts: list[dict] = []
+    for jx, jy, jnet in junction_points:
+        for other_net, segs in net_segments.items():
+            if other_net == jnet:
+                continue
+            for a, b in segs:
+                # Reuses the EXISTING module-level `_point_on_segment(pt, seg)`
+                # (defined below, with `_FUSION_EPS`) rather than a second copy:
+                # a first draft of this round did add a same-named 4-arg helper,
+                # which Python silently shadowed with the later definition, and
+                # the only symptom was a TypeError at call time.
+                if _point_on_segment((jx, jy), (a, b)):
+                    shorts.append({
+                        "at": [jx, jy],
+                        "junction_net": jnet,
+                        "shorted_to": other_net,
+                        "segment": [[a[0], a[1]], [b[0], b[1]]],
+                    })
+                    break
+    return shorts
 
 
 def _junction_block(x: float, y: float) -> str:
