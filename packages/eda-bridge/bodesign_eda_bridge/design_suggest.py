@@ -774,6 +774,16 @@ SUGGEST_STATUSES = ("suggested", "no-rule", "indeterminate")
 #: `committed` is not a member of the codomain, so no code path can emit it --
 #: a suggestion that could mark itself committed would be deciding, which is the
 #: line `concept.bodesign.netlist-synthesis-gap` forbids this layer to cross.
+#:
+#: SCOPE, so the assert is not over-read (the red line was rewritten 2026-09-07
+#: because its old wording conflated two risks): what is forbidden is THE SYSTEM
+#: deciding a net -- suggest may not silently become commit. It is NOT forbidden
+#: for a CALLER to hand bodesign a topology it already decided; that path has no
+#: fabrication risk and is a separate, permitted entry
+#: (`concept.bodesign.agent-declared-topology` -> `declare.py::declare_circuit`).
+#: Three postures, only the third is banned: suggest (system proposes, human
+#: adjudicates) / declare (caller decides, system lands) / synthesize (system
+#: decides). This assert defends the boundary of the FIRST one only.
 assert "committed" not in SUGGEST_STATUSES
 
 PIN_CLASSES = (

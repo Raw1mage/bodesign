@@ -120,6 +120,12 @@ The last row is new information this package produced, and it changes WP3's shap
   "decide" differ in the output contract, not in the caller's discipline.**
   The gap object's stated reason is avoiding silent fabrication of nets. Four
   properties, each mechanically checkable, keep the exposure on the safe side:
+  (Scope note, 2026-09-07: that gap object was rewritten because its wording
+  conflated two risks. What it forbids is THE SYSTEM deciding a net. A CALLER
+  handing bodesign a topology it already decided is a distinct, permitted entry
+  — `concept.bodesign.agent-declared-topology` / `declare_circuit` — so DD-02's
+  argument below is about `design_suggest` only and does not generalise into a
+  claim that bodesign may have no declaration entry.)
   (1) `status` ∈ {`suggested`, `no-rule`, `indeterminate`} — `committed` is not a
   member of the codomain, so no input can produce it;
   (2) `review_required` is a constant `true` asserted by test, not merely set by

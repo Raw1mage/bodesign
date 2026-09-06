@@ -99,6 +99,10 @@
 - Implementing subsystem→pin-level netlist synthesis. KB
   `concept.bodesign.netlist-synthesis-gap` records that omission as deliberate;
   WP5 delivers *suggestions with evidence*, never committed nets.
+  (Scope, 2026-09-07: "synthesis" here means THE SYSTEM deciding nets. Accepting
+  a topology the CALLER already decided is a different, permitted thing, out of
+  scope for this plan but not forbidden — see
+  `concept.bodesign.agent-declared-topology`.)
 - Raising `design_suggest` above `suggested` status, or letting any verb set
   `review_required=false`.
 - Connecting the vault to C03 (RCA §10.1). Named as a follow-on, not scoped here.

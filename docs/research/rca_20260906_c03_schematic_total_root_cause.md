@@ -94,6 +94,8 @@ BR 家族清單（檔名關鍵字比對 `issues/` + `issues/closed/`，控制組
 - `skills/bodesign/stages/c03-ee/references/pinout-to-circuit-method.md:1-8` — 明白寫著「**it is the most AI-heavy part of the stage, because it is reasoning, not a tool call**」。設計段被**明文指派給 LLM 推論**，不是指派給任何確定性機制。
 - `ragbase` object `concept.bodesign.netlist-synthesis-gap`（confidence: `partial`）逐字：「bodesign 無法從 PRD 直接畫出板，因為 **subsystem→pin-level netlist 的合成引擎從未實作**。這是**刻意留白**」。
 
+> **2026-09-07 後記（KB 已修正，本節結論不變但射程需收窄）**：上述 KB 條目當時把**兩件風險不同的事**寫成同一條紅線——「程式自動合成 netlist」（有 silent-fabrication 風險，禁令針對它）與「agent 宣告 netlist」（呼叫端想好、系統只落地＋驗證，風險為零）。本節引用的「合成引擎從未實作」對**前者**成立；但它**不蘊含**「呼叫端也無法把想好的拓樸交給 bodesign」。後者的入口當時同樣是 0 個 verb，卻屬於**可以直接補**的類別。該條目已拆解，宣告側另立 `concept.bodesign.agent-declared-topology`（`declare_circuit`，Phase 1 已綠）。
+
 **判讀**：這不是疏漏，是一個**有意識的產品邊界決定**，而且理由是誠實的（「netlist 對錯是唯一無法用確定性方法保證的環節，故團隊寧可擋在 gate 後也不冒 silent-fabrication 險」）。問題在於**這個邊界從未被向使用者揭露成「C03 不含設計段」**。使用者交辦 C03 時預期的是兩段，拿到的是一段，而中間那段的缺席不會報錯——它表現為「畫出來的圖沒有電路」。
 
 **可證偽條件**：若存在任何 verb 其輸入包含 MPN/datasheet 且輸出為 `{components, nets}`，則此根因不成立。實測 57 個 `bodesign_*` MCP tool（`grep -c '{"name": "bodesign_' services/mcp/server.py` → 57）中無此形狀。
@@ -410,7 +412,8 @@ DECIDE、`review_required=True`、每個值帶 KB 錨點。需要裁示的是「
 | commit `68bdde1` | PC-001 落在 `skills/`，非 `packages/` |
 | commit `d1ab7fd` | design_suggest 落地 |
 | commit `5599793`、`b612a43` | multi_unit / router-corner 修復（派工單引用，已驗 sha） |
-| KB `concept.bodesign.netlist-synthesis-gap` | 「合成引擎從未實作…刻意留白」 |
+| KB `concept.bodesign.netlist-synthesis-gap` | 「合成引擎從未實作…刻意留白」（2026-09-07 已修正射程：只擋自動合成，不擋 agent 宣告） |
+| KB `concept.bodesign.agent-declared-topology` | 宣告層零 fabrication 風險，不在禁令射程內（2026-09-07 新增） |
 | KB `workflow.eda.schematic-engine-postmortem` | 四代演進三條結論 |
 
 ---

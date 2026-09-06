@@ -4,7 +4,19 @@ plan c03_delivery_contract_and_engine_seams DD-02, errors.md §WP5.
 
 The red line this verb must not cross (`concept.bodesign.netlist-synthesis-gap`):
 it may SUGGEST, it may not DECIDE. DD-02 turns that sentence into four properties
-a test can actually fail on:
+a test can actually fail on.
+
+That red line was rewritten 2026-09-07 because its old wording conflated two
+different risks, so state the scope these tests actually defend: they assert
+THIS VERB does not slide from suggesting into deciding. They say nothing about
+whether a CALLER may hand bodesign a topology it already decided -- that path
+carries no fabrication risk and is a separate, permitted entry
+(`concept.bodesign.agent-declared-topology` -> `declare.py::declare_circuit`,
+covered by `tests/test_declare_circuit.py`). Of the three postures -- suggest
+(system proposes) / declare (caller decides, system lands) / synthesize (system
+decides) -- only the last is forbidden, and only the first is on trial here.
+
+The four properties:
 
   (1) `committed` is not in the status codomain — by construction, not convention
   (2) `review_required` is true on EVERY path, including the ones suggesting nothing
