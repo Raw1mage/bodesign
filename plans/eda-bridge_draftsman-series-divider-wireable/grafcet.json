@@ -4,11 +4,19 @@
     "ModuleRef": "A1",
     "StepType": "initial",
     "StepAction": "接收 declarations[] + components[]，發出 declare.enter（無條件）",
-    "LinkInputType": [],
-    "LinkInputNumber": [],
-    "LinkOutputNumber": [1],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      11
+    ],
+    "LinkOutputNumber": [
+      1
+    ],
     "LinkOutputType": "track",
-    "Condition": ["呼叫抵達"],
+    "Condition": [
+      "呼叫抵達"
+    ],
     "SubGrafcet": []
   },
   {
@@ -16,11 +24,21 @@
     "ModuleRef": "A1",
     "StepType": "normal",
     "StepAction": "驗證 schema 與 ref/pin 引用",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [0],
-    "LinkOutputNumber": [2, 3],
-    "LinkOutputType": "or",
-    "Condition": ["引用全部可解析", "有未宣告的 ref 或 schema 不合"],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      0
+    ],
+    "LinkOutputNumber": [
+      2,
+      3
+    ],
+    "LinkOutputType": "divergence_or",
+    "Condition": [
+      "引用全部可解析",
+      "有未宣告的 ref 或 schema 不合"
+    ],
     "SubGrafcet": []
   },
   {
@@ -28,9 +46,15 @@
     "ModuleRef": "A1",
     "StepType": "normal",
     "StepAction": "發出 declare.not_run，回 status=not_run + offending_refs[]（展開器未被呼叫）",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [1],
-    "LinkOutputNumber": [11],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      1
+    ],
+    "LinkOutputNumber": [
+      11
+    ],
     "LinkOutputType": "track",
     "Condition": [],
     "SubGrafcet": []
@@ -40,11 +64,21 @@
     "ModuleRef": "A2",
     "StepType": "normal",
     "StepAction": "判斷 declarations 是否為空",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [1],
-    "LinkOutputNumber": [4, 5],
-    "LinkOutputType": "or",
-    "Condition": ["declarations == []", "declarations 非空"],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      1
+    ],
+    "LinkOutputNumber": [
+      4,
+      5
+    ],
+    "LinkOutputType": "divergence_or",
+    "Condition": [
+      "declarations == []",
+      "declarations 非空"
+    ],
     "SubGrafcet": []
   },
   {
@@ -52,9 +86,15 @@
     "ModuleRef": "A2",
     "StepType": "normal",
     "StepAction": "發出 declare.empty，回 status=empty（顯式分支，不與 ok 共用）",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [3],
-    "LinkOutputNumber": [11],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      3
+    ],
+    "LinkOutputNumber": [
+      11
+    ],
     "LinkOutputType": "track",
     "Condition": [],
     "SubGrafcet": []
@@ -64,11 +104,19 @@
     "ModuleRef": "A2",
     "StepType": "normal",
     "StepAction": "展開六原語為 nets[] + nc[]，衍生中間節點穩定名，發出 declare.expanded",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [3],
-    "LinkOutputNumber": [6],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      3
+    ],
+    "LinkOutputNumber": [
+      6
+    ],
     "LinkOutputType": "track",
-    "Condition": ["展開完成"],
+    "Condition": [
+      "展開完成"
+    ],
     "SubGrafcet": []
   },
   {
@@ -76,11 +124,21 @@
     "ModuleRef": "A3",
     "StepType": "normal",
     "StepAction": "建立 provenance map 並斷言 set(all_nodes) == set(provenance.keys())",
-    "LinkInputType": ["track"],
-    "LinkInputNumber": [5],
-    "LinkOutputNumber": [7, 8],
-    "LinkOutputType": "or",
-    "Condition": ["斷言成立", "有無主 node（引擎自身 bug）"],
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      5
+    ],
+    "LinkOutputNumber": [
+      7,
+      8
+    ],
+    "LinkOutputType": "divergence_or",
+    "Condition": [
+      "斷言成立",
+      "有無主 node（引擎自身 bug）"
+    ],
     "SubGrafcet": []
   },
   {
@@ -88,9 +146,15 @@
     "ModuleRef": "A3",
     "StepType": "normal",
     "StepAction": "發出 declare.provenance_orphan，回 status=rejected + E_PROVENANCE_ORPHAN（不放行）",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [6],
-    "LinkOutputNumber": [11],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      6
+    ],
+    "LinkOutputNumber": [
+      11
+    ],
     "LinkOutputType": "track",
     "Condition": [],
     "SubGrafcet": []
@@ -100,10 +164,18 @@
     "ModuleRef": "A4",
     "StepType": "normal",
     "StepAction": "取每個元件的 pin 清單，逐腳檢查恰好出現一次；gate 回三態",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [6],
-    "LinkOutputNumber": [9, 10, 12],
-    "LinkOutputType": "or",
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      6
+    ],
+    "LinkOutputNumber": [
+      9,
+      10,
+      12
+    ],
+    "LinkOutputType": "divergence_or",
     "Condition": [
       "全部腳恰好一次 => declare.gate.pass",
       "有缺項或重複 => declare.gate.fail",
@@ -116,9 +188,15 @@
     "ModuleRef": "A5",
     "StepType": "normal",
     "StepAction": "套用 render 預設（未給者標 source=default），組裝 spec，回 status=ok",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [8],
-    "LinkOutputNumber": [11],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      8
+    ],
+    "LinkOutputNumber": [
+      11
+    ],
     "LinkOutputType": "track",
     "Condition": [],
     "SubGrafcet": []
@@ -128,9 +206,15 @@
     "ModuleRef": "A5",
     "StepType": "normal",
     "StepAction": "回 status=rejected + errors[]（全部缺項一次列出，不只第一個）",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [8],
-    "LinkOutputNumber": [11],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      8
+    ],
+    "LinkOutputNumber": [
+      11
+    ],
     "LinkOutputType": "track",
     "Condition": [],
     "SubGrafcet": []
@@ -140,9 +224,15 @@
     "ModuleRef": "A5",
     "StepType": "normal",
     "StepAction": "回 status=indeterminate + unknown[]（不假裝完整，也不冤枉宣告者）",
-    "LinkInputType": ["or"],
-    "LinkInputNumber": [8],
-    "LinkOutputNumber": [11],
+    "LinkInputType": [
+      "divergence_or"
+    ],
+    "LinkInputNumber": [
+      8
+    ],
+    "LinkOutputNumber": [
+      11
+    ],
     "LinkOutputType": "track",
     "Condition": [],
     "SubGrafcet": []
@@ -150,13 +240,31 @@
   {
     "StepNumber": 11,
     "ModuleRef": "A5",
-    "StepType": "final",
+    "StepType": "normal",
     "StepAction": "發出 declare.exit（無條件，無論成敗），攜帶 status + elapsed_ms",
-    "LinkInputType": ["track", "track", "track", "track", "track", "track"],
-    "LinkInputNumber": [2, 4, 7, 9, 10, 12],
-    "LinkOutputNumber": [],
+    "LinkInputType": [
+      "convergence_or",
+      "convergence_or",
+      "convergence_or",
+      "convergence_or",
+      "convergence_or",
+      "convergence_or"
+    ],
+    "LinkInputNumber": [
+      2,
+      4,
+      7,
+      9,
+      10,
+      12
+    ],
+    "LinkOutputNumber": [
+      0
+    ],
     "LinkOutputType": "track",
-    "Condition": [],
+    "Condition": [
+      "回應已送出，回到待命"
+    ],
     "SubGrafcet": []
   }
 ]

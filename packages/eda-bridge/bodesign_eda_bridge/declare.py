@@ -264,10 +264,59 @@ def _validate_refs(d: dict, did: str, kind: str, by_ref: dict[str, dict]) -> lis
             )
     elif kind == "series":
         chain = d.get("chain")
-        if not isinstance(chain, list) or len(chain) < 3:
+        if not isinstance(chain, list):
+            errors.append(Error("E_SCHEMA", f"{did}: series.chain must be a list", [did]))
+        elif len(chain) < 3:
+            # E_SERIES_TOO_SHORT, not E_SCHEMA. A 2-entry chain is well-formed --
+            # it is just not a series: ["+3V3","GND"] names two nets and no part,
+            # which is what `connect` is for. Reporting it as a schema violation
+            # would send the caller looking for a typo that is not there.
             errors.append(
-                Error("E_SCHEMA", f"{did}: series.chain needs >=1 part between two nets", [did])
+                Error(
+                    "E_SERIES_TOO_SHORT",
+                    f"{did}: series.chain has {len(chain)} entr"
+                    f"{'y' if len(chain) == 1 else 'ies'} "
+                    f"({chain!r}); a series is <net> <part>+ <net>, so it needs at "
+                    "least 3. Two nets and no part is a `connect`.",
+                    [did],
+                )
             )
+        else:
+            # Head and tail are NET names (not refs, so nothing to resolve);
+            # every middle entry must be a declared component.
+            for mid in chain[1:-1]:
+                if not isinstance(mid, str):
+                    errors.append(
+                        Error("E_SCHEMA", f"{did}: series.chain entry {mid!r} is not a ref", [did])
+                    )
+                elif mid not in by_ref:
+                    errors.append(
+                        Error(
+                            "E_REF_UNKNOWN",
+                            f"{did}: series.chain names {mid!r}, not in components[]",
+                            [mid],
+                        )
+                    )
+            pins = d.get("pins")
+            if pins is not None and not isinstance(pins, dict):
+                errors.append(
+                    Error(
+                        "E_SCHEMA",
+                        f"{did}: series.pins must be an object mapping ref -> [in, out]",
+                        [did],
+                    )
+                )
+            elif isinstance(pins, dict):
+                for ref, pair in pins.items():
+                    if not isinstance(pair, list) or len(pair) != 2:
+                        errors.append(
+                            Error(
+                                "E_SCHEMA",
+                                f"{did}: series.pins[{ref!r}] must be exactly 2 pins "
+                                f"(in, out), got {pair!r}",
+                                [did, ref],
+                            )
+                        )
 
     # -- endpoint refs resolve to a declared component --
     for ep, fname in _endpoint_refs(d, kind):
@@ -306,6 +355,7 @@ class _Expansion:
     provenance: dict[str, str] = field(default_factory=dict)
     render_plan: dict[str, dict[str, str]] = field(default_factory=dict)
     errors: list[Error] = field(default_factory=list)
+    warnings: list[Error] = field(default_factory=list)
     declared_net_names: set[str] = field(default_factory=set)
     derived_net_names: set[str] = field(default_factory=set)
 
@@ -422,11 +472,29 @@ def _expand(
             for ep in d.get("nodes") or []:
                 ex.add_node(name, ep, did)
             render = d.get("render")
-            ex.render_plan[name] = (
-                {"render": render, "source": "declared"}
-                if render
-                else {"render": DEFAULT_RENDER, "source": "default"}
-            )
+            if render:
+                ex.render_plan[name] = {"render": render, "source": "declared"}
+                if render != DEFAULT_RENDER:
+                    # tasks.md 2.4: the hint is RECORDED but not yet wired to
+                    # geometry (Phase 3, and Phase 3 has a hard stop gate on
+                    # reserve_wire_ok > 0). A deliberate no-op still has to leave
+                    # a trace: without this warning, "the hint was read and
+                    # ignored" and "the hint was never read" produce byte-identical
+                    # output, and the Phase 3 acceptance test could not tell
+                    # whether wiring it up had changed anything.
+                    ex.warnings.append(
+                        Error(
+                            "W_RENDER_HINT_IGNORED",
+                            f"{did}: rail {name!r} declares render={render!r}, but "
+                            "render hints are not wired to geometry in this build "
+                            "(tasks.md Phase 3). The hint is recorded in "
+                            "render_plan and the emitted schematic uses "
+                            f"{DEFAULT_RENDER!r}.",
+                            [did, name, render],
+                        )
+                    )
+            else:
+                ex.render_plan[name] = {"render": DEFAULT_RENDER, "source": "default"}
 
         elif kind == "no_connect":
             for ep in d.get("pins") or []:
@@ -434,17 +502,26 @@ def _expand(
                     ex.nc.append(ep)
 
         elif kind == "series":
-            # Phase 2 (tasks.md 2.2). A stub that RAISES is the only honest
-            # unimplemented form: returning an empty expansion would let a
-            # caller's series declaration vanish into a spec that still says ok.
-            ex.errors.append(
-                Error(
-                    "E_NOT_IMPLEMENTED",
-                    f"{did}: kind 'series' is Phase 2 (tasks.md 2.2); "
-                    "declared but not expanded in this build",
-                    [did],
-                )
-            )
+            chain = d["chain"]
+            head, tail = chain[0], chain[-1]
+            parts = chain[1:-1]
+            pin_map = d.get("pins") if isinstance(d.get("pins"), dict) else {}
+            # Node i sits BETWEEN parts[i-1] and parts[i]. Names are derived from
+            # the declaration id (DD-3) rather than a global counter: <id>_n1 is
+            # the same net on every run and in every diff, where SKiDL's N$1
+            # renumbers whenever an unrelated net is added upstream.
+            prev_net = head
+            for idx, part in enumerate(parts):
+                is_last = idx == len(parts) - 1
+                next_net = tail if is_last else f"{did}_n{idx + 1}"
+                if not is_last:
+                    ex.derived_net_names.add(next_net)
+                pins = pin_map.get(part) or _default_bridge_pins(part, by_ref, pin_lists)
+                if pins is None:
+                    pins = ["1", "2"]
+                ex.add_node(prev_net, _pin_key(part, str(pins[0])), did)
+                ex.add_node(next_net, _pin_key(part, str(pins[1])), did)
+                prev_net = next_net
 
     # Derived names must not collide with declared ones (E_NET_NAME_COLLISION).
     for derived in sorted(ex.derived_net_names & ex.declared_net_names):
@@ -653,6 +730,7 @@ def declare_circuit(
         "completeness": GateResult(GATE_NOT_RUN).as_dict(),
         "render_plan": {},
         "errors": [],
+        "warnings": [],
         "unknown": [],
     }
 
@@ -685,6 +763,10 @@ def declare_circuit(
 
     result["provenance"] = dict(ex.provenance)
     result["render_plan"] = dict(ex.render_plan)
+    # Warnings ride on EVERY outcome, including rejections. A warning that is
+    # only reported on success is invisible exactly when the caller is reading
+    # the output most carefully.
+    result["warnings"] = [w.as_dict() for w in ex.warnings]
 
     if ex.errors:
         result["status"] = STATUS_REJECTED
@@ -735,7 +817,7 @@ def declare_circuit(
             result["status"] = STATUS_REJECTED
             result["errors"] = [e.as_dict() for e in hard]
             return result
-        result["warnings"] = [e.as_dict() for e in errs]
+        result["warnings"] = result["warnings"] + [e.as_dict() for e in errs]
 
     result["status"] = STATUS_OK
     result["spec"] = spec

@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "state": "proposed",
-  "profile": [],
+  "state": "planned",
+  "profile": [
+    "software"
+  ],
   "history": [
     {
       "from": null,
@@ -10,6 +12,30 @@
       "by": "pkcs12",
       "mode": "new",
       "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "proposed",
+      "at": "2026-09-06T18:19:07.143Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "set lifecycle profile software → software (drives plan-validate artifact requirements)"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-09-06T18:26:21.217Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "design.md hung on IDEF0 A1-A5; both diagrams pass specbase_diagram_validate; profile=software per dispatcher"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-09-06T18:26:40.234Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "tasks.md carries executable Phase 1-3 slices with acceptance criteria; design/errors/test-vectors complete"
     }
   ]
 }

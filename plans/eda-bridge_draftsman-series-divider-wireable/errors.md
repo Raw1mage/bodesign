@@ -7,15 +7,39 @@
 「這份輸入完整嗎」**，於是每個下游關卡各自發明容錯，而每一種容錯的失效各自成為一張 BR。
 `declare_circuit` 是新的入口，若它自己不先宣告完整的結束狀態集合，它會複製同一個病。
 
-`declare_circuit` 的回傳物件恆帶 `status` 欄，值域封閉，五類齊備：
+`declare_circuit` 的回傳物件恆帶 `status` 欄，值域封閉，五類齊備。
+底層的完整性 gate 是**獨立模組**，自己也有完整值域——它回三態而非 bool，
+所以它必須自己列一組，不能被上層的 `status` 代表。
 
-| 類別 | `status` 值 | 意義 | **排放點** |
-|---|---|---|---|
-| ok | `"ok"` | 展開成功、完整性 gate 全綠、spec 可餵 compose | 展開器尾端，gate 判定後唯一出口 |
-| failed | `"rejected"` | 跑了、判定不通過。**帶 `errors[]` 非空** | 完整性 gate（DD-5）與展開期 raise 的收斂點 |
-| not-run | `"not_run"` | **根本沒展開**：`declarations` 缺欄、schema 不合、引用了未宣告的 ref | 入口參數驗證，在展開器被呼叫**之前** |
-| empty | `"empty"` | 跑完了，但 `declarations` 是空陣列 ⇒ 產出 0 net 0 node | 展開器入口的顯式分支，**不與 `ok` 共用** |
-| indeterminate | `"indeterminate"` | 展開成功但**有 gate 無法判定**（見下） | 每一個 gate 各自回三態，任一格 `unknown` 即整體降為此值 |
+| Module | Value | Class | Means | Emitted at |
+|---|---|---|---|---|
+| declare_circuit | `"ok"` | ok | 展開成功、完整性 gate 全綠、spec 可餵 compose | `declare.py::declare_circuit` 結果組裝（GRAFCET step 9） |
+| declare_circuit | `"rejected"` | failed | 跑了、判定不通過。**帶 `errors[]` 非空** | `declare.py::declare_circuit` 拒絕出口（GRAFCET step 10 / step 7） |
+| declare_circuit | `"not_run"` | not-run | **根本沒展開**：`declarations` 缺欄、schema 不合、引用了未宣告的 ref | `declare.py::_validate_input`，在展開器被呼叫**之前**（GRAFCET step 2） |
+| declare_circuit | `"empty"` | empty | 跑完了，但 `declarations` 是空陣列 ⇒ 產出 0 net 0 node | `declare.py::_expand` 入口的顯式分支，**不與 `ok` 共用**（GRAFCET step 4） |
+| declare_circuit | `"indeterminate"` | indeterminate | 展開成功但**有 gate 無法判定**（見下） | `declare.py::declare_circuit` 降級出口（GRAFCET step 12） |
+| completeness_gate | `"pass"` | ok | 每支已宣告的腳恰好出現一次 | `declare.py::check_completeness` 回傳（IDEF0 A4） |
+| completeness_gate | `"fail"` | failed | 有缺項或重複，`missing[]` / `duplicated[]` 非空 | `declare.py::check_completeness` 回傳（IDEF0 A4） |
+| completeness_gate | `"not_run"` | not-run | 展開在此之前就失敗，gate **從未被呼叫**——與「檢查過且全綠」必須分得開 | `declare.py::declare_circuit` 早退路徑，gate 呼叫點之前 |
+| completeness_gate | `"vacuous"` | empty | `components[] == []` ⇒ gate 有跑但無腳可檢；**不得回 `pass`**（零元件全綠是假綠燈） | `declare.py::check_completeness` 零元件分支 |
+| completeness_gate | `"unknown"` | indeterminate | symbol 載不到 ⇒ pin 清單未知 ⇒ 無法判定該元件 | `declare.py::check_completeness` symbol 解析失敗分支 |
+
+### 為什麼 `E_SERIES_TOO_SHORT` 與 `E_RAIL_SCOPE_UNKNOWN` 是 `not_run` 而非 `rejected`
+
+**這兩列曾經寫成 `rejected`，是錯的，2026-09-07 修正。寫下理由是為了防止下一個人「修正」回去。**
+
+兩者都在 `_validate_input` 被擋下來，**而展開器從未被呼叫**。
+而 `not_run` 在本表的定義逐字就是這件事：「根本沒展開」。
+
+差別不是語意潔癖，是**呼叫端會做出不同的事**：
+
+- 讀到 `rejected` 的呼叫端會以為宣告已經被展開過、`provenance` 與 `render_plan` 有意義，
+  並可能拿那些部分結果繼續做事——但它們都是空的。
+- 讀到 `not_run` 的呼叫端知道要回頭修輸入、重跑。
+
+這正是 codomain 契約要防的第一件事：**「跑了且判定不過」與「根本沒跑」不得共用同一個輸出。**
+若日後有人想把它們改回 `rejected`，先問：這兩個錯誤發生時，`_expand` 有沒有跑過？
+沒有，那就不是 `rejected`。
 
 ### 為什麼 `empty` 必須與 `ok` 分開
 
@@ -53,8 +77,8 @@
 | `E_PIN_UNKNOWN` | 宣告引用了該元件 symbol 沒有的 pin 編號 | `status="rejected"` | 對照 symbol pin map 修正 |
 | `E_NET_NAME_COLLISION` | 自動衍生的中間節點名撞上使用者宣告的 net 名 | `status="rejected"`，列出撞名 | 改宣告的 net 名（衍生名規則固定，不讓步） |
 | `E_DIVIDER_TAP_DEGENERATE` | 分壓的抽頭接回自己的上端或下端 | `status="rejected"` | 這是**必抓**的一格，見下方失效模式表 |
-| `E_SERIES_TOO_SHORT` | `series` 少於 2 個元件 | `status="rejected"` | 用 `connect` 而非 `series` |
-| `E_RAIL_SCOPE_UNKNOWN` | `rail.scope` 列了不存在的 ref | `status="rejected"` | 修正 scope |
+| `E_SERIES_TOO_SHORT` | `series.chain` 少於 3 項（頭尾是 net，中間至少一個元件） | `status="not_run"`，並回顯它拒絕的 chain 內容 | 兩個 net 沒有元件是 `connect`，不是 `series` |
+| `E_RAIL_SCOPE_UNKNOWN` | `rail.scope` 列了不存在的 ref | `status="not_run"`，**一次列出全部**未知 ref 而非只第一個 | 修正 scope，或補上缺的元件宣告 |
 | `E_PROVENANCE_ORPHAN` | 輸出的某個 node 沒有對應的宣告來源 | `status="rejected"`，**這是引擎自己的 bug**，不是使用者錯 | 內部斷言失敗；不得放行（天條 §2.2 No fabrication） |
 | `E_SYMBOL_UNRESOLVED` | 元件的 symbol 載不到，pin 清單未知 | `status="indeterminate"`，`unknown[]` 列 ref + 理由 | 給 `symbol_dirs`，或接受降級判定 |
 | `W_RENDER_HINT_IGNORED` | 給了 `render` 但目前 Phase 尚未接線 | **warning 非 error**，`render_source:"default"` | 資訊；Phase 3 前預期會出現 |

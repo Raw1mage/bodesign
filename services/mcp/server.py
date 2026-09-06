@@ -183,6 +183,20 @@ def _h_compose(a: dict) -> Any:
     return out
 
 
+def _h_declare_circuit(a: dict) -> Any:
+    # Direct submodule import, NOT `from bodesign_eda_bridge import ...`: the
+    # package __init__ pulls in kiutils-dependent modules, while declare.py is
+    # pure python (its one kicad_emit import is lazy and inside a function). A
+    # caller who only wants to declare topology must not need a KiCad install.
+    from bodesign_eda_bridge.declare import declare_circuit
+    return declare_circuit(
+        components=a.get("components"),
+        declarations=a.get("declarations"),
+        symbol_dirs=a.get("symbol_dirs"),
+        strict=a.get("strict", True),
+    )
+
+
 def _h_ato_build(a: dict) -> Any:
     from bodesign_eda_bridge.ato_bridge import run_ato_build
     r = run_ato_build(a["project_path"],
@@ -1194,6 +1208,18 @@ TOOLS: list[dict] = [
      "description": "Generate a KiCad .kicad_sym symbol from a pin list [{number,name,type}].",
      "schema": {"type": "object", "properties": {"symbol_name": _STR, "pins": {"type": "array"}, "output_path": _STR,
                 "footprint_filter": _STR, "datasheet": _STR}, "required": ["symbol_name", "pins", "output_path"]}},
+    {"name": "bodesign_declare_circuit", "handler": _h_declare_circuit,
+     "description": "C03 topology DECLARATION layer: say what the circuit IS (\"R13/R14 form a divider off BATT, tapped into U2.31\") and get back a compose_schematic spec plus a COMPLETENESS verdict. Six primitives: connect | bridge (decoupling/pull-up/current-limit all share this shape) | series (chain with auto-named intermediate nodes <decl_id>_nN) | divider | rail | no_connect. This is the entry that asks the question nothing downstream asked -- is this input complete? -- so an under-specified spec is rejected AT THE ENTRY instead of each later stage inventing its own tolerance for it. status is a CLOSED five-value codomain: ok | rejected | not_run (schema/ref error, expander never ran) | empty (zero declarations -- deliberately NOT ok) | indeterminate (a symbol could not be read, so pin completeness is unknowable). Every emitted node carries provenance back to the declaration id that produced it, making \"the engine invented a node\" a single assertion rather than a review task. IMPORTANT: ok means THIS DECLARATION IS INTERNALLY CONSISTENT AND COMPLETE, not that the circuit is correct -- a pull-up tied to GND and a 5V rail on a 3V3 pin both pass here; the result field is named `completeness`, not `valid`, for that reason. Pure python: needs no KiCad unless symbol_dirs is given for the pin-completeness gate.",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "schema": {"type": "object", "properties": {
+                "components": {"type": "array", "items": {"type": "object"},
+                               "description": "same shape as compose_schematic spec.components: [{ref, symbol, value?, footprint?, group?}]"},
+                "declarations": {"type": "array", "items": {"type": "object"},
+                                 "description": "[{id, kind, ...per-kind fields}]. kind is one of connect|bridge|series|divider|rail|no_connect. Order does not affect the result. An EMPTY array yields status=empty, never ok."},
+                "symbol_dirs": {"type": "array", "items": _STR,
+                                "description": "custom KiCad symbol dir(s), as an ARRAY (single-type declaration deliberately, per BR_20260730b: an anyOf/untyped argument gets stringified in transit). Omit it and the pin-completeness gate cannot read pin lists, so the verdict degrades to indeterminate rather than pretending to pass."},
+                "strict": {"type": "boolean", "description": "default true. false downgrades E_PIN_UNASSIGNED to a warning for incremental migration; E_PIN_MULTI_NET is NEVER downgraded -- a pin on two nets is an electrical contradiction, not an incompleteness."}},
+                "required": ["components", "declarations"]}},
     {"name": "bodesign_ato_build", "handler": _h_ato_build,
      "description": "C03 declarative verification front-end: compile an atopile .ato project (pinned toolchain, ee worker) — unit typing + tolerance intervals + assert constraint solving + parametric component picks checked at COMPILE TIME, before anything reaches KiCad. ok=true returns pcb_path (.kicad_pcb, feeds the C04 finishing chain directly — no netlist bridge) + constraint_solve evidence (5th trust layer). ok=false returns a structured deficiency list [{kind: compile_error|unsat_constraint|pick_failure|component_wrapper_missing|toolchain_missing, detail, source_anchor}] — fail-fast, no silent fallback, no constraint relaxation. component_source default 'vault' (Component Vault only; no cloud registry calls); 'registry'/'vault_then_registry' are explicit opt-ins. Raw build log lands at build_log_path in the workspace, not in this response.",
      "schema": {"type": "object", "properties": {"project_path": _STR, "component_source": {"type": "string", "enum": ["vault", "registry", "vault_then_registry"]}, "target": _STR}, "required": ["project_path"]}},
@@ -1478,6 +1504,11 @@ _EE_GROUP_TOOLS = {
     "bodesign_component_fetch",
     # C03 declarative front-end (atopile toolchain lives in the ee image; DD-2)
     "bodesign_ato_build",
+    # NOTE: bodesign_declare_circuit is deliberately NOT in the EE group. It is
+    # pure python -- its only KiCad touch is an optional pin-list read, whose
+    # absence degrades the verdict to `indeterminate` rather than failing. Put
+    # it behind the EE worker and a caller without a KiCad install could not
+    # declare topology at all, which is the one thing this layer exists to allow.
 }
 
 

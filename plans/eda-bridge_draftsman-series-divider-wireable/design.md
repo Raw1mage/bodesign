@@ -55,6 +55,28 @@ KB 那句「SKiDL / atopile 都是人已想好連接用 code 表達」講的正�
 - 不改既有 emit 幾何。router、anti-fusion、ledger 全部原封不動。
 - 不做元件選型／auto-picking。
 
+## Architecture — 掛在 IDEF0 骨架上
+
+`idef0.json` 是本包的功能骨架，下面每一條 DD 都掛在它的某一格活動上。
+**順序是骨架先、散文後**：先有 A1–A5 的分解，才有下面的決策；
+不是先寫好設計再回頭補圖。
+
+| IDEF0 活動 | 職責 | 對應 DD | `declare.py` 落點 | GRAFCET step |
+|---|---|---|---|---|
+| **A1** 驗證宣告輸入 | schema + ref/pin 解析。未宣告的 ref 在此擋下，展開器**尚未被呼叫** | DD-1 | `_validate_input` | 1 → 2 |
+| **A2** 展開宣告為 net | 六原語各自展開；中間節點衍生穩定名；`rail` 收下 render hint | DD-2 / DD-3 / DD-4 | `_expand` | 3 → 5 |
+| **A3** 建立 provenance | 每個 node 記錄產生它的宣告 id，並斷言無無主 node | DD-6 | `_build_provenance` | 6 → 7 |
+| **A4** 完整性 gate 判定 | 逐腳檢查恰好一次，回三態 pass/fail/unknown | DD-5 | `check_completeness` | 8 |
+| **A5** 組裝結果並判定 status | 收斂為封閉五值域，接到 compose 的輸出契約 | DD-1 / DD-7 | `declare_circuit` 尾段 | 9 / 10 / 12 → 11 |
+
+**A1 與 A4 是兩個不同的關卡，不可合併**：A1 回 `not_run`（展開器沒跑），
+A4 回 `rejected`（跑了、判定不過）。合併它們就會讓「根本沒檢查」與
+「檢查了但不通過」共用同一個輸出——那正是 `errors.md` §Outcome Codomain
+要拆開的那一格。
+
+**A3 在 A4 之前不是排版順序，是依賴**：完整性判定需要知道每個 node 的來源，
+才能在報錯時指名是哪一條宣告造成的缺項。
+
 ## Decisions
 
 ### DD-1：新入口是 spec 的**產生器**，不是 compose 的替代品
