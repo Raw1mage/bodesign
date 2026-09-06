@@ -160,6 +160,11 @@ class CheckC03Result:
     # they say so rather than letting a PASS imply the circuit was examined.
     mandated_passives: dict = field(default_factory=lambda: {"status": "not_run"})
     switch_node_shorts: dict = field(default_factory=lambda: {"status": "not_run"})
+    # PC-001 (plan c03_delivery_contract_and_engine_seams DD-08): relocated from
+    # the skill pipeline, which the delivery path never runs. Same not_run
+    # discipline — it needs a netlist WITH pinfunction annotations, and says so
+    # rather than letting a PASS imply any IC's decoupling was checked.
+    passive_completeness: dict = field(default_factory=lambda: {"status": "not_run"})
     # BR_20260802 F1: ALWAYS non-empty, in both PASS and FAIL. The gate's green
     # means "the wiring agrees with the paperwork", but it is read as "the circuit
     # is correct". That gap was never written down, so two board-killing defects
@@ -955,6 +960,176 @@ def _check_mandated_passives(rows: list[dict], netlist_paths: list[str],
     }
 
 
+# ── PC-001: passive completeness (decoupling-only) ──────────────────────────
+#
+# Relocated from skills/bodesign/engines/kicad/scripts/validation_detectors.py
+# :1261 into the DELIVERY path (plan c03_delivery_contract_and_engine_seams
+# DD-01/DD-08). The detector was correct where it lived and unreachable from
+# where C03 is actually adjudicated: the skill pipeline is an internal tool, the
+# MCP pipeline ships the verdict, and nothing on the MCP side ever ran PC-001.
+# A rule that cannot be reached by the delivery path is, from the deliverable's
+# point of view, a rule that does not exist.
+#
+# Policy carried over verbatim (plan c03-ee_passive-completeness-gate DD-2):
+# mandatory obligation scope is DECOUPLING-ONLY and blocking. DD-3 (the
+# passive_waivers.json sidecar) is deliberately NOT ported in this pass — see
+# `waivers` in the report, which says so rather than letting a caller assume a
+# waiver would be honoured here.
+
+#: pinfunction fragments that mark a power-input pin. Same list the skill-side
+#: detector uses (_POWER_PIN_NAME_HINTS): the netlist's pinfunction is the only
+#: place that says "this pad is a supply pin" as opposed to "this pad is A7".
+_PC_POWER_PIN_HINTS = ("VDD", "VCC", "AVDD", "DVDD", "VBAT", "VIN", "VDDA",
+                       "VDDIO", "VREF+", "AVCC", "VDDCORE", "VDD33", "VDD18")
+
+
+def _ic_power_rails(pin_nets: dict[str, dict[str, str]],
+                    pin_fns: dict[str, dict[str, str]],
+                    ref: str) -> list[str]:
+    """Distinct power-rail nets an active IC's supply pins connect to.
+
+    A rail qualifies only when BOTH hold: the pin's FUNCTION names a supply pin,
+    and the NET it sits on reads as power rather than ground. Requiring both is
+    what keeps a GND pin (function "VSS", net "GND") out of the rail set without
+    hard-coding a ground list at this level — _polarity_of already owns that.
+    """
+    rails: list[str] = []
+    for pin, fn in sorted((pin_fns.get(ref) or {}).items()):
+        if not any(h in fn.upper() for h in _PC_POWER_PIN_HINTS):
+            continue
+        net = (pin_nets.get(ref) or {}).get(pin)
+        if not net or _polarity_of(net) != "power":
+            continue
+        if net not in rails:
+            rails.append(net)
+    return rails
+
+
+def _rail_has_decoupling(pin_nets: dict[str, dict[str, str]],
+                         net_refs: dict[str, set[str]], rail: str) -> bool:
+    """True iff >=1 capacitor bridges `rail` to a ground net.
+
+    Presence only. A cap that is on the rail but whose other end goes nowhere
+    near ground is NOT decoupling, and counting it would make the rule green on
+    exactly the board it exists to fail.
+    """
+    for ref in sorted(net_refs.get(rail) or set()):
+        if not ref.upper().startswith("C"):
+            continue
+        nets = list((pin_nets.get(ref) or {}).values())
+        if any(_polarity_of(n) == "gnd" for n in nets):
+            return True
+    return False
+
+
+def _check_passive_completeness(rows: list[dict],
+                                netlist_paths: list[str]) -> tuple[list[RowFinding], dict]:
+    """PC-001 — an active IC whose power rails carry ZERO decoupling blocks.
+
+    This is the C03 analogue of C04's floating-copper HARD FAIL: a pinout-only
+    placement is electrically LEGAL, so ERC, DRC, fidelity and every rule R1-R8
+    pass on a board that cannot physically work.
+
+    Not-run is reported (never a clean run) whenever the netlist cannot answer
+    the question: no pinfunction annotations at all, or annotations that name no
+    supply pin on any active IC. Zero subjects examined is not zero defects.
+
+    SCOPE DEFORMATION vs the skill-side original: that detector selects its
+    subjects by `comp.type == 'ic'`, which a KiCad netlist does not carry. Here
+    the subject set is a REFDES-PREFIX PROXY -- every BOM row whose ref starts
+    with `U`. The two are not equal: `U*` is a superset that also sweeps in LDOs,
+    logic gates and anything else a designer chose to letter U, and it misses an
+    IC lettered otherwise. The proxy is stated rather than hidden because it
+    changes WHICH parts a verdict covers, and a reader comparing the two
+    pipelines' output would otherwise have no way to know why they differ.
+    Parts whose supply pins cannot be identified are named in
+    `ics_without_identifiable_rail`, never folded into the green.
+    """
+    pin_nets = _netlist_pin_nets(netlist_paths)
+    pin_fns = _netlist_pin_functions(netlist_paths)
+    waivers = {
+        "status": "not_run",
+        "reason": "passive_waivers.json sidecar (DD-3) is NOT ported to the "
+                  "delivery path in this pass — every decoupling gap blocks here "
+                  "and NO waiver can be honoured, however well-provenanced",
+    }
+    if not pin_fns:
+        return [], {
+            "status": "not_run",
+            "reason": "no pinfunction annotations in the supplied netlist(s) — "
+                      "supply pins cannot be identified, so a PASS here does NOT "
+                      "mean any IC's decoupling obligation was discharged",
+            "waivers": waivers,
+        }
+
+    net_refs = _nets_to_refs(pin_nets)
+    # Active ICs, from the BOM (the delivery-path SSOT for what is a part) and
+    # restricted to U*: J/Y/SW carry no decoupling obligation this rule can
+    # assert deterministically.
+    ics = sorted({r.get("_ref", "") for r in rows
+                  if r.get("_ref", "").upper().startswith("U")})
+    board_of = {r.get("_ref", ""): r.get("_board", "") for r in rows}
+
+    findings: list[RowFinding] = []
+    ics_checked: list[dict] = []
+    ics_no_rail: list[str] = []
+    rails_checked = 0
+
+    for ref in ics:
+        rails = _ic_power_rails(pin_nets, pin_fns, ref)
+        if not rails:
+            # No supply pin identifiable on this IC — reported by name, never
+            # folded into the green. "I could not look" is not "it is fine".
+            ics_no_rail.append(ref)
+            continue
+        rails_checked += len(rails)
+        undecoupled = [r for r in rails
+                       if not _rail_has_decoupling(pin_nets, net_refs, r)]
+        ics_checked.append({"ref": ref, "rails": rails,
+                            "undecoupled": undecoupled,
+                            "verdict": "gap" if undecoupled else "ok"})
+        if not undecoupled:
+            continue
+        zero_anywhere = len(undecoupled) == len(rails)
+        rails_str = ", ".join(undecoupled)
+        findings.append(RowFinding(
+            board_of.get(ref, ""), ref, "PC-001",
+            f"active IC has power rail(s) [{rails_str}] carrying ZERO decoupling "
+            f"capacitance (no rail->GND capacitor on them). "
+            + ("This IC has NO decoupling on ANY power rail — a pinout-only "
+               "placement that cannot physically work. " if zero_anywhere else "")
+            + "This is electrically legal, so ERC/DRC and every connectivity rule "
+              "pass. Add >=1 decoupling capacitor (rail->GND) per power rail, per "
+              "the datasheet decoupling recommendation "
+              "(pinout-to-circuit-method.md #Power)."))
+
+    if rails_checked == 0:
+        # The netlist HAS pinfunction data, yet no active IC exposed a supply
+        # pin on a power net. Same discipline as R8: a rule that inspected zero
+        # subjects has not run, whatever its loop did.
+        return [], {
+            "status": "not_run",
+            "reason": "the netlist carries pinfunction annotations but NO active "
+                      "IC in the BOM exposed a supply pin on a power net, so zero "
+                      "rails were examined. A PASS here means nothing was looked at.",
+            "ics_without_identifiable_rail": ics_no_rail,
+            "waivers": waivers,
+        }
+
+    return findings, {
+        "status": "run",
+        "reason": None,
+        "ics_checked": ics_checked,
+        "rails_checked": rails_checked,
+        # Named, not counted: an IC whose supply pins could not be identified is
+        # an IC this rule did NOT clear, and the reader must see which.
+        "ics_without_identifiable_rail": ics_no_rail,
+        "scope": "presence of >=1 rail->GND capacitor per identified power rail "
+                 "on U* parts; value, count and placement are NOT examined",
+        "waivers": waivers,
+    }
+
+
 def _load_pin_alloc_refs(path: str) -> tuple[set[str] | None, list[str]]:
     """Refs in the Pin_Allocation SSOT, plus its header.
 
@@ -1007,8 +1182,6 @@ def _check_ssot(active_rows: list[dict], pin_alloc_refs: set[str]) -> list[RowFi
 #: of every verdict: R1-R8 can only ever grow, but the boundary can be stated in
 #: full today. Entries are removed ONLY when a rule genuinely covers them.
 _NOT_CHECKED_BASE: tuple[str, ...] = (
-    "decoupling_adequacy — whether each supply pin has the datasheet's decoupling "
-    "(count, value, placement). A board with zero decoupling caps passes this gate.",
     "loop_compensation — DC-DC feedback loop stability (phase margin, compensation "
     "network sizing). Only the PRESENCE of mandated passives is checked (R7), never "
     "whether their values stabilise the loop.",
@@ -1021,15 +1194,32 @@ _NOT_CHECKED_BASE: tuple[str, ...] = (
 )
 
 
-def _build_not_checked(mandated: dict, switch: dict) -> list[str]:
+def _build_not_checked(mandated: dict, switch: dict,
+                       passive: dict | None = None) -> list[str]:
     """The scope disclosure printed beside every verdict, PASS or FAIL.
 
-    Two entries are conditional because R7/R8 may or may not have run: when they
-    did not, the class they would have covered is still unexamined and must be
-    named here. A caller must never have to reason about which rules ran to know
-    what was checked -- that reasoning is precisely what nobody does.
+    Three entries are conditional because R7/R8/PC-001 may or may not have run:
+    when they did not, the class they would have covered is still unexamined and
+    must be named here. A caller must never have to reason about which rules ran
+    to know what was checked -- that reasoning is precisely what nobody does.
+
+    `passive` defaults to None so a pre-PC-001 caller keeps working, but that
+    default is NOT a silent pass: with no PC-001 report there is no evidence any
+    decoupling was examined, so the unconditional not-run line is emitted -- the
+    same text the old unconditional _NOT_CHECKED_BASE entry carried.
     """
     out = list(_NOT_CHECKED_BASE)
+    if (passive or {}).get("status") != "run":
+        out.insert(0, "decoupling_adequacy — whether each supply pin has ANY "
+                      "decoupling at all (PC-001 did NOT run: "
+                      + str((passive or {}).get(
+                          "reason", "no PC-001 report supplied"))
+                      + "). A board with zero decoupling caps passes this gate.")
+    else:
+        out.append("decoupling_adequacy beyond rail→GND presence — PC-001 covers "
+                   "ONLY that at least one decoupling capacitor exists per "
+                   "identified power rail, NOT its value, count or placement. The "
+                   "datasheet may mandate four caps where one satisfies this gate.")
     if (switch or {}).get("status") != "run":
         out.insert(0, "topology_plausibility — whether switching/feedback nodes are "
                       "wired to the right place (R8 did NOT run: "
@@ -1206,6 +1396,12 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
                       "NOT checked against power rails; a PASS here does not mean "
                       "no switch node is shorted to a rail",
         }
+        passive_report: dict = {
+            "status": "not_run",
+            "reason": "netlist_path not supplied — active-IC decoupling was NOT "
+                      "checked; a PASS here does not mean any power rail carries "
+                      "a decoupling capacitor",
+        }
     else:
         paths = [netlist_path] if isinstance(netlist_path, str) else list(netlist_path)
         missing = [x for x in paths if not os.path.isfile(x)]
@@ -1220,6 +1416,8 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
         findings += mp_findings
         sw_findings, switch_report = _check_switch_node_shorts(paths)
         findings += sw_findings
+        pc_findings, passive_report = _check_passive_completeness(dict_rows, paths)
+        findings += pc_findings
 
     # frozen pad-count crosscheck (J_* freeze)
     if frozen_pad_counts and pad_i is not None:
@@ -1268,7 +1466,8 @@ def check_c03(bom_csv: str, *, pin_allocation_csv: str | None = None,
         ssot_crosscheck=ssot_report,
         mandated_passives=mandated_report,
         switch_node_shorts=switch_report,
-        not_checked=_build_not_checked(mandated_report, switch_report),
+        passive_completeness=passive_report,
+        not_checked=_build_not_checked(mandated_report, switch_report, passive_report),
     )
 
     if out_dir is not None:

@@ -60,13 +60,13 @@ mechanism is disabled). A negative control that cannot fail is not a control.
 
 ## 2. WP2 — pipeline adjudication landed + migration list
 
-- [ ] 2.1 Write DD-01 into `specs/architecture.md` as a decision paragraph: P1
+- [x] 2.1 Write DD-01 into `specs/architecture.md` as a decision paragraph: P1
       (`composer.py`→`kicad_emit.py`→`fidelity.py`) is the C03 delivery path; P2
       (`symbol_4edge` / `host_from_pinmap` / `netlist_to_kicad_sch` /
       `render_hybrid_sch`) is an internal tool. State the consequence: new C03
       quality rules and gates attach to P1 only —
       artifact: `specs/architecture.md`
-- [ ] 2.2 Land the DD-08 ruling (already adjudicated, not open): PC-001 relocates to
+- [x] 2.2 Land the DD-08 ruling (already adjudicated, not open): PC-001 relocates to
       `packages/workflow-core/bodesign_workflow_core/check_c03.py` as a new rule
       alongside R7. The `specs/architecture.md:101` veto ("BOM CSV, cannot see
       whether a cap is *connected* to a rail") was true at PC-001's design time and
@@ -77,21 +77,21 @@ mechanism is disabled). A negative control that cannot fail is not a control.
       the rail walk PC-001 needs. Write the superseding note INTO `:101` so the
       stale premise is not left standing beside its reversal —
       artifact: `specs/architecture.md`
-- [ ] 2.3 Write the PC-001 migration item: the detector logic moves from
+- [x] 2.3 Write the PC-001 migration item: the detector logic moves from
       `skills/bodesign/engines/kicad/scripts/validation_detectors.py` to the
       adjudicated destination; the source stays in place for P2 callers and is
       marked as the internal-tool copy; the `_NOT_CHECKED_BASE` entry for
       decoupling adequacy is updated to reflect that a rule now covers it, using
       the conditional wording the file already uses for R7/R8 (an unrun rule must
       stay listed rather than drop out) — artifact: `specs/architecture.md`
-- [ ] 2.3b Update `_NOT_CHECKED_BASE:1010` `decoupling_adequacy` to the conditional
+- [x] 2.3b Update `_NOT_CHECKED_BASE:1010` `decoupling_adequacy` to the conditional
       form `_build_not_checked:1024` already uses for R7/R8: when the relocated
       PC-001 did not run (no netlist, no identifiable power pin), the class stays
       listed with its reason; only a rule that actually ran may remove its entry.
       Dropping the entry unconditionally would make "covered" and "never examined"
       the same output — the defect `_NOT_CHECKED_BASE` exists to prevent —
       artifact: `packages/workflow-core/bodesign_workflow_core/check_c03.py`
-- [ ] 2.4 Assign each of the 8 rules in
+- [x] 2.4 Assign each of the 8 rules in
       `skills/bodesign/stages/c03-ee/references/schematic-drawing-rules.md` an
       owner under DD-01, one row per rule:
       R1 tool choice → P2-internal (names P2's own render chain, no P1 equivalent);
@@ -107,14 +107,46 @@ mechanism is disabled). A negative control that cannot fail is not a control.
       R8 discipline (generation ≠ correctness) → stage contract, WP1.
       Rules routed to a measurable form criterion (R4, R5) are WP6 inputs; the rest
       are contract statements — artifact: `specs/architecture.md`
-- [ ] 2.5 POSITIVE CONTROL: `grep -rl 'PC-001' packages/` returns at least one
-      file. Question answered: *is the passive-completeness backstop reachable from
-      the delivery path?* — artifact: none (measurement recorded in WP2 handoff)
-- [ ] 2.6 NEGATIVE CONTROL: the same grep on today's tree returns **zero** files
+- [x] 2.5 Criterion A *(rewritten 2026-09-06: original string-grep had no
+      discriminating power — a docstring mention would pass it)*. The question is
+      not *does the string `PC-001` appear under `packages/`* but *does the
+      delivery path REJECT a board the rule exists to reject?* A relocated
+      detector is proven reachable only by a verdict that changes with the defect,
+      so the criterion is the 2.5a/2.5b pair below, run through `check_c03()`
+      itself rather than against the detector function — the seam being tested is
+      the call site, and calling the function directly would pass even if nothing
+      in the delivery path ever invoked it —
+      artifact: `tests/test_check_c03_passive_completeness.py`
+- [x] 2.5a POSITIVE CONTROL: a fixture with an active IC on a power rail and NO
+      rail→GND capacitor yields `gate == "FAIL"` with a blocking finding whose
+      code is `PC-001` and whose ref is the IC. Question answered: *does the
+      delivery path fail an undecoupled board?* —
+      artifact: `tests/test_check_c03_passive_completeness.py`
+- [x] 2.5b NEGATIVE CONTROL: the byte-identical fixture plus one decoupling cap
+      yields no `PC-001` finding, AND every other finding is literally unchanged
+      (compared as a sorted `(code, ref, detail)` list). The second half is
+      load-bearing: a rule that silenced PC-001 by breaking R1–R8 would pass the
+      first half alone. Question answered: *does the verdict track the defect, or
+      does the rule just always fire?* —
+      artifact: `tests/test_check_c03_passive_completeness.py`
+- [x] 2.6 NEGATIVE CONTROL: the same grep on today's tree returns **zero** files
       while the control grep on `skills/` returns 3 — measured 2026-09-06, so the
       check is red before the work and its discriminating power is shown by the
       paired control rather than assumed —
       artifact: none (measurement recorded in WP2 handoff)
+- [ ] 2.7 Port the DD-3 waiver sidecar (`passive_waivers.json`) to the delivery
+      path. NOT done in this pass: the relocated rule reports
+      `passive_completeness.waivers.status == "not_run"` with the reason that no
+      waiver can be honoured here, so a caller is told rather than left to
+      discover that a well-provenanced waiver was ignored. Until this lands, a
+      legitimately-waived gap blocks C04 entry — which is the safe direction, but
+      it is a behaviour difference from the skill-side detector and must not stay
+      undeclared. Scope note: the skill-side copy at
+      `validation_detectors.py:1261` is the P2 INTERNAL-TOOL copy under DD-01 —
+      the two criteria may drift (they already do: `comp.type == 'ic'` there vs a
+      `U*` refdes-prefix proxy here) and are deliberately NOT kept in sync. Only
+      the delivery-path copy governs a C03 verdict — artifact:
+      `packages/workflow-core/bodesign_workflow_core/check_c03.py`
 
 ## 3. WP3 — projection carries an executable body
 
