@@ -103,6 +103,15 @@
   `review_required=false`.
 - Connecting the vault to C03 (RCA §10.1). Named as a follow-on, not scoped here.
 - Consuming ERC report files (RCA §10.7). Named as a follow-on.
+- **Completing PC-001's coverage, and porting the DD-3 waiver sidecar.** Carved out
+  2026-09-06 into `plans/c03_pc001_coverage_and_waiver_sidecar/` (tasks 2.7 / 2.8,
+  moved verbatim and still `- [ ]`). **This package reaching `verified` does not lift
+  their seal:** PC-001's measured coverage on the aiguard board is **9/16, NOT 16/16**
+  (`experiments/aiguard_c03_verify/ccm.net`, `rails_checked=12`; `U9`, `U10`, `U11`,
+  `U12`, `U_EE`, `U_IMU`, `U_S` reported in `ics_without_identifiable_rail`), and no
+  statement to the contrary may be made. The waiver sidecar is likewise **not ported** —
+  the delivery path reports `passive_completeness.waivers.status == "not_run"`, so a
+  legitimately-waived gap still blocks C04 entry.
 
 ## Constraints
 

@@ -53,8 +53,28 @@ mechanism is disabled). A negative control that cannot fail is not a control.
 - [x] 2.5a POSITIVE CONTROL: a fixture with an active IC on a power rail and NO rail→GND capacitor yields `gate == "FAIL"` with a blocking finding whose code is `PC-001` and whose ref is the IC. Question answered: *does the delivery path fail an undecoupled board?*. — artifact: `tests/test_check_c03_passive_completeness.py`
 - [x] 2.5b NEGATIVE CONTROL: the byte-identical fixture plus one decoupling cap yields no `PC-001` finding, AND every other finding is literally unchanged (compared as a sorted `(code, ref, detail)` list). The second half is load-bearing: a rule that silenced PC-001 by breaking R1–R8 would pass the first half alone. Question answered: *does the verdict track the defect, or does the rule just always fire?*. — artifact: `tests/test_check_c03_passive_completeness.py`
 - [x] 2.6 NEGATIVE CONTROL: the same grep on today's tree returns **zero** files while the control grep on `skills/` returns 3 — measured 2026-09-06, so the check is red before the work and its discriminating power is shown by the paired control rather than assumed. — artifact: none (measurement recorded in WP2 handoff)
-- [ ] 2.7 Port the DD-3 waiver sidecar (`passive_waivers.json`) to the delivery path. NOT done in this pass: the relocated rule reports `passive_completeness.waivers.status == "not_run"` with the reason that no waiver can be honoured here, so a caller is told rather than left to discover that a well-provenanced waiver was ignored. Until this lands, a legitimately-waived gap blocks C04 entry — which is the safe direction, but it is a behaviour difference from the skill-side detector and must not stay undeclared. Scope note: the skill-side copy at `validation_detectors.py:1261` is the P2 INTERNAL-TOOL copy under DD-01 — the two criteria may drift (they already do: `comp.type == 'ic'` there vs a `U*` refdes-prefix proxy here) and are deliberately NOT kept in sync. Only the delivery-path copy governs a C03 verdict. — artifact: `packages/workflow-core/bodesign_workflow_core/check_c03.py`
-- [ ] 2.8 Diagnose the 7 ICs that PC-001 did NOT cover on the aiguard board (`U9`, `U10`, `U11`, `U12`, `U_EE`, `U_IMU`, `U_S`, measured 2026-09-06 on `experiments/aiguard_c03_verify/ccm.net`: `rails_checked=12`, 9 of 16 `U*` parts examined). They are named in `ics_without_identifiable_rail`, which states they were NOT looked at — it does not say why, and the two possible causes need OPPOSITE fixes: (a) the netlist carries no `pinfunction` on their supply pins — an upstream/export problem; the fix is in whatever produced the netlist, and no change to `_ic_power_rails` would help; (b) the pins ARE annotated but their net name does not satisfy `_polarity_of(net) == "power"` — the rail predicate is too narrow, and the fix is in `check_c03.py` (`_PWR_PREFIXES` / `_PWR_PATTERN:127-129`). Deciding between them is a per-ref measurement, not a judgement call: dump `_netlist_pin_functions()[ref]` and the net each supply pin sits on. Until this runs, PC-001's real coverage on this board is 9/16, NOT 16/16, and no statement to the contrary may be made. — artifact: none (measurement; fix location depends on the answer)
+> **⛔ EFFECT BOUNDARY OF THIS PACKAGE'S `verified` STATE — READ BEFORE CITING WP2.**
+>
+> Tasks **2.7** (DD-3 waiver sidecar port) and **2.8** (diagnose the 7 uncovered ICs)
+> were moved out of this package **unfinished** on 2026-09-06, to
+> `plans/c03_pc001_coverage_and_waiver_sidecar/tasks.md` (verbatim, same numbering).
+> They are still `- [ ]` there because they are still undone.
+>
+> The seal they carry is **not lifted** by this package reaching `verified`:
+>
+> > **PC-001's real coverage on the aiguard board is 9/16, NOT 16/16, and no statement
+> > to the contrary may be made** — measured 2026-09-06 on
+> > `experiments/aiguard_c03_verify/ccm.net` (`rails_checked=12`, 9 of 16 `U*` parts
+> > examined; `U9`, `U10`, `U11`, `U12`, `U_EE`, `U_IMU`, `U_S` named in
+> > `ics_without_identifiable_rail`).
+>
+> Likewise the **waiver sidecar is NOT ported**: the delivery path reports
+> `passive_completeness.waivers.status == "not_run"`, so a legitimately-waived gap
+> still blocks C04 entry. Safe direction, but a declared behaviour difference from
+> the skill-side detector — not a silent one.
+>
+> This package's `verified` means "the delivery contract and engine seams landed and
+> were measured"; it does **not** mean PC-001 is fully covered.
 
 ## 3. WP3 — projection carries an executable body
 

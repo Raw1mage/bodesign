@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "state": "proposed",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-09-06T15:52:59.008Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    }
+  ],
+  "tasks_contract": {
+    "version": "1"
+  },
+  "outcome_contract": {
+    "version": "1"
+  }
+}
