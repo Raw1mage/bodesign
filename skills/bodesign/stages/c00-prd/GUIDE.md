@@ -59,6 +59,13 @@ status with a reason + owner — silent absence is not allowed.
 > `BODESIGN_SRC=<bodesign repo root containing packages/*>` **before** the first `gate.py` call —
 > otherwise every landing verb fails with `LANDING_PACKAGES_NOT_FOUND`. `gate.py --list` reports
 > the answer as `result.packages_resolved` (it stays `ok:true` either way — read the field, not `count`).
+>
+> **Same prerequisite, second entry point: `assets/render_prd.py` (§5).** It is the only OTHER
+> script in this stage that reaches into `packages/workflow-core` (it refuses to compute readiness
+> locally, by design). From a published install it walks up from
+> `~/.local/share/opencode/skills/…` and never reaches a repo, so without `BODESIGN_SRC` it exits
+> with `could not find bodesign packages/workflow-core`. Measured 2026-09-06: unset → that refusal;
+> `BODESIGN_SRC=<repo>` → proceeds past resolution into the render path. Export it before §5 too.
 
 **Self-verify:** run the landing verb `c00_readiness` (`python3 <skill>/scripts/gate.py
 c00_readiness --repo <abs-project>` — NOT an MCP tool; see SKILL.md § "Landing / compute routing

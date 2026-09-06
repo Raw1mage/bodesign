@@ -403,7 +403,12 @@ subagents into an engine-R&D marathon that shipped nothing. The post-mortem
    states ownership explicitly on dispatch. (Two subagents shared the engine and
    one's rollback pulled the other's environment out from under it.)
 5. **Engine-change snapshot + no git rollback.** Before any engine edit:
-   `tar -C packages/eda-bridge -cf <cache>/engine_snap_<ts>.tar bodesign_eda_bridge`.
+   `tar -C <bodesign-repo>/packages/eda-bridge -cf <cache>/engine_snap_<ts>.tar bodesign_eda_bridge`.
+   `<bodesign-repo>` is the **repo checkout root** (`$BODESIGN_SRC`), never the published
+   skill tree: `skill resync` projects `skills/` only, so `packages/` is structurally
+   absent from `~/.local/share/opencode/skills/bodesign/` and a repo-relative spelling
+   run from there fails (`tar: packages/eda-bridge: Cannot open`). Engine edits happen in
+   the checkout; this line says so rather than assuming the reader's cwd.
    `git checkout`/`reset`/`stash` on UNCOMMITTED engine files is banned in the
    dispatch template — a frustrated subagent's `git checkout` erased 6 relays of
    uncommitted work (recovered only by luck from a container copy).
