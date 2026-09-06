@@ -55,10 +55,64 @@ contains its figures" share one output.** A consumer discovers the gap only by
 opening the file and looking, which is exactly the check that gets skipped when a
 pipeline reports success.
 
-Upstream's inference from this is worth preserving: because `emit_doc` cannot embed
-PNGs, the figures in the delivered `.docx` **cannot have come from the preferred
-path** — some other, undocumented route produced them, and that route is where no
-figure-freshness check exists (see the sibling BR).
+## Severity — restated (2026-09-06); this is not a missing-branch ticket
+
+The original framing ("the preferred verb is missing one branch") understates it by
+a category. The correct statement is:
+
+> **A verb that the guide names as *preferred* does not support something the
+> deliverable *requires*. Every consumer with a figure-bearing deliverable is
+> therefore forced out of the sanctioned path — and once they are outside it, no
+> bodesign contract governs anything they do.**
+
+The damage is not the absent images. It is that the guide's own routing manufactures
+defectors: it names one path, the path cannot carry the payload, and the consumer
+necessarily leaves. What they build after leaving is unreviewed, unversioned against
+our engines, and invisible to every gate we own. **A capability gap costs one
+feature; a preferred-path capability gap costs jurisdiction.**
+
+This is the same chain as
+`BR_20260906_no_contract_for_re_rendering_docx_figures_after_kicad_sch_change.md`,
+and the causal order between them matters:
+
+1. **(this BR)** the preferred path cannot embed figures → the consumer must route
+   figures through *something else*, of their own devising;
+2. **(sibling BR)** because that something-else was never a bodesign path, no
+   bodesign contract says who re-renders a figure when the `.kicad_sch` changes —
+   so nobody owns discovering that a figure has gone stale.
+
+Step 2 is not an independent oversight. **It is the downstream cost of step 1:** we
+cannot write a freshness contract for a route we never sanctioned and do not know
+the shape of. Fixing the freshness gap without fixing the routing gap writes a
+contract for a path nobody is on.
+
+### Upstream causal inference — DOWNGRADED TO UNPROVEN HYPOTHESIS (2026-09-06)
+
+An earlier revision preserved this upstream inference: *because `emit_doc` cannot
+embed PNGs, the figures in the delivered `.docx` cannot have come from the preferred
+path, so some other undocumented route produced them.* **The conclusion is probably
+right but the premise chain is not established, and it is hereby marked unproven.**
+
+Peer duty-officer measurement in `thesmart_products`, re-verified first-hand here
+(read-only; `git`-family commands deliberately not used — that repo's index was
+recently repaired and its git output is untrusted):
+
+| probe | result | control |
+| --- | --- | --- |
+| Is `mk_spec.py` a docx assembler? | **No** — `:3` verbatim: *"Project design.py (the electrical SSOT) into per-sheet bodesign compose specs."* | it is a compose-spec projector |
+| `.py` files under `04.btdongle/` mentioning `docx` | **1** (`…/sch_gen/mk_sch2.py:122`, and that line is a comment about figure legibility, not assembly) | same grep for `kicad` → **13 files**; negative control `zzznope_marker` → **0** |
+| `DELIVERY_NOTES.md` record for `v2.4` | **0 hits** | `v2.1` → **5**; negative control `v9.9` → **0, rc=1** |
+| only recorded assembly route | `DELIVERY_NOTES.md:22` — docxmcp native chain (`from_markdown` → `assemble`) | corroborated `:29` |
+
+**Reading:** the consuming repo has no docx-assembling script at all; assembly was
+done by direct docxmcp tool calls. So the upstream document plausibly never touched
+a bodesign render verb, and **this BR must not be cited as the cause of that case.**
+
+What is unaffected by the above: `doc_emit.py` has zero image handling and
+`GUIDE.md:459` prefers it without saying so. That is measured **in this repo**, and
+the severity argument in the preceding section rests on it alone — no consumer
+incident is required to make a preferred path that cannot carry the payload a
+defect.
 
 ## Three repair directions (NOT adjudicated)
 
@@ -79,6 +133,14 @@ figure-freshness check exists (see the sibling BR).
   `bodesign_c00_emit_prd_docx` (`server.py:1250`) and the docxmcp bridge were flagged
   unexamined upstream and remain unexamined here. **If the intended figure path is
   one of those, this BR's fix is (1) alone — the guide should point there.**
+- **Whether this defect had any role in the upstream v2.4 document.** The measured
+  evidence (table above) points away from it: no docx-assembling script exists in the
+  consuming repo and the only recorded assembly route is docxmcp-native. Marked
+  unproven; not investigated further. `DELIVERY_NOTES.md` has no v2.4 entry at all,
+  so what produced v2.4 is simply unrecorded.
+- **How many consumers have actually defected.** The severity argument above is a
+  structural claim ("the preferred path cannot carry the payload, so figure-bearing
+  work must leave it"), not a census. No survey of consuming repos was performed.
 - Whether any current caller passes image-bearing markdown to `emit_doc` today (no
   call-site survey performed).
 - Whether the PDF half of `md → docx+pdf` behaves differently with respect to images.

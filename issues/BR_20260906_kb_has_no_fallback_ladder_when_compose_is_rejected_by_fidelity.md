@@ -66,7 +66,43 @@ investigated.
 The upstream report frames this as an open question with two answers (its §4 F-1
 table): either the general clause **is** the answer and the handler failed to apply
 it (→ consumer's fault), or the clause does not address the situation at all
-(→ bodesign's gap). This BR takes the second reading, on the following ground:
+(→ bodesign's gap). This BR takes the second reading.
+
+### The ground for taking reading B (revised 2026-09-06 — the earlier ground was rejected)
+
+An earlier revision of this BR justified reading B as chosen *"for the purpose of
+having something to fix"*. **That is not a criterion and it has been withdrawn** —
+a thing being fixable says nothing about whether it is a defect, and choosing a
+reading because it yields work is how a non-defect acquires a repair.
+
+The replacement ground is behavioural and observable: **what a consumer does after
+compose is rejected leaves a trace, and the trace is a self-written substitute.**
+
+- Attribution: **peer duty officer testimony from `thesmart_products`** (a GUEST
+  read of a consuming repo), re-verified first-hand here by directory listing —
+  **not** a bodesign-side measurement of bodesign behaviour.
+- The measured trace: `thesmart_products/04.btdongle/C03-EE/02_build/sch_gen/`
+  contains a locally authored schematic-generation toolchain at the exact node
+  where `compose_schematic` was the sanctioned path — `mk_sch.py`, `mk_sch2.py`,
+  `mk_sch_bodesign.py`, `mk_spec.py`, `verify_net.py`, `verify_sch.py`, plus
+  `design.py` / `mk_local_syms.py` / `mk_tables.py` / `symlib.py`.
+  (Count note: the peer's testimony said "six scripts"; a direct `ls` of that
+  directory on 2026-09-06 shows **10** `.py` files. The discrepancy is reported
+  rather than smoothed; it does not change the reading, since the claim rests on
+  *existence*, not on cardinality.)
+
+The inference: **a KB that has no next step after a rejection has, as its
+observable consequence, consumers inventing their own next step — and an invented
+next step is governed by no gate at all.** That is a defect in the KB regardless of
+whether any particular invented substitute was good or bad.
+
+**Scope boundary (user ruling, 2026-09-06):** the *contents* of those scripts are
+explicitly out of scope. The ruling was that they should not have been written at
+all — a correct one might be adopted, an incorrect one has no debugging value — so
+this BR uses only the fact **that they exist**, and performs no content analysis on
+them. Nothing in this BR should be read as a critique of their internals.
+
+### The prior textual argument (retained; it is independent of the above)
 
 `SKILL.md:381`'s stop-loss is about **when to stop asking the engine team for
 changes**. It is silent on the question the consumer actually faces — *the deliverable
@@ -74,10 +110,9 @@ requires a schematic, the engine refuses to produce an acceptable one, and the
 deadline is real.* A rule that does not mention the deliverable cannot be the rule
 governing the deliverable.
 
-That said, **this framing is a judgement and is not measured.** The counter-reading
-is legitimate and the adjudicator may prefer it; in that case the fix moves to
-wiring `SKILL.md:381` into the c03-ee SOP so it is visible at the failure site,
-which is a smaller change and lands in this same repo.
+The counter-reading remains legitimate and the adjudicator may prefer it; in that
+case the fix moves to wiring `SKILL.md:381` into the c03-ee SOP so it is visible at
+the failure site, which is a smaller change and lands in this same repo.
 
 ## What a fix would need to contain (NOT adjudicated)
 
@@ -103,5 +138,11 @@ indistinguishable from a good one at the consumer's end, which is the same shape
   guide by a reader who never opens `SKILL.md` — the navigation question, not the
   content question.
 - The upstream report's own §4 F-1 hedge: it explicitly declined to choose between
-  its A and B readings. This BR chooses B **for the purpose of having something to
-  fix**, and says so.
+  its A and B readings. This BR chooses B on the behavioural ground stated above.
+  **The "something to fix" justification that previously stood here is withdrawn.**
+- **Whether the self-written toolchain in `thesmart_products` was caused by this
+  gap.** The scripts' existence at that node is measured; the causal link to the
+  fidelity rejection is an inference, not a measurement. No commit-time ordering
+  was established (the consuming repo's git index was recently repaired, so git-side
+  probes there were deliberately not used).
+- Anything about the scripts' contents — out of scope by user ruling, see above.

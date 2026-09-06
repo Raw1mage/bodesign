@@ -49,18 +49,47 @@ so the type is fixed at the point of construction (`:45`), before the branch.
 - `grep -c 'Render a zzznope companion' services/mcp/server.py` → **0** — the probe
   returns a true zero, so the hit above is not a matching artefact.
 
-## Why it matters (the measured consequence)
+## Why it matters
 
-The upstream case needed **PNG**, to embed schematic figures into a `.docx`. The verb's
-description says PNG is available. A consumer reading only the description would
-select this verb, call it on a `.kicad_sch`, and receive a PDF — at which point the
-options are to re-convert downstream (undocumented) or abandon the verb.
+A consumer reading only the description would select this verb for a PNG need, call
+it on a `.kicad_sch`, and receive a PDF — at which point the options are to re-convert
+downstream (undocumented) or abandon the verb. **That false affordance is the defect,
+and it stands on the code measurement above alone.** It does not depend on any claim
+about who has been bitten by it.
 
-Upstream measured that `render_companion` has **zero call sites** in the consuming
-repo, and could not determine whether the cause was ① the guide never routed callers
-here, ② a caller tried it and found the format unusable, or ③ nobody read it at all.
-This BR does not resolve that either — **but ② is only possible because of this
-defect**, and it is the one cause that is fixable from inside bodesign.
+### Causal claim about the upstream v2.4 case — DOWNGRADED TO UNPROVEN HYPOTHESIS (2026-09-06)
+
+An earlier revision of this BR presented this defect as **a cause of** the upstream
+`.docx` figure problem. **That framing is withdrawn and re-labelled a hypothesis.**
+It is *not* supported by evidence, and the evidence that exists points away from it.
+
+Peer duty-officer measurement in `thesmart_products` (re-verified first-hand here,
+read-only, 2026-09-06 — `git`-family commands deliberately not used on that repo,
+its index was recently repaired and its git output is untrusted):
+
+| probe | result | control |
+| --- | --- | --- |
+| Is `mk_spec.py` a docx assembler? | **No.** Its `:3` docstring reads verbatim *"Project design.py (the electrical SSOT) into per-sheet bodesign compose specs."* | — it is a compose-spec projector, not a document builder |
+| Which `.py` under `04.btdongle/` mention `docx`? | **exactly one file**, `…/sch_gen/mk_sch2.py:122`, and that hit is a *comment about figure legibility*, not assembly code | same grep for `kicad` → **13 files**; negative control `zzznope_marker` → **0** |
+| `DELIVERY_NOTES.md` assembly record for `v2.4` | **0 hits** | `v2.1` → **5 hits**; negative control `v9.9` → **0, rc=1** |
+| Only recorded assembly path | `DELIVERY_NOTES.md:22` — v2.1 produced via the **docxmcp native chain** (`from_markdown` → `assemble`) | corroborated at `:29` ("v2.1 以同一條 docxmcp 原生鏈重建") |
+
+**Reading:** the consuming repo has *no script whose job is assembling the `.docx`*;
+the only documented assembly route is direct docxmcp tool calls. So the upstream
+document very likely never went through a bodesign render verb at all, and this
+defect **cannot be asserted as its cause**.
+
+What remains true and unaffected: `companion_render.py:45-52` hard-codes PDF on the
+`.kicad_sch` branch while `server.py:1245` advertises `(pdf/png)`. That is a
+self-contained contract defect in this repo, measured here, and it needs no consumer
+incident to justify fixing.
+
+Upstream separately measured that `render_companion` has **zero call sites** in the
+consuming repo, and could not determine whether the cause was ① the guide never
+routed callers here, ② a caller tried it and found the format unusable, or ③ nobody
+read it at all. **That remains unresolved, and given the table above ①/③ are now the
+more likely branches.** ② is a possibility this defect would enable — it is not an
+observation.
 
 ## Two repair directions (NOT adjudicated)
 
@@ -86,3 +115,8 @@ overstates, every caller that reads it is misinformed.
 - Whether `bodesign_c00_emit_prd_docx` / the docxmcp bridge offers a PNG path that
   makes this verb unnecessary for the docx use case — the upstream report explicitly
   flags that branch as unexamined, and it stays unexamined here.
+- **Whether this defect had any role in the upstream v2.4 document.** Measured
+  evidence (table above) says the consuming repo has no docx-assembling script and
+  records only a docxmcp-native assembly path, so the causal story is **unproven and
+  currently unsupported**. Not investigated further: what actually produced v2.4
+  (`DELIVERY_NOTES.md` has no v2.4 entry at all).
