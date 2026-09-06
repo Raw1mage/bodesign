@@ -147,43 +147,89 @@ mechanism is disabled). A negative control that cannot fail is not a control.
       `U*` refdes-prefix proxy here) and are deliberately NOT kept in sync. Only
       the delivery-path copy governs a C03 verdict — artifact:
       `packages/workflow-core/bodesign_workflow_core/check_c03.py`
+- [ ] 2.8 Diagnose the 7 ICs that PC-001 did NOT cover on the aiguard board
+      (`U9`, `U10`, `U11`, `U12`, `U_EE`, `U_IMU`, `U_S`, measured 2026-09-06 on
+      `experiments/aiguard_c03_verify/ccm.net`: `rails_checked=12`, 9 of 16 `U*`
+      parts examined). They are named in `ics_without_identifiable_rail`, which
+      states they were NOT looked at — it does not say why, and the two possible
+      causes need OPPOSITE fixes:
+      (a) the netlist carries no `pinfunction` on their supply pins — an
+          upstream/export problem; the fix is in whatever produced the netlist,
+          and no change to `_ic_power_rails` would help;
+      (b) the pins ARE annotated but their net name does not satisfy
+          `_polarity_of(net) == "power"` — the rail predicate is too narrow, and
+          the fix is in `check_c03.py` (`_PWR_PREFIXES` / `_PWR_PATTERN:127-129`).
+      Deciding between them is a per-ref measurement, not a judgement call: dump
+      `_netlist_pin_functions()[ref]` and the net each supply pin sits on. Until
+      this runs, PC-001's real coverage on this board is 9/16, NOT 16/16, and no
+      statement to the contrary may be made —
+      artifact: none (measurement; fix location depends on the answer)
 
 ## 3. WP3 — projection carries an executable body
 
-- [ ] 3.1 Record DD-03 in the WP3 design note: `mcp.json:14-16` declares
+- [x] 3.1 Record DD-03 in the WP3 design note: `mcp.json:14-16` declares
       `skillPaths: ["skills"]`, and `skills/bodesign/packages` does not exist in the
       repo (rc=1; control `packages/` at repo root rc=0), so `packages/` is outside
       the projection unit rather than excluded from a list. Option (a) is therefore
       not implementable as stated — artifact: `specs/architecture.md`
-- [ ] 3.2 Implement DD-04 in `_resolve_src()`: after `$BODESIGN_SRC` and the
-      existing walk-up, try a literal enumerated candidate list; accept a candidate
-      only if `<candidate>/packages/workflow-core` exists; report the accepted one
-      in `packages_root` — artifact: `skills/bodesign/scripts/gate.py:75`
-- [ ] 3.3 Keep the failure path typed and unchanged in shape: no candidate matches
+- [x] 3.2 Implement DD-04 in `_resolve_src()`: try a literal enumerated candidate
+      list; accept a candidate only if `<candidate>/packages/workflow-core` exists;
+      report the accepted one in `packages_root` — artifact:
+      `skills/bodesign/scripts/gate.py:74`.
+      TWO DEVIATIONS from the task text as written, both deliberate:
+      (i) ORDER — candidates are tried BEFORE the walk-up, not after. The walk-up
+          starts at `gate.py`'s own directory, so in the published install it can
+          only ever fail; putting it first buys nothing and makes the ordering
+          harder to reason about. In-tree runs are unaffected: the repo root IS
+          the first candidate, so it answers either way (`packages_origin`
+          reports which, so the two are no longer the same output).
+      (ii) An explicitly-set `$BODESIGN_SRC` that lacks `packages/workflow-core`
+          now raises IMMEDIATELY rather than falling through to the candidates.
+          Falling through would make an operator's typo indistinguishable from a
+          correct setting while running the roster against a tree nobody named.
+          `tests/test_landing_gate.py:68` already required this behaviour.
+- [x] 3.3 Keep the failure path typed and unchanged in shape: no candidate matches
       ⇒ `packages_resolved=false` plus the existing `code`/`message`/`hint`/`impact`
       object; no filesystem search, no partial import, no default root —
       artifact: `skills/bodesign/scripts/gate.py:99`
-- [ ] 3.4 Make every roster verb report `not-run` rather than `ok` when
+- [x] 3.4 Make every roster verb report `not-run` rather than `ok` when
       `packages_resolved=false`: the per-verb dispatch path returns a typed not-run
       status carrying the same `packages_error`, so "the verb did nothing" and "the
       verb ran and found nothing" stop sharing an output —
-      artifact: `skills/bodesign/scripts/gate.py`
-- [ ] 3.5 POSITIVE CONTROL: from the published skill directory with `BODESIGN_SRC`
-      unset, `gate.py check_c03 --repo <abs>` runs and returns a report envelope.
-      Question answered: *can a consumer holding only the projected skill execute
-      the verb the GUIDE tells them to run?* —
-      artifact: none (measurement recorded in WP3 handoff)
-- [ ] 3.6 NEGATIVE CONTROL: force `packages_resolved=false` (point every candidate
+      artifact: `skills/bodesign/scripts/gate.py`.
+      Implemented as an ADDITIVE `status` field on the envelope
+      (`ok`/`failed`/`not-run`); `ok`, `error.code`, `error.message` and
+      `error.hint` keep their existing shape, so no existing caller or test
+      changes behaviour. Resolution now has its own `try` block in `main()` —
+      only that failure is `not-run`; a verb that was reachable and refused
+      (e.g. `VERB_NOT_LANDING`) stays `failed`, which is what gives the field
+      discriminating power rather than one constant value.
+- [x] 3.5 POSITIVE CONTROL: from a scratch copy of `skills/bodesign/scripts/`
+      standing OUTSIDE the repo (no `packages/` anywhere above it — asserted, not
+      assumed, by walking every ancestor in `setUp`) with `BODESIGN_SRC` unset,
+      the roster resolves via `packages_origin == "candidate:…"` and a verb pair
+      actually executes (`c00_scaffold_prd` → `c00_readiness`), with every file
+      the envelope claims verified on disk. Question answered: *can a consumer
+      holding only the projected skill execute the verb the GUIDE tells them to
+      run?* Running the module from its in-tree path would NOT answer it — the
+      walk-up succeeds there regardless of the candidate list —
+      artifact: `tests/test_landing_gate_published_resolution.py`
+- [x] 3.6 NEGATIVE CONTROL: force `packages_resolved=false` (point every candidate
       at a directory with no `packages/workflow-core`) and assert that **every**
       verb in the roster returns `not-run`, and specifically that none returns `ok`.
-      This goes red today for a different reason — currently the call raises
-      `LANDING_PACKAGES_NOT_FOUND` rather than returning a per-verb `not-run` — so
-      the assertion distinguishes the new state from both the old failure and from
-      success — artifact: none (measurement recorded in WP3 handoff)
-- [ ] 3.7 Re-derive the candidate list in a test rather than restating it (the
+      Asserted over the WHOLE roster, not a sample, because the claim is universal.
+      Paired with a REVERSE CONTROL (`emit_fab` ⇒ `status == "failed"`) so the
+      field is shown to take more than one value — a status hard-coded to
+      `not-run` would satisfy the main assertion and measure nothing —
+      artifact: `tests/test_landing_gate_published_resolution.py`
+- [x] 3.7 Re-derive the candidate list in a test rather than restating it (the
       V4-c hand-written-list shape, `specs/architecture.md:75`); a candidate path
       that does not exist on the running host is skipped and does not alter the
-      reported error — artifact: `tests/` (test module named at implementation time)
+      reported error. Three assertions: candidates are literal absolute paths with
+      no glob metacharacters; prepending a dead path leaves `packages_root`
+      unchanged; a candidate that EXISTS but lacks `packages/workflow-core` is
+      rejected (otherwise the acceptance predicate is not actually applied) —
+      artifact: `tests/test_landing_gate_published_resolution.py`
 
 ## 4. WP4 — `bodesign_verify_netlist_fidelity`
 

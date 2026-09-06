@@ -183,7 +183,20 @@ class GateC00CycleE2ETests(unittest.TestCase):
     def test_c00_scaffold_readiness_update_emit_cycle(self):
         env, rc, _ = _run_gate("c00_scaffold_prd", "--repo", str(self.work))
         self.assertEqual(rc, 0, env)
-        self.assertTrue((self.work / "C00-PRD" / "answer_state.json").is_file())
+        # Paths come from the envelope, not from a hand-written guess. This line
+        # asserted `C00-PRD/answer_state.json` while the scaffold has always
+        # written `C00-PRD/03_output/answer_state.json`
+        # (c00_prd_template.py:184), so the module was RED at HEAD -- which cost
+        # it its whole job: a permanently-failing gate module cannot tell anyone
+        # that gate.py broke, because the new breakage hides behind the same
+        # rc=1. Reading the paths back from `result.files` also strengthens the
+        # assertion: it now checks that everything the verb CLAIMS to have
+        # written is actually on disk, rather than that one remembered path is.
+        written = env["result"]["files"]
+        self.assertIn("C00-PRD/03_output/answer_state.json", written)
+        for rel in written:
+            self.assertTrue((self.work / rel).is_file(),
+                            f"envelope claims {rel} but it is not on disk")
 
         env, rc, _ = _run_gate("c00_readiness", "--repo", str(self.work))
         self.assertEqual(rc, 0, env)

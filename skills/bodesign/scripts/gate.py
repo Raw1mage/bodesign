@@ -53,12 +53,27 @@ def _emit(envelope):
     return 0 if envelope.get("ok") else 1
 
 
-def _fail(verb, code, message, hint=None):
-    _log(f"landing_verb_error verb={verb or '-'} code={code}")
+def _fail(verb, code, message, hint=None, status="failed"):
+    """Emit the failure envelope, carrying WHICH KIND of failure it was.
+
+    `status` is the outcome codomain (plan c03_delivery_contract_and_engine_seams
+    WP3 task 3.4). `ok=false` alone collapses two different facts into one output:
+
+        "failed"  -- the verb RAN and did not succeed. Its result is a verdict.
+        "not-run" -- the verb never executed at all (packages/ unresolvable here).
+                     There is no verdict, and treating the absence of findings as
+                     a clean result is exactly the false-pass this plan removes.
+
+    The `ok` / `code` / `message` / `hint` shape is UNCHANGED so every existing
+    caller and test keeps working; `status` is additive disclosure, not a
+    replacement. A caller that ignores it is no worse off than before -- one that
+    reads it can finally tell the two apart.
+    """
+    _log(f"landing_verb_error verb={verb or '-'} code={code} status={status}")
     err = {"code": code, "message": message}
     if hint:
         err["hint"] = hint
-    return _emit({"ok": False, "verb": verb or "", "error": err})
+    return _emit({"ok": False, "verb": verb or "", "status": status, "error": err})
 
 
 def _check_python():
@@ -71,36 +86,103 @@ def _check_python():
         )
 
 
-def _resolve_src():
-    """Resolve the bodesign source root (a dir containing packages/workflow-core).
+# Literal fallback roots for the XDG-INSTALLED case (plan
+# c03_delivery_contract_and_engine_seams DD-04). The published skill tree is
+# projected from `skillPaths: ["skills"]` (mcp.json:14-16), so `packages/` is
+# structurally OUTSIDE the projection unit -- walking up from a gate.py living
+# under ~/.local/share/opencode/skills/ can never reach a repo. Without these,
+# every landing verb is unrunnable from the published install.
+#
+# DELIBERATELY LITERAL, and deliberately short. No glob, no filesystem search,
+# no $HOME scan: a search that FINDS something is indistinguishable from a
+# search that found the WRONG something, and this function's answer decides
+# which source tree the whole verb roster executes from. Two entries, both
+# naming the same path in the two spellings a deployment may use -- the second
+# lets a non-pkcs12 uid resolve without editing this file.
+_LANDING_SRC_CANDIDATES = (
+    "/home/pkcs12/projects/bodesign",
+    os.path.expanduser("~/projects/bodesign"),
+)
 
-    Order: explicit $BODESIGN_SRC, else walk up from gate.py's location (the
-    skill-shipped-in-tree case). Failure is typed — never a container fallback.
+
+def _has_packages(root):
+    """The single acceptance predicate, applied identically to every candidate.
+
+    NOTE what this does NOT prove: that the tree holds an IMPORTABLE module. A
+    directory named packages/workflow-core containing nothing satisfies this and
+    still yields ModuleNotFoundError at the first verb (BR_20260903a §7 attack 2).
+    The roster's `packages_resolved` field says so in its own comment; this
+    docstring exists so the predicate is not read as a health check either.
+    """
+    return os.path.isdir(os.path.join(root, "packages", "workflow-core"))
+
+
+def _resolve_src_origin():
+    """Resolve the bodesign source root, and say WHICH rule answered.
+
+    Returns (root, origin) where origin is one of:
+        "env:BODESIGN_SRC" | "candidate:<path>" | "walkup:<start>"
+
+    Order: explicit $BODESIGN_SRC, then the literal candidate list, then walk up
+    from gate.py's location (the skill-shipped-in-tree case). Failure is typed --
+    never a container fallback.
+
+    An explicitly-set $BODESIGN_SRC that does NOT satisfy _has_packages raises
+    IMMEDIATELY rather than falling through to the candidates. That is the whole
+    point of an explicit override: silently resolving a DIFFERENT root than the
+    operator named would make a typo indistinguishable from a correct setting,
+    and the verbs would then run against a tree nobody asked for. Fail loud on
+    the override; fall through only when there is no override to contradict.
     """
     tried = []
     env = os.environ.get("BODESIGN_SRC")
     if env:
         cand = os.path.realpath(env)
         tried.append(cand)
-        if os.path.isdir(os.path.join(cand, "packages", "workflow-core")):
-            return cand
-    else:
-        here = os.path.dirname(os.path.realpath(__file__))
-        cur = here
-        while True:
+        if _has_packages(cand):
+            return cand, "env:BODESIGN_SRC"
+        raise LandingError(
+            LANDING_PACKAGES_NOT_FOUND,
+            "BODESIGN_SRC is set to %r but it has no packages/workflow-core. "
+            "Refusing to resolve a different root than the one you named -- "
+            "unset BODESIGN_SRC to use the built-in candidates, or point it at a "
+            "bodesign repo root. tried: %s" % (cand, ", ".join(tried)),
+            hint="export BODESIGN_SRC=<bodesign repo root containing packages/*>",
+        )
+
+    for cand in _LANDING_SRC_CANDIDATES:
+        real = os.path.realpath(cand)
+        if real in tried:
+            continue          # the two spellings collapse on a pkcs12 host
+        tried.append(real)
+        if _has_packages(real):
+            return real, "candidate:%s" % cand
+
+    here = os.path.dirname(os.path.realpath(__file__))
+    cur = here
+    while True:
+        if cur not in tried:
             tried.append(cur)
-            if os.path.isdir(os.path.join(cur, "packages", "workflow-core")):
-                return cur
-            parent = os.path.dirname(cur)
-            if parent == cur:
-                break
-            cur = parent
+            if _has_packages(cur):
+                return cur, "walkup:%s" % here
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+
     raise LandingError(
         LANDING_PACKAGES_NOT_FOUND,
         "could not find bodesign packages/ (looked for packages/workflow-core); "
         "tried: " + ", ".join(tried) + ". Set BODESIGN_SRC=/path/to/bodesign repo.",
         hint="export BODESIGN_SRC=<bodesign repo root containing packages/*>",
     )
+
+
+def _resolve_src():
+    """Root only. Callers that need to report WHICH rule answered use
+    _resolve_src_origin() -- the roster does, so a reader can tell an in-tree
+    run from a published-install run without guessing from the path."""
+    return _resolve_src_origin()[0]
 
 
 def _prepend_packages(src_root):
@@ -828,9 +910,10 @@ def _list_envelope():
     # caller would get from an actual verb invocation.
     packages_resolved = False
     packages_root = None
+    packages_origin = None
     packages_error = None
     try:
-        packages_root = _resolve_src()
+        packages_root, packages_origin = _resolve_src_origin()
     except LandingError as error:
         packages_error = {"code": error.code, "message": error.message}
         if error.hint:
@@ -857,6 +940,12 @@ def _list_envelope():
                        # evidence a verb runs is running one.
                        "packages_resolved": packages_resolved,
                        "packages_root": packages_root,
+                       # WHICH rule answered: "env:BODESIGN_SRC" |
+                       # "candidate:<path>" | "walkup:<start>". Without it, an
+                       # in-tree run and a published-install run that happen to
+                       # land on the same root are the same output, and a
+                       # candidate silently shadowing a walk-up is invisible.
+                       "packages_origin": packages_origin,
                        "packages_error": packages_error,
                        "verbs": verbs,
                        # BR_20260730 round 7: `--repo` is enforced for EVERY verb
@@ -944,11 +1033,19 @@ def main(argv=None):
         return _emit(_list_envelope())
 
     verb = ns.verb or ""
+
+    # (2)+(3) resolve packages + sys.path — no container fallback.
+    # Handled in its OWN try so the outcome can be typed `not-run`: nothing in
+    # the roster executed, so this is not a verdict about the verb. Every other
+    # LandingError below concerns a verb that was at least reachable, and stays
+    # `failed`.
     try:
-        # (2)+(3) resolve packages + sys.path — no container fallback
         src = _resolve_src()
         _prepend_packages(src)
+    except LandingError as error:
+        return _fail(verb, error.code, error.message, error.hint, status="not-run")
 
+    try:
         # (4) verb lookup: unknown vs known-heavy
         if not verb:
             raise LandingError(VERB_ARGS_INVALID, "no verb given; run --list to enumerate landing verbs")
@@ -976,7 +1073,7 @@ def main(argv=None):
         traceback.print_exc(file=sys.stderr)
         return _fail(verb, VERB_RUNTIME_ERROR, f"{type(error).__name__}: {error}")
     _log(f"landing_verb_ok verb={verb}")
-    return _emit({"ok": True, "verb": verb, "result": result})
+    return _emit({"ok": True, "verb": verb, "status": "ok", "result": result})
 
 
 if __name__ == "__main__":
