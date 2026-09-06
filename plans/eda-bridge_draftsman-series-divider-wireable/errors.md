@@ -17,7 +17,7 @@
 | declare_circuit | `"rejected"` | failed | 跑了、判定不通過。**帶 `errors[]` 非空** | `declare.py::declare_circuit` 拒絕出口（GRAFCET step 10 / step 7） |
 | declare_circuit | `"not_run"` | not-run | **根本沒展開**：`declarations` 缺欄、schema 不合、引用了未宣告的 ref | `declare.py::_validate_input`，在展開器被呼叫**之前**（GRAFCET step 2） |
 | declare_circuit | `"empty"` | empty | 跑完了，但 `declarations` 是空陣列 ⇒ 產出 0 net 0 node | `declare.py::_expand` 入口的顯式分支，**不與 `ok` 共用**（GRAFCET step 4） |
-| declare_circuit | `"indeterminate"` | indeterminate | 展開成功但**有 gate 無法判定**（見下） | `declare.py::declare_circuit` 降級出口（GRAFCET step 12） |
+| declare_circuit | `"indeterminate"` | indeterminate | 展開成功、**`spec` 照常產出**，但**有 gate 無法判定**（見下） | `declare.py::declare_circuit` 降級出口（GRAFCET step 12） |
 | completeness_gate | `"pass"` | ok | 每支已宣告的腳恰好出現一次 | `declare.py::check_completeness` 回傳（IDEF0 A4） |
 | completeness_gate | `"fail"` | failed | 有缺項或重複，`missing[]` / `duplicated[]` 非空 | `declare.py::check_completeness` 回傳（IDEF0 A4） |
 | completeness_gate | `"not_run"` | not-run | 展開在此之前就失敗，gate **從未被呼叫**——與「檢查過且全綠」必須分得開 | `declare.py::declare_circuit` 早退路徑，gate 呼叫點之前 |
@@ -46,6 +46,40 @@
 `declarations: []` 會產出一份語法合法的空 spec，而 `BR_20260730b` 記錄過
 **「空 spec 四閘齊綠」**——四個 gate 全部通過一份什麼都沒有的輸入。
 `ok` 與 `empty` 共用同一個 status 就是那張 BR 的複製。
+
+### `indeterminate` 仍然給 spec —— 「驗不了」不等於「產不出」
+
+**這一格 2026-09-07 修正。原本 `indeterminate` 回 `spec=null`，是錯的。**
+
+`spec` 是**宣告的函數，不是 symbol library 的函數**。`{components, nets, nc}` 的每一個欄位
+都來自 caller 宣告的內容——沒有任何一格需要知道 `Device:R` 有幾支腳。
+pin list 只用在**一件事**：完整性 gate（DD-5「每支腳恰好出現一次」）。
+
+原本的寫法把兩件事綁在同一個 return 上：
+
+```
+檢不了完整性  ⇒  連 spec 都不給
+```
+
+**因果方向是反的**，而代價是實測到的：lean core 容器沒有 KiCad symbol library
+（`/usr/share/kicad/symbols` 不存在，EE worker 則有 224 個），於是它**什麼都宣告不了**——
+即使宣告拓樸根本不需要 KiCad。
+
+這與本檔 `vacuous` 那一格是**同一個病的不同外觀**：
+
+| | 兩個被混在一起的事實 | 共用的輸出 |
+|---|---|---|
+| `vacuous` | 「零元件所以沒得檢」 vs 「檢過了全對」 | `pass` |
+| 本格 | 「完整性未驗」 vs 「產不出 spec」 | `spec=null` |
+
+**修法**：`indeterminate` 照常給 `spec`，語意維持不變——
+缺的是**判決**（verdict），不是**產物**。`completeness.verdict` 仍為 `unknown`、
+`unknown[]` 仍逐筆列出讀不到的 symbol，所以沒有任何一格宣稱這份 spec 被背書過。
+
+**為什麼不另立第六個 status**：`indeterminate` 的定義本來就是「跑了，判不出來」，
+它從未承諾「所以我不給你產物」。真正壞掉的是實作，不是值域。
+多開一格會讓契約表變成「四個正常態 + 兩個各自解釋 spec 有沒有」，
+而那正是 codomain 契約要消滅的東西。
 
 ### `indeterminate` 的具體來源（不是佔位）
 

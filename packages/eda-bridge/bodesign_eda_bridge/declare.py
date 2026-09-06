@@ -781,7 +781,27 @@ def declare_circuit(
     spec = {"components": list(components), "nets": nets, "nc": list(ex.nc)}
 
     if gate.verdict == GATE_UNKNOWN:
+        # THE SPEC IS A FUNCTION OF THE DECLARATION, NOT OF THE SYMBOL LIBRARY.
+        #
+        # Every field of {components, nets, nc} comes from what the caller
+        # declared; not one of them needs to know how many pins Device:R has.
+        # A pin list is used for exactly ONE thing -- the completeness gate
+        # ("does every pin appear exactly once", DD-5).
+        #
+        # This branch used to return spec=null, which made two different facts
+        # share one output: "I could not CHECK completeness" became "I could
+        # not PRODUCE a spec", and the causal direction is backwards. A core
+        # container with no KiCad libraries could then declare nothing at all,
+        # even though declaring topology needs no KiCad. Same shape as the
+        # `vacuous` case in check_completeness: an unverifiable result and an
+        # absent result must not be the same value.
+        #
+        # `indeterminate` keeps its meaning -- the VERDICT is missing, not the
+        # product. completeness.verdict stays `unknown` and unknown[] names
+        # every symbol that could not be read, so nothing here claims this spec
+        # was vouched for.
         result["status"] = STATUS_INDETERMINATE
+        result["spec"] = spec
         result["unknown"] = list(gate.unknown) + load_notes
         return result
 
