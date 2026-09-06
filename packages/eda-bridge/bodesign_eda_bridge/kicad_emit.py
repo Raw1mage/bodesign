@@ -2049,9 +2049,32 @@ def emit_kicad_schematic(
             for (jx, jy) in junctions:
                 junction_blocks.append(_junction_block(jx, jy))
                 junction_points.append((jx, jy, net.name))
-            # one local label on the trunk's left end to name the net
-            trunk = segments[0]
-            _place_local_label(net.name, trunk[0][0], trunk[0][1], [trunk[0], trunk[1]])
+            # round 13: ONE LOCAL LABEL PER FRAGMENT, not per net.
+            #
+            # A blocked hop SPLITS the chain (see the `continue` at the hop guard
+            # above), and the split branch's own comment states the contract that
+            # makes a split safe: "every fragment gets its own net-name label,
+            # which is precisely how the wholesale fallback connected those same
+            # pins". Labelling `segments[0]` honoured that for the FIRST fragment
+            # only -- every later fragment carried drawn copper with NO net name,
+            # i.e. an electrically floating island that LOOKS wired.
+            #
+            # Measured (13-component synthetic board, power rails routed): VCC
+            # produced 2 fragments and 1 label; `verify_partition_fidelity`
+            # reported all 5 of its nodes as `disconnected`. GND produced 1
+            # fragment and was unaffected -- which is why the defect survived:
+            # the single-fragment case (the common one) is byte-identical either
+            # way, so nothing failed until a hop was actually blocked.
+            #
+            # This is a LABEL-coverage fix and touches no geometry: segments,
+            # junctions and reservations above are unchanged. The separate
+            # cross-net fusion defect (a junction landing mid-span on another
+            # net's wire, `_route_clears_points` being vertex-only) is NOT
+            # addressed here and stays open.
+            for _frag in _sig_frags:
+                _ftrunk = _frag["segs"][0]
+                _place_local_label(net.name, _ftrunk[0][0], _ftrunk[0][1],
+                                   [_ftrunk[0], _ftrunk[1]])
         else:
             # label fallback: power, single-pin, unresolved, or style=label
             # power_ports=False (dense castellated-edge / connector pages, e.g. the
