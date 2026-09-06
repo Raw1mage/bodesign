@@ -1,0 +1,198 @@
+{
+  "diagram_title": "C03 delivery contract and engine seams",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Define C03 delivery contract",
+      "description": "Rewrite the stage contract so the deliverable is a frozen, version-controlled netlist and the docx is its projection (WP1).",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Adjudicate delivery pipeline",
+      "description": "Record DD-01 (MCP pipeline is the delivery path, skill pipeline is an internal tool) and derive the migration list, including PC-001 relocation and drawing-rule ownership (WP2).",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Resolve executable body for projected skill",
+      "description": "Make gate.py resolve packages/ under an XDG install, or report packages_resolved=false and return not-run per verb (WP3).",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Verify netlist fidelity",
+      "description": "Compare the spec partition against emitted .net files, reporting fused/split/node_diff/nc_wired independently and never reporting ok from an empty read (WP4).",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Suggest passive network",
+      "description": "Expose design_suggest as an MCP verb returning evidence-backed suggestions with review_required always true, and widen pin-class coverage (WP5).",
+      "decomposition": null
+    },
+    {
+      "id": "A6",
+      "title": "Gate schematic readability",
+      "description": "Project route_stats into form-axis thresholds and report gate_axis=form with does_not_authorize=electrical_correctness (WP6).",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    {
+      "id": "AR1",
+      "source": "EXTERNAL",
+      "target": "A1:input",
+      "type": "input",
+      "label": "current GUIDE.md deliverable table"
+    },
+    {
+      "id": "AR2",
+      "source": "EXTERNAL",
+      "target": "A1:control",
+      "type": "control",
+      "label": "user ruling 2026-09-06; RCA root cause G"
+    },
+    {
+      "id": "AR3",
+      "source": "EXTERNAL",
+      "target": "A1:mechanism",
+      "type": "mechanism",
+      "label": "opencode skill resync"
+    },
+    {
+      "id": "AR4",
+      "source": "A1:output",
+      "target": "A4:control",
+      "type": "output",
+      "label": "frozen netlist contract"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A2:input",
+      "type": "input",
+      "label": "two-pipeline inventory; PC-001 location"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "DD-01 pipeline adjudication"
+    },
+    {
+      "id": "AR7",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "specs/architecture.md"
+    },
+    {
+      "id": "AR8",
+      "source": "A2:output",
+      "target": "A6:control",
+      "type": "output",
+      "label": "drawing-rule ownership map"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A3:input",
+      "type": "input",
+      "label": "projected skill tree without packages"
+    },
+    {
+      "id": "AR10",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "type": "control",
+      "label": "DD-03 and DD-04 no silent fallback"
+    },
+    {
+      "id": "AR11",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "gate.py _resolve_src"
+    },
+    {
+      "id": "AR12",
+      "source": "A3:output",
+      "target": "A4:mechanism",
+      "type": "output",
+      "label": "runnable verb roster"
+    },
+    {
+      "id": "AR13",
+      "source": "EXTERNAL",
+      "target": "A4:input",
+      "type": "input",
+      "label": "spec nets; emitted net files; nc_declared"
+    },
+    {
+      "id": "AR14",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "type": "mechanism",
+      "label": "fidelity.py parse_net_file and compare_partitions"
+    },
+    {
+      "id": "AR15",
+      "source": "A4:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "electrical verdict with nets_parsed"
+    },
+    {
+      "id": "AR16",
+      "source": "EXTERNAL",
+      "target": "A5:input",
+      "type": "input",
+      "label": "MPN; pin class; design context"
+    },
+    {
+      "id": "AR17",
+      "source": "EXTERNAL",
+      "target": "A5:control",
+      "type": "control",
+      "label": "DD-02 suggest not decide; review_required true"
+    },
+    {
+      "id": "AR18",
+      "source": "EXTERNAL",
+      "target": "A5:mechanism",
+      "type": "mechanism",
+      "label": "design_suggest.py and ragbase KB anchors"
+    },
+    {
+      "id": "AR19",
+      "source": "A5:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "evidence-backed draft for human review"
+    },
+    {
+      "id": "AR20",
+      "source": "EXTERNAL",
+      "target": "A6:input",
+      "type": "input",
+      "label": "route_stats wired labelled junctions"
+    },
+    {
+      "id": "AR21",
+      "source": "EXTERNAL",
+      "target": "A6:mechanism",
+      "type": "mechanism",
+      "label": "BR_20260905 real-board thresholds"
+    },
+    {
+      "id": "AR22",
+      "source": "A6:output",
+      "target": "EXTERNAL",
+      "type": "output",
+      "label": "form-axis verdict authorizing nothing electrical"
+    }
+  ]
+}

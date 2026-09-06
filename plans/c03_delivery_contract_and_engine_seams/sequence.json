@@ -1,0 +1,209 @@
+[
+  {
+    "title": "A4 — bodesign_verify_netlist_fidelity: status resolution never passes an unread input",
+    "participants": [
+      "Caller",
+      "server.py handler",
+      "fidelity.net_adapter",
+      "fidelity.compare_partitions",
+      "status_resolver"
+    ],
+    "messages": [
+      {
+        "from": "Caller",
+        "to": "server.py handler",
+        "label": "invoke {spec, emitted[], nc_declared[]}"
+      },
+      {
+        "from": "server.py handler",
+        "to": "status_resolver",
+        "label": "precondition check: spec present, emitted non-empty"
+      },
+      {
+        "from": "status_resolver",
+        "to": "Caller",
+        "label": "ALT precondition unmet: status=not-run, exit 2, no comparison attempted"
+      },
+      {
+        "from": "server.py handler",
+        "to": "fidelity.net_adapter",
+        "label": "parse each emitted .net, union-find merge across sheets"
+      },
+      {
+        "from": "fidelity.net_adapter",
+        "to": "status_resolver",
+        "label": "return (classes, nets_parsed, unreadable_paths[])"
+      },
+      {
+        "from": "status_resolver",
+        "to": "Caller",
+        "label": "ALT nets_parsed==0 OR unreadable_paths non-empty: status=indeterminate, exit 2 — set BEFORE any comparison (DD-06)"
+      },
+      {
+        "from": "status_resolver",
+        "to": "fidelity.compare_partitions",
+        "label": "compare spec partition vs emitted classes"
+      },
+      {
+        "from": "fidelity.compare_partitions",
+        "to": "status_resolver",
+        "label": "fused / split / node_diff{spec_only, emitted_only}; nc_declared pins excluded from fused into nc_wired"
+      },
+      {
+        "from": "status_resolver",
+        "to": "Caller",
+        "label": "all five difference fields empty: status=ok exit 0; else status=failed exit 1"
+      }
+    ]
+  },
+  {
+    "title": "A3 — gate.py packages resolution under XDG install",
+    "participants": [
+      "Consumer",
+      "gate.py CLI",
+      "_resolve_src",
+      "verb dispatch"
+    ],
+    "messages": [
+      {
+        "from": "Consumer",
+        "to": "gate.py CLI",
+        "label": "gate.py check_c03 --repo <abs> from published skill"
+      },
+      {
+        "from": "gate.py CLI",
+        "to": "_resolve_src",
+        "label": "resolve packages root"
+      },
+      {
+        "from": "_resolve_src",
+        "to": "_resolve_src",
+        "label": "tier 1: $BODESIGN_SRC"
+      },
+      {
+        "from": "_resolve_src",
+        "to": "_resolve_src",
+        "label": "tier 2: walk up from gate.py location (cannot succeed under XDG)"
+      },
+      {
+        "from": "_resolve_src",
+        "to": "_resolve_src",
+        "label": "tier 3: enumerated candidate list, accept only if <cand>/packages/workflow-core exists (DD-04, no filesystem search)"
+      },
+      {
+        "from": "_resolve_src",
+        "to": "verb dispatch",
+        "label": "ALT resolved: packages_root reported, verb runs"
+      },
+      {
+        "from": "_resolve_src",
+        "to": "verb dispatch",
+        "label": "ALT unresolved: packages_resolved=false + packages_error{code,message,hint,impact}"
+      },
+      {
+        "from": "verb dispatch",
+        "to": "Consumer",
+        "label": "unresolved: every roster verb returns not-run carrying packages_error — never ok"
+      }
+    ]
+  },
+  {
+    "title": "A5 — bodesign_design_suggest: suggest, never decide",
+    "participants": [
+      "Caller",
+      "server.py handler",
+      "design_suggest rules",
+      "ragbase KB",
+      "Human reviewer"
+    ],
+    "messages": [
+      {
+        "from": "Caller",
+        "to": "server.py handler",
+        "label": "invoke {mpn, pin_class, context}"
+      },
+      {
+        "from": "server.py handler",
+        "to": "design_suggest rules",
+        "label": "dispatch by pin_class"
+      },
+      {
+        "from": "design_suggest rules",
+        "to": "Caller",
+        "label": "ALT no KB anchor for class: status=no-rule, empty suggestions, no numeric value"
+      },
+      {
+        "from": "design_suggest rules",
+        "to": "ragbase KB",
+        "label": "resolve rule anchor (fallbackApplied read; an or-degraded hit is not a hit)"
+      },
+      {
+        "from": "ragbase KB",
+        "to": "design_suggest rules",
+        "label": "rule body: formula + provenance + confidence"
+      },
+      {
+        "from": "design_suggest rules",
+        "to": "Caller",
+        "label": "ALT required input unresolvable or value outside validated window: status=indeterminate, no value forced"
+      },
+      {
+        "from": "design_suggest rules",
+        "to": "Caller",
+        "label": "status=suggested, each value carrying evidence{kb_object, formula, provenance}, review_required=true"
+      },
+      {
+        "from": "Caller",
+        "to": "Human reviewer",
+        "label": "draft fragment — the verb writes no files and does not mutate the spec (DD-02)"
+      },
+      {
+        "from": "Human reviewer",
+        "to": "Caller",
+        "label": "reviewer commits the fragment into the spec by hand"
+      }
+    ]
+  },
+  {
+    "title": "A6 — form-axis readability verdict alongside the A4 electrical verdict",
+    "participants": [
+      "Caller",
+      "composer",
+      "readability_gate",
+      "verify_netlist_fidelity",
+      "Delivery reader"
+    ],
+    "messages": [
+      {
+        "from": "Caller",
+        "to": "composer",
+        "label": "compose_schematic"
+      },
+      {
+        "from": "composer",
+        "to": "readability_gate",
+        "label": "route_stats {wired_nets, labelled_nets, label_fallback_reasons[drawn_fragments], junctions}"
+      },
+      {
+        "from": "readability_gate",
+        "to": "Delivery reader",
+        "label": "ALT route_stats absent: status=not-run — absence is not a pass"
+      },
+      {
+        "from": "readability_gate",
+        "to": "Delivery reader",
+        "label": "ALT route_stats disagrees with the emitted drawing: status=indeterminate, both numbers reported"
+      },
+      {
+        "from": "readability_gate",
+        "to": "Delivery reader",
+        "label": "form verdict + gate_axis=form + does_not_authorize[electrical_correctness], on pass and fail alike (DD-07)"
+      },
+      {
+        "from": "verify_netlist_fidelity",
+        "to": "Delivery reader",
+        "label": "electrical verdict — reported alongside, never replaced by, the form verdict"
+      }
+    ]
+  }
+]

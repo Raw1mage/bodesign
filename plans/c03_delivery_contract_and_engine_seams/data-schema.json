@@ -1,0 +1,203 @@
+{
+  "schemas": [
+    {
+      "name": "C03_Netlist_Freeze.json",
+      "kind": "json",
+      "notes": "WP1/DD-05. The freeze record promoted to the stage root alongside C03_<product>.net. Tracked in version control; its absence beside an existing .net is C03_NETLIST_FREEZE_MISSING.",
+      "fields": [
+        {
+          "name": "product",
+          "type": "string",
+          "notes": "product slug; matches the C03_<product>.net filename"
+        },
+        {
+          "name": "frozen_at",
+          "type": "string (ISO-8601)",
+          "notes": "when the freeze was taken"
+        },
+        {
+          "name": "emitting_revision",
+          "type": "string",
+          "notes": "engine revision that produced the .net files (git sha or container rev)"
+        },
+        {
+          "name": "entries",
+          "type": "array<FreezeEntry>",
+          "notes": "one per emitted .net; an empty array is the `empty` outcome, not a pass"
+        },
+        {
+          "name": "fidelity_verdict",
+          "type": "string",
+          "notes": "the bodesign_verify_netlist_fidelity status recorded at freeze time: ok | failed | not-run | indeterminate. Anything other than ok makes the freeze check fail."
+        }
+      ]
+    },
+    {
+      "name": "FreezeEntry",
+      "kind": "json",
+      "notes": "WP1/DD-05. One emitted netlist file inside C03_Netlist_Freeze.json.entries.",
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "notes": "path of the emitted .net relative to the stage root"
+        },
+        {
+          "name": "sha256",
+          "type": "string",
+          "notes": "digest of the file at freeze time; a mismatch on disk is C03_NETLIST_FREEZE_STALE"
+        },
+        {
+          "name": "nets_parsed",
+          "type": "int",
+          "notes": "net blocks parsed from this file; 0 makes the freeze check fail rather than pass"
+        }
+      ]
+    },
+    {
+      "name": "verify_netlist_fidelity.input",
+      "kind": "message",
+      "notes": "WP4 MCP verb input. The spec schema carries inner field descriptions — the RCA section 3-F defect was an opaque {type: object}.",
+      "fields": [
+        {
+          "name": "spec",
+          "type": "object {net: array<[ref, pin]>}",
+          "notes": "the expected partition; each key is a net name, each value a list of [ref, pin] pairs"
+        },
+        {
+          "name": "emitted",
+          "type": "array<string>",
+          "notes": "paths of KiCad .net exports; nets of the same name on different sheets are merged by shared node"
+        },
+        {
+          "name": "nc_declared",
+          "type": "array<[ref, pin]>",
+          "notes": "pins the spec declares no-connect; a declared pin found with peers lands in nc_wired and is excluded from fused"
+        }
+      ]
+    },
+    {
+      "name": "verify_netlist_fidelity.output",
+      "kind": "message",
+      "notes": "WP4 MCP verb output. Five difference fields stay independent because their fixes differ; status never reaches ok from an unread input (DD-06).",
+      "fields": [
+        {
+          "name": "status",
+          "type": "enum {ok, failed, not-run, indeterminate}",
+          "notes": "exit 0 for ok, 1 for failed, 2 for not-run and indeterminate"
+        },
+        {
+          "name": "nets_parsed",
+          "type": "int",
+          "notes": "0 forces indeterminate before any comparison runs"
+        },
+        {
+          "name": "fused",
+          "type": "array<string>",
+          "notes": "nodes that gained peers only — short / fusion; NC-declared pins excluded"
+        },
+        {
+          "name": "split",
+          "type": "array<string>",
+          "notes": "nodes that lost peers only — open circuit"
+        },
+        {
+          "name": "node_diff",
+          "type": "object {spec_only: array<string>, emitted_only: array<string>}",
+          "notes": "nodes present on one side only, singleton exemptions applied symmetrically and reported"
+        },
+        {
+          "name": "nc_wired",
+          "type": "array<string>",
+          "notes": "declared-NC pins the emitter connected to something; new in WP4 — fidelity.py has zero nc_ occurrences today"
+        },
+        {
+          "name": "unreadable_paths",
+          "type": "array<string>",
+          "notes": "emitted paths that could not be read or parsed; non-empty forces indeterminate. Replaces the swallowing continue at fidelity.py:220"
+        }
+      ]
+    },
+    {
+      "name": "design_suggest.output",
+      "kind": "message",
+      "notes": "WP5 MCP verb output. committed is not a member of the status codomain, so no input can produce it (DD-02 property 1).",
+      "fields": [
+        {
+          "name": "status",
+          "type": "enum {suggested, no-rule, indeterminate}",
+          "notes": "no-rule means no KB anchor covered the pin class; indeterminate means a rule applied but its input or window did not resolve"
+        },
+        {
+          "name": "suggestions",
+          "type": "array<object>",
+          "notes": "topology + values; empty whenever status is not suggested"
+        },
+        {
+          "name": "evidence",
+          "type": "object {kb_object, formula, provenance, confidence}",
+          "notes": "attached to every numeric value; a value without kb_object cannot be emitted"
+        },
+        {
+          "name": "review_required",
+          "type": "boolean (constant true)",
+          "notes": "asserted by test for every input in the matrix, not merely set by convention (DD-02 property 2)"
+        }
+      ]
+    },
+    {
+      "name": "readability_gate.report",
+      "kind": "json",
+      "notes": "WP6 output. gate_axis and does_not_authorize are report FIELDS, not prose, so an aggregator cannot drop them by reformatting (DD-07).",
+      "fields": [
+        {
+          "name": "status",
+          "type": "enum {ok, failed, not-run, indeterminate}",
+          "notes": "not-run when route_stats is absent; indeterminate when route_stats disagrees with the emitted drawing"
+        },
+        {
+          "name": "gate_axis",
+          "type": "string (constant form)",
+          "notes": "names the axis this verdict belongs to"
+        },
+        {
+          "name": "does_not_authorize",
+          "type": "array<string> containing electrical_correctness",
+          "notes": "emitted on pass and fail alike"
+        },
+        {
+          "name": "measurements",
+          "type": "object {junctions, stub_share, wired_nets, labelled_nets, antifusion_downgrades, drawn_fragments}",
+          "notes": "projected from route_stats; each compared against a threshold citing its BR_20260905 section 8.5 line"
+        },
+        {
+          "name": "corpus",
+          "type": "string",
+          "notes": "which spec was scored; thresholds are scale-dependent, so a synthetic corpus may supplement but never decide (BR_20260905 section 8.5.5)"
+        }
+      ]
+    },
+    {
+      "name": "gate.py --list envelope (packages disclosure)",
+      "kind": "json",
+      "notes": "WP3. Fields already exist at gate.py:845-861; WP3 extends resolution, not the disclosure shape.",
+      "fields": [
+        {
+          "name": "packages_resolved",
+          "type": "boolean",
+          "notes": "true proves only that packages/workflow-core resolved as a directory — not that any verb will run (gate.py:849)"
+        },
+        {
+          "name": "packages_root",
+          "type": "string | null",
+          "notes": "which candidate answered; new information under DD-04's enumerated tier"
+        },
+        {
+          "name": "packages_error",
+          "type": "object {code, message, hint, impact} | null",
+          "notes": "verbatim LandingError; no fallback attempted on failure"
+        }
+      ]
+    }
+  ]
+}

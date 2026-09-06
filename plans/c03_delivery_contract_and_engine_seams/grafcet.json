@@ -1,0 +1,122 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Rewrite GUIDE.md C03 delivery contract: netlist freeze rule MANDATORY, docx demoted to projection, 02_build exclusion narrowed to admit the two promoted freeze artifacts",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      5
+    ],
+    "LinkOutputNumber": [
+      1
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "netlist_freeze_section_mandatory_count >= 1 AND docx_is_not_sole_bold_row"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Write DD-01 into specs/architecture.md, adjudicate PC-001 destination, emit migration list and 8-rule ownership map",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      0
+    ],
+    "LinkOutputNumber": [
+      2
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "PC-001 reachable from packages tree AND every drawing rule has a named owner"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Extend gate.py _resolve_src with the enumerated candidate tier; make every roster verb return not-run when packages_resolved is false",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      1
+    ],
+    "LinkOutputNumber": [
+      3
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "published skill runs check_c03 without BODESIGN_SRC AND unresolved state yields not-run for every verb"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Add the net-file adapter and nc_wired computation to fidelity.py, resolve status per DD-06, register handler and schema in server.py, map exit codes 0 1 2",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      2
+    ],
+    "LinkOutputNumber": [
+      4
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "declared NC tied to GND lands in nc_wired not fused AND empty net file yields indeterminate AND mutation of the swallowing continue turns the suite red"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Register bodesign_design_suggest handler and schema, build the nine-class KB coverage table reading fallbackApplied, extend rules in the recorded order, record DD-02",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      3
+    ],
+    "LinkOutputNumber": [
+      5
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "I2C pull-up returns suggested with KB anchor AND uncovered pin class returns no-rule with no value AND review_required is true for every input"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A6",
+    "StepType": "normal",
+    "StepAction": "Project route_stats into form-axis thresholds calibrated on the real board; emit gate_axis form and does_not_authorize electrical_correctness in every report",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      4
+    ],
+    "LinkOutputNumber": [
+      0
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "power-clustering fixture passes the form gate while carrying does_not_authorize AND readable drawing passes AND absent route_stats yields not-run"
+    ],
+    "SubGrafcet": []
+  }
+]

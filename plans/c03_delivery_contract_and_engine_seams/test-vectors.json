@@ -1,0 +1,208 @@
+[
+  {
+    "id": "TV-1",
+    "description": "WP4 positive control — a pin declared NC that the emitter tied to GND (the BR_20260905 D1.5 case) lands in nc_wired and NOT in fused. Today fidelity.py has zero nc_ occurrences, so this input is currently indistinguishable from a real short.",
+    "input": {
+      "spec": {
+        "GND": [["C1", "2"], ["U1", "10"]]
+      },
+      "emitted": ["fixture/d1_5_nc_tied_to_gnd.net"],
+      "nc_declared": [["D1", "5"]],
+      "emitted_content_note": "the .net places D1.5 in the GND net alongside C1.2 and U1.10"
+    },
+    "expected": {
+      "status": "failed",
+      "exit_code": 1,
+      "nc_wired": ["D1.5"],
+      "fused": [],
+      "nets_parsed": 1
+    }
+  },
+  {
+    "id": "TV-2",
+    "description": "WP4 negative control A — an emitted .net that parses to zero nets yields indeterminate, never ok. On today's path the equivalent input returns ok=True whenever the spec holds only single-pin nets (RCA 10.3(c)).",
+    "input": {
+      "spec": {
+        "ISOLATED": [["R1", "1"]]
+      },
+      "emitted": ["fixture/empty.net"],
+      "nc_declared": []
+    },
+    "expected": {
+      "status": "indeterminate",
+      "exit_code": 2,
+      "nets_parsed": 0,
+      "note": "status is set before any comparison runs (DD-06); the difference fields are not consulted"
+    }
+  },
+  {
+    "id": "TV-3",
+    "description": "WP4 negative control A-prime — an unreadable emitted path yields indeterminate and names the path, rather than being skipped by a bare continue (the fidelity.py:220 shape).",
+    "input": {
+      "spec": {
+        "NET_A": [["R1", "1"], ["R2", "2"]]
+      },
+      "emitted": ["fixture/does_not_exist.net"],
+      "nc_declared": []
+    },
+    "expected": {
+      "status": "indeterminate",
+      "exit_code": 2,
+      "unreadable_paths": ["fixture/does_not_exist.net"]
+    }
+  },
+  {
+    "id": "TV-4",
+    "description": "WP4 precondition — an empty emitted list is not-run, distinct from indeterminate: nothing was read because nothing was offered.",
+    "input": {
+      "spec": {
+        "NET_A": [["R1", "1"], ["R2", "2"]]
+      },
+      "emitted": [],
+      "nc_declared": []
+    },
+    "expected": {
+      "status": "not-run",
+      "exit_code": 2
+    }
+  },
+  {
+    "id": "TV-5",
+    "description": "WP4 clean path — a faithful emit over two sheets sharing a net by name merges into one class and returns ok.",
+    "input": {
+      "spec": {
+        "VBUS": [["J1", "A4"], ["F1", "1"]],
+        "GND": [["C1", "2"], ["J1", "A1"]]
+      },
+      "emitted": ["fixture/sheet_power.net", "fixture/sheet_io.net"],
+      "nc_declared": []
+    },
+    "expected": {
+      "status": "ok",
+      "exit_code": 0,
+      "fused": [],
+      "split": [],
+      "node_diff": {"spec_only": [], "emitted_only": []},
+      "nc_wired": [],
+      "nets_parsed": 4,
+      "note": "nets_parsed counts net blocks across both sheets before the cross-sheet merge"
+    }
+  },
+  {
+    "id": "TV-6",
+    "description": "WP5 positive control — a covered pin class returns suggested with a KB anchor.",
+    "input": {
+      "mpn": "any",
+      "pin_class": "io_gpio_i2c_pullup",
+      "context": {"rail": "+1V8", "bus_capacitance_pf": 100, "speed_hz": 400000}
+    },
+    "expected": {
+      "status": "suggested",
+      "review_required": true,
+      "evidence": {"kb_object": "control.sch.pullup-termination-sizing"},
+      "note": "every numeric value carries its own evidence block"
+    }
+  },
+  {
+    "id": "TV-7",
+    "description": "WP5 negative control — a pin class with no KB anchor surviving the fallbackApplied check returns no-rule with no value. A guessed number here would be the exact fabrication the netlist-synthesis-gap red line forbids.",
+    "input": {
+      "mpn": "any",
+      "pin_class": "boot_strapping",
+      "context": {}
+    },
+    "expected": {
+      "status": "no-rule",
+      "suggestions": [],
+      "review_required": true,
+      "note": "no numeric value is emitted; status is never suggested"
+    }
+  },
+  {
+    "id": "TV-8",
+    "description": "WP5 indeterminate — a rule covers the class but no typical value fits the computed window; the rule warns rather than forcing a value (design_suggest.py:106-115).",
+    "input": {
+      "mpn": "any",
+      "pin_class": "io_gpio_i2c_pullup",
+      "context": {"rail": "+1V8", "bus_capacitance_pf": 900, "speed_hz": 1000000}
+    },
+    "expected": {
+      "status": "indeterminate",
+      "review_required": true,
+      "note": "the computed Rp_min/Rp_max window is reported; no typical is forced into it"
+    }
+  },
+  {
+    "id": "TV-9",
+    "description": "WP6 negative control — the BR_20260905 8.5.2 power-clustering measurement. Every form threshold is met while fidelity moved=67 including an open circuit. The form gate PASSES and still carries does_not_authorize, so the form verdict alone cannot be read as electrical approval.",
+    "input": {
+      "route_stats": {"junctions": 43, "stub_share": 0.327, "subcircuits": 11, "antifusion_downgrades": 0},
+      "corpus": "btdongle real spec, 45 components / 27 nets",
+      "concurrent_fidelity_moved": 67
+    },
+    "expected": {
+      "status": "ok",
+      "gate_axis": "form",
+      "does_not_authorize": ["electrical_correctness"],
+      "note": "the gate must NOT block on this input and must NOT assert anything electrical; the open circuit is WP4's finding, not WP6's"
+    }
+  },
+  {
+    "id": "TV-10",
+    "description": "WP6 baseline — HEAD on the real board fails the form thresholds. This is the label-farm state the package exists to make visible (BR_20260905 8.5.1, independently reproduced four ways).",
+    "input": {
+      "route_stats": {"junctions": 5, "stub_share": 0.730, "subcircuits": 3, "antifusion_downgrades": 3},
+      "corpus": "btdongle real spec, 45 components / 27 nets"
+    },
+    "expected": {
+      "status": "failed",
+      "gate_axis": "form",
+      "does_not_authorize": ["electrical_correctness"],
+      "note": "names which thresholds were unmet"
+    }
+  },
+  {
+    "id": "TV-11",
+    "description": "WP6 not-run — a compose result with no route_stats (connection_style=netlist, where composer.py:281 types it RouteStats or None). Absence must never read as a pass.",
+    "input": {
+      "route_stats": null,
+      "corpus": "any"
+    },
+    "expected": {
+      "status": "not-run",
+      "gate_axis": "form",
+      "does_not_authorize": ["electrical_correctness"]
+    }
+  },
+  {
+    "id": "TV-12",
+    "description": "WP3 negative control — with every candidate pointing at a directory holding no packages/workflow-core, every roster verb returns not-run and none returns ok.",
+    "input": {
+      "BODESIGN_SRC": null,
+      "candidates": ["fixture/empty_root_a", "fixture/empty_root_b"],
+      "invoked_verb": "check_c03"
+    },
+    "expected": {
+      "packages_resolved": false,
+      "packages_root": null,
+      "packages_error_code": "LANDING_PACKAGES_NOT_FOUND",
+      "verb_status": "not-run",
+      "note": "assert across the WHOLE roster, not just one verb; no verb may return ok"
+    }
+  },
+  {
+    "id": "TV-13",
+    "description": "WP3 positive control — a candidate holding packages/workflow-core is accepted and reported by name, so the caller can see which root answered.",
+    "input": {
+      "BODESIGN_SRC": null,
+      "candidates": ["fixture/empty_root_a", "/home/pkcs12/projects/bodesign"],
+      "invoked_verb": "check_c03"
+    },
+    "expected": {
+      "packages_resolved": true,
+      "packages_root": "/home/pkcs12/projects/bodesign",
+      "verb_status": "ok",
+      "note": "packages_resolved true proves only that the directory resolved (gate.py:849), not that the verb is healthy; verb_status is the separate claim"
+    }
+  }
+]
