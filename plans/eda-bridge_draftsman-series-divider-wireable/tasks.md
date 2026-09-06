@@ -70,11 +70,36 @@ verb 可達（非僅字串存在）                   NEGCTRL 回顯我送的假
 （`_guard_route` 只對「已註冊 wire segment」防護）**其集合恆為空集**。
 **在那格修好之前不要動這個 Phase。**
 
-- [ ] 3.1 確認前置：`reserve_wire_ok > 0`（現況 0/71）
+- [x] 3.1 確認前置：`reserve_wire_ok > 0`（round 7 treatment 量到 40，原 0/71）
+      —— **但這一格不足以授權 3.2–3.4**，見下方 3.0。
+- [ ] 3.0 **（round 11 新增的硬前置）** 先解 daisy_chain 的跨 net 熔接根因。
+      round 11 在 scratch tree 重測（產品碼未改）：power rail 改走 drawn path 後
+      `moved 0 → 20`（fused 15 / disconnected 5），歸因逐項量到
+      **SIG_A 的 R1.1 R2.1 被熔進 GND**，熔接點 (161.29,96.52) / (161.29,120.65) /
+      (184.15,120.65) 逐一指認為 **GND 的 pin site C2.2 / R4.2 / R3.2**。
+      ⇒ 這正是 `BR_20260905` §8.5.2 的 open-circuit 缺陷，**在 wire 帳本修好之後
+      仍然成立**。`_foreign_pin_points` 已在 HEAD（`kicad_emit.py:1902/1940`）
+      卻沒擋住它——原因待查（本輪只量測不修）。
+      **3.2/3.3 在這格綠之前不要動。**
 - [ ] 3.2 `composer.py` 的 power net 分支讀 `render_plan`
 - [ ] 3.3 `local_star` / `daisy_chain` 兩種展開的幾何實作
+      —— ⚠ 這會是 `_PERPENDICULAR_OK_KINDS` / `path_clear` perp 豁免的
+      **第一個非既有呼叫端**。若 hop 不經 `_guard_route`，T 接觸會漏成跨 net
+      短路且無任何告警（見 `occupancy.py` `path_clear` docstring 第 3 句）。
 - [ ] 3.4 真板驗收：btdongle GND `daisy_chain` 後，`#PWR` glyph 數下降、
       junction 上升，且 **fidelity `moved` 維持 10**（不得因此惡化）
+      —— **狀態：`not-run`，不是 `pass`。** 本 repo **無 btdongle fixture**
+      （round 11 量測：`find . -iname '*btdongle*'` → 0 命中；控制組
+      `find tests -name 'test_fidelity*'` → 5 檔，證明搜尋窗口是真的）。
+      `btdongle` 只以**字串**存在於 `PROVENANCE.md` / `readability_gate.py` /
+      `test_consumer_fork_drift.py` 與本包四份 md。
+      **判準不降級**（dispatcher round 11 裁決）：真板 fixture 的取得歸
+      dispatcher（`thesmart_products` 為 GUEST repo，本包不得碰）。
+- [ ] 3.4a 合成 fixture 檢查（**輔助，非驗收**）：以本 repo 內合成的 power-heavy
+      spec 量 `#PWR` glyph / junction / `moved`。
+      **它不是 3.4、不能替代 3.4、通過它不構成 Phase 3 的驗收。**
+      理由：本 repo 三個月 40 張 BR 的形狀就是「每一格都綠、板子畫不出來」；
+      把真板判準改寫成合成判準，是那個模式的下一次發作。
 
 ## 4. Consumer 遷移與收尾
 
