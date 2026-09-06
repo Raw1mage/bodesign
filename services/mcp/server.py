@@ -498,6 +498,22 @@ def _h_verify_netlist_fidelity(a: dict) -> Any:
         return out
 
 
+def _h_design_suggest(a: dict) -> Any:
+    from bodesign_eda_bridge.design_suggest import (DesignSuggestInputError,
+                                                    design_suggest)
+    try:
+        return design_suggest(mpn=a.get("mpn"), pin_class=a.get("pin_class"),
+                              context=a.get("context"))
+    except DesignSuggestInputError as error:
+        # Off the `status` axis on purpose (errors.md WP5): a caller who mistyped
+        # a class name or omitted the pin list has learned nothing about KB
+        # coverage, and `no-rule` would send them to write a rule they do not need.
+        out = {"ok": False, "error": {"code": error.code, "message": error.message}}
+        if error.hint:
+            out["error"]["hint"] = error.hint
+        return out
+
+
 def _h_check_c03(a: dict) -> Any:
     from bodesign_workflow_core import check_c03
     # netlist_path / covers_boards MUST be forwarded: BR_20260730 F2 added R5
@@ -1063,6 +1079,18 @@ def _h_kb_get(a: dict) -> Any:
 
 
 _STR = {"type": "string"}
+
+# Imported rather than restated: the nine pin classes are declared once, in the
+# module that routes on them. A hand-copied enum here would drift silently, and
+# the drift would surface as a schema advertising a class the router refuses --
+# i.e. the tool description itself would become the false statement.
+try:
+    from bodesign_eda_bridge.design_suggest import PIN_CLASSES as _SUGGEST_PIN_CLASSES
+except ImportError:  # pragma: no cover - packages/ unresolvable in this process
+    # Fail LOUD at schema-build time rather than shipping a tool whose enum is
+    # an empty list (which would reject every call with an unhelpful message).
+    raise
+
 TOOLS: list[dict] = [
     # R15 self-describing guide (plans/mcp_r15-self-describing-guide DD-1/DD-5):
     # served IN-PROCESS by run_tool (no registry handler); handler=None is a
@@ -1194,6 +1222,17 @@ TOOLS: list[dict] = [
          "nc_declared": {"type": "array", "items": {},
                          "description": "pins the design DECLARES not-connected, as [[ref, pin], ...]. Any of these found on a multi-node net in the export is reported in `nc_wired`. Omit it and `nc_wired` is always empty \u2014 which means absent, NOT verified-clean."}},
          "required": ["spec", "emitted"]}},
+    {"name": "bodesign_design_suggest", "handler": _h_design_suggest,
+     "description": "Evidence-backed DRAFT suggestion for one pin class — it SUGGESTS, it never DECIDES. Every returned value is computed from a KB rule and stamped with `evidence.kb_object`; `review_required` is true on EVERY path including the ones that suggest nothing, and `committed` is not a member of the status codomain, so no code path can mark a suggestion as adopted (plan c03_delivery_contract_and_engine_seams DD-02). READ `status` FIRST, and note that THREE of its outcomes return zero suggestions for three DIFFERENT reasons: `suggested` = a KB rule covers this class and produced >=1 value, each carrying its own evidence; `no-rule` WITH AN EMPTY `evidence` block = the class has NO KB anchor at all (nothing ran, so no value could exist — distil a rule into KB before expecting an answer here); `no-rule` WITH A POPULATED `evidence` block = a rule DID run and the supplied context named zero pins of that class (ran, nothing to do); `indeterminate` = a rule covers the class but cannot yield a value — either a required electrical input is unresolvable, or (analog-reference today) the anchor states an OBLIGATION without a value. Which classes are answerable is decided by MEASURED KB coverage, not by plausibility: `power` uses control.power.decoupling-pdn-strategy (0.1uF per 2 power pins, ~15uF bulk per 10, placement <=1.25cm, TI SPRABV2, confidence=verified); `analog-reference` maps to step.sch.mcu-adc-frontend-review, whose entire VREF content is the sentence 'VREF/analog-supply pins get required filtering and grounding' — an obligation with NO capacitance, formula or window, so that class returns `indeterminate` with the obligation named rather than the customary 100nF, because attaching a real KB id to a value the object does not contain is worse than no answer. `ground`, `reset-en`, `boot-strapping` and `nc-dnc` returned no class-specific anchor when queried on 2026-09-06 and therefore return `no-rule`; `clock`, `io-gpio` and `high-speed` are served today by the dedicated suggest_* entry points. A malformed call (unknown pin_class, missing pin list) is `ok:false` with code DESIGN_SUGGEST_INPUT_INVALID, NOT a status — a typo teaches you nothing about KB coverage. Deterministic, side-effect free: the input is never mutated and no file is written.",
+     "schema": {"type": "object", "properties": {
+         "mpn": {"type": "string",
+                 "description": "the part this pin belongs to; echoed into the result for traceability. It does NOT select a rule — rules are chosen by pin_class — so an unknown MPN never degrades the answer."},
+         "pin_class": {"type": "string",
+                       "enum": list(_SUGGEST_PIN_CLASSES),
+                       "description": "one of the nine classes from skills/bodesign/stages/c03-ee/references/pinout-to-circuit-method.md:32-47. A class with no KB anchor returns `no-rule` and an empty suggestion list — NEVER a guessed value. An unsupported class is not an error: it is the honest answer that no rule exists."},
+         "context": {"type": "object",
+                     "description": "per-class inputs. pin_class='power' requires context.power_pins (a list of pin ids — the cap count IS ceil(pins/2), so an absent list has no honest default) and accepts rail, ref, ground_net. pin_class='analog-reference' requires context.vref_pins and accepts ref. A missing required key is DESIGN_SUGGEST_INPUT_INVALID rather than a zero-count answer, because 'you gave me no pins' and 'this part has no such pins' must not share an output."}},
+         "required": ["pin_class"]}},
     {"name": "bodesign_check_c03", "handler": _h_check_c03,
      "description": "C03→C04 STAGE-ENTRY gate (BR_20260707): deterministic machine check that C03 (EE) delivery is complete BEFORE C04 layout may start — the entry counterpart to check_c04's output gate. Reads the BOM csv (+ optional Pin_Allocation.csv SSOT + frozen_pad_counts) and HARD-FAILS (gate=FAIL, refuse C04 entry) on: R1 BOM schema lint (column-count/quoting breakage, bad status enum, duplicate (board,ref)); R2 readiness (any draft/blocked row; a finalized row whose mpn carries TBC/TBD/UNDECIDED); R3 drawability (every row needs a symbol-source marker: official|vendor+LCSC|manual|N-A); R4 SSOT crosscheck (active parts U/J/Y/SW must appear in Pin_Allocation.csv — catches the U4 wireless-scheme conflict class; J_* pad counts must match frozen_pad_counts when provided); R5 BOM<->netlist (every BOM row must exist as a drawn symbol) and R6 pin-spec polarity, both requiring netlist_path; R7 datasheet-mandated passives (an adjustable buck missing its feedforward cap / FB divider — an ABSENT PART, which no connectivity rule and no ERC can express) and R8 switch-node shorts (a switching or feedback pin sitting on a power rail — electrically LEGAL, so ERC is silent while the converter is destroyed), both requiring netlist_path with pinfunction annotations; PC-001 passive completeness (an active IC whose power rails carry ZERO rail→GND decoupling — a pinout-only placement that cannot physically work, and that passes ERC, DRC and every connectivity rule; relocated into this delivery path by plan c03_delivery_contract_and_engine_seams DD-01/DD-08, reported under passive_completeness, PRESENCE only and subject set selected by a U* refdes-prefix proxy, with ICs whose supply pins could not be identified named in ics_without_identifiable_rail rather than folded into the green). stock=0 is a non-blocking warn. READ not_checked FIRST: it is ALWAYS non-empty, in BOTH pass and fail, and lists the defect classes this gate structurally does NOT examine (decoupling adequacy BEYOND rail→GND presence — PC-001 checks that at least one decoupling cap exists per identified rail, never its value/count/placement; loop compensation, component VALUES, sequencing, thermal, ESD, analog SI). A PASS means 'the wiring agrees with the paperwork', NOT 'this circuit is correct' — two board-killing defects once passed every rule AND ERC and were caught only because a human happened to read a datasheet (BR_20260802). Each of R4–R8 also reports status='run'|'not_run' so a caller can never mistake 'never looked' for 'looked, clean'. Fail-fast on absent/empty inputs (BOM_MISSING/BOM_EMPTY/PIN_ALLOC_MISSING). Gate values NEVER relaxed to pass (check_c04 floating-PSRAM false-pass lesson). Pure python, runs in core.",
      "schema": {"type": "object", "properties": {"bom_csv": _STR, "pin_allocation_csv": _STR,

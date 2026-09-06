@@ -134,7 +134,15 @@ The last row is new information this package produced, and it changes WP3's shap
   Rejected alternative: keeping `design_suggest` unexposed until synthesis is
   solved — the measured cost of that choice is that the module has existed since
   commit `d1ab7fd` with its own unit test as its only caller.
-  `ledger: spec_record_decision #9`
+  `ledger: spec_record_decision #9`, amended by `#11` (implementation round,
+  2026-09-06). The amendment sharpens property (3) and adds one finding the
+  design stage could not have had: an anchor that states an OBLIGATION is not an
+  anchor that states a VALUE. `step.sch.mcu-adc-frontend-review` carries only the
+  former, so analog-reference is implemented and still cannot reach `suggested` —
+  see §"The two anchors are NOT equally usable". Property (3) is now tested by
+  resolving each `kb_object` against `.specbase/ragbase.sqlite` with a
+  fabricated-id control, because asserting the field is non-empty would pass for
+  an invented id — the exact failure the property exists to catch.
 
 - **DD-03 — WP3's premise from RCA §10.9 #6 ("is excluding `packages/` deliberate
   or an oversight?") is a false dichotomy; the measured answer is a third one.**
@@ -258,6 +266,20 @@ The last row is new information this package produced, and it changes WP3's shap
   `.kicad_sch` — that reads the emitter's output through a second parser and
   reintroduces the drift the `label_nets`-passing comment at `:1790` explicitly
   removed.
+- **DD-02 amendment (implementation round, 2026-09-06)** — recorded in the event
+  ledger as `spec_record_decision #11`. This file keeps DD-01..DD-10 as its
+  numbering; #11 is the ledger's running sequence for the same DD-02, not an
+  eleventh decision. Substance: the four DD-02 properties survive contact with the
+  implementation, with property (3) sharpened from "carries an `evidence` block"
+  to "carries a `kb_object` that RESOLVES against `.specbase/ragbase.sqlite`",
+  tested with a fabricated-id control — a non-emptiness assertion would pass for
+  an invented id, which is the exact failure the property exists to catch. One
+  finding the design stage could not have had: **an anchor that states an
+  OBLIGATION is not an anchor that states a VALUE**, so a class can be covered and
+  still be unable to reach `suggested` (§"The two anchors are NOT equally usable").
+  Implemented: `power` (`suggested`) and `analog-reference` (`indeterminate`
+  always). Real-board figures and the annotation limit behind the seven
+  zero-subject results are in §"WP5 real-board measurement".
 
 ## WP5 KB coverage — measured, not assumed
 
@@ -307,6 +329,60 @@ governed on a typical board — (1) Power/decoupling (every VDD/VCC/AVDD/VBAT pi
 every active part), (2) Analog-reference (VREF/VRES, typically 1–3 pins on parts
 that have an ADC at all). The three already implemented (I²C pull-up, crystal load
 caps, series termination) are not re-ordered.
+
+### The two anchors are NOT equally usable — measured 2026-09-06
+
+The coverage table above answers *does an anchor exist*. Implementation forced a
+second question the table does not ask: **does the anchor carry a VALUE?** The two
+surviving classes answer it differently, and that difference decides their arms.
+
+| anchor | confidence | what the body actually contains | can it yield a value? |
+|---|---|---|---|
+| `control.power.decoupling-pdn-strategy` | `verified` | a literal checker: 0.1µF per 2 power pins, ~15µF bulk per 10 power pins, decoupling ≤1.25cm, TI SPRABV2 | **yes** — `suggested` |
+| `step.sch.mcu-adc-frontend-review` | `partial`, `extraction_status=raw-only` | one obligation sentence: *"VREF/analog-supply pins get required filtering and grounding"* — no capacitance, no formula, no validated window | **no** — `indeterminate` |
+
+Read in full from `.specbase/ragbase.sqlite` (`ragbase_objects`, 1196 chars for the
+ADC object), with a control: `SELECT` on a fabricated id returns no row, so the
+absence of a formula is a reading of the object rather than a failed query.
+
+**Consequence.** Analog-reference is implemented but can never reach `suggested`.
+Emitting the customary 100nF would attach a REAL KB id to a number the object does
+not contain — worse than no answer, because the evidence block would make the guess
+look sourced. The arm therefore returns `indeterminate` and names the obligation,
+which is real information (this pin needs filtering) without being a value. Under
+DD-02 property (3) an anchor that states an obligation is not an anchor that states
+a value, and the codomain already had the right cell for that distinction.
+
+### WP5 real-board measurement — `experiments/aiguard_c03_verify/ccm.net`
+
+Parse controls first, because the first attempt produced a confident wrong number:
+a regex whose block-body lookahead never matched reported `U* refs = 0` against 281
+net blocks — a zero from a broken pattern, indistinguishable in shape from a board
+with no ICs. Re-measured with a sequential line scan and each count cross-checked
+against a raw token count: nets 282, nodes 637 (raw `(node ` = 637), `power_in` 59
+(raw `pintype "power_in"` = 59), control `ZZZ*` refs = 0.
+
+| ref | `power_in` pins | status | 0.1µF | bulk | kb_object |
+|---|---|---|---|---|---|
+| U1 | 55 | `suggested` | 28 | 6 | `control.power.decoupling-pdn-strategy` |
+| U2 | 4 | `suggested` | 2 | 1 | `control.power.decoupling-pdn-strategy` |
+| U3, U5, U6, U7, U8, UB1, UW1 | 0 | `no-rule` (zero-subject arm) | — | — | anchor named in `evidence` |
+
+Totals: 30 × 0.1µF, 7 × 15µF bulk across 9 U\* refs; distribution `suggested`×2,
+`no-rule`×7. No class returned `indeterminate` on this board, and no VREF/AREF net
+exists in `ccm.net`, so the analog-reference arm has **no real-board exercise** —
+stated rather than inferred from its absence in the table.
+
+**Why 7 of 9 ICs report zero power pins — diagnosed, not left as a number.** Their
+pins carry `pintype` `unspecified` or `passive`, never `power_in`: U3 24 pins
+(15 unspecified / 9 unspecified+no_connect), UB1 65, UW1 49, U5 6, U6/U7/U8 4–6
+passive. Only U1 (55 `power_in`) and U2 (4) annotate supply pins at all. So the
+seven `no-rule` results are a property of **this netlist's annotation**, not of the
+parts — the same limitation that put 7 ICs in PC-001's
+`ics_without_identifiable_rail` (WP2 round 3d). The zero-subject arm is the correct
+output for them (a rule ran, the context named no pins of the class), and it is
+distinguishable from an uncovered class because `evidence` is populated. What it is
+NOT is evidence that those parts need no decoupling.
 
 ## WP3 candidate roots and the projection's current state
 

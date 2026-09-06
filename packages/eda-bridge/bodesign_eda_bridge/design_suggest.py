@@ -754,3 +754,281 @@ def suggest_crystal_load_caps(intent: dict) -> dict:
 
     result["note"] = " ".join(note_parts)
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# WP5 — `bodesign_design_suggest`: the pin-class router
+# ══════════════════════════════════════════════════════════════════════════
+# plan c03_delivery_contract_and_engine_seams WP5, DD-02, errors.md §WP5.
+#
+# The nine pin classes come from
+# skills/bodesign/stages/c03-ee/references/pinout-to-circuit-method.md:32-47.
+# Which of them this verb may answer is decided by MEASURED KB coverage
+# (design.md §WP5 KB coverage), never by what feels reasonable: a class with no
+# anchor returns `no-rule` and no value, because DD-02 property (3) says a value
+# without an `evidence.kb_object` is a fabrication regardless of how right it looks.
+
+SUGGEST_STATUSES = ("suggested", "no-rule", "indeterminate")
+
+#: DD-02 property (1), asserted BY CONSTRUCTION rather than by convention.
+#: `committed` is not a member of the codomain, so no code path can emit it --
+#: a suggestion that could mark itself committed would be deciding, which is the
+#: line `concept.bodesign.netlist-synthesis-gap` forbids this layer to cross.
+assert "committed" not in SUGGEST_STATUSES
+
+PIN_CLASSES = (
+    "power", "ground", "clock", "reset-en", "boot-strapping",
+    "analog-reference", "io-gpio", "high-speed", "nc-dnc",
+)
+
+DESIGN_SUGGEST_INPUT_INVALID = "DESIGN_SUGGEST_INPUT_INVALID"
+
+
+class DesignSuggestInputError(ValueError):
+    """A refusal about the INPUT, deliberately off the `status` axis.
+
+    A caller who omitted `pin_class` has not discovered that a class is
+    uncovered -- they have a typo. Returning `no-rule` would tell them the KB is
+    missing a rule, sending them to write one for a question they never asked.
+    """
+
+    def __init__(self, message: str, hint: str | None = None):
+        super().__init__(message)
+        self.code = DESIGN_SUGGEST_INPUT_INVALID
+        self.message = message
+        self.hint = hint
+
+
+# ── Power / decoupling rule (control.power.decoupling-pdn-strategy) ──────────
+# The ONLY class among the four newly-queried ones whose anchor carries an
+# actionable checker rather than an obligation sentence. Transcribed from the KB
+# body (TI SPRABV2): 0.1uF per 2 power pins, ~15uF bulk per 10 power pins,
+# decoupling within 1.25cm of the IC. `confidence=verified` in the KB row.
+_PWR_KB_OBJECT = "control.power.decoupling-pdn-strategy"
+_PWR_KB_FORMULA = ("pin caps = ceil(power_pins / 2) x 0.1uF; "
+                   "bulk = ceil(power_pins / 10) x ~15uF; placement <= 1.25cm")
+_PWR_KB_PROVENANCE = "TI SPRABV2 (BGA decoupling / PDN strategy); TMS320 5.6 for the 1.25cm figure"
+_PWR_KB_CONFIDENCE = "verified"
+
+_PWR_PIN_CAP_VALUE = "0.1uF"
+_PWR_PINS_PER_CAP = 2
+_PWR_BULK_VALUE = "15uF"
+_PWR_PINS_PER_BULK = 10
+_PWR_MAX_DISTANCE_CM = 1.25
+
+
+def _power_evidence() -> dict:
+    return {
+        "kb_object": _PWR_KB_OBJECT,
+        "formula": _PWR_KB_FORMULA,
+        "provenance": _PWR_KB_PROVENANCE,
+        "confidence": _PWR_KB_CONFIDENCE,
+    }
+
+
+def _suggest_power_decoupling(context: dict) -> dict:
+    """Decoupling cascade for one rail, counted from its power pins.
+
+    Returns the {status, suggestions, evidence, ...} body; the caller stamps the
+    envelope. Raises DesignSuggestInputError when the context does not name the
+    pins -- a count is the whole input, and defaulting it to zero would produce
+    a confident "no caps needed".
+    """
+    pins = context.get("power_pins")
+    if pins is None:
+        raise DesignSuggestInputError(
+            "context.power_pins is required for pin_class='power': the cap count "
+            "IS ceil(pins/2), so an absent pin list has no honest default",
+            hint='pass context={"power_pins": ["1", "12", ...], "rail": "+3V3"}')
+    if not isinstance(pins, (list, tuple)):
+        raise DesignSuggestInputError(
+            "context.power_pins must be a list of pin identifiers, got "
+            f"{type(pins).__name__}")
+
+    rail = context.get("rail") or context.get("pull_rail") or "VCC"
+    ref = context.get("ref") or context.get("mpn") or "U?"
+    count = len(pins)
+
+    if count == 0:
+        # ZERO-SUBJECT ARM (errors.md: `no-rule` with empty suggestions, class
+        # `empty`). The rule ran and matched the class; the board simply has no
+        # pin of it. `evidence` is populated precisely so this is distinguishable
+        # from the uncovered-class arm, which carries none.
+        return {
+            "status": "no-rule",
+            "suggestions": [],
+            "evidence": _power_evidence(),
+            "reason": (
+                f"rule {_PWR_KB_OBJECT} covers pin_class='power' and executed, but "
+                f"the supplied context names zero power pins on {ref} -- nothing "
+                "to suggest. This is NOT an uncovered class: the evidence block "
+                "above names the rule that found nothing to do."),
+            "rule_matched": True,
+        }
+
+    pin_caps = -(-count // _PWR_PINS_PER_CAP)      # ceil
+    bulk_caps = -(-count // _PWR_PINS_PER_BULK)    # ceil
+
+    suggestions = [
+        {
+            "component": {"type": "capacitor", "value": _PWR_PIN_CAP_VALUE,
+                          "count": pin_caps,
+                          "placement": f"local to {ref} power pins, <= {_PWR_MAX_DISTANCE_CM}cm",
+                          "net_from": rail, "net_to": context.get("ground_net", "GND")},
+            "basis": (f"{count} power pin(s) / {_PWR_PINS_PER_CAP} per cap "
+                      f"= {pin_caps} x {_PWR_PIN_CAP_VALUE} (ceil)"),
+            "evidence": _power_evidence(),
+        },
+        {
+            "component": {"type": "capacitor", "value": _PWR_BULK_VALUE,
+                          "count": bulk_caps,
+                          "placement": f"bulk for rail {rail}; may sit further than the pin caps",
+                          "net_from": rail, "net_to": context.get("ground_net", "GND")},
+            "basis": (f"{count} power pin(s) / {_PWR_PINS_PER_BULK} per bulk cap "
+                      f"= {bulk_caps} x {_PWR_BULK_VALUE} (ceil)"),
+            "evidence": _power_evidence(),
+        },
+    ]
+    return {
+        "status": "suggested",
+        "suggestions": suggestions,
+        "evidence": _power_evidence(),
+        "computed": {"power_pins": count, "pin_caps": pin_caps,
+                     "bulk_caps": bulk_caps, "rail": rail,
+                     "max_distance_cm": _PWR_MAX_DISTANCE_CM},
+        "rule_matched": True,
+    }
+
+
+# ── Analog-reference rule (step.sch.mcu-adc-frontend-review) ────────────────
+# MEASURED LIMIT, and it decides the shape of this arm. The anchor was read in
+# full (1196 chars, `confidence=partial`, `extraction_status=raw-only`) and its
+# entire VREF content is ONE obligation line:
+#
+#     "VREF/analog-supply pins get required filtering and grounding"
+#
+# There is no capacitance, no formula, no validated window -- "required" is not
+# a value. So this class CANNOT reach `suggested`: emitting the customary 100nF
+# would be a fabrication wearing this object's id, which is worse than no answer
+# because the evidence block would make it look sourced. The anchor supports an
+# OBLIGATION (this pin must be filtered) but not a VALUE, and `indeterminate`
+# with the obligation named is the honest projection of exactly that.
+_AREF_KB_OBJECT = "step.sch.mcu-adc-frontend-review"
+_AREF_KB_PROVENANCE = "evidence-first KiCad schematic review methodology (repo tier)"
+_AREF_KB_CONFIDENCE = "partial"
+_AREF_KB_OBLIGATION = (
+    "VREF/analog-supply pins get required filtering and grounding")
+
+
+def _aref_evidence() -> dict:
+    return {
+        "kb_object": _AREF_KB_OBJECT,
+        "formula": None,
+        "obligation": _AREF_KB_OBLIGATION,
+        "provenance": _AREF_KB_PROVENANCE,
+        "confidence": _AREF_KB_CONFIDENCE,
+        "value_bearing": False,
+    }
+
+
+def _suggest_analog_reference(context: dict) -> dict:
+    """Report the VREF filtering OBLIGATION; never invent its value.
+
+    Always `indeterminate` (unresolved-input arm): the anchor states that
+    filtering is required and does not state what it is. The obligation is
+    returned so the caller learns the pin needs attention -- which is real
+    information, and is not the same as a suggestion.
+    """
+    pins = context.get("vref_pins")
+    if pins is None:
+        raise DesignSuggestInputError(
+            "context.vref_pins is required for pin_class='analog-reference'",
+            hint='pass context={"vref_pins": ["14"], "ref": "U3"}')
+    if not isinstance(pins, (list, tuple)):
+        raise DesignSuggestInputError(
+            "context.vref_pins must be a list of pin identifiers, got "
+            f"{type(pins).__name__}")
+
+    ref = context.get("ref") or context.get("mpn") or "U?"
+    return {
+        "status": "indeterminate",
+        "suggestions": [],
+        "evidence": _aref_evidence(),
+        "obligation": {
+            "applies_to": [f"{ref}.{p}" for p in pins],
+            "statement": _AREF_KB_OBLIGATION,
+        },
+        "reason": (
+            f"{_AREF_KB_OBJECT} states the filtering OBLIGATION for VREF pins but "
+            "carries no capacitance, formula or validated window -- 'required "
+            "filtering' is not a value. Emitting a customary 100nF here would "
+            "attach this object's id to a number it does not contain. The pin "
+            "needs filtering; the value must come from the part's datasheet or "
+            "from a rule distilled into KB first."),
+        "rule_matched": True,
+    }
+
+
+#: Class -> the callable that answers it. MEMBERSHIP IS THE CONTRACT: a class
+#: absent from this table returns `no-rule`, and the only way in is a measured,
+#: non-degraded KB anchor (design.md WP5 KB coverage). Ground, reset-en,
+#: boot-strapping and nc-dnc are deliberately absent -- their queries returned no
+#: class-specific anchor on 2026-09-06.
+_CLASS_RULES = {
+    "power": _suggest_power_decoupling,
+    "analog-reference": _suggest_analog_reference,
+}
+
+
+def design_suggest(mpn=None, pin_class=None, context=None) -> dict:
+    """Route a pin class to its KB-anchored rule, or refuse to answer.
+
+    Returns {status, mpn, pin_class, suggestions, evidence, review_required, ...}
+    with `status` in SUGGEST_STATUSES. `review_required` is True on EVERY path,
+    including the ones that suggest nothing: this layer never decides.
+
+    Raises DesignSuggestInputError (code DESIGN_SUGGEST_INPUT_INVALID) for an
+    input it cannot accept at all. That is deliberately NOT a status: a caller
+    who mistyped a class name has not learned anything about KB coverage.
+    """
+    if not pin_class:
+        raise DesignSuggestInputError(
+            "pin_class is required; one of: " + ", ".join(PIN_CLASSES))
+    if pin_class not in PIN_CLASSES:
+        raise DesignSuggestInputError(
+            f"unknown pin_class {pin_class!r}; one of: " + ", ".join(PIN_CLASSES),
+            hint="the nine classes come from pinout-to-circuit-method.md:32-47")
+    ctx = copy.deepcopy(context or {})   # read-only snapshot; never mutate input
+
+    rule = _CLASS_RULES.get(pin_class)
+    if rule is None:
+        # UNCOVERED-CLASS ARM. `evidence` is EMPTY here and populated in the
+        # zero-subject arm -- that difference is the only thing separating
+        # "no rule exists" from "a rule ran and found nothing", and both say
+        # `no-rule` with an empty suggestion list.
+        return {
+            "status": "no-rule",
+            "mpn": mpn,
+            "pin_class": pin_class,
+            "suggestions": [],
+            "evidence": {},
+            "rule_matched": False,
+            "reason": (
+                f"pin_class {pin_class!r} has no KB anchor surviving the "
+                "fallbackApplied check (design.md WP5 KB coverage, measured "
+                "2026-09-06). No rule executed, so no value can exist. Distil a "
+                "rule into KB before expecting a suggestion here -- a value "
+                "produced without an evidence.kb_object is a fabrication."),
+            "review_required": True,
+        }
+
+    body = rule(ctx)
+    body.update({"mpn": mpn, "pin_class": pin_class, "review_required": True})
+    # DD-02 property (1), enforced at the exit rather than trusted: a rule that
+    # returned an off-codomain status is a programming error, and letting it
+    # through would put an unvetted word where callers read the verdict.
+    if body["status"] not in SUGGEST_STATUSES:
+        raise AssertionError(
+            f"rule for {pin_class!r} returned status {body['status']!r}, "
+            f"outside {SUGGEST_STATUSES}")
+    return body

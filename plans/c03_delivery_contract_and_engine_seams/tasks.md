@@ -305,20 +305,20 @@ mechanism is disabled). A negative control that cannot fail is not a control.
 
 ## 5. WP5 — `bodesign_design_suggest`
 
-- [ ] 5.1 Define the verb contract: input `{mpn, pin_class, context}`; output
+- [x] 5.1 Define the verb contract: input `{mpn, pin_class, context}`; output
       `{status, suggestions:[…], evidence:{…}, review_required}` with
       `status ∈ {suggested, no-rule, indeterminate}` and `review_required` constant
       `true` — artifact: `services/mcp/server.py`
-- [ ] 5.2 Register handler and schema (two sites), with the schema describing
+- [x] 5.2 Register handler and schema (two sites), with the schema describing
       `pin_class` as one of the nine classes from
       `references/pinout-to-circuit-method.md:32-47` and stating that an
       unsupported class returns `no-rule`, never a value —
       artifact: `services/mcp/server.py`
-- [ ] 5.3 Assert DD-02 property (1) by construction and (2) by test: `committed` is
+- [x] 5.3 Assert DD-02 property (1) by construction and (2) by test: `committed` is
       not a member of the status codomain, and `review_required` is `true` for
       every input in the test matrix —
       artifact: `tests/` (test module named at implementation time)
-- [ ] 5.4 Build the nine-class coverage table. For each class in
+- [x] 5.4 Build the nine-class coverage table. For each class in
       `pinout-to-circuit-method.md:32-47`, record the KB anchor found by an actual
       `ragbase_query`, reading `fallbackApplied` on every result: an or-degraded hit
       is **not** a hit (RCA §8 item 14 measured a nonsense query returning
@@ -335,20 +335,20 @@ mechanism is disabled). A negative control that cannot fail is not a control.
       `matchMode=and-tokens`, `fallbackApplied=false`. This task is now to keep
       that table current, not to produce it —
       artifact: `plans/c03_delivery_contract_and_engine_seams/design.md`
-- [ ] 5.5 Implement in the order fixed by the coverage table (see `design.md` §WP5):
+- [x] 5.5 Implement in the order fixed by the coverage table (see `design.md` §WP5):
       (1) Power/decoupling, (2) Analog-reference. Only these two of the five
       previously-open classes have a non-degraded anchor; the other three
       (Ground, Reset-EN, Boot-strapping, NC-DNC) are `no-rule` classes in the WP5
       contract and are NOT implemented. Ordering basis: anchor-bearing first, then
       pin count governed on a typical board —
       artifact: `plans/c03_delivery_contract_and_engine_seams/design.md`
-- [ ] 5.6 Record DD-02 via `spec_record_decision` so the adjudication lives in the
+- [x] 5.6 Record DD-02 via `spec_record_decision` so the adjudication lives in the
       event ledger, not only in this file — artifact: `verb:spec_record_decision`
-- [ ] 5.7 POSITIVE CONTROL: an I²C pull-up request returns `status="suggested"`
+- [x] 5.7 POSITIVE CONTROL: an I²C pull-up request returns `status="suggested"`
       with an `evidence.kb_object` of `control.sch.pullup-termination-sizing`.
       Question answered: *does a supported class return a sourced value?* —
       artifact: `tests/` (test module named at implementation time)
-- [ ] 5.8 NEGATIVE CONTROL: a pin class with no KB rule returns `status="no-rule"`
+- [x] 5.8 NEGATIVE CONTROL: a pin class with no KB rule returns `status="no-rule"`
       with an empty suggestion list — it must not return a guessed value and must
       not return `suggested`. The control is red if any code path can emit a number
       without an `evidence.kb_object` —

@@ -31,6 +31,8 @@ from .kicad_emit import (
 )
 from .fidelity import (FidelityError, FidelityInputError, FidelityReport,
                        verify_netlist_fidelity, verify_partition_fidelity)
+from .design_suggest import (PIN_CLASSES, SUGGEST_STATUSES,
+                             DesignSuggestInputError, design_suggest)
 from .render_qa import TextQAReport, qa_svg_text
 # block_drafter / block_qa are LAZY (PEP 562, see __getattr__ at the bottom):
 # they import kiutils, which the schematic/routing side of this package does not
@@ -176,6 +178,11 @@ __all__ = [
     # resolves every one of them by getattr -- a registry row naming a callable
     # this package does not expose is a false declaration, not a lazy import.
     "verify_netlist_fidelity",
+    # WP5 pin-class suggestion router (DD-02).
+    "design_suggest",
+    "DesignSuggestInputError",
+    "PIN_CLASSES",
+    "SUGGEST_STATUSES",
     "TextQAReport",
     "qa_svg_text",
     "PinoutBlock",
