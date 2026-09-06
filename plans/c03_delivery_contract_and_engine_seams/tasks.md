@@ -233,55 +233,70 @@ mechanism is disabled). A negative control that cannot fail is not a control.
 
 ## 4. WP4 — `bodesign_verify_netlist_fidelity`
 
-- [ ] 4.1 Add the `.net` adapter in `fidelity.py`: a function taking
+- [x] 4.1 Add the `.net` adapter in `fidelity.py`: a function taking
       `emitted: list[Path]`, calling `parse_net_file` (`:181`) per file, merging
       classes that share a node across sheets by union-find (same-name nets on
       different sheets are one net), returning `(classes, nets_parsed)` where
       `nets_parsed` counts the `(net ...)` blocks actually parsed —
       artifact: `packages/eda-bridge/bodesign_eda_bridge/fidelity.py:181`
-- [ ] 4.2 Read failure is not swallowed: an unreadable or unparseable `emitted`
+- [x] 4.2 Read failure is not swallowed: an unreadable or unparseable `emitted`
       path is collected into a named list, never `continue`d past — the `:216-221`
       shape is not reproduced in the new adapter —
       artifact: `packages/eda-bridge/bodesign_eda_bridge/fidelity.py:216`
-- [ ] 4.3 Add `nc_wired` computation: for each `[ref,pin]` in `nc_declared`, if the
+- [x] 4.3 Add `nc_wired` computation: for each `[ref,pin]` in `nc_declared`, if the
       emitted partition places it in a class with any peer, it lands in `nc_wired`
       and is **excluded** from `fused`. Today `fidelity.py` has zero occurrences of
       `nc_`/`no_connect` (control: 8 in `kicad_emit.py`), so a wired NC and a real
       short share one output —
       artifact: `packages/eda-bridge/bodesign_eda_bridge/fidelity.py`
-- [ ] 4.4 Split the report into the four independent fields the verb contract
+- [x] 4.4 Split the report into the four independent fields the verb contract
       names: `fused` (gained peers only, NC-excluded), `split` (lost peers only —
       the `disconnected` list under its contract name), `node_diff`
       `{spec_only, emitted_only}`, `nc_wired` —
       artifact: `packages/eda-bridge/bodesign_eda_bridge/fidelity.py:380`
-- [ ] 4.5 Implement DD-06 status resolution: `nets_parsed == 0` **or** any
+- [x] 4.5 Implement DD-06 status resolution: `nets_parsed == 0` **or** any
       `emitted` path unreadable ⇒ `status="indeterminate"`, set before any
       comparison runs; otherwise `ok` when all four difference fields are empty,
       `failed` when any is non-empty; `not-run` when a precondition (missing
       `spec`, empty `emitted` list) means no comparison was attempted —
       artifact: `packages/eda-bridge/bodesign_eda_bridge/fidelity.py`
-- [ ] 4.6 Register the handler in `services/mcp/server.py` —
+- [x] 4.6 Register the handler in `services/mcp/server.py` —
       artifact: `services/mcp/server.py`
-- [ ] 4.7 Register the schema in `services/mcp/server.py` with inner field
+- [x] 4.7 Register the schema in `services/mcp/server.py` with inner field
       descriptions for `spec` (`{net: [[ref,pin],…]}`), `emitted` (list of `.net`
       paths, cross-sheet same-name nets merged) and `nc_declared`
       (`[[ref,pin],…]`); the description states that `status` is never `ok` when
       `nets_parsed == 0` — artifact: `services/mcp/server.py:1133`
-- [ ] 4.8 Map exit codes: `0` ↔ `ok`; `1` ↔ `failed`; `2` ↔ `not-run` and
-      `indeterminate`. A caller reading only the exit code can never read an
-      unreadable input as a pass — artifact: `services/mcp/server.py`
-- [ ] 4.9 POSITIVE CONTROL: the D1.5 case from BR_20260905 — a pin declared NC that
+- [x] 4.8 Map exit codes on the CLI seam, which is where an exit code exists at
+      all *(rewritten 2026-09-06: the MCP handler has no exit code — it returns
+      the `status` field. The frozen map is honoured by adding the landing verb
+      `verify_netlist_fidelity` to `gate.py`, whose `main()` derives the process
+      exit from the result's own `status`)*: `0` ↔ `ok`; `1` ↔ `failed`; `2` ↔
+      `not-run` and `indeterminate`, via `STATUS_EXIT_VERBS`. A caller reading
+      only the exit code can never read an unreadable input as a pass, and an
+      unmapped status is refused rather than assumed benign. `NETLIST_MISSING`
+      stays on the existing `_fail` channel (exit 1) because a wrong path sends
+      the reader somewhere different from an inconclusive comparison —
+      artifact: `skills/bodesign/scripts/gate.py`,
+      `tests/test_landing_gate_published_resolution.py`
+- [x] 4.9 POSITIVE CONTROL: the D1.5 case from BR_20260905 — a pin declared NC that
       the emitter ties to GND — appears in `nc_wired` and **not** in `fused`.
       Question answered: *does the verb distinguish a mis-wired NC from a real
       short?* — artifact: `tests/` (test module named at implementation time)
-- [ ] 4.10 NEGATIVE CONTROL A: an empty `.net` (or one whose blocks parse to zero
+- [x] 4.10 NEGATIVE CONTROL A: an empty `.net` (or one whose blocks parse to zero
       nets) yields `status="indeterminate"`, exit 2, and never `ok`. On today's code
       path the equivalent input yields `ok=True` whenever the spec holds only
       single-pin nets (RCA §10.3(c)), so the assertion fails before the work —
       artifact: `tests/` (test module named at implementation time)
-- [ ] 4.11 NEGATIVE CONTROL B (mutation): replace the `continue` at
-      `fidelity.py:221` with a `raise` and confirm the WP4 test suite goes RED. If
-      it stays green the tests never exercised that path. **Clear `__pycache__`
+- [x] 4.11 NEGATIVE CONTROL B (mutation) *(rewritten 2026-09-06: `:221` belongs to
+      `sch_union_classes`, off the WP4 path — MUTANT A green proved no causality;
+      MUTANT B on `parse_net_files` is the bearing control)*: replace the
+      `unreadable.append(...)` error-collection arm inside `parse_net_files` in
+      `fidelity.py` with a bare `continue` (i.e. swallow the read failure) and
+      confirm the WP4 test suite goes RED. If it stays green the tests never
+      exercised that path, and an unreadable `.net` would silently read as an empty
+      one — which is exactly the `indeterminate`-vs-`ok` collapse this verb exists
+      to prevent. **Clear `__pycache__`
       first** (`find . -name __pycache__ -prune -exec rm -rf {} +`) — AGENTS.md
       §6.3 measured that `python3 -B` does not prevent an existing stale `.pyc`
       from being loaded, so a same-length edit can leave the mutant unapplied and

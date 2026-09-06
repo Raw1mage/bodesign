@@ -451,6 +451,215 @@ def compare_partitions(expected: dict[str, list[str]],
     )
 
 
+# ── WP4: standalone `.net` fidelity verb ────────────────────────────────────
+#
+# plan c03_delivery_contract_and_engine_seams DD-06, errors.md §WP4.
+#
+# `verify_partition_fidelity` below binds the check to the EMITTER: it takes a
+# .kicad_sch, shells out to kicad-cli, and can only be run where KiCad is. The
+# C03 delivery path adjudicates a FROZEN `.net` that may have been exported
+# elsewhere, so the same comparison has to be reachable from the netlist alone.
+#
+# The status codomain is the point of this verb, not a side effect:
+#
+#   ok            nets_parsed > 0, every `emitted` readable, all five difference
+#                 fields empty
+#   failed        nets_parsed > 0, every `emitted` readable, >=1 field non-empty
+#   not-run       precondition unmet BEFORE any read -- no spec, or an empty
+#                 `emitted` list. No comparison was attempted.
+#   indeterminate nets_parsed == 0, or an `emitted` path could not be read or
+#                 parsed. Set BEFORE comparison, and NOT reachable from ok.
+#
+# `not-run` and `indeterminate` are separate on purpose. Both mean "there is no
+# verdict", and collapsing them loses the only thing a caller can act on: one
+# says the caller supplied nothing, the other says the caller supplied something
+# the verb could not read. Today's `verify_partition_fidelity` has neither -- a
+# spec of single-pin nets against an empty export returns ok=True (RCA §10.3(c)).
+
+NETLIST_MISSING = "NETLIST_MISSING"
+FIDELITY_ARGS_INVALID = "FIDELITY_ARGS_INVALID"
+
+
+class FidelityInputError(ValueError):
+    """A typed refusal about the INPUTS, distinct from any verdict.
+
+    A named `.net` that does not exist is NOT `indeterminate`: the caller can
+    fix a path, and telling them "the comparison was inconclusive" would send
+    them looking at the schematic instead. `indeterminate` is reserved for a
+    file that exists and could not be made sense of.
+    """
+
+    def __init__(self, code: str, message: str, hint: str | None = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.hint = hint
+
+
+def _node_str(nd) -> str:
+    """`[ref, pin]` / `(ref, pin)` / `"REF.PIN"` -> `"REF.PIN"`."""
+    if isinstance(nd, (tuple, list)) and len(nd) == 2:
+        return f"{nd[0]}.{nd[1]}"
+    return str(nd)
+
+
+def parse_net_files(paths: list[Path]) -> tuple[list[frozenset], int, list[dict]]:
+    """Parse `.net` exports into merged node-set classes.
+
+    Returns (classes, nets_parsed, unreadable) where `nets_parsed` counts the
+    `(net ...)` blocks that actually yielded nodes, and `unreadable` names every
+    path that raised, with the reason.
+
+    Cross-sheet merge is by SHARED NODE (union-find), the same mechanism
+    `sch_union_classes` uses: a net carried across sheets appears as separate
+    blocks that name the same `REF.PIN`. NOTE the limit, stated rather than
+    papered over: two same-NAMED nets on different sheets that share no node are
+    NOT merged, because names are discarded by `parse_net_file` by design (power
+    ports rename endpoints, so name alignment is unreliable -- module docstring).
+
+    `unreadable` is a RETURN VALUE, not a log line. `sch_union_classes:220`
+    swallows the same condition with a bare `continue`, which is what lets a
+    failed export reach the comparison as "this sheet had no nets".
+    """
+    parent: dict = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    nets_parsed = 0
+    unreadable: list[dict] = []
+    for path in paths:
+        try:
+            classes = parse_net_file(Path(path))
+        except Exception as exc:                      # noqa: BLE001 - reported, not hidden
+            unreadable.append({"path": str(path),
+                               "reason": f"{type(exc).__name__}: {exc}"})
+            continue
+        nets_parsed += len(classes)
+        for cls in classes:
+            nodes = list(cls)
+            for n in nodes:
+                find(n)
+            for n in nodes[1:]:
+                union(nodes[0], n)
+
+    comps = defaultdict(set)
+    for node in parent:
+        comps[find(node)].add(node)
+    return [frozenset(v) for v in comps.values()], nets_parsed, unreadable
+
+
+def verify_netlist_fidelity(spec, emitted, nc_declared=None) -> dict:
+    """Compare a spec partition against frozen `.net` exports. Netlist-only.
+
+    spec:        {net_name: [[ref, pin], ...]} (or "REF.PIN" strings).
+    emitted:     list of `.net` paths. Same-named nets across sheets are merged
+                 by shared node (see `parse_net_files` for the stated limit).
+    nc_declared: [[ref, pin], ...] the design declares NOT connected.
+
+    Returns {status, fused, split, node_diff:{spec_only, emitted_only},
+             nc_wired, nets_parsed, ...}. Never raises for a VERDICT; raises
+             FidelityInputError only for inputs it cannot accept at all.
+    """
+    # ---- precondition arm: not-run. Nothing was read, so there is no verdict.
+    paths = [Path(p) for p in (emitted or [])]
+    if not spec or not paths:
+        return {
+            "status": "not-run",
+            "reason": ("spec is empty" if not spec else "emitted is an empty list")
+            + " — no comparison was attempted; this is NOT a clean result",
+            "fused": [], "split": [],
+            "node_diff": {"spec_only": [], "emitted_only": []},
+            "nc_wired": [], "nets_parsed": 0, "emitted_unreadable": [],
+        }
+
+    # A named path that does not exist is a caller error with a fixable cause,
+    # NOT an inconclusive comparison. Separate code, separate channel.
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        raise FidelityInputError(
+            NETLIST_MISSING,
+            "emitted netlist(s) not found: " + ", ".join(missing),
+            hint="pass paths to exported KiCad .net files")
+
+    expected = {str(name): [_node_str(nd) for nd in nodes]
+                for name, nodes in dict(spec).items()}
+    cand_classes, nets_parsed, unreadable = parse_net_files(paths)
+
+    # ---- pre-comparison arm: indeterminate. Set BEFORE comparing, and not
+    # reachable from ok -- the whole point of DD-06. A zero-net parse is not
+    # "ran and found nothing": it is indistinguishable from a failed export.
+    if nets_parsed == 0 or unreadable:
+        return {
+            "status": "indeterminate",
+            "reason": ("zero (net ...) blocks parsed from the supplied export(s) "
+                       "— an empty export and a board with no nets are the same "
+                       "bytes here, so no verdict is available"
+                       if nets_parsed == 0 else
+                       "one or more emitted paths could not be parsed"),
+            "fused": [], "split": [],
+            "node_diff": {"spec_only": [], "emitted_only": []},
+            "nc_wired": [], "nets_parsed": nets_parsed,
+            "emitted_unreadable": unreadable,
+        }
+
+    report = compare_partitions(expected, cand_classes)
+
+    # `regrouped` (compare_partitions:432) is a node that BOTH lost and gained
+    # peers. It belongs to neither name alone, and dropping it would leave all
+    # five difference fields empty for a genuinely diverged board -- a false ok
+    # of exactly the shape this verb exists to remove. It is therefore reported
+    # under BOTH, which is what it literally is, and named separately so the
+    # double-count is visible rather than inferred from a mismatched total.
+    fused = sorted(set(report.fused) | set(report.regrouped))
+    split = sorted(set(report.disconnected) | set(report.regrouped))
+
+    # ---- nc_wired: an INDEPENDENT axis, deliberately not folded into fused.
+    # A pin the design declares NC and the emitter wired to a real net is a
+    # defect even when the partition otherwise matches, and it is a different
+    # defect from two nets welded together. Merging them would mean a board can
+    # be "only" fused when it is in fact violating an explicit NC declaration.
+    nc_nodes = {_node_str(nd) for nd in (nc_declared or [])}
+    cand_idx = _index(cand_classes)
+    nc_wired = sorted(
+        nd for nd in nc_nodes
+        if len(cand_idx.get(nd, frozenset())) > 1)
+
+    node_diff = {"spec_only": list(report.only_baseline),
+                 "emitted_only": list(report.only_candidate)}
+
+    differences = (fused or split or node_diff["spec_only"]
+                   or node_diff["emitted_only"] or nc_wired)
+    return {
+        "status": "failed" if differences else "ok",
+        "reason": None,
+        "fused": fused,
+        "split": split,
+        "node_diff": node_diff,
+        "nc_wired": nc_wired,
+        "nets_parsed": nets_parsed,
+        "emitted_unreadable": [],
+        # Disclosure, carried on ok as well as on failed: a reader who cannot
+        # see the exemptions cannot tell a clean verdict from an unasked one.
+        "regrouped": list(report.regrouped),
+        "spec_overlapping_nodes": report.spec_overlapping_nodes,
+        "singleton_only_spec": list(report.singleton_only_baseline),
+        "singleton_only_emitted": list(report.singleton_only_candidate),
+        "spec_nets": report.baseline_nets,
+        "emitted_nets": report.candidate_nets,
+        "shared_nodes": report.shared,
+    }
+
+
 def verify_partition_fidelity(expected_nets, sch_path: str | Path) -> FidelityReport:
     """Whole check: expected spec nets vs the KiCad-exported partition of the
     schematic file (or every *.kicad_sch under a directory).

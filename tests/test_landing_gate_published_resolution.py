@@ -246,5 +246,102 @@ class CandidateListDisciplineTests(_ScratchGateCase):
         self.assertIn(str(empty), env["error"]["message"])
 
 
+class FidelityExitCodeTests(_ScratchGateCase):
+    """4.8 — the CLI exit code must carry the four-value status, not two.
+
+    Why this lives in the WP3 scratch harness rather than beside the WP4 unit
+    tests: the claim is about the PROCESS boundary. `verify_netlist_fidelity`
+    returning `status="indeterminate"` proves nothing about what a shell caller
+    sees; only `main()` deciding an exit code does. Running it from the scratch
+    copy also proves the verb is reachable from a published install, which is
+    the state its real caller (a peer bypassing the emitter) is in.
+    """
+
+    _NET = ('(export (version "E")\n  (nets\n'
+            '    (net (code "1") (name "N1") (class "Default")\n'
+            '      (node (ref "U1") (pin "1") (pintype "passive"))\n'
+            '      (node (ref "R1") (pin "1") (pintype "passive")))))\n')
+    _EMPTY_NET = '(export (version "E")\n  (nets))\n'
+    _SPEC = {"N1": [["U1", "1"], ["R1", "1"]]}
+
+    def _files(self, net_body):
+        spec = self.work / "spec.json"
+        spec.write_text(json.dumps(self._SPEC), encoding="utf-8")
+        net = self.work / "board.net"
+        net.write_text(net_body, encoding="utf-8")
+        return str(spec), str(net)
+
+    def test_matching_netlist_exits_zero(self):
+        spec, net = self._files(self._NET)
+        env, rc = _call(self.module, ["verify_netlist_fidelity", "--repo",
+                                      str(self.work), "--spec", spec,
+                                      "--emitted", net])
+        self.assertEqual(rc, 0, env)
+        self.assertEqual(env["status"], "ok")
+        self.assertTrue(env["ok"])
+        self.assertEqual(env["result"]["nets_parsed"], 1)
+
+    def test_empty_netlist_exits_two_and_is_never_ok(self):
+        """The RCA §10.3(c) hole, measured at the exit code.
+
+        Same spec, same command line, only the export's contents differ — so a
+        different exit code cannot be attributed to anything else.
+        """
+        spec, net = self._files(self._EMPTY_NET)
+        env, rc = _call(self.module, ["verify_netlist_fidelity", "--repo",
+                                      str(self.work), "--spec", spec,
+                                      "--emitted", net])
+        self.assertEqual(rc, 2, env)
+        self.assertEqual(env["status"], "indeterminate")
+        self.assertFalse(env["ok"])
+        self.assertEqual(env["result"]["nets_parsed"], 0)
+
+    def test_a_missing_netlist_exits_one_not_two(self):
+        """REVERSE CONTROL: exit 2 must mean "no verdict", not "anything bad".
+
+        A path that does not exist is an input error the caller can fix. If it
+        also came back as 2, the code would carry no information — which is the
+        collapse this whole task exists to undo, reintroduced one layer up.
+        """
+        spec, _ = self._files(self._NET)
+        env, rc = _call(self.module, ["verify_netlist_fidelity", "--repo",
+                                      str(self.work), "--spec", spec,
+                                      "--emitted", str(self.work / "absent.net")])
+        self.assertEqual(rc, 1, env)
+        self.assertFalse(env["ok"])
+        self.assertEqual(env["error"]["code"], "NETLIST_MISSING")
+        self.assertEqual(env["status"], "failed")
+
+    def test_a_differing_netlist_exits_one(self):
+        """The fourth value, so the map is exercised end to end rather than at
+        its two extremes — `failed` and `indeterminate` must not share a code."""
+        fused = ('(export (version "E")\n  (nets\n'
+                 '    (net (code "1") (name "N1") (class "Default")\n'
+                 '      (node (ref "U1") (pin "1") (pintype "passive"))\n'
+                 '      (node (ref "R1") (pin "1") (pintype "passive"))\n'
+                 '      (node (ref "R9") (pin "1") (pintype "passive")))))\n')
+        spec, net = self._files(fused)
+        env, rc = _call(self.module, ["verify_netlist_fidelity", "--repo",
+                                      str(self.work), "--spec", spec,
+                                      "--emitted", net])
+        self.assertEqual(rc, 1, env)
+        self.assertEqual(env["status"], "failed")
+        self.assertFalse(env["ok"])
+
+    def test_conflicting_spellings_are_refused_not_silently_resolved(self):
+        """--spec and --json/spec together must fail loud.
+
+        Picking one would make a typo in the other invisible, and the verb's
+        answer depends entirely on which partition it compared.
+        """
+        spec, net = self._files(self._NET)
+        env, rc = _call(self.module, [
+            "verify_netlist_fidelity", "--repo", str(self.work),
+            "--spec", spec, "--emitted", net,
+            "--json", json.dumps({"spec": {"OTHER": [["X1", "1"]]}})])
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(env["error"]["code"], "VERB_ARGS_INVALID")
+
+
 if __name__ == "__main__":
     unittest.main()

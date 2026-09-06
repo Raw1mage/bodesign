@@ -29,7 +29,8 @@ from .kicad_emit import (
     load_symbol,
     validate_kicad_schematic,
 )
-from .fidelity import FidelityError, FidelityReport, verify_partition_fidelity
+from .fidelity import (FidelityError, FidelityInputError, FidelityReport,
+                       verify_netlist_fidelity, verify_partition_fidelity)
 from .render_qa import TextQAReport, qa_svg_text
 # block_drafter / block_qa are LAZY (PEP 562, see __getattr__ at the bottom):
 # they import kiutils, which the schematic/routing side of this package does not
@@ -167,8 +168,14 @@ __all__ = [
     "validate_kicad_schematic",
     "__engine_rev__",
     "FidelityError",
+    "FidelityInputError",
     "FidelityReport",
     "verify_partition_fidelity",
+    # WP4 netlist-only gate. Exported at package level because gate.py's verb
+    # registry declares (module, callable) pairs and tests/test_landing_gate.py
+    # resolves every one of them by getattr -- a registry row naming a callable
+    # this package does not expose is a false declaration, not a lazy import.
+    "verify_netlist_fidelity",
     "TextQAReport",
     "qa_svg_text",
     "PinoutBlock",

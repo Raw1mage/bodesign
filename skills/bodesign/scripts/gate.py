@@ -13,6 +13,11 @@ Usage:
 Contract (plans/mcp_r13-landing-webdav-cache):
   * stdout = exactly one JSON envelope {ok, verb, result | error:{code,message,hint?}}
   * exit code != 0 iff ok=false
+  * exit 2 is reserved for STATUS_EXIT_VERBS: a verb that ran to completion and
+    reached NO VERDICT (`not-run` / `indeterminate`). The invariant above still
+    holds -- those envelopes carry ok=false -- but a caller that hard-codes
+    `rc in (0, 1)` will read 2 as an unknown failure rather than as "no verdict",
+    which is the honest reading. See STATUS_EXIT_VERBS.
   * logs go to stderr only (landing_verb_start / landing_verb_ok / landing_verb_error)
   * NO fallback to the container — ever (repo 天條 2)
 """
@@ -397,6 +402,15 @@ VERBS = {
                     "Render-layer text-overlap QA: scan every <text> bbox in a "
                     "kicad-cli-exported SVG; >15% intersection = violation. "
                     "violation=0 required for presentation-done claims."),
+    "verify_netlist_fidelity": (_EB, "verify_netlist_fidelity", ("spec", "emitted"),
+                                "Netlist-only fidelity gate (plan "
+                                "c03_delivery_contract_and_engine_seams WP4/DD-06): compare a "
+                                "spec partition against frozen .net exports. Reports fused / "
+                                "split / node_diff / nc_wired as INDEPENDENT axes, and "
+                                "status in {ok, failed, not-run, indeterminate} -- a "
+                                "zero-net parse is never ok. Exit 0/1/2/2 respectively "
+                                "(see STATUS_EXIT_VERBS). Pass --spec/--emitted/--nc, or "
+                                "the equivalent --json keys."),
     # refs-first gate (EPIC refs-derived-design, 切面 1)
     "refs_ingest": (_WC, "ingest_refs", ("folder",),
                     "Scan a stage's 01_refs/ SSOT into a manifest (classify sources, "
@@ -865,6 +879,44 @@ def _v_impedance_solve(a):
     return solve_impedance(a["stackup"], a["targets"])
 
 
+# Verbs whose exit code is derived from the RESULT's `status` field rather than
+# from ok/not-ok alone (plan c03_delivery_contract_and_engine_seams task 4.8,
+# errors.md §WP4 frozen codomain).
+#
+# WHY this exists at all: the default map is `0 if ok else 1`, which has exactly
+# two outcomes, and WP4's whole point is that "compared, and it matches" and
+# "could not compare" must not share one. A caller that reads only the exit code
+# -- a Makefile, a CI step, a peer bypassing the emitter -- would otherwise read
+# `not-run` and `indeterminate` as `failed`, i.e. as a VERDICT about the board,
+# when no verdict was reached. 2 says "no verdict", and it says it to a reader
+# that never parses the JSON.
+#
+# `ok` is set from the status, so the module-level invariant (exit != 0 iff
+# ok=false) is PRESERVED, not broken: only the assumption that a failing exit is
+# always 1 widens.
+STATUS_EXIT_VERBS = {
+    "verify_netlist_fidelity": {"ok": 0, "failed": 1, "not-run": 2, "indeterminate": 2},
+}
+
+
+def _v_verify_netlist_fidelity(a):
+    from bodesign_eda_bridge.fidelity import (FidelityInputError,
+                                              verify_netlist_fidelity)
+    emitted = a["emitted"]
+    if isinstance(emitted, str):
+        emitted = [emitted]
+    try:
+        return verify_netlist_fidelity(a["spec"], emitted, a.get("nc_declared"))
+    except FidelityInputError as error:
+        # NETLIST_MISSING / FIDELITY_ARGS_INVALID are refusals about the INPUT,
+        # not inconclusive comparisons. They go down the existing _fail channel
+        # (ok=false, exit 1) and deliberately do NOT become `indeterminate`:
+        # a caller who mistyped a path must be sent to the path, not to the
+        # schematic. Re-typed as LandingError so the envelope shape is the same
+        # one every other verb's refusal produces.
+        raise LandingError(error.code, error.message, error.hint) from error
+
+
 def _v_qa_svg_text(a):
     from bodesign_eda_bridge.render_qa import qa_svg_text
     report = qa_svg_text(a["svg_path"])
@@ -967,7 +1019,10 @@ def _list_envelope():
                        "not_landing": dict(sorted(NOT_LANDING.items()))}}
 
 
-def _build_args(ns, verb):
+def _build_args(ns, verb, extra=None):
+    """`extra` folds verb-specific convenience flags in BEFORE the required-args
+    check. Placing it after would reject a fully-specified command line as
+    "missing spec", i.e. report a caller error the caller did not make."""
     args = {}
     if ns.json_args:
         try:
@@ -994,6 +1049,9 @@ def _build_args(ns, verb):
         raise LandingError(VERB_ARGS_INVALID, f"--repo is not an existing directory: {ns.repo!r}")
     repo = os.path.realpath(ns.repo)
 
+    if extra is not None:
+        extra(args)
+
     required = VERBS[verb][2]
     for key in REPO_DEFAULT_KEYS:
         if key in required and key not in args:
@@ -1009,6 +1067,56 @@ def _build_args(ns, verb):
                            f"verb '{verb}' missing required arg(s): {', '.join(missing)}",
                            hint="pass them via --json '{...}' or --arg k=v")
     return args
+
+
+def _read_json_file(path, flag):
+    """Load a JSON side file for a convenience flag, or refuse by type.
+
+    A missing/unparseable file is a caller error with a fixable cause, so it
+    raises VERB_ARGS_INVALID (ok=false, exit 1). It is deliberately NOT allowed
+    to become an empty dict: an empty spec makes verify_netlist_fidelity return
+    `not-run`, so a typo in --spec would come back as "no comparison attempted"
+    instead of "your path is wrong" -- two different actions for the reader.
+    """
+    if not os.path.isfile(path):
+        raise LandingError(VERB_ARGS_INVALID,
+                           f"{flag} is not an existing file: {path!r}")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except ValueError as error:
+        raise LandingError(VERB_ARGS_INVALID,
+                           f"{flag} is not valid JSON ({path}): {error}") from error
+
+
+def _apply_fidelity_flags(ns, args):
+    """Fold --spec/--emitted/--nc into the verb args, without shadowing --json.
+
+    An explicit --json key WINS and the flag is refused rather than silently
+    dropped: two spellings of the same argument disagreeing is precisely the
+    case where guessing which one the operator meant makes a typo invisible.
+    """
+    if not (ns.spec_path or ns.emitted or ns.nc_path):
+        return
+    for flag, dest, key in (("--spec", ns.spec_path, "spec"),
+                            ("--nc", ns.nc_path, "nc_declared")):
+        if not dest:
+            continue
+        if key in args:
+            raise LandingError(VERB_ARGS_INVALID,
+                               f"{flag} and --json/{key} both given; refusing to "
+                               "choose between two conflicting spellings")
+        args[key] = _read_json_file(
+            dest if os.path.isabs(dest) else os.path.join(os.path.realpath(ns.repo), dest),
+            flag)
+    if ns.emitted:
+        if "emitted" in args:
+            raise LandingError(VERB_ARGS_INVALID,
+                               "--emitted and --json/emitted both given; refusing to "
+                               "choose between two conflicting spellings")
+        args["emitted"] = [
+            p if os.path.isabs(p) else os.path.join(os.path.realpath(ns.repo), p)
+            for p in ns.emitted]
 
 
 def main(argv=None):
@@ -1027,6 +1135,19 @@ def main(argv=None):
                         help="single k=v argument (value parsed as JSON when possible); repeatable")
     parser.add_argument("--list", dest="list_verbs", action="store_true",
                         help="enumerate landing verbs and exit")
+    # verify_netlist_fidelity convenience flags (task 4.8). The verb is fully
+    # callable through --json; these exist because its real caller is a shell
+    # step comparing files on disk, and forcing that caller to inline a whole
+    # partition into a --json string is how a check stops being run.
+    parser.add_argument("--spec", dest="spec_path",
+                        help="path to a JSON file holding {net_name: [[ref,pin],...]} "
+                             "(verify_netlist_fidelity)")
+    parser.add_argument("--emitted", action="append", default=[],
+                        help="path to an exported .net file; repeatable "
+                             "(verify_netlist_fidelity)")
+    parser.add_argument("--nc", dest="nc_path",
+                        help="path to a JSON file holding [[ref,pin],...] declared "
+                             "NOT CONNECTED (verify_netlist_fidelity)")
     ns = parser.parse_args(argv)
 
     if ns.list_verbs:
@@ -1059,8 +1180,10 @@ def main(argv=None):
             raise LandingError(VERB_UNKNOWN,
                                f"unknown verb: {verb!r}; run gate.py --list to enumerate landing verbs")
 
-        # (5) arg validation
-        args = _build_args(ns, verb)
+        # (5) arg validation. The convenience flags are folded in FIRST: they
+        # supply `spec` / `emitted`, so running the required-args check before
+        # them would reject a fully-specified command line as "missing spec".
+        args = _build_args(ns, verb, extra=lambda a: _apply_fidelity_flags(ns, a))
     except LandingError as error:
         return _fail(verb, error.code, error.message, error.hint)
 
@@ -1072,6 +1195,28 @@ def main(argv=None):
     except Exception as error:  # (6) runtime error — traceback to stderr only
         traceback.print_exc(file=sys.stderr)
         return _fail(verb, VERB_RUNTIME_ERROR, f"{type(error).__name__}: {error}")
+    # Exit-code derivation. For most verbs "the handler returned" IS success and
+    # the envelope status is `ok`. For STATUS_EXIT_VERBS the handler's own
+    # `status` field is the outcome, and it has four values, not two -- so the
+    # process must not report `ok` merely because nothing raised. That would be
+    # this plan's defect (a no-verdict read as a pass) reproduced at the CLI
+    # boundary, one layer above the code that was fixed to prevent it.
+    exit_map = STATUS_EXIT_VERBS.get(verb)
+    if exit_map is not None:
+        status = result.get("status") if isinstance(result, dict) else None
+        if status not in exit_map:
+            # An unmapped status is NOT assumed benign: the verb's codomain and
+            # this table have drifted, and guessing which way would be exactly
+            # the silent fallback this repo forbids.
+            traceback_note = f"verb {verb!r} returned unmapped status {status!r}"
+            return _fail(verb, VERB_RUNTIME_ERROR, traceback_note,
+                         hint="STATUS_EXIT_VERBS and the verb's status codomain disagree",
+                         status="indeterminate")
+        _log(f"landing_verb_ok verb={verb} status={status}")
+        print(json.dumps({"ok": status == "ok", "verb": verb, "status": status,
+                          "result": result}, ensure_ascii=False))
+        return exit_map[status]
+
     _log(f"landing_verb_ok verb={verb}")
     return _emit({"ok": True, "verb": verb, "status": "ok", "result": result})
 
