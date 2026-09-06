@@ -81,6 +81,79 @@ verb 可達（非僅字串存在）                   NEGCTRL 回顯我送的假
       仍然成立**。`_foreign_pin_points` 已在 HEAD（`kicad_emit.py:1902/1940`）
       卻沒擋住它——原因待查（本輪只量測不修）。
       **3.2/3.3 在這格綠之前不要動。**
+- [ ] 3.0-obs **（round 17 觀察項，不要修）** `route_stats.wired_nets = 0` 這個
+      讀數**同時代表兩件事**，而前面每一輪都拿它做判斷。
+      round 16 插樁（branch entry marker + 逐個 wire/junction 產出點，
+      `tracebacks=0 stderr_lines=0`）在 13 顆合成板量到：
+
+          branch  Bmultinode = [GND, VCC]      B2pin = [SIG_A, SIG_B]
+          wire    L2046 multinode drawn = 19（GND×16 + VCC×3）
+                  L2249/L2273 power stub = 2
+          junction L2050 multinode      = 11（全部）
+
+      也就是 `wired_nets=0` 的同時，**L2046 真的畫了 19 條線與 11 個 junction**。
+      成因：composer 的 `_build_route_stats` 按 net `kind` 歸類，power net 一律
+      計入 `labelled`，與 emitter 實際畫了什麼無關。
+      ⇒ **「一條都沒畫」與「畫了但按 kind 不算」共用同一個 `0`。**
+      任何用 `wired_nets` 判斷「有沒有走 drawn 路徑」的推論都不成立。
+
+      ⚠ **round 15 的 transcript 在這一格有錯，下一個人會讀到它**：round 15
+      回報「21 條 wire + 11 個 junction 全部出自 power-stub 路徑」，實際是
+      **19/21 出自 multinode drawn**。該錯誤結論導致當輪誤判
+      `_route_clears_points` 不在畫線路徑上；round 16 的 site×branch 歸屬
+      推翻它——**guard 確實在那條路上**（`kicad_emit.py:1979`，multinode 分支內）。
+- [ ] 3.0-obs-b **（round 21-23 母體歸屬，不要修）** defect 1（label 貼在他 net
+      線上導致跨 net 熔接）**在本 repo 的 HEAD 上不發生**。三輪量測的最終讀數：
+
+          全套 107 次 emit 呼叫
+          STATE A（pin 落他 net 線段中段 AND 該點有 junction）= 0
+          STATE B（落中段、無 junction）                      = 34
+            └ 22 筆 pin 不屬於任何宣告 net（另立觀察項，見下）
+            └ 12 筆 pin 有 own_net —— 這 12 筆才是 defect 1 的母體
+
+      12 筆**全量**送 KiCad netlist 仲裁（round 23，非抽樣）：
+      **FUSED=0、SEPARATE=9、ABSENT=3**（ABSENT ＝ 該 foreign net 未出現在
+      匯出 netlist 中，undecidable，不計為證據）。
+      控制組：POS（pin 必在自己 net 內）ok=10 bad=2；NEG（不在他 net 線上的
+      控制 pin 對該 net）NOT_IN=13 IN=5；parser 逐檔 `parsed_nets == raw
+      '(net (code' block count` 全 True。**兩組控制組都會紅，不是恆真探針。**
+
+      ⇒ T1/T2 的「無 junction ⇒ 不熔」在真實母體上成立（9 個獨立判決）。
+
+      ⚠ **round 21 回報的 `B=55` 已作廢，正確值是 34。** 作廢原因是探針 bug：
+      `_all_pin_points` 的 id 是 `'REF.PIN'` **字串**，而 `net.nodes` 裝的是
+      `('REF','PIN')` **tuple**，歸屬判定 `_nid in own_members` **恆為 False**，
+      於是每一支 pin 都被算成「不屬於任何 net」＝對每個 net 都外來。
+      修正後 `ctlpins` 從 0 次非空變成 98 次非空、`own` 欄從全 `None` 變成有值。
+      **下一個人若讀到 round 21 的 transcript，那裡的 55 是錯的。**
+
+- [ ] 3.0-obs-c **（round 23 新觀察項，與 defect 1 不同病，本輪未查）**
+      上面 34 筆裡有 **22 筆的 pin 不屬於任何宣告 net**。那是 **spec 完整性**
+      問題（宣告漏了腳），不是「pin 落在他 net 幹線上」。兩者症狀相鄰、成因無關，
+      **不要合併處理**。未量：這 22 筆是 fixture 刻意造的殘缺 spec，還是
+      `declare.py` 完整性 gate 的漏網，尚未歸因。
+
+- [ ] 3.0-obs-d **（round 21-22 自我更正，逐字保留；不是記過）**
+      下一個人會拿 round 10-22 的 transcript 當依據，所以錯誤歸屬必須留在這裡：
+
+      1. **round 11 宣稱「`_POWER_CLUSTER_MM` 從未進過版控（`git log -S` 全歷史
+         空）」是錯的。** 它進過 `c3019f6`，但**只在 `.md` 裡**，從未進過 `.py`
+         （`git log --all -S'_POWER_CLUSTER_MM' -- '*.py'` count=0；控制組同形狀
+         打 `drawn_fragments` count=2）。當時的 pickaxe **沒有指定窗口**，於是
+         「只存在於文件」與「完全不存在」共用同一個空結果。
+      2. **round 11 在 scratch 建的東西不是 BR §8.5.2 的 clustering。** 它是 6 行
+         env-flag early-continue（讓 power net 跳過 label 分類）。我用了 BR 裡
+         那個**被否決方案**的詞去命名它，於是後續十輪的每一次引用，都在把三個
+         不同的東西當成同一件：(i) BR §8.5.2 記載的 clustering（只活在 .md）、
+         (ii) 這 6 行 early-continue（只活在 scratch）、(iii) repo HEAD 的實際行為。
+      3. **dispatcher round 10 的裁決是對的**（「`moved=67` 是一份沒有落地的實驗的
+         讀數」），錯在後續十輪沒有照它行動，繼續拿那棵樹當母體。
+      4. **「第五個缺陷：功能消失且無人察覺」撤銷。** 曾懷疑的理由：BR §8.5.2
+         詳述了一套 clustering 的量測數字，而 repo 裡找不到它 ⇒ 疑似功能被刪。
+         撤銷的理由：那一節標題逐字寫著「**被否決的修法**」——它記錄的是一個
+         寫過、量過、然後被丟棄的候選方案。**功能沒有消失，它從未存在。**
+         BR 沒說謊，是我們讀成了現況。不開 BR。
+
 - [ ] 3.2 `composer.py` 的 power net 分支讀 `render_plan`
 - [ ] 3.3 `local_star` / `daisy_chain` 兩種展開的幾何實作
       —— ⚠ 這會是 `_PERPENDICULAR_OK_KINDS` / `path_clear` perp 豁免的

@@ -315,6 +315,63 @@ SKiDL 把 hint 塗在 Net 物件上（於是 net 相等性與畫法糾纏），a
   忠實落地 + 盡力檢查，不是替 agent 判斷電路對錯。
   誰抓得到、誰抓不到逐格寫在 `errors.md`。
 
+## A1 逃逸樁：已封存，不是被否決（round 20-23）
+
+**先講結論，因為最容易被讀錯**：`archived/A1_escape_stub.patch` 裡那份修法
+**不是被判定為錯而拒收**，是**被降級為「未觸發」**——它防的那件事，在本 repo
+的 HEAD 上量不到。**若未來量到 state A，它是現成的，直接 apply。**
+
+### 它做什麼
+
+label 被 anti-fusion guard 降級後，會被貼在 **pin 座標**上；密板上那個座標可能
+落在**別的 net 已畫好的 wire 中段**。label 貼在 wire 上就是替那條 wire 命名，
+於是兩個 net 在 KiCad 眼裡合併。修法是：**替這種 label 拉一條短逃逸樁**，讓它
+有自己的銅可以命名；所有候選方向都被 guard 拒絕時，**排放顯式第三態
+（`label_escape_unresolvable`）而不是原地貼標**。
+
+### 為什麼封存而不合併
+
+| 量測 | 讀數 | 控制組 |
+|---|---|---|
+| 全套 emit 呼叫 | 107 | `segs>0` 71 次、`junctions>0` 9 次（母體非空） |
+| STATE A（落中段 **且** 該點有 junction）| **0** | 注入 junction ⇒ `A=0→1`，分支是活的 |
+| STATE B（落中段、無 junction）| 34 | — |
+| 12 筆 own-net B **全量** KiCad 仲裁 | **FUSED=0** SEPARATE=9 ABSENT=3 | POS ok=10／NEG NOT_IN=13，兩組都會紅 |
+
+**KiCad 只在該點有顯式 junction 時才合併**（T1/T2，見 `kicad_emit.py`
+`_point_on_segment` docstring）。34 筆全部無 junction ⇒ **電氣上沒有短路正在發生**。
+round 20 也已量到：樁確實畫出銅、label 確實移位，而 **HEAD 與 A1 的 KiCad netlist
+逐字相同**——即這條樁在現況下**電氣上不必要**，觸發謂詞比電氣必要性寬。
+
+### 復活條件（任一成立即 apply）
+
+1. 12 筆（或未來擴充的母體）出現任一 **FUSED**；
+2. **STATE A > 0**——`_assert_no_cross_net_junction()`（已移到 emit 尾端，`ded8b95`）
+   會 raise `CROSS_NET_JUNCTION_SHORT`，那就是訊號；
+3. 觸發謂詞收窄後（見下）重測仍有電氣差異；
+4. **router 視野修復後重測，STATE A > 0**（dispatcher round 24）。
+   當前的 `A=0` 是在**有 13 條 net 根本沒被畫成線**的情況下量到的
+   （btdongle 真板：7 條無 routing gap + 3 條 anti-fusion 降級 + 3 條 reserve 拒絕）。
+   **沒畫的線不可能讓 pin 落在它的中段上**——所以 `A=0` 有一部分是
+   「母體裡的線太少」而不是「幾何上安全」。router 畫出更多線之後，
+   pin 落他 net 幹線中段的機會可能上升，必須重測。
+
+**⚠ 收窄成「落中段 **且** 該點有 junction 才出樁」是行不通的**（dispatcher round 21
+裁決，我複查同意）：junction 落點由 multinode 迴圈**下游**決定，出樁決策當下該點
+還沒有 junction ⇒ 條件恆為假 ⇒ 樁永不產生。那正是 `errors.md` §Vacuous 的形狀。
+
+### 樁的三格任意性（佔位，不是設計）
+
+方向＝固定四方向候選列表、長度＝具名常數、碰撞＝走 `_guard_route`。
+**這三格都是「能跑就好」的佔位**，沒有幾何論證支撐，未來要重做。
+
+### A1 是止血，A3 才是治本
+
+**真正的解不在這裡。** 根因是 **router 一開始就不該讓一支 pin 落在別的 net 的
+幹線中段**——那是 placement／走線幾何的問題（A3）。逃逸樁只是在錯誤已經造成
+之後補救。**不要讓下一個人以為「替 label 拉樁」是正確設計**：它是止血帶，
+射程遠小於本包的 placement 禁區之外那個真問題。
+
 ## Critical Files
 
 - `packages/eda-bridge/bodesign_eda_bridge/composer.py:1887` — `compose_schematic`

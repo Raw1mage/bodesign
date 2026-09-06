@@ -1,0 +1,238 @@
+diff --git a/packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py b/packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py
+index d296c2b..36152a6 100644
+--- a/packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py
++++ b/packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py
+@@ -87,6 +87,19 @@ class SchematicEmitResult:
+     # Each entry {"net": name, "at": [x, y]}. Empty == every local label found a
+     # clear slot (the good case). Visible so a reviewer sees crowded pages.
+     label_local_downgrades: list[dict] = field(default_factory=list)
++    # A1 (round 20): labels that could not be placed at their pin coordinate
++    # because that coordinate sits ON ANOTHER NET'S WIRE (where a label would
++    # rename that wire and merge the nets -- measured: /GND vanished entirely and
++    # its 13 pins joined SIG_A). Each entry {"net", "from": [x,y], "to": [x,y]}
++    # records the short escape stub drawn so the label has its own copper to name.
++    label_escape_stubs: list[dict] = field(default_factory=list)
++    # The THIRD state, and the reason this pair exists rather than one list: every
++    # candidate escape direction was rejected by the guard, so NO label was placed
++    # for that net. Non-empty means the sheet is knowingly incomplete -- which is
++    # strictly better than the old behaviour of placing the label on the foreign
++    # wire and shorting two nets silently. Never let this share an output with
++    # "placed successfully": that conflation IS the defect A1 fixes.
++    label_escape_unresolvable: list[dict] = field(default_factory=list)
+     # BR_20260708 machine check: drawn wire segments that still cross a NON-host
+     # component body AABB (keep-out-inflated). Empty == every drawn wire clears all
+     # symbol bodies (the BR acceptance geometry check). Each entry:
+@@ -2168,6 +2181,107 @@ def emit_kicad_schematic(
+     # anchor is the pin endpoint (px, py) which is already known from power_endpoints
+     # before the port loop runs; identical to the box the loop reserves so this is a
+     # faithful pre-image, not a new estimate.
++    # ---------------------------------------------------------------- A1 -----
++    # ESCAPE STUB: a label must never be placed ON ANOTHER NET'S WIRE.
++    #
++    # Measured defect (13-part synthetic board): a net refused by the anti-fusion
++    # guard is down-graded to a label, and the label is then placed at the PIN
++    # COORDINATE -- which on a dense board can sit MID-SPAN on a different net's
++    # already-drawn wire. A label on a wire names THAT wire, mid-span or not, so
++    # KiCad merges the nets: the exported netlist had no /GND at all, its 13 GND
++    # pins and 2 SIG_A pins having become one net called SIG_A. The guard had
++    # already judged the geometry unsafe and refused to DRAW it; the fallback then
++    # did something more dangerous, with nothing checking it.
++    #
++    # Refusing to place is NOT sufficient (round 15 MUT2: moving the label with
++    # nowhere to go just turns the net into two unconnected pins). The label needs
++    # a HOME -- a short stub off the pin, label at its far end.
++    #
++    # The stub's NEAR end sits mid-span on the foreign wire on purpose. That is
++    # safe because KiCad merges an END into a mid-span only when an EXPLICIT
++    # junction is there (round 17, T1/T2, arbitrated by KiCad's netlist export);
++    # `exempt_interior_pt` encodes exactly that condition and
++    # `_assert_no_cross_net_junction` (end of emit) enforces its "no junction"
++    # half. Everything else the guard rejects stays rejected.
++    #
++    # A1 IS HEMOSTASIS, NOT A CURE -- see design.md. The upstream defect is that
++    # the router laid the GND trunk across R1.1/R2.1 at all (A3, placement).
++    #
++    # ARBITRARY, PLACEHOLDER, NOT DESIGN (errors.md records this): the stub length
++    # and the direction order below were chosen to be *a* strategy that runs, not
++    # a good one. No search, no cost function, no awareness of page density.
++    _LABEL_ESCAPE_STUB_MM = 2.54          # arbitrary: 2 grid steps, same as _STUB_MM
++    _LABEL_ESCAPE_DIRS = ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0))  # arbitrary order
++
++    def _junction_at(pt) -> bool:
++        return any(abs(pt[0] - jx) < _FUSION_EPS and abs(pt[1] - jy) < _FUSION_EPS
++                   for (jx, jy, _jn) in junction_points)
++
++    def _pt_on_foreign_wire(net_name: str, pt) -> bool:
++        return any(_point_on_segment(pt, o) for o in _other_net_segments(net_name))
++
++    def _escape_anchor(net_name: str, px: float, py: float):
++        """Where to put this net's label. Returns (anchor, mode).
++
++        mode is a THREE-state codomain and the third one is the point of the
++        exercise (code-thinker §12):
++          "clear"        -- the pin coord is already off every foreign wire; use
++                            it verbatim (byte-identical to the old behaviour, so
++                            boards with no conflict are unchanged).
++          "stub"         -- a candidate direction passed every guard; caller draws
++                            the stub and labels its far end.
++          "unresolvable" -- EVERY candidate was rejected. The caller must NOT fall
++                            back to the pin coord: that is the original defect.
++        """
++        pin = (round(px, 4), round(py, 4))
++        if not _pt_on_foreign_wire(net_name, pin):
++            return pin, "clear"
++        others = _other_net_segments(net_name)
++
++        def _near_end_only(p) -> bool:
++            # exempt ONLY our own near end, and only when no junction sits there
++            return (abs(p[0] - pin[0]) < _FUSION_EPS
++                    and abs(p[1] - pin[1]) < _FUSION_EPS
++                    and not _junction_at(p))
++
++        for (nx, ny) in _LABEL_ESCAPE_DIRS:
++            far = (round(pin[0] + nx * _LABEL_ESCAPE_STUB_MM, 4),
++                   round(pin[1] + ny * _LABEL_ESCAPE_STUB_MM, 4))
++            if _segment_fuses((pin, far), others, exempt_interior_pt=_near_end_only):
++                continue
++            if _pt_on_foreign_wire(net_name, far):
++                continue          # far end on a foreign wire = the same defect
++            if not _route_clears_ledger([pin, far], (), net_name):
++                continue
++            return far, "stub"
++        return None, "unresolvable"
++
++    label_escape_stubs: list[dict] = []
++    label_escape_unresolvable: list[dict] = []
++    _resolved_label_endpoints: list = []
++    for (_lnet, _lx, _ly, _ledge) in label_endpoints:
++        _anchor, _lmode = _escape_anchor(_lnet, _lx, _ly)
++        if _lmode == "clear":
++            _resolved_label_endpoints.append((_lnet, _lx, _ly, _ledge))
++            continue
++        if _lmode == "stub":
++            _pin_pt = (round(_lx, 4), round(_ly, 4))
++            wire_blocks.append(_wire_segment_block(_pin_pt[0], _pin_pt[1],
++                                                   _anchor[0], _anchor[1]))
++            _record_run(_pin_pt[0], _pin_pt[1], _anchor[0], _anchor[1], _lnet)
++            fusion_registry.setdefault(_lnet, []).append((_pin_pt, _anchor))
++            _reserve_wire([_pin_pt, _anchor], _lnet)
++            label_escape_stubs.append({"net": _lnet, "from": list(_pin_pt),
++                                       "to": list(_anchor)})
++            _resolved_label_endpoints.append((_lnet, _anchor[0], _anchor[1], _ledge))
++            continue
++        # unresolvable: emit the third state and place NOTHING. "Safely landed"
++        # and "found no safe landing" must not share one output.
++        label_escape_unresolvable.append({
++            "net": _lnet, "at": [_lx, _ly],
++            "reason": "every candidate escape direction was rejected by the route guard"})
++    label_endpoints = _resolved_label_endpoints
++
+     _pwr_name_cw_pre = _PIN_NAME_CW_MM * (page_scale if page_scale > 1.0 else 1.0)
+     _pwr_name_ch_pre = _PIN_NAME_CH_MM * (page_scale if page_scale > 1.0 else 1.0)
+     _power_label_boxes: list[tuple[float, float, float, float]] = []
+@@ -2435,6 +2549,17 @@ def emit_kicad_schematic(
+         fusion_label_fallbacks=fusion_label_fallbacks,
+         fusion_jogged_nets=fusion_jogged_nets,
+         label_local_downgrades=label_local_downgrades,
++        # A1 (round 20): the escape-stub three-state codomain. Both lists are
++        # assigned unconditionally (BR_20260804f shape). Read together they
++        # separate three outcomes a single count cannot:
++        #   both empty            -- no label sat on a foreign wire (nothing to do)
++        #   stubs non-empty       -- labels were re-homed onto their own stub
++        #   unresolvable non-empty-- NO safe landing existed and NOTHING was placed;
++        #                            those nets are unlabelled ON PURPOSE. This is
++        #                            the state the old code could not express: it
++        #                            placed the label anyway, on another net's wire.
++        label_escape_stubs=label_escape_stubs,
++        label_escape_unresolvable=label_escape_unresolvable,
+         wire_body_intrusions=wire_body_intrusions,
+         # BR_20260804f: the lossless carrier for guard C. The warning string
+         # truncates at 12; this does not. Assigned unconditionally so "empty"
+@@ -3330,9 +3455,8 @@ def _point_on_segment(pt: tuple[float, float], seg: tuple) -> bool:
+     not a necessary one. Being stricter than KiCad is the safe direction (it can
+     refuse a drawable route, never admit a short), which is why the round-8
+     `_PERPENDICULAR_OK_KINDS` safety argument built on it does NOT need revisiting.
+-    A caller that needs KiCad's ACTUAL (looser) rule must therefore add its own
+-    exemption at its own call site and justify it there; do NOT loosen this
+-    predicate, because every existing caller depends on the strict reading.
++    Callers that must model KiCad's ACTUAL rule use the exemption in
++    `_segment_fuses` (see `exempt_interior_pt`), never a change here.
+     """
+     a, b = seg
+     ax = _seg_axis(a, b)
+@@ -3349,14 +3473,72 @@ def _point_on_segment(pt: tuple[float, float], seg: tuple) -> bool:
+     return lo - _FUSION_EPS <= pt[1] <= hi + _FUSION_EPS
+ 
+ 
+-def _segment_fuses(seg: tuple, other_net_segs: list[tuple]) -> bool:
++def _point_strictly_interior(pt: tuple[float, float], seg: tuple) -> bool:
++    """True iff pt lies on seg but is NOT within eps of either of its endpoints.
++
++    The endpoint exclusion is the whole point: endpoint-to-endpoint contact is a
++    real KiCad connection (T1/T2 never tested it and it is not exempted anywhere),
++    while END-on-MID-SPAN is the case measured to need an explicit junction.
++    """
++    if not _point_on_segment(pt, seg):
++        return False
++    a, b = seg
++    for end in (a, b):
++        if (abs(pt[0] - end[0]) < _FUSION_EPS
++                and abs(pt[1] - end[1]) < _FUSION_EPS):
++            return False
++    return True
++
++
++def _segment_fuses(seg: tuple, other_net_segs: list[tuple],
++                   exempt_interior_pt=None) -> bool:
+     """True iff `seg` would electrically fuse with any segment belonging to a
+     DIFFERENT net: collinear interval overlap, or either endpoint on the other
+-    segment (and vice versa, to catch a foreign endpoint on THIS segment)."""
++    segment (and vice versa, to catch a foreign endpoint on THIS segment).
++
++    `exempt_interior_pt` (A1, round 20) -- OPTIONAL callable (pt) -> bool. DEFAULT
++    None means "no exemption", so every existing caller keeps a byte-identical
++    verdict; the exemption exists only for callers that opt in explicitly.
++
++    WHAT IT EXEMPTS, and why it is exactly this narrow. Measured (round 17 T1/T2,
++    arbitrated by KiCad's own netlist export): KiCad merges a wire END landing on
++    another wire's MID-SPAN only when an EXPLICIT junction sits there. Without a
++    junction the two nets stay separate. So when ALL THREE hold:
++
++        (a) the contact is OUR endpoint landing on THEIR segment,
++        (b) strictly INTERIOR to it (not at either of their endpoints), and
++        (c) the caller confirms NO junction is emitted at that point,
++
++    the contact is not a fusion and blocking it costs a drawable escape route.
++    The caller supplies (c) -- this module cannot see the junction list.
++
++    WHAT IT DOES NOT EXEMPT, deliberately:
++      * collinear overlap -- visually indistinguishable, always a fusion;
++      * endpoint-to-endpoint contact -- KiCad really does connect those, and
++        T1/T2 never measured that case, so it stays rejected;
++      * a FOREIGN endpoint landing on OUR segment -- the mirror case, also
++        unmeasured here.
++
++    SAFETY DEPENDS ON AN ENFORCER, NOT ON THIS DOCSTRING. The whole exemption
++    rests on "no junction there". `_assert_no_cross_net_junction` is what makes
++    that true at emit time, and it is called at the END of emit so its window
++    includes the power nets (they enter `fusion_registry` late, at the power-port
++    stub site). Moving that call earlier re-blinds it -- measured: at the old call
++    position the registry held only signal nets, and a junction injected onto a
++    real GND segment did NOT raise while the same injection onto a SIG_A segment
++    did.
++    """
+     for o in other_net_segs:
+         if _collinear_overlap(seg, o):
+             return True
+-        if _point_on_segment(seg[0], o) or _point_on_segment(seg[1], o):
++        for _pt in (seg[0], seg[1]):
++            if not _point_on_segment(_pt, o):
++                continue
++            if (exempt_interior_pt is not None
++                    and _point_strictly_interior(_pt, o)
++                    and exempt_interior_pt(_pt)):
++                continue                      # measured-safe: END on mid-span,
++                                              # no junction there (T1/T2)
+             return True
+         if _point_on_segment(o[0], seg) or _point_on_segment(o[1], seg):
+             return True
