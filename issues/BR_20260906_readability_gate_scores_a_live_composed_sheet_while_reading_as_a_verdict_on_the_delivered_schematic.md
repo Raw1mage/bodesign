@@ -1,6 +1,14 @@
 # BR_20260906 — readability_gate 評的是 live-compose 的另一張圖，讀起來卻像對交付圖的判決
 
-- **Status**: OPEN
+- **Status**: **PARTIAL**（2026-09-06 改判 · 原記 OPEN）—— §7 的欄位已落地，§8 的磁碟入口未做。
+  **不是 CLOSED**，殘留二項，兩項都是能力而非收尾：
+  1. **讀 `.kicad_sch` 的入口仍不存在。** 本 gate 的唯一輸入仍是 live compose 產的 `route_stats`，
+     所以**現行交付圖的可讀性依舊是 `not-run`**。差別在於：現在這件事寫在報告的 `not_scored`
+     欄位裡（值逐字含 `on-disk` 與 `not-run`），讀者不必自己推理。
+  2. **三條閾值尚未重新校準。** `MIN_SUBCIRCUIT_RATIO=0.50` 等值仍釘在 live-compose 的量測上
+     （`MEASURE_RUN`）；在磁碟入口落地前先套用到 426-wire 的人工圖，會得到一個沒校準過的判決
+     ——就是本 BR 這個缺陷換一個方向再犯一次（§8）。
+  子包追蹤：尚未開包（待 dispatcher 裁決；本輪只做 §7）。
 - **Severity**: P1 — 它汙染的不是某個數值，是「這個 FAIL 在講哪一塊板子」
 - **Family**: `G13-harness-disclosure` — 兩個不同母體的量測結果共用同一份輸出，沒有任何欄位區分
 - **Component**: `packages/eda-bridge/bodesign_eda_bridge/readability_gate.py`,

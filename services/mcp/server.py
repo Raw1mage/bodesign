@@ -498,6 +498,31 @@ def _h_verify_netlist_fidelity(a: dict) -> Any:
         return out
 
 
+def _h_readability_gate(a: dict) -> Any:
+    from bodesign_eda_bridge.readability_gate import (ScoredSubjectError,
+                                                      readability_gate)
+    try:
+        return readability_gate(
+            a.get("route_stats"),
+            spec=a.get("spec"),
+            n=a.get("n"),
+            scored_subject=a.get("scored_subject"),
+            subject_source=a.get("subject_source"),
+        )
+    except ScoredSubjectError as error:
+        # A subject this gate cannot vouch for is a CALLER error, deliberately
+        # kept OFF the `status` axis for the same reason NETLIST_MISSING is:
+        # `indeterminate` tells a reader the drawing was inconclusive, while
+        # this tells them their own claim was unbackable. Conflating the two
+        # would recreate BR_20260906 one layer up.
+        return {"ok": False, "error": {"code": "READABILITY_SUBJECT_INVALID",
+                                       "message": str(error)}}
+    except ValueError as error:
+        # missing denominator (neither spec nor n) — same channel, same reason
+        return {"ok": False, "error": {"code": "READABILITY_ARGS_INVALID",
+                                       "message": str(error)}}
+
+
 def _h_design_suggest(a: dict) -> Any:
     from bodesign_eda_bridge.design_suggest import (DesignSuggestInputError,
                                                     design_suggest)
@@ -1222,6 +1247,20 @@ TOOLS: list[dict] = [
          "nc_declared": {"type": "array", "items": {},
                          "description": "pins the design DECLARES not-connected, as [[ref, pin], ...]. Any of these found on a multi-node net in the export is reported in `nc_wired`. Omit it and `nc_wired` is always empty \u2014 which means absent, NOT verified-clean."}},
          "required": ["spec", "emitted"]}},
+    {"name": "bodesign_readability_gate", "handler": _h_readability_gate,
+     "description": "FORM-axis gate (plan c03_delivery_contract_and_engine_seams WP6): score how a schematic is DRAWN. `gate_axis` is literally 'form' and every report carries `does_not_authorize: [electrical_correctness, fidelity]` as a DATA FIELD in every status, pass and fail alike \u2014 because BR_20260905 \u00a78.5.2 measured a change that improved EVERY geometric criterion at once (junctions 5\u219243, stub share 73.0%\u219232.7%, subcircuits 3\u219211) while raising fidelity `moved` from 10 to 67, because it wired an OPEN CIRCUIT. Every threshold here would have gone green on that change. A PASS from this verb authorizes NOTHING about whether the circuit is correct; run `bodesign_verify_netlist_fidelity` for that axis and report both. \u26a0 WHAT IT SCORES, and this is the whole of BR_20260906: it scores the `route_stats` of a LIVE COMPOSE \u2014 NOT the `.kicad_sch` sitting on disk. There is no `.kicad_sch` reader in this module. Read `scored_subject` before quoting any verdict: `live-compose` (a spec was composed; `source` names it) or `frozen-stats` (frozen numbers replayed with an explicit denominator `n`; nothing was composed). The third enumerated value `on-disk` is RESERVED AND REFUSED (READABILITY_SUBJECT_INVALID) precisely so this verb cannot CLAIM a measurement it cannot make. `not_scored` states the same fact positively: the delivered schematic's readability is `not-run` here, NEVER `failed`. The defect this prevents: a `ratio 0.2222 FAIL` on btdongle read as a verdict on the DELIVERED drawing, while the two populations differ by an order of magnitude (delivered 426 wires / 56 junctions across 3 sheets vs the scored 116 / 6, single sheet). Do NOT confuse `scored_subject` with `measure_run`: the latter is the historical run the THRESHOLDS were calibrated from (identical in every report ever emitted) and carries a spec path that reads like a subject; it is labelled `what` for that reason. THRESHOLDS ARE SCALE-DEPENDENT (task 6.3): junction > 20, stub share < 40%, drawn_subcircuits/N >= 0.50, all pinned on a live-compose run of the real 45-component/27-net btdongle spec \u2014 BR_20260905 \u00a78.5.5 measured a synthetic 28/21 corpus reporting an apparent near-miss where the same code on the real board passed clearly, so a synthetic corpus may supplement the acceptance corpus and may never decide it. These numbers do NOT transfer to a hand-drawn sheet without recalibration. Status codomain: `ok` / `failed` (>=1 threshold unmet, `unmet` names which) / `not-run` (no route_stats, or route_stats missing the task-6.0 emissions \u2014 absence is NEVER a pass) / `empty` (ran, nothing to score: zero nets, or N==0 so the ratio has no denominator and was not evaluated) / `indeterminate` (the emitter predates task 6.0, so its stats cannot be reconciled against what was drawn). N is spec-derived per DD-09 and reported beside the ratio, so a low ratio is distinguishable from a small denominator. Pure python, runs in core.",
+     "schema": {"type": "object", "properties": {
+         "route_stats": {"type": "object",
+                         "description": "the `RouteStats.to_dict()` from a compose result. null/absent is `not-run`, never a pass. A dict lacking `stub_share` or `drawn_subcircuits` is also `not-run` with `missing_fields` naming them \u2014 a missing key is absent input, not a measured zero, and defaulting it to 0 would let 'no stubs were measured' pass the stub criterion."},
+         "spec": {"type": "object",
+                  "description": "the design spec the stats came from. Supplying it derives N per DD-09 AND sets `scored_subject` to `live-compose` with the spec as its source. Supply either this or `n`; supplying neither is READABILITY_ARGS_INVALID, because N=0 would then mean both 'no eligible nets' and 'the caller forgot the denominator'."},
+         "n": {"type": "integer",
+               "description": "explicit denominator, to replay a frozen fixture. Sets `scored_subject` to `frozen-stats`: no spec was composed, so this is a DIFFERENT subject and not a weaker form of the same one."},
+         "scored_subject": {"type": "string",
+                            "description": "override the derived subject. Closed enumeration: live-compose | frozen-stats | on-disk. Normally OMIT it \u2014 the derived value comes from the branch actually taken and so cannot disagree with what was scored. `on-disk` is refused (no .kicad_sch reader exists); an unenumerated value is refused rather than coerced."},
+         "subject_source": {"type": "object",
+                            "description": "evidence for the subject claim. Derived from `spec` when omitted. Passing it EXPLICITLY EMPTY is refused, so 'no source was supplied' and 'the source is empty' never share an output."}},
+         "required": []}},
     {"name": "bodesign_design_suggest", "handler": _h_design_suggest,
      "description": "Evidence-backed DRAFT suggestion for one pin class — it SUGGESTS, it never DECIDES. Every returned value is computed from a KB rule and stamped with `evidence.kb_object`; `review_required` is true on EVERY path including the ones that suggest nothing, and `committed` is not a member of the status codomain, so no code path can mark a suggestion as adopted (plan c03_delivery_contract_and_engine_seams DD-02). READ `status` FIRST, and note that THREE of its outcomes return zero suggestions for three DIFFERENT reasons: `suggested` = a KB rule covers this class and produced >=1 value, each carrying its own evidence; `no-rule` WITH AN EMPTY `evidence` block = the class has NO KB anchor at all (nothing ran, so no value could exist — distil a rule into KB before expecting an answer here); `no-rule` WITH A POPULATED `evidence` block = a rule DID run and the supplied context named zero pins of that class (ran, nothing to do); `indeterminate` = a rule covers the class but cannot yield a value — either a required electrical input is unresolvable, or (analog-reference today) the anchor states an OBLIGATION without a value. Which classes are answerable is decided by MEASURED KB coverage, not by plausibility: `power` uses control.power.decoupling-pdn-strategy (0.1uF per 2 power pins, ~15uF bulk per 10, placement <=1.25cm, TI SPRABV2, confidence=verified); `analog-reference` maps to step.sch.mcu-adc-frontend-review, whose entire VREF content is the sentence 'VREF/analog-supply pins get required filtering and grounding' — an obligation with NO capacitance, formula or window, so that class returns `indeterminate` with the obligation named rather than the customary 100nF, because attaching a real KB id to a value the object does not contain is worse than no answer. `ground`, `reset-en`, `boot-strapping` and `nc-dnc` returned no class-specific anchor when queried on 2026-09-06 and therefore return `no-rule`; `clock`, `io-gpio` and `high-speed` are served today by the dedicated suggest_* entry points. A malformed call (unknown pin_class, missing pin list) is `ok:false` with code DESIGN_SUGGEST_INPUT_INVALID, NOT a status — a typo teaches you nothing about KB coverage. Deterministic, side-effect free: the input is never mutated and no file is written.",
      "schema": {"type": "object", "properties": {

@@ -45,6 +45,54 @@ connectivity gap is documented in `Netlist_Status.md`, never silently dropped.
 | 8 | Mechanical bridge | `Mechanical_Constraint_Export.json` | `approval=false` |
 | 9 | PRD-BOM crosscheck report | `prd_bom_crosscheck.report.json` | `gate: PASS` required; report absent = gate **not run** (never presume PASS) — § 3b |
 | 10 | C03 stage-entry gate report | `check_c03.report.json` | `gate: PASS` required — R1 schema / R2 readiness / R3 symbol-source **claim** / R4 SSOT / R5 BOM↔netlist / R6 pin-spec polarity (`bodesign_check_c03`); absent = **not run** — § 3c |
+| 11 | Schematic readability (FORM axis, optional) | `readability_gate` verdict | scores how the schematic is **drawn**, never whether the circuit is **correct**; it scores a **live compose**, not the `.kicad_sch` on disk — see "Readability gate" below. Absent = not run; a PASS authorizes nothing electrical |
+
+### Readability gate (`readability_gate` — FORM axis, and what it does NOT score)
+
+Available on both planes: `gate.py readability_gate --repo <abs>` (landing) and
+`bodesign_readability_gate` (MCP). Thresholds: junction > 20, stub share < 40%,
+`drawn_subcircuits / N` ≥ 0.50.
+
+**Two boundaries, both load-bearing, both emitted as DATA FIELDS rather than prose — an
+aggregator that reformats can drop a sentence, it cannot drop a key:**
+
+1. **AXIS.** Every report carries `gate_axis: "form"` and
+   `does_not_authorize: [electrical_correctness, fidelity]`. BR_20260905 §8.5.2 measured a
+   change that improved **every** geometric criterion at once (junctions 5→43, stub share
+   73.0%→32.7%, subcircuits 3→11) while raising fidelity `moved` from 10 to 67 — because it
+   wired an **open circuit**. Every threshold here would have gone green on that change.
+   **Report this verdict alongside `bodesign_verify_netlist_fidelity`, never instead of it.**
+2. **SUBJECT.** Read `scored_subject` **before quoting any verdict**. It is
+   `live-compose` (a spec was composed; `source` names it) or `frozen-stats` (frozen numbers
+   replayed with an explicit `n`; nothing was composed). The enumerated third value `on-disk`
+   is **reserved and REFUSED** (`READABILITY_SUBJECT_INVALID`) because this gate has no
+   `.kicad_sch` reader — so it cannot *claim* a measurement it cannot make. `not_scored`
+   states the same fact positively: **the delivered schematic's readability is `not-run`
+   here, never `failed`.**
+
+   Why this field exists (BR_20260906): the gate returned `ratio 0.2222 FAIL` on btdongle and
+   it read as a verdict on the **delivered** drawing. The two populations differ by an order
+   of magnitude — delivered `sch/` = 426 wires / 56 junctions across 3 sheets, versus the
+   scored live compose = 116 / 6, single sheet. Nothing in the report distinguished them.
+
+> ⚠ Do not confuse `scored_subject` with `measure_run`. `measure_run` is the **historical**
+> run the thresholds were calibrated from — identical in every report this gate ever emits —
+> and it carries a spec path that reads like a subject. It is labelled `what` for exactly
+> that reason.
+
+**Thresholds are SCALE-DEPENDENT** (task 6.3), pinned on a live compose of the real
+45-component / 27-net btdongle spec. BR_20260905 §8.5.5 measured a synthetic 28/21 corpus
+reporting an apparent near-miss where the same code on the real board passed clearly: a
+synthetic corpus may supplement the acceptance corpus, never decide it. **These numbers do
+not transfer to a hand-drawn sheet without recalibration.**
+
+Status → landing exit code: `ok`→0, `failed`→1, `not-run`/`empty`/`indeterminate`→2. The
+three that map to 2 are all **no-verdict**: `not-run` = no `route_stats` (or the task-6.0
+fields are missing — a missing key is absent input, not a measured zero); `empty` = it ran
+and there was nothing to score (zero nets, or `N == 0` so the ratio has no denominator);
+`indeterminate` = the emitter predates task 6.0, so its stats cannot be reconciled against
+what was drawn. `N` is spec-derived per DD-09 and reported beside the ratio, so a low ratio
+is distinguishable from a small denominator.
 
 > **Landing-verb prerequisite (BR_20260903a).** `gate.py` executes out of the bodesign `packages/`
 > tree. When the skill is projected outside the bodesign checkout (XDG install at

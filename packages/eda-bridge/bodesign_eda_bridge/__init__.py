@@ -34,6 +34,7 @@ from .fidelity import (FidelityError, FidelityInputError, FidelityReport,
 from .design_suggest import (PIN_CLASSES, SUGGEST_STATUSES,
                              DesignSuggestInputError, design_suggest)
 from .render_qa import TextQAReport, qa_svg_text
+from .readability_gate import ScoredSubjectError, readability_gate
 # block_drafter / block_qa are LAZY (PEP 562, see __getattr__ at the bottom):
 # they import kiutils, which the schematic/routing side of this package does not
 # need. Importing them eagerly made `from bodesign_eda_bridge import
@@ -185,6 +186,12 @@ __all__ = [
     "SUGGEST_STATUSES",
     "TextQAReport",
     "qa_svg_text",
+    # WP6 form-axis readability gate. Exported for the same reason
+    # verify_netlist_fidelity is: gate.py's registry declares (module, callable)
+    # pairs and tests/test_landing_gate.py resolves each by getattr, so a row
+    # naming a callable this package does not expose is a false declaration.
+    "readability_gate",
+    "ScoredSubjectError",
     "PinoutBlock",
     "draw_block",
     "BlockQAVerdict",

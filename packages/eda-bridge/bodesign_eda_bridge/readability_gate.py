@@ -46,6 +46,17 @@ MIN_SUBCIRCUIT_RATIO = 0.50
 # task 6.2c step (1) MEASURE — the run this threshold was pinned from. Recorded
 # so the number can be attributed to a measurement rather than to taste.
 MEASURE_RUN = {
+    # DISAMBIGUATION (BR_20260906 §3.3). `measure_run` and `scored_subject` have
+    # similar shapes and OPPOSITE meanings, and the BR measured that this one is
+    # the more likely of the two to be misread as the other:
+    #     measure_run    = the run the THRESHOLDS were calibrated from (historical,
+    #                      identical in every report this module ever emits)
+    #     scored_subject = what THIS call scored (per-call, the thing a reader
+    #                      actually wants when they ask "which drawing is this?")
+    # A reader who takes `measure_run.spec` for the subject gets a path that is
+    # right about the calibration and wrong about the verdict.
+    "what": "threshold calibration run (NOT the subject of this report — see "
+            "scored_subject for that)",
     "spec": "/home/pkcs12/products/thesmart_products/04.btdongle/"
             "C03-EE/02_build/sch_gen/design.py",
     "spec_shape": "45 components / 27 nets",
@@ -65,6 +76,36 @@ GATE_AXIS = "form"
 # specifically — naming only the general term would let a reader assume the
 # specific one had been covered.
 DOES_NOT_AUTHORIZE = ["electrical_correctness", "fidelity"]
+
+# --- scored subject (BR_20260906 §7) --------------------------------------
+# The defect that made this field necessary: the gate reported `ratio 0.2222
+# FAIL` on btdongle and it read as a verdict on the DELIVERED schematic, while
+# it had in fact scored a sheet the engine composed live during the run. The two
+# populations differ by an order of magnitude (delivered sch/: wire 426 /
+# junction 56 across 3 sheets; the scored live compose: wire 116 / junction 6,
+# single sheet), and NOTHING in the report distinguished them.
+#
+# CLOSED enumeration. A free string would let a caller invent a fourth meaning
+# that no reader could adjudicate.
+SUBJECT_LIVE_COMPOSE = "live-compose"
+SUBJECT_FROZEN_STATS = "frozen-stats"
+SUBJECT_ON_DISK = "on-disk"
+SCORED_SUBJECTS = (SUBJECT_LIVE_COMPOSE, SUBJECT_FROZEN_STATS, SUBJECT_ON_DISK)
+
+# `on-disk` is RESERVED AND STRUCTURALLY UNREACHABLE TODAY, and that is the
+# point of naming it rather than omitting it (BR_20260906 §8): this module's
+# only input is `route_stats`, which is produced by a live compose. There is no
+# reader for `.kicad_sch`, so no code path can emit this value. It is declared
+# so that the report can state what it did NOT score, and
+# `test_readability_gate.py` asserts the unreachability rather than leaving it
+# as a comment nobody re-checks. A future disk entry point must add the emission
+# point AND flip that test — the thresholds are calibrated on live-compose runs
+# (see MEASURE_RUN) and do not transfer to a hand-drawn sheet without recal.
+NOT_SCORED = [
+    "on-disk deliverable — this gate has no `.kicad_sch` reader; it scores the "
+    "stats of a live compose. The delivered schematic's readability is `not-run` "
+    "here, never `failed` (BR_20260906)."
+]
 
 _PASSIVE_PREFIXES = ("R", "C", "L")
 # DD-09 node-count window: a net small enough to read as ONE local subcircuit.
@@ -113,17 +154,72 @@ def compute_n(spec: dict) -> int:
     return n
 
 
-def _base_report(status: str) -> dict:
-    """Every report carries the axis and the disclaimer, in EVERY status."""
+class ScoredSubjectError(ValueError):
+    """The caller named a subject this module cannot vouch for.
+
+    Raised rather than defaulted. A gate whose report says `live-compose` when
+    nobody established that is worse than one that says nothing, because the
+    field exists precisely to be quoted.
+    """
+
+
+def _subject_block(subject: str, evidence) -> dict:
+    """Build the `scored_subject` block, or refuse.
+
+    Question this answers: WHICH DRAWING did this report score?
+
+    Fail-fast, both arms, because each failure mode has its own wrong-but-
+    plausible default:
+      * an unknown subject value would otherwise become a free string, and the
+        enumeration would stop meaning anything;
+      * absent evidence would otherwise become "" or {}, and "nobody supplied a
+        source" would share an output with "the source is empty" — the exact
+        conflation this whole field exists to remove.
+    """
+    if subject not in SCORED_SUBJECTS:
+        raise ScoredSubjectError(
+            f"scored_subject must be one of {list(SCORED_SUBJECTS)}; got "
+            f"{subject!r}. The enumeration is closed on purpose: a free string "
+            "would let a caller invent a meaning no reader can adjudicate.")
+    if subject == SUBJECT_ON_DISK:
+        # Structurally unreachable today (see NOT_SCORED). Refusing here rather
+        # than accepting keeps the claim and the capability from diverging: this
+        # module cannot read a `.kicad_sch`, so it must not be able to SAY it
+        # scored one.
+        raise ScoredSubjectError(
+            "scored_subject='on-disk' is reserved and not implemented: this gate "
+            "scores route_stats from a live compose and has no `.kicad_sch` "
+            "reader. Emitting it would claim a measurement that did not happen "
+            "(BR_20260906).")
+    if not evidence:
+        raise ScoredSubjectError(
+            f"scored_subject={subject!r} requires source evidence; got "
+            f"{evidence!r}. Without it 'no source was supplied' and 'the source "
+            "is empty' would be the same output.")
+    return {"subject": subject, "source": evidence}
+
+
+def _base_report(status: str, subject_block: dict) -> dict:
+    """Every report carries the axis, the disclaimer and the scored subject.
+
+    `scored_subject` is a FIELD in EVERY status, pass and fail alike, for the
+    same reason `does_not_authorize` is (task 6.5 / DD-07): an aggregator that
+    reformats can drop a sentence, it cannot drop a key. A `failed` verdict whose
+    subject is missing is exactly the artifact BR_20260906 is about.
+    """
     return {
         "status": status,
         "gate_axis": GATE_AXIS,
         "does_not_authorize": list(DOES_NOT_AUTHORIZE),
+        "scored_subject": dict(subject_block),
+        "not_scored": list(NOT_SCORED),
     }
 
 
 def readability_gate(route_stats, *, spec: dict | None = None,
-                     n: int | None = None, emit=None) -> dict:
+                     n: int | None = None, emit=None,
+                     scored_subject: str | None = None,
+                     subject_source=None) -> dict:
     """Score a compose result on the `form` axis. Authorizes nothing electrical.
 
     route_stats: the `RouteStats` (or its `to_dict()`) from a compose result, or
@@ -135,6 +231,18 @@ def readability_gate(route_stats, *, spec: dict | None = None,
         and "nobody supplied the denominator" are different facts.
     emit: optional `SchematicEmitResult`. Used ONLY to detect an emitter that
         predates task 6.0 (DD-11 `indeterminate` arm).
+    scored_subject / subject_source: WHICH DRAWING this call scored, and the
+        evidence for that claim (BR_20260906 §7). Closed enumeration
+        (`SCORED_SUBJECTS`). Left unset, BOTH are derived FROM THE BRANCH THE
+        CALLER TOOK, which is the only fact available that cannot disagree with
+        what was actually scored:
+            spec= supplied  -> `live-compose`, sourced from the spec
+            n= only         -> `frozen-stats`, sourced as a fixture replay
+        That derivation is an EMISSION POINT, not a default: the two arms report
+        DIFFERENT values, so a reader can tell them apart, and neither is the
+        empty string. What is refused outright (`ScoredSubjectError`) is a claim
+        this module cannot back: a value outside the enumeration, `on-disk` (no
+        `.kicad_sch` reader exists), or evidence explicitly passed as empty.
 
     Returns a report dict. Statuses, per errors.md §WP6 as amended by DD-11:
       ok            every threshold met
@@ -146,6 +254,9 @@ def readability_gate(route_stats, *, spec: dict | None = None,
       indeterminate the emitter predates task 6.0 (no `wire_runs` /
                     `junctions_emitted`) while nets were wired, so the stats
                     cannot be vouched for against what was drawn
+
+    Every report carries `scored_subject` (what was scored) and `not_scored`
+    (what was structurally NOT scored) in EVERY status.
     """
     if n is None and spec is None:
         raise ValueError(
@@ -153,9 +264,49 @@ def readability_gate(route_stats, *, spec: dict | None = None,
             "`n` (to replay a frozen fixture). Supplying neither would make N=0 "
             "mean both 'no eligible nets' and 'caller forgot the denominator'.")
 
+    # --- subject arm: established BEFORE any verdict is computed ------------
+    # Order matters. Establishing the subject after scoring would let a report
+    # exist, however briefly, with a verdict and no subject -- and every arm
+    # below returns early, so "after" would in practice mean "on some paths".
+    if spec is not None:
+        # A spec was supplied, so these stats came from composing it.
+        if scored_subject is None:
+            scored_subject = SUBJECT_LIVE_COMPOSE
+        if subject_source is None:
+            # Derive from the spec the denominator already came from, so the
+            # source cannot disagree with what was scored. Keys in preference
+            # order; a spec naming none of them still yields a POSITIVE
+            # statement ("unnamed in-memory spec" + its shape), never "".
+            for key in ("source", "spec_path", "path", "name"):
+                value = spec.get(key)
+                if value:
+                    subject_source = {"from_spec": key, "value": value}
+                    break
+            else:
+                subject_source = {
+                    "from_spec": None,
+                    "value": "unnamed in-memory spec",
+                    "shape": f"{len(spec.get('components', []) or [])} components / "
+                             f"{len(spec.get('nets', []) or [])} nets",
+                }
+    else:
+        # `n=` with no spec: a frozen replay. This is a DIFFERENT subject, not a
+        # weaker version of the same one -- there is no spec behind these
+        # numbers, so nothing was composed and no drawing was consulted. Saying
+        # `live-compose` here would be the BR_20260906 defect in miniature.
+        if scored_subject is None:
+            scored_subject = SUBJECT_FROZEN_STATS
+        if subject_source is None:
+            subject_source = {
+                "from_spec": None,
+                "value": "frozen route_stats replayed with an explicit "
+                         "denominator (n=); no spec was composed",
+            }
+    subject_block = _subject_block(scored_subject, subject_source)
+
     # --- precondition arm: absent input is not a verdict --------------------
     if route_stats is None:
-        report = _base_report("not-run")
+        report = _base_report("not-run", subject_block)
         report["reason"] = "compose result carries no route_stats"
         report["code"] = "READABILITY_STATS_ABSENT"
         return report
@@ -164,7 +315,7 @@ def readability_gate(route_stats, *, spec: dict | None = None,
 
     missing = [f for f in _REQUIRED_STAT_FIELDS if f not in stats]
     if missing:
-        report = _base_report("not-run")
+        report = _base_report("not-run", subject_block)
         report["reason"] = ("route_stats lacks the task-6.0 emission(s); a missing "
                             "key is absent input, not a measured zero")
         report["missing_fields"] = missing
@@ -185,7 +336,7 @@ def readability_gate(route_stats, *, spec: dict | None = None,
         emitter_missing = [f for f in ("wire_runs", "junctions_emitted")
                            if not hasattr(emit, f)]
         if emitter_missing:
-            report = _base_report("indeterminate")
+            report = _base_report("indeterminate", subject_block)
             report["reason"] = ("emitter predates task 6.0; its stats cannot be "
                                 "reconciled against what was drawn")
             report["missing_emitter_fields"] = emitter_missing
@@ -195,7 +346,7 @@ def readability_gate(route_stats, *, spec: dict | None = None,
     # --- zero-net arm --------------------------------------------------------
     labelled = stats.get("labelled_nets", 0) or 0
     if wired == 0 and labelled == 0:
-        report = _base_report("empty")
+        report = _base_report("empty", subject_block)
         report["reason"] = "route_stats records zero nets; nothing to score"
         return report
 
@@ -213,7 +364,7 @@ def readability_gate(route_stats, *, spec: dict | None = None,
     downgrades_without_fragment = [d["net"] for d in downgrades
                                    if not (d.get("drawn_fragments") or 0)]
 
-    report = _base_report("ok")
+    report = _base_report("ok", subject_block)
     report["N"] = n_value
     report["drawn_subcircuits"] = subcircuits
     report["stub_share"] = stub_share

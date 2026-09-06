@@ -29,6 +29,12 @@ from bodesign_eda_bridge.readability_gate import (
     MAX_STUB_SHARE,
     MIN_JUNCTIONS,
     MIN_SUBCIRCUIT_RATIO,
+    NOT_SCORED,
+    SCORED_SUBJECTS,
+    SUBJECT_FROZEN_STATS,
+    SUBJECT_LIVE_COMPOSE,
+    SUBJECT_ON_DISK,
+    ScoredSubjectError,
     compute_n,
     readability_gate,
 )
@@ -385,6 +391,132 @@ class LiveEmissionTests(unittest.TestCase):
                             "a live compose carries both task-6.0 fields, so not-run "
                             "here would mean to_dict() lost one")
         self.assertEqual(DOES_NOT_AUTHORIZE, report["does_not_authorize"])
+
+
+class ScoredSubjectTests(unittest.TestCase):
+    """BR_20260906 §7 — which drawing did this report score?
+
+    The defect: `ratio 0.2222 FAIL` on btdongle read as a verdict on the
+    DELIVERED schematic while it scored a live compose. The two populations
+    differ by an order of magnitude (delivered 426 wires / 56 junctions across 3
+    sheets vs the scored 116 / 6, single sheet) and nothing in the report told
+    them apart.
+    """
+
+    def test_field_present_in_every_reachable_status(self):
+        # Question: can a report ever carry a verdict and no subject?
+        # Same rationale as does_not_authorize (task 6.5): a key survives an
+        # aggregator that drops a sentence.
+        cases = {
+            "not-run": readability_gate(None, n=18),
+            "not-run-missing-field": readability_gate(
+                {k: v for k, v in _stats().items() if k != "stub_share"}, n=18),
+            "empty-zero-nets": readability_gate(
+                _stats(wired_nets=0, labelled_nets=0), n=18),
+            "empty-zero-N": readability_gate(_stats(), n=0),
+            "failed": readability_gate(_stats(), n=18),
+            "ok": readability_gate(
+                _stats(junctions=43, stub_share=0.327, drawn_subcircuits=11), n=18),
+            "indeterminate": readability_gate(
+                _stats(), n=18, emit=_FakeEmit(task_6_0=False)),
+        }
+        for label, report in cases.items():
+            with self.subTest(case=label):
+                self.assertIn("scored_subject", report)
+                self.assertIn(report["scored_subject"]["subject"], SCORED_SUBJECTS)
+                # absent evidence must never reach a report as "" or {}
+                self.assertTrue(report["scored_subject"]["source"])
+                self.assertEqual(NOT_SCORED, report["not_scored"])
+        # CONTROL: the statuses really are distinct, else the loop proves only
+        # that ONE shape carries the field
+        self.assertEqual(
+            {"not-run", "empty", "failed", "ok", "indeterminate"},
+            {r["status"] for r in cases.values()})
+
+    def test_live_compose_and_frozen_replay_report_different_subjects(self):
+        # Question: is the value DERIVED from what happened, or is it a constant?
+        # This is the discriminating pair. If both arms said the same thing the
+        # field would carry no information at all.
+        spec = DenominatorTests.SPEC
+        live = readability_gate(_stats(), spec=spec)
+        frozen = readability_gate(_stats(), n=18)
+        self.assertEqual(SUBJECT_LIVE_COMPOSE, live["scored_subject"]["subject"])
+        self.assertEqual(SUBJECT_FROZEN_STATS, frozen["scored_subject"]["subject"])
+        self.assertNotEqual(live["scored_subject"], frozen["scored_subject"])
+
+    def test_emission_site_mutation_is_caught(self):
+        # MUTATION TEST (dispatcher's J-2, and the gap recorded in
+        # BR gate_unit_fixtures_blind_to_emission_site_mutation): pin the
+        # producer's subject to a CONSTANT and this must go red. A suite that
+        # only asserts "the key exists" would stay green under exactly that
+        # mutation, which is how the field would rot into a decoration.
+        spec = DenominatorTests.SPEC
+        subjects = {
+            readability_gate(_stats(), spec=spec)["scored_subject"]["subject"],
+            readability_gate(_stats(), n=18)["scored_subject"]["subject"],
+        }
+        self.assertEqual(2, len(subjects),
+                         "both arms reported the same subject: the emission site "
+                         "has been replaced by a constant, so the field no longer "
+                         "says which drawing was scored")
+
+    def test_source_is_derived_from_the_spec_that_was_scored(self):
+        # Question: can the source disagree with what was actually scored?
+        report = readability_gate(_stats(), spec={**DenominatorTests.SPEC,
+                                                 "source": "/x/y/design.py"})
+        self.assertEqual("source", report["scored_subject"]["source"]["from_spec"])
+        self.assertEqual("/x/y/design.py", report["scored_subject"]["source"]["value"])
+
+    def test_unnamed_spec_yields_a_positive_statement_not_an_empty_string(self):
+        # "no source was supplied" and "the source is empty" must not share an
+        # output. An unnamed spec still gets a POSITIVE description + its shape.
+        report = readability_gate(_stats(), spec=DenominatorTests.SPEC)
+        source = report["scored_subject"]["source"]
+        self.assertIsNone(source["from_spec"])
+        self.assertTrue(source["value"])
+        self.assertIn("nets", source["shape"])
+
+    def test_unknown_subject_is_refused_not_coerced(self):
+        with self.assertRaises(ScoredSubjectError):
+            readability_gate(_stats(), n=18, scored_subject="whatever-i-like",
+                             subject_source={"x": 1})
+
+    def test_explicitly_empty_evidence_is_refused(self):
+        # fail fast rather than emitting "" — the field exists to be quoted
+        for empty in ({}, "", []):
+            with self.subTest(evidence=repr(empty)):
+                with self.assertRaises(ScoredSubjectError):
+                    readability_gate(_stats(), n=18,
+                                     scored_subject=SUBJECT_LIVE_COMPOSE,
+                                     subject_source=empty)
+
+    def test_on_disk_is_reserved_and_structurally_unreachable(self):
+        # Question: can this module CLAIM to have scored a delivered .kicad_sch?
+        # It has no reader for one, so it must not be able to say it did. When a
+        # disk entry point lands (BR §8), this test flips — deliberately, so the
+        # capability and the claim cannot diverge silently.
+        self.assertIn(SUBJECT_ON_DISK, SCORED_SUBJECTS)
+        with self.assertRaises(ScoredSubjectError):
+            readability_gate(_stats(), n=18, scored_subject=SUBJECT_ON_DISK,
+                             subject_source={"path": "/real/board.kicad_sch",
+                                             "sha256": "deadbeef"})
+
+    def test_not_scored_names_the_delivered_schematic(self):
+        # The BR's core reading defect: a `failed` verdict on one drawing read as
+        # a verdict on another. The report must say what it did NOT look at.
+        report = readability_gate(_stats(), n=18)
+        blob = " ".join(report["not_scored"])
+        self.assertIn("on-disk", blob)
+        self.assertIn("not-run", blob)
+
+    def test_measure_run_is_labelled_so_it_is_not_read_as_the_subject(self):
+        # BR §3.3: measure_run and scored_subject have similar shapes and
+        # opposite meanings, and measure_run carries a spec PATH that reads like
+        # a subject. It must announce which one it is.
+        report = readability_gate(_stats(), n=18)
+        self.assertIn("scored_subject", report["measure_run"]["what"])
+        self.assertNotEqual(report["measure_run"].get("spec"),
+                            report["scored_subject"]["source"].get("value"))
 
 
 if __name__ == "__main__":

@@ -398,6 +398,25 @@ VERBS = {
                              "Cross-check generated nets vs a reference product's nets."),
     "impedance_solve": (_EB, "solve_impedance", ("stackup", "targets"),
                         "Pure-python C04 impedance estimate from stackup + targets."),
+    "readability_gate": (_EB, "readability_gate", (),
+                         "FORM-axis schematic readability gate (WP6). Scores how a "
+                         "schematic is DRAWN: junction > 20, stub share < 40%, "
+                         "drawn_subcircuits/N >= 0.50. Every report carries "
+                         "gate_axis='form' and does_not_authorize="
+                         "[electrical_correctness, fidelity] as FIELDS -- a PASS "
+                         "here says nothing about whether the circuit is correct "
+                         "(BR_20260905 \u00a78.5.2: every form criterion improved while "
+                         "an OPEN CIRCUIT was wired). It scores the route_stats of "
+                         "a LIVE COMPOSE, never the .kicad_sch on disk -- read "
+                         "`scored_subject` (live-compose | frozen-stats) and "
+                         "`not_scored` before quoting a verdict; `on-disk` is "
+                         "reserved and REFUSED because no reader exists "
+                         "(BR_20260906). Thresholds are SCALE-DEPENDENT, pinned on "
+                         "a live compose of the real 45/27 btdongle spec, and do "
+                         "not transfer to a hand-drawn sheet. Exit 0/1/2/2/2 for "
+                         "ok/failed/not-run/empty/indeterminate (see "
+                         "STATUS_EXIT_VERBS). Pass --route-stats plus --spec or "
+                         "--n, or the equivalent --json keys."),
     "qa_svg_text": (_EB, "qa_svg_text", ("svg_path",),
                     "Render-layer text-overlap QA: scan every <text> bbox in a "
                     "kicad-cli-exported SVG; >15% intersection = violation. "
@@ -896,6 +915,14 @@ def _v_impedance_solve(a):
 # always 1 widens.
 STATUS_EXIT_VERBS = {
     "verify_netlist_fidelity": {"ok": 0, "failed": 1, "not-run": 2, "indeterminate": 2},
+    # `empty` is in this verb's codomain and NOT in fidelity's: the gate ran,
+    # and there was nothing to score (zero nets, or N==0 so the ratio has no
+    # denominator). That is a no-verdict, so it maps to 2 alongside `not-run`
+    # and `indeterminate` -- mapping it to 0 would let "nothing to measure"
+    # exit as "measured clean", which is the plan's whole defect at the CLI
+    # boundary. An unmapped status is refused above, never assumed benign.
+    "readability_gate": {"ok": 0, "failed": 1, "not-run": 2, "empty": 2,
+                         "indeterminate": 2},
 }
 
 
@@ -915,6 +942,33 @@ def _v_verify_netlist_fidelity(a):
         # schematic. Re-typed as LandingError so the envelope shape is the same
         # one every other verb's refusal produces.
         raise LandingError(error.code, error.message, error.hint) from error
+
+
+def _v_readability_gate(a):
+    from bodesign_eda_bridge.readability_gate import (ScoredSubjectError,
+                                                      readability_gate)
+    try:
+        return readability_gate(
+            a.get("route_stats"),
+            spec=a.get("spec"),
+            n=a.get("n"),
+            scored_subject=a.get("scored_subject"),
+            subject_source=a.get("subject_source"),
+        )
+    except ScoredSubjectError as error:
+        # Same routing decision as _v_verify_netlist_fidelity's FidelityInputError:
+        # a subject this gate cannot vouch for is a refusal about the CALLER'S
+        # CLAIM, not an inconclusive reading of a drawing. It goes down the
+        # _fail channel (ok=false, exit 1) and deliberately does NOT become
+        # `indeterminate`, which would send a reader to inspect the schematic
+        # when what needs fixing is the argument they passed.
+        raise LandingError("READABILITY_SUBJECT_INVALID", str(error),
+                           "scored_subject must be live-compose or frozen-stats; "
+                           "on-disk is reserved and unimplemented") from error
+    except ValueError as error:
+        raise LandingError("READABILITY_ARGS_INVALID", str(error),
+                           "pass --spec (derives N per DD-09) or --n "
+                           "(frozen-fixture replay)") from error
 
 
 def _v_qa_svg_text(a):
