@@ -2131,7 +2131,19 @@ def emit_kicad_schematic(
                 f"connection -- these nets would be silently shorted. {_detail}"
                 + (f" (+{len(shorts) - 8} more)" if len(shorts) > 8 else ""))
 
-    _assert_no_cross_net_junction()
+    # A1 / round 20: THE CALL SITE MOVED TO THE END OF EMIT -- see the call just
+    # before `_schematic_document(...)` below. It used to run HERE, and here it is
+    # BLIND to the power nets: GND/VCC segments enter `fusion_registry` at the
+    # power-port stub site further down, so at this point the registry holds only
+    # signal nets. Measured (round 18, same injection machinery, only the victim
+    # net differing): a junction injected onto a real GND segment did NOT raise,
+    # while the same injection onto a SIG_A segment DID.
+    #
+    # That blindness is not cosmetic: the A1 exemption in `_segment_fuses` is
+    # safe ONLY because "no junction lands there", and this assert is the sole
+    # enforcer of that sentence. An enforcer that cannot see the net class the
+    # exemption is used on would have made the exemption strictly worse than none
+    # -- it would read as verified while policing nothing.
 
     # DD-14: sheet-abs AABBs of every component's drawn body graphics, threaded
     # into the label placer so L6 avoidance keeps labels CLEAR of arcs/plates
@@ -2383,6 +2395,22 @@ def emit_kicad_schematic(
                     "seg": [list(a), list(b)],
                     "through": ref,
                 })
+
+    # A1 / round 20: cross-net junction assert, at END of emit (moved from the
+    # pre-power-port position; the rationale is at the old site). Here
+    # `fusion_registry` holds EVERY net that will be drawn -- signal nets from the
+    # routers above AND the power nets registered at the power-port stub site --
+    # so the predicate's window finally matches what lands on the sheet.
+    #
+    # Pre-flight before moving it (round 19, full-suite, representative tree):
+    #   base vs moved      Ran 2068 both, per-test-id diff NEW RED = 0
+    #   it actually ran    107 executions, 50 of them with GND in the window
+    #   it can still fire  mutation control (foreign junction injected at a real
+    #                      segment midpoint) -> 64 CROSS_NET_JUNCTION_SHORT, 63
+    #                      newly-red tests; 0 occurrences unmutated
+    # The middle line is the one that matters: without it, "NEW RED = 0" would be
+    # indistinguishable from "the assert never executed after the move".
+    _assert_no_cross_net_junction()
 
     schematic = _schematic_document(
         root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks,
@@ -3287,7 +3315,25 @@ def _collinear_overlap(s1: tuple, s2: tuple) -> bool:
 
 def _point_on_segment(pt: tuple[float, float], seg: tuple) -> bool:
     """True iff pt lies ON seg (endpoints included). A shared endpoint between two
-    nets is itself a fusion (KiCad merges a wire END that touches another wire)."""
+    nets is itself a fusion (KiCad merges a wire END that touches another wire).
+
+    THIS PREDICATE IS STRICTER THAN KICAD (measured, round 17 -- experiment T1/T2).
+    KiCad connects a wire END landing on another wire's MID-SPAN only when an
+    EXPLICIT junction sits at that point. Same sheet, same 23 wires, the only
+    delta being one junction block:
+
+        T1 (no junction)   /GND n=13 OK,  SIG_A n=2 OK      -- NOT merged
+        T2 (junction)      /GND absent,   SIG_A n=14        -- merged, 12 GND
+                                                               pins swallowed
+
+    So the docstring sentence above describes a SUFFICIENT condition for danger,
+    not a necessary one. Being stricter than KiCad is the safe direction (it can
+    refuse a drawable route, never admit a short), which is why the round-8
+    `_PERPENDICULAR_OK_KINDS` safety argument built on it does NOT need revisiting.
+    A caller that needs KiCad's ACTUAL (looser) rule must therefore add its own
+    exemption at its own call site and justify it there; do NOT loosen this
+    predicate, because every existing caller depends on the strict reading.
+    """
     a, b = seg
     ax = _seg_axis(a, b)
     if ax is None:
