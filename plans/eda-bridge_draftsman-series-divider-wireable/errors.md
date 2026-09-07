@@ -468,3 +468,70 @@ kicad_emit.py:1274   emitter 收到 label_nets 之後，又自己呼叫
   **它宣告自己是唯一真相來源，而 compose 端仍保留一份等價推導（`composer.py:2208-2231`）。
   兩份都在跑，OR 在一起。** 「已經去重了」這句註解本身是這格的誘因。
 - **同族**：與第 ①-③ 格一樣，錯的不是判準，是判準的**作用面**與我以為的不同。
+
+## 防護措施自身失效的第三、四例（round 35-36）
+
+前兩例在 round 23（docstring 懸空引用、`git apply` rc=0）。那兩例壞的是
+**留給未來的**防護。底下兩例壞的是**當輪正在用的**東西，而且它們各自壞在
+一個「程式碼看起來完全正常」的地方。
+
+### ⑥ `except` 把診斷資訊吞成一個合理值（round 35）
+
+量 cross-IC 政策的邊際貢獻時，我呼叫 `_net_power_kind_names(names, None)`，
+它對 `None` 丟 `AttributeError`（`'NoneType' object has no attribute 'get'`）。
+我的 `except` 印了一行「composer helper failed」然後讓 `powerlike` 留在空集合。
+
+```
+powerlike = set()            ← except 之後的實際值
+power-rail labelled : []     ← 於是 power-rail 一條都沒標到
+final label_nets    : 12     ← 真值是 13
+```
+
+- **它回了什麼令人安心的值**：`12`。不是 0、不是負數、不是例外——**是一個
+  和 13 只差一條的、完全落在預期範圍內的數字**。而 `label_nets` 本來就會隨
+  政策組合浮動，所以 12 沒有任何一格看起來不對。
+- **RCA（機制層）**：`except` 的設計目的就是**讓程式繼續跑**，而「繼續跑」
+  正是它靜默的方式。前面所有失效模式裡，污染源都在被測系統或探針邏輯裡；
+  這一例的污染源是**錯誤處理本身**——它是我為了「探針不要中途爆掉」而寫的，
+  結果它把「helper 沒跑成」和「helper 跑了、回空」壓成同一個輸出。
+- **偵測**：改傳 `{}`（一個 helper 能接受的空 dict）再跑一次，得 `powerlike`
+  = `{'+3V3','GND','VBUS'}`，`label_nets` = 13。**兩次讀數不同 ⇒ 前一次的
+  except 分支有實質作用**，而它在 log 裡只佔一行、混在正常輸出中間。
+- **防線**：探針裡的 `except` **必須讓被吞掉的變數帶上「我沒被算出來」的標記**，
+  不可以留在型別合法的預設值（空 set／空 dict／0）上。最低限度：`except` 之後
+  把該格設成 `None` 並在最終輸出印它，讓「沒算出來」與「算出來是空的」分開。
+- **與 `code-thinker` §12 的關係**：這正是 `not-run` 與 `empty` 塌成同一格。
+  差別在於這次塌陷發生在**探針自己的產出狀態**上，不是被測模組上。
+
+### ⑦ 宣告要 instrument 分支，實際只 instrument 了結果（round 36）
+
+診斷 `power` 紙的 `CROSS_NET_JUNCTION_SHORT` 時，`probe3.py` 開頭逐字寫著
+「INSTRUMENT THE BRANCH, not the result」，並宣告了三個計數器：
+
+```python
+SITE = {"interior_retry_true": 0, "guard_calls": 0, "guard_interior_ok": 0}
+_real_guard = kicad_emit._guard_route if hasattr(...) else None
+```
+
+**然後從頭到尾沒有把 `_guard_route` 換掉，也沒有印 `SITE`。** 三個計數器是
+死變數；`_real_guard` 取了值之後再也沒被使用。
+
+- **它回了什麼令人安心的值**：探針正常跑完、`tracebacks=0`、其他三格證據
+  （幾何、接觸點分類、整圖對照）全部有效且結論正確。**唯一沒有的是我宣告
+  要量的那一格**，而它的缺席不會讓任何其他讀數看起來不對。
+- **若我當時印了 `SITE`，會拿到三個 0**——而「那條分支沒走」與「我根本沒把
+  recorder 接上去」**共用這個 0**。這是 §「缺席態與失敗態不得共用同一個輸出」
+  的教科書形狀，發生在一支開頭就引用了該條規則的探針裡。
+- **RCA（機制層）**：instrument 結果只需要包住一個**已經會被呼叫**的函式
+  （`cross_net_junction_shorts` 我確實包了，而且有效）；instrument 分支需要
+  **改變控制流上的一個點**。前者寫完就會有輸出，後者寫完若忘了接線，**輸出
+  形狀與「接了但分支沒走」完全相同**。所以前者的疏漏會自己現形，後者不會。
+- **偵測（可機械套用）**：任何 `SITE` / counter / flag 型的分支計數器，
+  **在正控制上必須先看到非零才可信**。做法是拿一條**已知會走那條分支**的輸入
+  跑一次（本例：round 26 量到 `exempted_at_site1=7` 的整圖路徑），
+  看到非零，才有資格把 0 讀成「沒走」。
+- **防線**：counter 宣告與 patch 動作**寫在同一個 code block 裡**，不要分開；
+  並在每次輸出無條件印出 counter，**不管是不是 0**——一個從不出現在輸出裡的
+  counter，與一個不存在的 counter，對讀者是同一件事。
+- **代價**：這格缺席讓 A1 復活條件 2 的判定停在「判不出來」，而 dispatcher
+  必須再派一輪才能拿到它。**一輪的成本，換一行沒寫的 `SITE[...] += 1`。**
