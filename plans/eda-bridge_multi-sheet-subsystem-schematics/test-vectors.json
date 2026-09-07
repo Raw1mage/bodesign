@@ -84,9 +84,11 @@
   },
   {
     "id": "TV-6",
-    "description": "政策 scope=sheet：K9 的 9 條單紙 net 逐條記錄在 scope=sheet 下是否改為 drawn。**本向量只記錄結果，不預設方向**——K8 已測得 M6-8d 存活，故不假設它們一定會改為 drawn。對應 tasks 5.3。",
+    "description": "政策 scope=sheet：K9 的 8 條單紙 net 逐條記錄在 scope=sheet 下是否改為 drawn（round 41 從 9 修正為 8，見 single_sheet_nets_note）。**本向量只記錄結果，不預設方向**——K8 已測得 M6-8d 存活，故不假設它們一定會改為 drawn。對應 tasks 5.3。",
     "input": {
-      "single_sheet_nets": ["BAT_EXT", "CC1", "CC2", "ENPPB", "NTC", "SWCLK", "SWDIO", "VBUS", "VBUS_CON"],
+      "single_sheet_nets": ["BAT_EXT", "CC1", "CC2", "NTC", "SWCLK", "SWDIO", "VBUS", "VBUS_CON"],
+      "single_sheet_nets_note": "8 條，不是 9。round 41 用『三條政策兩處實作全關』的成因判準重算：ENPPB 在政策全關後仍是 0 段 ⇒ 真因是 anti-fusion 不是政策，已移出（母體：原 9 條扣掉 1 條非政策成因）。VBUS 保留但注意它在 HEAD 已畫 6 段，非全無表達。偏差方向：關政策只能增加畫線，故本名單只會高估。",
+      "excluded_not_policy": ["ENPPB"],
       "scope": "sheet",
       "policy_relaxed": false
     },

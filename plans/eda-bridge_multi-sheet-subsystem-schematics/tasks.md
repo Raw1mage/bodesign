@@ -43,7 +43,7 @@
 
 - [ ] 5.1 三條政策加 `scope` 參數（`whole` 預設 / `sheet`），`E_SCOPE_UNKNOWN` 不得靜默退回 — artifact: packages/eda-bridge/bodesign_eda_bridge/composer.py
 - [ ] 5.2 **兩處實作都要改**：`composer.py:2175-2231` 與 `kicad_emit.py:1274-1282` 會 OR 回去（舊包 `errors.md` ⑤） — artifact: packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py
-- [ ] 5.3 K9 的 9 條單紙 net 在 `scope="sheet"` 下是否改為 drawn，逐條列名 — artifact: test-vectors.json
+- [ ] 5.3 K9 的 **8** 條單紙 net 在 `scope="sheet"` 下是否改為 drawn，逐條列名 — artifact: test-vectors.json（**不是 9**：round 41 成因判準把 `ENPPB` 移出，它是 anti-fusion 不是政策）
 - [ ] 5.4 `policy_evaluated` 分支入口計數器，正控制必須先見非零才可信 — artifact: packages/eda-bridge/bodesign_eda_bridge/composer.py
 
 ## 6. 驗收與回歸
