@@ -321,6 +321,15 @@ SKiDL 把 hint 塗在 Net 物件上（於是 net 相等性與畫法糾纏），a
 **不是被判定為錯而拒收**，是**被降級為「未觸發」**——它防的那件事，在本 repo
 的 HEAD 上量不到。**若未來量到 state A，它是現成的，直接 apply。**
 
+> **⚠ 上一句的後半（「現成的，直接 apply」）自 round 38 起已不成立。**
+> 該 patch 的 hunk 5 已被 `0195950` 取代且**簽名不相容**
+> （`exempt_interior=bool` vs 今日的 `exempt_interior_pt=callable`），`git apply` 失敗。
+> **原句刻意不改**——它是 round 23 的事實記錄（過去式，不會爛）；
+> 爛的是它與今日 HEAD 的關係。詳見
+> `issues/BR_20260907_a1_archived_patch_no_longer_applies_and_design_md_still_asserts_it_does.md`。
+> **A1 仍有復活價值**（round 37 已證復活條件 2 於 no-group 母體成立），
+> 但復活的第一步是**重寫 hunk 5**，不是套用。
+
 ### 它做什麼
 
 label 被 anti-fusion guard 降級後，會被貼在 **pin 座標**上；密板上那個座標可能

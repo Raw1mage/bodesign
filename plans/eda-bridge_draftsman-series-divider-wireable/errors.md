@@ -535,3 +535,45 @@ _real_guard = kicad_emit._guard_route if hasattr(...) else None
   counter，與一個不存在的 counter，對讀者是同一件事。
 - **代價**：這格缺席讓 A1 復活條件 2 的判定停在「判不出來」，而 dispatcher
   必須再派一輪才能拿到它。**一輪的成本，換一行沒寫的 `SITE[...] += 1`。**
+
+### ⑦-b 接不上的時候怎麼辦：從唯一消費者讀出雙條件等價（round 37）
+
+⑦ 說的是「宣告要 instrument 分支卻沒接上」。**本則是同一個事件的另一面：
+為什麼接不上，以及接不上時正確的做法是什麼。** 兩則要一起讀。
+
+**接不上的原因（機制層）**：`_guard_route` 是 `emit_kicad_schematic` 的
+**內部閉包**（定義於 `kicad_emit.py:1647`），不是模組層級的屬性。
+`monkeypatch` 只能換掉**模組屬性**；閉包在函式每次被呼叫時重新綁定，
+外部沒有任何名字指向它。所以 `kicad_emit._guard_route = recorder` 這行
+**不會報錯、不會有任何效果**——`hasattr(kicad_emit, "_guard_route")` 回 `False`，
+而 `setattr` 只是替模組新增一個從未被讀取的屬性。
+
+> **這正是 ⑦ 那三個死變數的成因**：`_real_guard = kicad_emit._guard_route if hasattr(...) else None`
+> 的 `hasattr` 回 `False`，於是 `_real_guard = None`，而 `None` 是一個
+> 型別合法、不會拋錯的值（⑥ 的形狀）。**「取不到」與「取到了但沒用」共用 `None`。**
+
+**正確做法——不要從行為推，去讀原始碼找等價命題**：
+
+| 步驟 | 本例的內容 |
+|---|---|
+| 1. 找旗標的**唯一消費者** | `interior_retry` 只在 `:1690-1692` 被讀，讀完只做一件事：決定傳給 `_segment_fuses` 的 `exempt_interior*` 參數 |
+| 2. 找旗標的**唯一產生點** | `_guard_route(..., interior_retry=True)` 全樹只有 `:1920` 一處（`:1990` 有逐字註解說明它刻意不傳） |
+| 3. 推出雙條件 | `_segment_fuses` 收到豁免參數 ⟺ 該次 `_guard_route` 呼叫帶了 `interior_retry=True` |
+| 4. patch 可及的那一端 | `_segment_fuses` **是模組層級屬性**，可 monkeypatch。量它 ＝ 量到閉包 |
+
+**這一步為什麼不是繞過而是等價**：繞過是「換一個相關的東西量，希望它跟著動」，
+得到的是**相關性**；本例是先在原始碼上證明兩個命題互為充要（唯一消費者 + 唯一產生點
+＝ 沒有第三條路徑能讓其中一邊成立而另一邊不成立），得到的是**等價**。
+**差別在於前者要祈禱沒有旁路，後者已經把旁路數完了。**
+
+- **它回了什麼令人安心的值**：`setattr` 到一個不存在的閉包名**不會拋任何錯**，
+  探針照常跑完、`tracebacks=0`、其他讀數全部有效。**沒有任何東西會不一致。**
+- **偵測（可機械套用）**：monkeypatch 之前先 `assert hasattr(mod, name)`。
+  這一行把「patch 成功」與「patch 到一個不存在的名字」分開——
+  沒有它，兩者都是靜默成功。
+- **驗收**：等價推導完成後，正控制必須非零（本例 `exempt_calls=13`）、
+  負控制為 0、**falsification 決定性**（豁免中性化後短路消失、
+  `changed_verdict` 3→0）。**三格齊了才算量到分支。**
+- **與 ⑦ 的分工**：⑦ 告訴你「counter 在正控制上必須先非零才可信」；
+  本則告訴你**當 counter 永遠接不上時，該去原始碼裡找哪三樣東西**
+  （唯一消費者、唯一產生點、可及的那一端）。
