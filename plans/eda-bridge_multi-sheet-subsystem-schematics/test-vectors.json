@@ -1,9 +1,98 @@
 [
   {
-    "$scaffold": "plan-builder:scaffold",
     "id": "TV-1",
-    "description": "<placeholder: what this vector proves>",
-    "input": {},
-    "expected": {}
+    "description": "跨檔連通性 treatment：兩張葉紙各一個同名 global_label，netlist 必須落在同一條 net。對應 tasks 1.2、spec.md Scenario「同名跨檔連通」。",
+    "input": {
+      "sheets": {
+        "leafA": ["U1"],
+        "leafB": ["U2"]
+      },
+      "global_labels": {
+        "leafA": ["NET_X"],
+        "leafB": ["NET_X"]
+      },
+      "arbiter": "kicad-cli sch export netlist"
+    },
+    "expected": {
+      "nets_containing_the_two_endpoints": 1,
+      "verdict": "connected"
+    }
+  },
+  {
+    "id": "TV-2",
+    "description": "跨檔連通性 CONTROL：同一份改成不同名，必須落在兩條不同 net。**缺這格時 TV-1 的 PASS 分不出「跨檔連通」與「netlist 匯出把所有東西併成一條」**——兩者共用「兩端同 net」這個輸出。對應 tasks 1.3。",
+    "input": {
+      "sheets": {
+        "leafA": ["U1"],
+        "leafB": ["U2"]
+      },
+      "global_labels": {
+        "leafA": ["NET_X"],
+        "leafB": ["NET_Y"]
+      },
+      "arbiter": "kicad-cli sch export netlist"
+    },
+    "expected": {
+      "nets_containing_the_two_endpoints": 2,
+      "verdict": "separate"
+    }
+  },
+  {
+    "id": "TV-3",
+    "description": "嚴格 partition 正向：真板 45 顆元件依 design.py 第 5 欄分派，逐紙數必須是 22/9/14 且 Σ=distinct=45（K3，已由兩條互不相干的路徑交叉印證）。對應 tasks 2.5。",
+    "input": {
+      "spec_source": "btdongle design.py COMPONENTS field-5",
+      "component_count": 45
+    },
+    "expected": {
+      "sheets": {
+        "power": 22,
+        "mcu": 9,
+        "io": 14
+      },
+      "sum_equals_distinct": true,
+      "duplicate_refs": 0,
+      "partition_source": "declared"
+    }
+  },
+  {
+    "id": "TV-4",
+    "description": "嚴格 partition 負向控制：拿掉一顆元件的分派欄位，必須 E_UNASSIGNED_REFS 且列出該 ref。**沒有這格，TV-3 的 PASS 無法證明檢查會在該紅的時候紅。** 對應 tasks 2.3。",
+    "input": {
+      "spec_source": "btdongle, 移除 R1 的分派欄位",
+      "component_count": 45
+    },
+    "expected": {
+      "raises": "E_UNASSIGNED_REFS",
+      "unassigned_refs": ["R1"],
+      "files_written": 0
+    }
+  },
+  {
+    "id": "TV-5",
+    "description": "N=1 byte-stable：未宣告任何分派時走原單檔路徑，WIRE_GEOM_SHA 與 HEAD 逐字相同。對應 tasks 3.2、spec.md AC-2。母體：with-group 構法、政策 ON、整圖。",
+    "input": {
+      "spec_source": "btdongle 全 45 顆，無分派宣告",
+      "multi_sheet": false
+    },
+    "expected": {
+      "files_count": 1,
+      "emit_mode": "single-legacy",
+      "partition_source": "none-declared",
+      "wire_geom_sha": "與 HEAD 逐字相同"
+    }
+  },
+  {
+    "id": "TV-6",
+    "description": "政策 scope=sheet：K9 的 9 條單紙 net 逐條記錄在 scope=sheet 下是否改為 drawn。**本向量只記錄結果，不預設方向**——K8 已測得 M6-8d 存活，故不假設它們一定會改為 drawn。對應 tasks 5.3。",
+    "input": {
+      "single_sheet_nets": ["BAT_EXT", "CC1", "CC2", "ENPPB", "NTC", "SWCLK", "SWDIO", "VBUS", "VBUS_CON"],
+      "scope": "sheet",
+      "policy_relaxed": false
+    },
+    "expected": {
+      "per_net_verdict": "逐條記錄 drawn|label（實作階段填入）",
+      "note": "ENPPB 已知因 anti-fusion 而非政策而未畫（round 30 POLICYOFF 控制組），它留在 label 不構成本格失敗"
+    }
   }
 ]

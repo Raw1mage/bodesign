@@ -1,14 +1,100 @@
 {
-  "$scaffold": "plan-builder:scaffold",
   "schemas": [
     {
-      "name": "<placeholder schema name>",
-      "kind": "<table|json|message|config>",
+      "name": "ComponentSheetAssignment",
+      "kind": "json",
+      "notes": "元件→葉紙的分派來源。C-1 與 C-2 兩案並列，**待使用者裁決**（見 design.md Q1）。兩案不可同時實作。",
       "fields": [
         {
-          "name": "<field>",
-          "type": "<type>",
-          "notes": "<placeholder>"
+          "name": "ref",
+          "type": "string",
+          "notes": "元件參考編號（R1 / U2 / J1）。真板量測：45 顆有編號 ref，跨紙重複 0（K3 嚴格 partition）。"
+        },
+        {
+          "name": "group",
+          "type": "string (existing, optional)",
+          "notes": "**既有欄位**。今日語意 = cluster placement（版面上要不要擺在一起），由 composer.py:640-667 消費；declared 非空時完全接管分群，未宣告者自成 singleton auto-<ref>。真板橋接 mk_sch_bodesign.py:67 已把 sheet 名餵進此欄。**衝突（K11）**：tests/test_composer_draftsman.py 的 33 筆中有 21 筆值為 a/p/g/g0/g1，是佈局佔位標籤而非子系統名。"
+        },
+        {
+          "name": "sheet",
+          "type": "string (C-2 only, proposed)",
+          "notes": "**C-2 才新增**。專用於「上哪張紙」，group 維持原意。代價：需另訂 group 與 sheet 的一致性規則（同一 group 能否跨 sheet）。C-1 採納時本欄不存在。"
+        }
+      ],
+      "open_decision": {
+        "id": "Q1",
+        "status": "awaiting-user-ruling",
+        "options": [
+          {
+            "id": "C-1",
+            "summary": "語意合一：group 同時意味分群與分紙",
+            "cost": "零新欄位、零 schema 變更；但（i）以後無法表達「同一張紙上分兩群」，（ii）K11 的 21 筆佔位標籤會生出名為 g0/g1 的紙 ⇒ 是破壞性變更，須先讓兩種用法分家",
+            "cost_concrete": "C-1 代價的具體長相：tests/test_composer_draftsman.py:460 的值是 f\"g{i % 4}\" —— 一行程式碼就會生出四張叫 g0/g1/g2/g3 的紙，而該測試量的正是單張紙上的佈局幾何。母體：該檔 33 筆 group 宣告中，有語意 12 筆 / 無語意（a/p/g/g0/g1）21 筆；test-vectors.json 另 4 筆皆合法。MCP tool-registry 的同名 group 已分開數，不混入。"
+          },
+          {
+            "id": "C-2",
+            "summary": "新增 sheet 欄，group 維持原意",
+            "cost": "新欄位 + 兩欄一致性規則（又一條要訂的政策）；既有 consumer 零影響"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SheetMap",
+      "kind": "json",
+      "notes": "partition_components 的回傳型別。errors.md §Outcome Codomain 的 ok / empty 兩格由本型別承載。",
+      "fields": [
+        {
+          "name": "sheets",
+          "type": "dict[str, list[str]]",
+          "notes": "葉紙名 → 該紙元件 ref 清單。嚴格 partition：Σ|values| == |distinct refs| == |spec.components|。"
+        },
+        {
+          "name": "partition_source",
+          "type": "enum(declared|none-declared)",
+          "notes": "區分 ok 與 empty。none-declared ⇒ 退回單張紙語意（N=1），**不是錯誤**。這一欄的存在就是為了讓「沒宣告」與「宣告了但只有一組」不共用同一個輸出。"
+        },
+        {
+          "name": "unassigned_refs",
+          "type": "list[str]",
+          "notes": "非空即 E_UNASSIGNED_REFS。不得由引擎代為丟進 catch-all（repo 天條 §2.1 No silent fallback）。"
+        }
+      ]
+    },
+    {
+      "name": "RootSheetBlock",
+      "kind": "config",
+      "notes": "root .kicad_sch 中每個 (sheet …) block 的必填欄位。欄位清單來自真板 root 逐欄抄錄（round 32，17 行全文讀過），**不憑記憶**。缺欄 ⇒ E_ROOT_SHEET_BLOCK_INVALID。",
+      "fields": [
+        {
+          "name": "at",
+          "type": "(x, y)",
+          "notes": "sheet 方塊在 root 頁上的座標"
+        },
+        {
+          "name": "size",
+          "type": "(w, h)",
+          "notes": "方塊尺寸"
+        },
+        {
+          "name": "uuid",
+          "type": "string",
+          "notes": "每個 sheet block 唯一"
+        },
+        {
+          "name": "property Sheetname",
+          "type": "string",
+          "notes": "顯示名（power / mcu / io）"
+        },
+        {
+          "name": "property Sheetfile",
+          "type": "string",
+          "notes": "葉檔檔名。此欄是 root→葉的唯一連結。"
+        },
+        {
+          "name": "instances",
+          "type": "block",
+          "notes": "project/path/page。真板 root 為 page 1，三葉為 2/3/4 —— 是否 KiCad 強制未知（Q2，只有一份樣本）。"
         }
       ]
     }

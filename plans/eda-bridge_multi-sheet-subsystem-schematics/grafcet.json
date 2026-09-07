@@ -1,18 +1,21 @@
 [
   {
-    "$scaffold": "plan-builder:scaffold",
     "StepNumber": 0,
     "ModuleRef": "A1",
     "StepType": "initial",
-    "StepAction": "<placeholder: initial step of eda-bridge_multi-sheet-subsystem-schematics>",
-    "LinkInputType": [],
-    "LinkInputNumber": [],
+    "StepAction": "接收 circuit spec，等待多紙模式旗標",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      6
+    ],
     "LinkOutputNumber": [
       1
     ],
     "LinkOutputType": "track",
     "Condition": [
-      "<placeholder transition condition>"
+      "spec 已載入"
     ],
     "SubGrafcet": []
   },
@@ -20,16 +23,120 @@
     "StepNumber": 1,
     "ModuleRef": "A1",
     "StepType": "normal",
-    "StepAction": "<placeholder: next step action>",
+    "StepAction": "分派元件到功能子系統，產出 SheetMap",
     "LinkInputType": [
       "track"
     ],
     "LinkInputNumber": [
       0
     ],
-    "LinkOutputNumber": [],
+    "LinkOutputNumber": [
+      2
+    ],
     "LinkOutputType": "track",
-    "Condition": [],
+    "Condition": [
+      "unassigned_refs 為空 且 無 ref 跨紙重複"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "逐紙佈局與繪線，政策 scope=sheet",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      1
+    ],
+    "LinkOutputNumber": [
+      3
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "每張葉紙幾何皆已產出"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "跨紙 net 在每張跨到的葉紙放置同名 global_label",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      2
+    ],
+    "LinkOutputNumber": [
+      4
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "無同名不同 net 之標籤碰撞"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "寫出 N 個葉檔並在 root 產生對應的 sheet block",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      3
+    ],
+    "LinkOutputNumber": [
+      5
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "root 與全部葉檔皆存在於磁碟"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "以 kicad-cli 匯出 netlist 仲裁跨檔連通性",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      4
+    ],
+    "LinkOutputNumber": [
+      6
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "同名標籤落於同一 net 且不同名落於兩 net"
+    ],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "交付已仲裁的檔組，回到待命",
+    "LinkInputType": [
+      "track"
+    ],
+    "LinkInputNumber": [
+      5
+    ],
+    "LinkOutputNumber": [
+      0
+    ],
+    "LinkOutputType": "track",
+    "Condition": [
+      "檔組已交付"
+    ],
     "SubGrafcet": []
   }
 ]

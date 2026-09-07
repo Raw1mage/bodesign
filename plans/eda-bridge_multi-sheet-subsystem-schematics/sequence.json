@@ -1,16 +1,58 @@
 [
   {
-    "$scaffold": "plan-builder:scaffold",
-    "title": "<placeholder sequence name>",
+    "title": "多紙原理圖產出：從 spec 到已仲裁的檔組",
     "participants": [
-      "<ActorA>",
-      "<ActorB>"
+      "caller",
+      "composer",
+      "partition",
+      "kicad_emit",
+      "kicad-cli"
     ],
     "messages": [
       {
-        "from": "<ActorA>",
-        "to": "<ActorB>",
-        "label": "<message>"
+        "from": "caller",
+        "to": "composer",
+        "label": "compose_schematic(spec, multi_sheet=True)"
+      },
+      {
+        "from": "composer",
+        "to": "partition",
+        "label": "partition_components(spec) — 排放 sheet_partition.entered"
+      },
+      {
+        "from": "partition",
+        "to": "composer",
+        "label": "SheetMap{sheets, partition_source, unassigned_refs}"
+      },
+      {
+        "from": "composer",
+        "to": "composer",
+        "label": "逐紙佈局與繪線，政策 scope=sheet（兩處實作都要套）"
+      },
+      {
+        "from": "composer",
+        "to": "kicad_emit",
+        "label": "emit_hierarchical_schematic(per_sheet_geometry)"
+      },
+      {
+        "from": "kicad_emit",
+        "to": "kicad_emit",
+        "label": "跨紙 net 於每張跨到的葉紙放同名 global_label"
+      },
+      {
+        "from": "kicad_emit",
+        "to": "caller",
+        "label": "files=[root, leaf…] — 只列磁碟上真實存在的檔"
+      },
+      {
+        "from": "caller",
+        "to": "kicad-cli",
+        "label": "sch export netlist（treatment 同名 + control 不同名，兩格都跑）"
+      },
+      {
+        "from": "kicad-cli",
+        "to": "caller",
+        "label": "netlist；不可用時回 indeterminate，不得記為 ok"
       }
     ]
   }

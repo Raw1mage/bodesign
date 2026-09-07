@@ -1,12 +1,35 @@
 {
-  "$scaffold": "plan-builder:scaffold",
-  "diagram_title": "<placeholder: what eda-bridge_multi-sheet-subsystem-schematics does>",
+  "diagram_title": "把單張原理圖輸出改為 root + N 張功能子系統葉紙",
   "node_reference": "A0",
   "activities": [
     {
       "id": "A1",
-      "title": "<placeholder activity>",
-      "description": "<placeholder: what this activity transforms>",
+      "title": "分派元件到功能子系統",
+      "description": "讀 spec 的分派欄位，產出 SheetMap；嚴格 partition，未分派元件 fail-fast",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "逐紙佈局與繪線",
+      "description": "對每張葉紙各自決定座標並套用政策，產出該紙的 wire/label 幾何",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "產生跨紙連接",
+      "description": "跨紙 net 在其跨到的每張葉紙上放置同名 global_label",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "組裝 root 與葉檔",
+      "description": "寫出 N 個葉檔，並在 root 為每個葉檔產生 (sheet …) block",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "仲裁跨檔連通性",
+      "description": "以 kicad-cli 匯出 netlist，確認同名 global_label 跨檔落在同一條 net",
       "decomposition": null
     }
   ],
@@ -16,28 +39,112 @@
       "source": "EXTERNAL",
       "target": "A1:input",
       "type": "input",
-      "label": "<placeholder input>"
+      "label": "circuit spec (components, nets, nc)"
     },
     {
       "id": "AR2",
       "source": "EXTERNAL",
       "target": "A1:control",
       "type": "control",
-      "label": "<placeholder control>"
+      "label": "嚴格 partition 規則 (無 catch-all)"
     },
     {
       "id": "AR3",
       "source": "EXTERNAL",
       "target": "A1:mechanism",
       "type": "mechanism",
-      "label": "<placeholder mechanism>"
+      "label": "partition_components()"
     },
     {
       "id": "AR4",
       "source": "A1:output",
+      "target": "A2:input",
+      "type": "output",
+      "label": "SheetMap {sheet: [refs]}"
+    },
+    {
+      "id": "AR5",
+      "source": "EXTERNAL",
+      "target": "A2:control",
+      "type": "control",
+      "label": "政策 scope=sheet (M6-8d 不放寬)"
+    },
+    {
+      "id": "AR6",
+      "source": "EXTERNAL",
+      "target": "A2:mechanism",
+      "type": "mechanism",
+      "label": "composer placement + router"
+    },
+    {
+      "id": "AR7",
+      "source": "A2:output",
+      "target": "A3:input",
+      "type": "output",
+      "label": "per-sheet geometry"
+    },
+    {
+      "id": "AR8",
+      "source": "EXTERNAL",
+      "target": "A3:control",
+      "type": "control",
+      "label": "只用 global_label, 禁 hierarchical_label"
+    },
+    {
+      "id": "AR9",
+      "source": "EXTERNAL",
+      "target": "A3:mechanism",
+      "type": "mechanism",
+      "label": "_global_label_block()"
+    },
+    {
+      "id": "AR10",
+      "source": "A3:output",
+      "target": "A4:input",
+      "type": "output",
+      "label": "sheets + cross-sheet labels"
+    },
+    {
+      "id": "AR11",
+      "source": "EXTERNAL",
+      "target": "A4:control",
+      "type": "control",
+      "label": "KiCad 9 sheet block 必填欄位"
+    },
+    {
+      "id": "AR12",
+      "source": "EXTERNAL",
+      "target": "A4:mechanism",
+      "type": "mechanism",
+      "label": "emit_hierarchical_schematic()"
+    },
+    {
+      "id": "AR13",
+      "source": "A4:output",
+      "target": "A5:input",
+      "type": "output",
+      "label": "root + N leaf .kicad_sch"
+    },
+    {
+      "id": "AR14",
+      "source": "EXTERNAL",
+      "target": "A5:control",
+      "type": "control",
+      "label": "同名 same-net / 不同名 two-net 控制組"
+    },
+    {
+      "id": "AR15",
+      "source": "EXTERNAL",
+      "target": "A5:mechanism",
+      "type": "mechanism",
+      "label": "kicad-cli sch export netlist"
+    },
+    {
+      "id": "AR16",
+      "source": "A5:output",
       "target": "EXTERNAL",
       "type": "output",
-      "label": "<placeholder output>"
+      "label": "已仲裁的多紙原理圖檔組"
     }
   ]
 }

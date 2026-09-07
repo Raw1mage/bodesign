@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "state": "proposed",
-  "profile": [],
+  "state": "planned",
+  "profile": [
+    "software"
+  ],
   "history": [
     {
       "from": null,
@@ -10,6 +12,30 @@
       "by": "pkcs12",
       "mode": "new",
       "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-09-07T02:43:54.255Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "design/spec/errors(Outcome Codomain)/tasks/data-schema/test-vectors/observability/handoff/idef0/grafcet authored from rounds 28-37 measurements; scope fixed at (a)(b)(c-verify)(d)(e)"
+    },
+    {
+      "from": "designed",
+      "to": "designed",
+      "at": "2026-09-07T02:48:15.002Z",
+      "by": "pkcs12",
+      "mode": "sync",
+      "reason": "set lifecycle profile software → software (drives plan-validate artifact requirements)"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-09-07T02:59:16.010Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "profile=software 修正後重驗；補寫 round 28-38 六格證據（29/397 分頁上界、K8 四基準全表、五組子系統段數、C-1 具體代價、母體宣告來源、Q4 falsification 四格）；A1 patch 失效已立 BR"
     }
   ],
   "tasks_contract": {
