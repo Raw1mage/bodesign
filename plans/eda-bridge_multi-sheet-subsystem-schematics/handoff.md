@@ -14,7 +14,8 @@ treatment 與 control **兩格都做**（只做 treatment 不算）。
 
 ## Required Reads
 
-- 本包 `proposal.md`（射程與使用者裁示逐字）、`design.md`（K1–K11 已知數與母體）、
+- 本包 `proposal.md`（射程與使用者裁示逐字）、`design.md`（K1–K12 已知數與母體；
+  **K12 是 K8 的母體錯配警告條，引用 K8 的 A/A' 兩格前必讀**）、
   `errors.md`（Outcome Codomain：每個狀態的排放點）
 - 舊包 `plans/eda-bridge_draftsman-series-divider-wireable/errors.md` —— 特別是
   **⑤（同一政策有兩份實作，pass-through 控制組結構性無效）** 與
@@ -35,5 +36,16 @@ treatment 與 control **兩格都做**（只做 treatment 不算）。
 
 - [ ] Q1 已由使用者裁決，`data-schema.json` 的 `open_decision.status` 已從 `awaiting-user-ruling` 更新
 - [ ] `kicad-cli` 在執行環境可用（不可用時跨檔連通性只能記 `indeterminate`，不得記 `ok`）
+  - **取得方式（round 43 實測，非推測）**：**宿主已有** `/usr/bin/kicad-cli`，版本 `9.0.9`，
+    `sch export netlist` 子命令存在（控制組：不存在的子命令回 `Failed to parse`）。
+    **不需進容器**——Phase 1 可直接在宿主跑。若日後環境變動，開工前跑
+    `command -v kicad-cli` 確認；容器側 (`./mcpctl.sh`) 是否含此執行檔**本輪未驗**。
 - [ ] 已讀舊包 `errors.md` ⑤ 與 ⑦，理解 tasks 5.2 為何要求「兩處實作都改」
 - [ ] 已確認工作樹狀態並依 `AGENTS.md` §6.1 錨定自己的工作（本樹長期有多顆 session 並行、大量未 commit）
+
+## 本包自評的母體（round 42-43 交接品質檢查）
+
+**「一顆零記憶 session 可否只讀本包就開工」這個判斷的母體是五檔**：
+`tasks.md` / `handoff.md` / `design.md` / `spec.md` / `test-vectors.json`。
+**`sequence.json` / `idef0.json` / `grafcet.json` / `observability.md` / `README.en.md` 未通讀**——
+所以那個「可以開工」的結論對這五檔什麼都沒說。接手者若在它們裡撞到缺口，**那不是回歸，是從未測過**。

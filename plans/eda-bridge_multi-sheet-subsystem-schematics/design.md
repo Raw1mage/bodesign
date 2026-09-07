@@ -19,12 +19,12 @@ bodesign 的 C03 原理圖輸出至今**只會產出一個 `.kicad_sch` 檔**。
 | K5 | 我們的寫檔點 = **1** 處（`kicad_emit.py:2452-2453`）；`sheet_instances` 是寫死的 `(path "/" (page "1"))`（`:3930`） | bodesign HEAD `2ff0837`，`packages/eda-bridge/` |
 | K6 | `global_label` 原語**已具備**，欄位與真板逐字同構（只差字型 scale） | 同 K5，`kicad_emit.py:2532`/`:3176`、`declare.py:53-54` |
 | K7 | 連接原理含量 105~210 段，我們畫 124 段，**已落在區間內** | 真板 426 段；下界 K−1 edge、上界每 edge ≤2 段，宣告於量測前 |
-| K8 | **`M6-8d` 存活**：整圖+政策OFF=83 交叉、分紙+政策OFF=66，C 是 B 的 80%。**四基準全表**：**A** 分紙+政策ON=**8**（power 7 / mcu 1 / io 0）、**A'** 整圖+政策ON=**8**、**B** 整圖+政策OFF=**83**、**C** 分紙+政策OFF=**66**（power **43** / mcu **20** / io **3**）；伴隨讀數線數 62→92、junction 4→19 | 全表同一母體：with-group 構法、真板第 5 欄分派、政策兩處都攔、同一支 `count_interior_crossings`；單調性控制組 B≥A' 成立 |
-| K12 | **母體錯配的實例**：A/A' 的 8 **不可**拿去比 `M6-8d` 聲稱的「12+」——前者是「那些線一條都沒畫」的狀態，後者是「畫出來之後」。**可比的只有 B vs C** | 本線 round 35 曾做過這個無效比較，round 36 才發現。**此列是 `observability.md` 母體宣告紀律的來源** |
+| K8 | **`M6-8d` 存活**：整圖+政策OFF=83 交叉、分紙+政策OFF=66，C 是 B 的 80%。**四基準全表**：**A** 分紙+政策ON=**8**（power 7 / mcu 1 / io 0）、**A'** 整圖+政策ON=**8**、**B** 整圖+政策OFF=**83**、**C** 分紙+政策OFF=**66**（power **43** / mcu **20** / io **3**）；伴隨讀數線數 62→92、junction 4→19 | 全表同一母體：with-group 構法、真板第 5 欄分派、政策兩處都攔、同一支 `count_interior_crossings`；單調性控制組 B≥A' 成立。<br>⚠ **本列的 A/A' 兩格是母體錯配的高危區——引用前先讀 K12**（A/A' 的 8 不可拿去比 `M6-8d` 的「12+」） |
 | K9 | **8 條**單紙且**確實因政策而未畫**的 net：`BAT_EXT CC1 CC2 NTC SWCLK SWDIO VBUS VBUS_CON`。<br>**已拿掉 `ENPPB`**（round 41 重算）：它在 HEAD 的 label 理由是 `forced-label`（命中 cross-IC），但**三條政策兩處實作全關後它仍是 0 段** ⇒ 真因是 anti-fusion，不是政策。<br>⚠ `VBUS` 在 HEAD 已畫 6 段（部分畫出），政策關後 8 段，不是全無表達 | **母體：原 9 條單紙 net，扣掉 1 條非政策成因**。判準：三條政策（power-rail / high-fanout / cross-IC）在 composer `:2189-2231` 與 kicad_emit `:1274-1282` **兩處同時**中性化後的 `wire_runs` 段數＞0。<br>控制組：POS `labelled_ON=15` / `total_segs_ON=120`（命中 HEAD 已知值）、MONO `180≥120`、拦截計數 45 且 passthru 53 皆非零（⇒ scoped 而非全面破壞 symbol 載入）、`tracebacks=0`。<br>**偏差方向（量前宣告）**：關政策只能**增加**畫線 ⇒ 本探針只會**高估** keep-set；因此 `ENPPB` 的 DROP 是強訊號 |
 | K9-註 | **本格的 v1 探針已作廢**：它讀 `res.emit.nets`（不存在的屬性），全部計數回 0，9 條全部得到 DROP——**一個看起來完整、實則來自空量測的結論**。是 POS 控制組（`labelled_ON` 應為 15 卻得 0）拦下它 | 正確屬性是 `emit.wire_runs`（list of `{net, len_mm}`）。**舊包 `errors.md` 那一族的又一例：判準跑得好好的，輸入在上游静默為空** |
 | K10 | Q3 衝擊面：A 類單檔路徑字面值 **13** 處、C 類 `result.schematic_path` 單數語意 **29** 處、`glob("*.kicad_sch")` **0**、`sheet_instances`/`page` 字面值 **0**、`WIRE_GEOM_SHA` 在 `tests/` **0** | `tests/` 153 個模組，grep tool；控制組換檔後仍成立 |
 | K11 | `group` 語意衝突：33 筆 spec fixture 中 **21 筆**的值是佈局佔位標籤（`a`/`p`/`g`/`g0`/`g1`），非子系統名 | `tests/test_composer_draftsman.py`；MCP tool-registry 的同名 `group` 已分開數，不混入 |
+| K12 | **母體錯配的實例（K8 的警告條，見 K8 末尾指標）**：A/A' 的 8 **不可**拿去比 `M6-8d` 聲稱的「12+」——前者是「那些線一條都沒畫」的狀態，後者是「畫出來之後」。**可比的只有 B vs C** | 本線 round 35 曾做過這個無效比較，round 36 才發現。**此列是 `observability.md` 母體宣告紀律的來源** |
 
 ## Goals / Non-Goals
 
