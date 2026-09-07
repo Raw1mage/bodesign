@@ -64,32 +64,58 @@ K 個 pin 在同一條 net 上至少需要 K−1 條 edge（下界），正交�
 
 ## Scope
 
-### IN — 三格，逐格帶現況讀數
+### IN — 四格，逐格帶現況讀數
 
 | # | 能力 | 現況讀數（HEAD `2ff0837`） | 證據 | 新增 or 改既有 |
 |---|---|---|---|---|
 | (a) | 產出 N 個 `.kicad_sch` 檔 | 寫檔點 **1** 處 | `kicad_emit.py:2452-2453`（`schematic_path = root / f"{project_name}.kicad_sch"` → `write_text`） | **新增能力**（既有寫檔點是單數形，需擴為「一組」） |
 | (b) | root 檔帶 `(sheet …)` block | **0**。`sheet_instances` 是寫死字串 `(path "/" (page "1"))` | `kicad_emit.py:3930` | **新增能力**（目前無任何 sheet block 產生器） |
-| (d) | 元件→sheet 分派 | **不存在**。座標在 composer 決定，emitter 只消費 | 決定點 `composer.py:2367-2380`（`_page_fill_distribute` → `abs_pos` → `EmitComponent(x, y)`）；emitter 端只讀 `c.x/c.y` | **新增能力**（且它是唯一需要新政策的一格） |
+| (c) | 跨 sheet 連通性 | 原語**已具備**；但跨**檔**連通從未被測過 | `kicad_emit.py:2532`/`:3176`、`declare.py:53-54` | **驗證，非實作**（見下方實驗契約） |
+| (d) | 元件→sheet 分派 | 分派**資料**已存在（`group` 欄）；分派**到 sheet** 不存在 | `composer.py:2072`/`:2285`/`:640-667`；座標決定點 `composer.py:2367-2380` | **改既有**（語意擴張，見 Q1） |
+| (e) | 政策的 sheet-aware 重新推導 | cross-IC / power-rail / high-fanout 三條政策的判定範圍是**整張圖** | `composer.py:2175-2231`（`M6-8d (user 03a ruling)`） | **需使用者裁決**（見下） |
 
-### (c) 明確排除 — `global_label` 已具備
+### (c) 的實驗契約 — 不新增原語，但必須驗證
 
-本輪最省事的發現：**跨 sheet 不需要新原語。**
+**已具備的那一半**：我們已在產 `global_label`（`kicad_emit.py:2532` `_global_label_block`、`:3176` 呼叫點），
+`declare.py:53-54` 已把它列為 `RENDER_MODES` 且是 `DEFAULT_RENDER`；欄位與真板逐字同構，唯一差異是字型 scale。
+真板 `hierarchical_label=0` / local label=0 ⇒ **不需要第二種跨頁原語**。
 
-- 我們已在產 `global_label`：`kicad_emit.py:2532`（`_global_label_block`）、`:3176` 呼叫點；
-  `declare.py:53-54` 已把 `global_label` 列為 `RENDER_MODES` 且是 `DEFAULT_RENDER`。
-- 欄位與真板逐字同構，**唯一差異是字型 scale**（我們帶 `text_scale=page_scale`）。
-- 真板 `hierarchical_label=0`、local label=0 ⇒ 不需要補第二種跨頁原語。
+**必須驗證的那一半**：真板三張葉紙的 global_label 是 **3/7/8=18**，而 root 檔 `global_label=0`——
+**跨 sheet 連通性是靠「同名 global_label 出現在不同葉檔」建立的，與 root 檔無關。**
+我們只有一個檔，所以「同名 label 在同一張紙上連得起來」是**平凡的**——
+它與「跨檔連得起來」共用「有 global_label 原語」這個外觀。
 
-**⚠ 未量**：同構是**文字比對**。沒有實際產一份多 sheet 檔丟給 KiCad，驗證跨 sheet 的
-`global_label` 真的在 netlist 層連得起來。這一格是 designed 階段的第一個實驗。
+**designed 的第一個實驗（契約，不可簡化）**：
+
+```
+treatment : root + 2 葉，兩葉各 1 個 **同名** global_label
+            → kicad-cli 匯出 netlist → 兩端必須落在 **同一條** net
+control   : 同一份，兩葉改成 **不同名**
+            → 必須落在 **兩條不同** net
+```
+
+**控制組不可省**：沒有它，treatment 的 PASS 分不出「跨檔真的連通」與
+「netlist 匯出把所有東西都併成一條」——兩者共用同一個「兩端同 net」的輸出。
+
+### (e) 政策的 sheet-aware 重新推導 — **會碰 `M6-8d`，需使用者裁決**
+
+`M6-8d` 的理由逐字是「drawn cross-IC bus 產生 12+ 條無序交叉線」。
+**那個交叉是單張紙逼出來的。** 切成 power/mcu/io 三張紙之後，每張紙上的 cross-IC 對數大幅下降
+⇒ **政策的前提在多 sheet 形狀下不再成立，但政策的 code 不會自己知道這件事。**
+
+本包 designed 階段要產出的是**量測**，不是修改：
+
+1. cross-IC / power-rail / high-fanout 三條政策的判定範圍從「整張圖」改為「單張 sheet 內」是否成立；
+2. **每張紙上實際會有幾條交叉**。
+
+**拿那個數字去問使用者，不自己改**——`M6-8d` 是使用者裁示。
 
 ### OUT
 
-- **不改單張紙的佈線判準**。`M6-8d` / anti-fusion / `interior_retry` 全部留在舊包。
+- **不改單張紙的幾何判準**。anti-fusion / `interior_retry` / `_segment_fuses` 全部留在舊包。
+  （(e) 碰的是政策的**判定範圍**，不是畫線的幾何。）
 - **不追真板 426 段**（理由見 §Why，105~210 區間 + 我們的 124 已落在區間內）。
 - 不引入 `hierarchical_label`。
-- 不做元件自動分群演算法的選型——本包 `proposed` 階段**只列候選不預選**（見 §未決問題）。
 - 不碰 C04 以後任何路徑。
 
 ## Non-Goals
@@ -149,15 +175,41 @@ K 個 pin 在同一條 net 上至少需要 K−1 條 edge（下界），正交�
 
 ## 未決問題（本包 `proposed` 階段刻意不答）
 
-### Q1 — 元件→sheet 的分派規則從哪來？**三個候選，不預選。**
+### Q1 — 元件→sheet 的分派規則從哪來？**候選 C 已實測成立，問題改形。**
 
-| 候選 | 形狀 | 已知的代價 |
+**候選 C 成立：欄位名是 `group`，且它不只存在——它已經被消費、且真板已經在用。**
+五條證據鏈（全部唯讀量測，2026-09-07 round 33）：
+
+| 環節 | 讀數 | 證據 |
 |---|---|---|
-| **A. agent 在 `declare_circuit` 時宣告** | spec 多一個 `sheet` 欄，設計者自己說 | 把負擔丟回呼叫端；但符合本 repo「系統不自己發明電路」的天條 |
-| **B. 從 net 拓撲自動分群** | 用連通度/社群偵測切 | **有 silent-fabrication 風險**——系統自己決定了功能邊界。KB `netlist-synthesis-gap` 的禁令可能適用，需辨析 |
-| **C. 從既有 spec 的某個既有欄位推導** | 例如從 `value` / `footprint` / 既有分組欄位反推 | 需先確認那個欄位存在且語意穩定；本輪未查 |
+| spec 欄位定義 | `group: string`，notes 逐字寫「**功能分群**，透傳給引擎 cluster placement」 | 舊包 `data-schema.json` §Component |
+| composer 讀取 | 讀進來 → 餘給 `_cluster()` | `composer.py:2072`（`comp.get("group")`）、`:2285`、`:2287` |
+| 消費語意 | **`declared` 非空時完全接管分群**（`source="declared"`）；未宣告者自成 singleton `auto-<ref>`，**一顆不掉** | `composer.py:640-667` |
+| 真板已在用 | `design.py:49 SHEETS = [("power",…),("mcu",…),("io",…)]`；`COMPONENTS` 每顆的**第 5 欄**就是 sheet 名 | GUEST 唯讀，45/45 欄位值皆屬已宣告 sheet 名 |
+| 橋接已接線 | `"group": sheet` ——**真板的 sheet 欄已經直接餵進 bodesign 的 `group`** | `mk_sch_bodesign.py:67,69` |
 
-**我不預選，因為 B 可能直接撞上本 repo 的天條，那是設計裁決不是實作偏好。**
+**交叉印證（決定性）**：`design.py` 第 5 欄的分佈是 **power 22 / mcu 9 / io 14**，
+與獨立從三個 `.kicad_sch` 檔數出來的每張紙元件數**逐格相符**（Σ=45=distinct）。
+兩條互不相干的路徑得到同一組數字。
+
+**所以 Q1 不再是「規則從哪來」，而是一個更窄、但仍需裁決的問題：**
+
+> **`group` 目前的語意是「版面上要不要摆在一起」（cluster placement）。
+> 把它直接當成「上哪張紙」來用，這兩個語意可以合一嗎？**
+
+兩個選項，**不預選**：
+
+- **C-1 語意合一**：`group` 同時意味分群與分紙。零新欄位、零 schema 變更、consumer 零修改
+  （真板橋接已經在餵 sheet 名進去了）。**代價：以後想表達「同一張紙上分兩群」就說不出來了。**
+- **C-2 新增 `sheet` 欄，`group` 維持原意**：兩個維度可分別表達。
+  **代價：新欄位 + 兩欄的一致性規則（同一 group 能不能跨 sheet？）又是一條要訂的政策。**
+
+**原候選 A（agent 另外宣告）實質上已被 C 吐揉掉**——宣告管道已經存在。
+**原候選 B（拓撲自動分群）不需要了**：它本來就只是 `_cluster()` 在 `declared` 為空時的 fallback
+（`composer.py:669+`，net-degree connected-components），**而且拿它當分紙依據正是 silent-fabrication 風險的來源**。
+
+**⚠ 本輪未量**：`group` 在**既有呼叫端**裡的實際使用情形——除了 btdongle 以外，還有誰在帶這個欄，
+以及他們帶的值能不能当 sheet 名。**C-1 若被採納，這一格必須先量**。
 
 ### Q2 — `page` 從 2 起算，是 KiCad 強制還是作者選擇？
 
@@ -172,6 +224,18 @@ K 個 pin 在同一條 net 上至少需要 K−1 條 edge（下界），正交�
 
 ## 與舊包的關係
 
+**本包不接手「宣告入口」那個空缺——因為它已經被填補了。**
+
+舊包 `proposal.md` §Why 開頭寫的「61 個 verb、讓 agent 宣告電路拓撲的入口 0 個」，
+**已於本線 `23df9ad` / `fe5278b` 建好 `declare_circuit`**。生效的證據是 round 29 ③ 的
+**堆 3 = 0**：27/27 spec net 以 node-set 身分精確對應，**那些連接原理已經進到系統裡了**。
+
+> **⚠ 文件裡的問題陳述不會因為問題被解決而自動更新。**
+> 舊包 `proposal.md` §Why 至今逐字寫著那個已經不存在的空缺。本包在 round 33 差一點因此把
+> 「宣告入口」列進射程，即重做一件三週前已完成的事。
+> **實際的缺口是 (e)**：那 12 條被 label 政策攔在繪圖之外，
+> 而那條政策的正當性建立在「只有一張紙」這個前提上。
+
 **本包不取代 `eda-bridge_draftsman-series-divider-wireable`。** 留在舊包的：
 
 - `ENPPB` / `CHG_LED_A` 兩條因 **anti-fusion**（非政策）而 0 段的 net
@@ -180,6 +244,10 @@ K 個 pin 在同一條 net 上至少需要 K−1 條 edge（下界），正交�
 - `M6-8d` 本身與 `label-policy-for-user-ruling.md` 的 baseline 記錄。
 - `errors.md` 的 8 則失效模式（跨包可讀，本包不複製）。
 
-舊包現況：`state=planned`，`plan-validate` **PASS**（12 required artifacts），
-但報 **STATE DRIFT**——tasks.md 進度已到 `implementing`。**本輪未 advance，唯讀。**
+舊包現況（round 33 量）：`plan-validate` **PASS**（12 required artifacts）。
+帳面已於 round 33 由 `planned` 推至 **`implementing`**（修正 STATE DRIFT，dispatcher 授權）。
+
+**舊包的 PASS 有一個必須連帶讀的限制**：`execution-contract layer DID NOT RUN`（該包未 opt in），
+所以它的 `idef0.json` / `grafcet.json` 是 **present but UNVALIDATED**——
+**那個 PASS 對這兩份檔什麼都沒說。** 本包若日後要引用舊包的圖，不得把那個 PASS 當成它們的背書。
 

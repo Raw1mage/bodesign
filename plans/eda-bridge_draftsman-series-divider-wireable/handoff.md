@@ -370,3 +370,38 @@ BASELINE tree 的真實性已逐位元證明：`sha256(before/kicad_emit.py)` �
 `373471f8b2b914a3` == `git show edc6cd8:` 同值，且 != HEAD 的 `3ee256f5cea1349e`；
 round-8 標記 `perpendicular_ok_kinds` 在 before tree 計數 0、在 HEAD 計數 7。
 兩側 run 前均清 `__pycache__`（AGENTS.md §6.3）。
+
+---
+
+## Round 33 — 帳面修正與一則 PASS 的閱讀限制
+
+### 狀態已由 `planned` 推至 `implementing`
+
+`plan-validate` / `plan-promote` 兩者都在報 **STATE DRIFT**（`tasks.md` 進度隱含
+`implementing`，`.state.json` 卻停在 `planned`），並明文要求 `Run plan-promote NOW
+(not at close-out)`。dispatcher `ses_04db7a1c5ffe` 於 round 33 授權修正。
+
+作法：`plan-promote.ts --dry-run` 先取 `nextStateFile`（DD-15：runner 只裁決合法性，
+由 agent 自行套用），確認它**只動 `.state.json`**（state 欄 + history 一筆）之後才寫入。
+dry-run 後 `git status --porcelain` 對本包回空、對全 repo 非空——證明 dry-run 真的沒寫，
+且該探針不是瞎的。
+
+### ⚠ 這個包的 `plan-validate` PASS，對兩份圖檔什麼都沒說
+
+```
+⚠ execution-contract layer DID NOT RUN (no .state.json.execution_contract)
+  — 2 manifest(s) present but UNVALIDATED: idef0.json, grafcet.json
+PASS — state=implementing: 12 required, 1 optional
+  [execution-contract: NOT RUN — package has not opted in]
+```
+
+本包**未 opt in** execution-contract layer，所以那六個驗證器一次都沒跑。
+`idef0.json` / `grafcet.json` 是 **present but UNVALIDATED**。
+
+**這是「檔案存在」與「檔案通過驗證」共用同一個 PASS 外觀的一個實例**——
+與本包 `errors.md` 收錄的失效模式同族：閱讀者會把整體 PASS 讀成對每一份 artifact 的背書。
+
+**判準**：日後任何地方（含新包 `eda-bridge_multi-sheet-subsystem-schematics`）
+若要引用本包的 IDEF0 / GRAFCET，**不得以「本包 plan-validate PASS」作為它們的背書**。
+要背書就得先 opt in（在 `.state.json` 加 `"execution_contract": {"version":"1.0.0","marking":[]}`）
+再跑一次。**本輪只落帳，未 opt in、未跑。**
