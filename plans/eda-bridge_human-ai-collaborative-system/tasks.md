@@ -56,10 +56,14 @@
   - Pinned components are excluded from force-directed movement; remaining auto-placed parts flow around them.
   - Preserve exact pinned origins through sheet fitting and emitter snapping; nonzero pinned rotation fails explicitly.
   - Verified with `python3 -m unittest tests.test_kicad_sync` (8 tests) and `tests.test_composer` (5 tests).
-- [ ] 4.3 Implement Interactive Decision Gate helpers via `ask_question`:
+- [x] 4.3 Implement Interactive Decision Gate helpers via `ask_question`:
   - Emit structured trade-off options for major circuit decisions (LDO vs Buck, BOM alternates).
-- [ ] 4.4 Implement Visual QA Companion report:
+  - Injected synchronous callback, validated single selection, package-size options and provenance; selection never asserts electrical suitability.
+- [x] 4.4 Implement Visual QA Companion report:
   - Generate diff render showing newly added wires (green), moved parts (yellow), and DRC warnings (red).
+  - Approved bounded SVG-only UUID change-map: schematic instances/wires/labels and PCB footprints/straight tracks/pads/vias; PCB net declarations matched by name (they have no UUID).
+  - Located external diagnostics retain exact codes; no diagnostics means not supplied, never DRC passed. Curves, zones, hierarchy and native artwork are explicitly outside coverage. No PNG generated.
+  - Verification: `python3 -m unittest tests.test_decision_gate tests.test_visual_companion tests.test_kicad_sync` — 20 tests, OK. Native DRC/ERC, live UI and visual rendering QA not measured.
 
 ## Phase 5: End-to-End Benchmark & Verification on Real Board
 
