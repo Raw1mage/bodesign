@@ -720,7 +720,40 @@ def _cluster(refs: list[str], groups: dict[str, str], adjacency: dict[str, set[s
 # DD-2 stage B: deterministic force-directed refinement within a cluster.
 # No RNG: initial layout is a ref-sorted grid; fixed iterations/step.
 # ---------------------------------------------------------------------------
-def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str, tuple[float, float] | None], gutter_scale: float = 1.0) -> dict[str, tuple[float, float]]:
+def _place_around_pins(positions, bboxes, fixed):
+    """Place movable boxes to the right of collisions, never move human boxes.
+
+    Each collision advances x past an occupied right edge, so the finite
+    obstacle set guarantees termination. Missing geometry fails explicitly.
+    """
+    occupied = dict(fixed)
+    for ref in positions.keys() | fixed.keys():
+        if not bboxes.get(ref):
+            raise ValueError(f"USER_PINNED_BBOX_UNAVAILABLE: {ref}")
+    def clashes(ref, x, y, other, ox, oy):
+        w, h = bboxes[ref]
+        ow, oh = bboxes[other]
+        return abs(x - ox) < (w + ow) / 2 + BBOX_MARGIN_MM and abs(y - oy) < (h + oh) / 2 + BBOX_MARGIN_MM
+    for ref, (x, y) in fixed.items():
+        for other, (ox, oy) in fixed.items():
+            if ref < other and clashes(ref, x, y, other, ox, oy):
+                raise ValueError(f"USER_PINNED_OVERLAP: {ref}, {other}")
+    for ref in sorted(positions):
+        if ref in fixed:
+            continue
+        x, y = positions[ref]
+        while True:
+            hits = [ox + (bboxes[other][0] + bboxes[ref][0]) / 2 + BBOX_MARGIN_MM
+                    for other, (ox, oy) in occupied.items()
+                    if clashes(ref, x, y, other, ox, oy)]
+            if not hits:
+                break
+            x = max(hits) + 1e-6
+        occupied[ref] = (x, y)
+    return occupied
+
+
+def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str, tuple[float, float] | None], gutter_scale: float = 1.0, fixed=None) -> dict[str, tuple[float, float]]:
     """Return deterministic local (x, y) offsets per member around (0, 0).
 
     Spring (shared-net attraction) + repulsion (overlap avoidance). Members
@@ -746,6 +779,8 @@ def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str
     pos: dict[str, list[float]] = {}
     for i, ref in enumerate(ordered):
         pos[ref] = [float((i % cols) * k), float((i // cols) * k)]
+    for ref, point in (fixed or {}).items():
+        pos[ref] = list(point)
 
     active = [r for r in ordered if bboxes.get(r) is not None]
     if len(active) < 2:
@@ -804,12 +839,18 @@ def _refine(members: list[str], adjacency: dict[str, set[str]], bboxes: dict[str
             disp[r][1] += (cy - pos[r][1]) * GRAVITY_K
         # Clamp each displacement to the current temperature, then cool.
         for r in active:
+            if fixed and r in fixed:
+                continue
             dlen = (disp[r][0] ** 2 + disp[r][1] ** 2) ** 0.5
             if dlen > 1e-9:
                 scale = min(dlen, temp) / dlen
                 pos[r][0] += disp[r][0] * scale
                 pos[r][1] += disp[r][1] * scale
         temp = max(temp - cool, k * 0.05)
+
+    if fixed:
+        # Human constraints supersede satellite snapping and recentering.
+        return _place_around_pins({r: tuple(p) for r, p in pos.items()}, bboxes, fixed)
 
     # Satellite snap (A2): a 2-terminal decoupling/oscillator part that shares a
     # net with exactly ONE cluster peer is a "satellite" of that peer. Force-
@@ -1066,6 +1107,7 @@ def _macro_compact(
     adjacency: dict[str, set[str]],
     warnings: list[str],
     gutter_scale: float = 1.0,
+    fixed=None,
 ) -> dict[str, tuple[float, float]]:
     """Deterministic macro + 2D shelf bin-packing (DD-12 — opt-in whitespace治本).
 
@@ -1079,6 +1121,10 @@ def _macro_compact(
     re-lays EVERY non-explicit part, discarding the sparse force-directed spread.
     Overlap-safety holds by construction (shelf-packed disjoint boxes).
     """
+    if fixed:
+        free = {ref: pos for ref, pos in abs_pos.items() if ref not in fixed}
+        packed = _macro_compact(free, bboxes, adjacency, warnings, gutter_scale)
+        return _place_around_pins(packed, bboxes, fixed)
     refs = sorted(abs_pos)
     if not refs:
         return abs_pos
@@ -1423,7 +1469,7 @@ def _compact_frame_avail(
 # DD-5: sheet-fit. Compute content AABB, pick the smallest standard paper that
 # fits (with margin), and translate content to the margin origin.
 # ---------------------------------------------------------------------------
-def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, float] | None], warnings: list[str], sheet_margin_mm: float | None = None, label_reach_mm: float = 0.0, prop_reach_mm: float = 0.0, fail_on_overflow: bool = False, paper_whitelist: set[str] | None = None) -> SheetFit:
+def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, float] | None], warnings: list[str], sheet_margin_mm: float | None = None, label_reach_mm: float = 0.0, prop_reach_mm: float = 0.0, fail_on_overflow: bool = False, paper_whitelist: set[str] | None = None, preserve_positions: bool = False) -> SheetFit:
     if not components:
         return SheetFit(selected_paper="A4", content_w=0.0, content_h=0.0, overflow=False)
     # sheet_margin_mm (opt-in, default None → SHEET_MARGIN_MM=12.7 unchanged): the
@@ -1481,6 +1527,12 @@ def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, f
 
     needed_w = content_w + 2 * margin
     needed_h = content_h + 2 * margin
+    if preserve_positions:
+        reach = label_reach_mm + prop_reach_mm
+        if min_x - ext_l - reach < 0 or min_y - ext_t - reach < 0:
+            raise ValueError("USER_PINNED_OUT_OF_FRAME: negative drawing extent")
+        needed_w = max_x + ext_r + reach + margin
+        needed_h = max_y + ext_b + reach + margin
     # M4-2 (occupancy-ledger, DD-3): budget-first frame scan. Walk the standard
     # papers smallest→largest; the FIRST whose usable region contains the
     # label-inclusive content AABB is the budget-feasible frame. Record each
@@ -1572,8 +1624,9 @@ def _fit_sheet(components: list[EmitComponent], bboxes: dict[str, tuple[float, f
         block_origin_x = max(block_origin_x, margin + label_reach_mm + prop_reach_mm + ext_l + _SNAP_SLACK_MM)
         block_origin_y = max(block_origin_y, margin + label_reach_mm + prop_reach_mm + ext_t + _SNAP_SLACK_MM)
     for c in components:
-        c.x = _snap_grid((c.x - min_x) + block_origin_x)
-        c.y = _snap_grid((c.y - min_y) + block_origin_y)
+        if not preserve_positions:
+            c.x = _snap_grid((c.x - min_x) + block_origin_x)
+            c.y = _snap_grid((c.y - min_y) + block_origin_y)
 
     return SheetFit(selected_paper=paper_name, content_w=content_w, content_h=content_h, overflow=overflow,
                     span_w=span_w, span_h=span_h, pad_w=pad_w, pad_h=pad_h,
@@ -2063,6 +2116,11 @@ def compose_schematic(
             skips.append(reason)
             warnings.append(reason)
             continue
+        if comp.get("user_pinned"):
+            from .kicad_sync import _pose
+            _pose({"x": comp.get("x"), "y": comp.get("y"), "rotation": comp.get("rotation", 0)})
+            if float(comp.get("rotation", 0)) % 360:
+                raise ValueError(f"USER_PINNED_ROTATION_UNSUPPORTED: {ref}")
         parsed.append({
             "index": index,
             "ref": ref,
@@ -2072,7 +2130,10 @@ def compose_schematic(
             "group": str(comp.get("group", "")).strip() or None,
             "x": comp.get("x"),
             "y": comp.get("y"),
+            "user_pinned": bool(comp.get("user_pinned", False)),
         })
+
+    pinned = {c["ref"]: (float(c["x"]), float(c["y"])) for c in parsed if c["user_pinned"]}
 
     # Parse nets (shared by both styles).
     nets: list[EmitNet] = []
@@ -2205,6 +2266,9 @@ def compose_schematic(
         # per bus: once an IC pair is label-ized, ALL its signals are labels (never a
         # mix of drawn + label on one bus). ICs are pin-count>2 parts (passives are
         # <=2-pin R/C/L); a net's "IC endpoints" are its multi-pin member refs.
+        # M7-3.3 (DD-9 / BR_20261004): this decision's SINGLE SOURCE OF TRUTH is the
+        # capacity_plan layer (capacity_plan.py); the duplicate per-pair counting
+        # loop here is removed and delegated to decide_route_policy.
         _pin_ct: dict[str, int] = {}
         for _c in parsed:
             try:
@@ -2212,21 +2276,12 @@ def compose_schematic(
                 _pin_ct[_c["ref"]] = len(_pins)
             except Exception:
                 _pin_ct[_c["ref"]] = 0
-        def _is_ic(ref: str) -> bool:
-            return _pin_ct.get(ref, 0) > 2
-        # Count signals per unordered IC pair; a signal "crosses" an IC pair when its
-        # nodes touch >=2 distinct ICs.
-        _pair_sig: dict[frozenset, list[str]] = {}
-        for net in nets:
-            ic_refs = sorted({r for (r, _p) in net.nodes if _is_ic(r)})
-            if len(ic_refs) < 2:
-                continue
-            for _i in range(len(ic_refs)):
-                for _j in range(_i + 1, len(ic_refs)):
-                    _pair_sig.setdefault(frozenset((ic_refs[_i], ic_refs[_j])), []).append(net.name)
-        _crossic_label = {
-            n for names in _pair_sig.values() if len(names) >= 2 for n in names
-        }
+        from .capacity_plan import NetConn as _NetConn, decide_route_policy as _decide_policy
+        _policy = _decide_policy(
+            [_NetConn(name=_net.name, nodes=tuple(_net.nodes)) for _net in nets],
+            _pin_ct,
+        )
+        _crossic_label = {name for name, style in _policy.items() if style == "label"}
         if _crossic_label:
             label_nets |= _crossic_label
 
@@ -2234,6 +2289,8 @@ def compose_schematic(
     sheet_fit: SheetFit | None = None
     bboxes: dict[str, tuple[float, float] | None] = {}
     bbox_cache: dict = {}
+
+    motif_geometries = []
 
     # DD-10 (A7): page density lint runs BEFORE placement (fail-fast). Disabled
     # by default (density_budget is None). Applies to both styles — an over-dense
@@ -2251,6 +2308,7 @@ def compose_schematic(
             components.append(EmitComponent(
                 ref=c["ref"], lib_id=c["symbol"], value=c["value"],
                 footprint=c["footprint"], x=x, y=y,
+                user_pinned=c["user_pinned"],
             ))
         paper = "A4"
     else:
@@ -2282,9 +2340,51 @@ def compose_schematic(
                         adjacency[a].add(b)
                         adjacency[b].add(a)
 
-        groups = {c["ref"]: c["group"] for c in parsed if c["group"]}
+        from .motifs import detect_motifs, synthesize_motif_geometry
+        from .kicad_emit import _native_pitch_and_count, _vendor_sym_scale
+        attachments = {}
+        original_bboxes = dict(bboxes)
+        if effective_conn in ("wire", "auto") and not all_label:
+            candidates = detect_motifs(raw_components, [
+                {"name": n.name, "nodes": n.nodes, "kind": net_kinds.get(n.name)} for n in nets])
+            by_ref = {c["ref"]: c for c in parsed}
+            motif_pins, lanes = {}, {}
+            for motif in candidates:
+                member_refs = [motif.host[0], *(b[0] for b in motif.branches)]
+                if any(by_ref[r]["x"] is not None or by_ref[r]["y"] is not None for r in member_refs):
+                    warnings.append(f"motif {motif.kind} at {motif.host}: explicit placement retained")
+                    continue
+                for r in member_refs:
+                    lib = by_ref[r]["symbol"]
+                    pitch, count = _native_pitch_and_count(lib, symbol_dirs, _npitch_cache)
+                    scale = (1.0 if lib.partition(":")[0].startswith("u1_") else
+                             _vendor_sym_scale(page_scale, pitch, _page_floor, count))
+                    motif_pins[r] = load_symbol(lib, symbol_dirs, page_scale=scale)[1]
+                host = motif.host[0]
+                lane = lanes.get(motif.host, 0)
+                geometry = synthesize_motif_geometry(motif, motif_pins, lane=lane)
+                lanes[motif.host] = lane + 1
+                motif_geometries.append((host, geometry))
+                for r, offset in geometry.offsets.items():
+                    attachments[r] = (host, offset)
+                    hw, hh = bboxes[host]
+                    rw, rh = bboxes[r]
+                    bboxes[host] = (max(hw, 2 * abs(offset[0]) + rw),
+                                    max(hh, 2 * abs(offset[1]) + rh + 5.08))
+            # All placement passes operate on rigid host macros, not satellites.
+            def root_ref(r):
+                return attachments[r][0] if r in attachments else r
+            macro_adjacency = {r: set() for r in adjacency if r not in attachments}
+            for r, neighbors in adjacency.items():
+                for other in neighbors:
+                    a, b = root_ref(r), root_ref(other)
+                    if a != b:
+                        macro_adjacency[a].add(b)
+            adjacency = macro_adjacency
+
+        groups = {c["ref"]: c["group"] for c in parsed if c["group"] and c["ref"] not in attachments}
         refs = [c["ref"] for c in parsed]
-        clusters = _cluster(refs, groups, adjacency, warnings)
+        clusters = _cluster([r for r in refs if r not in attachments], groups, adjacency, warnings)
 
         # Stage B per cluster, then lay clusters on a deterministic grid.
         abs_pos: dict[str, tuple[float, float]] = {}
@@ -2310,7 +2410,8 @@ def compose_schematic(
             cy = (ci // ccols) * cell
             cluster.center_x = cx
             cluster.center_y = cy
-            local = _refine(cluster.members, adjacency, bboxes, gutter_scale=placement_gutter_scale)
+            local_pins = {r: (x - cx, y - cy) for r, (x, y) in pinned.items() if r in cluster.members}
+            local = _refine(cluster.members, adjacency, bboxes, gutter_scale=placement_gutter_scale, fixed=local_pins)
             for ref, (lx, ly) in local.items():
                 if ref in explicit:
                     abs_pos[ref] = explicit[ref]
@@ -2327,6 +2428,7 @@ def compose_schematic(
             resolved = _macro_compact(
                 non_explicit_pos, bboxes, adjacency, warnings,
                 gutter_scale=placement_gutter_scale,
+                fixed=pinned,
             )
         else:
             resolved = _resolve_overlaps(non_explicit_pos, bboxes, warnings, gutter_scale=placement_gutter_scale)
@@ -2366,8 +2468,22 @@ def compose_schematic(
         _prop_reach = _prop_clear + _prop_h / 2.0
         if page_fill:
             avail = _compact_frame_avail(resolved, bboxes, sheet_margin_mm, label_reach_mm=_label_reach, prop_reach_mm=_prop_reach)
-            resolved = _page_fill_distribute(resolved, bboxes, avail=avail)
+            resolved = _page_fill_distribute({r: p for r, p in resolved.items() if r not in pinned}, bboxes, avail=avail)
         abs_pos.update(resolved)
+        if pinned:
+            # Recheck after compaction/page-fill and snapping, across ALL clusters.
+            reach = _label_reach + _prop_reach + SHEET_MARGIN_MM
+            snapped = {r: (max(_snap_grid(x), bboxes[r][0] / 2 + reach),
+                           max(_snap_grid(y), bboxes[r][1] / 2 + reach))
+                       for r, (x, y) in abs_pos.items() if r not in pinned}
+            abs_pos = _place_around_pins(snapped, bboxes, pinned)
+
+        for r, (host, offset) in attachments.items():
+            hx, hy = abs_pos[host]
+            abs_pos[r] = (hx + offset[0], hy + offset[1])
+        for cluster in clusters:
+            cluster.members.extend(r for r, (host, _) in attachments.items() if host in cluster.members)
+        bboxes = original_bboxes
 
         components = []
         by_ref = {c["ref"]: c for c in parsed}
@@ -2376,7 +2492,8 @@ def compose_schematic(
             c = by_ref[ref]
             components.append(EmitComponent(
                 ref=ref, lib_id=c["symbol"], value=c["value"],
-                footprint=c["footprint"], x=_snap_grid(x), y=_snap_grid(y),
+                footprint=c["footprint"], x=x if pinned else _snap_grid(x), y=y if pinned else _snap_grid(y),
+                user_pinned=c["user_pinned"],
             ))
 
         # DD-12: overflow is an OBSERVATION, not a driving gate. The constructive
@@ -2388,7 +2505,7 @@ def compose_schematic(
         # records overflow as a warning rather than raising a per-scale verdict that
         # would drive a retry (there is no scan to feed). paper_whitelist is honoured
         # so a caller that already closed the form pins the frame to the chosen paper.
-        sheet_fit = _fit_sheet(components, bboxes, warnings, sheet_margin_mm=sheet_margin_mm, label_reach_mm=_label_reach, prop_reach_mm=_prop_reach, fail_on_overflow=False, paper_whitelist=paper_whitelist)
+        sheet_fit = _fit_sheet(components, bboxes, warnings, sheet_margin_mm=sheet_margin_mm, label_reach_mm=_label_reach, prop_reach_mm=_prop_reach, fail_on_overflow=bool(pinned), paper_whitelist=paper_whitelist, preserve_positions=bool(pinned))
         paper = sheet_fit.selected_paper
 
         # M4-2 (scale-coherence DD-6b): TRUE-INK density gate REPLACES the AABB
@@ -2565,6 +2682,7 @@ def compose_schematic(
         page_scale=page_scale, ledger=_ledger, power_port_gate=power_port_gate,
         clusters=clusters,
         l6_avoidance=bool(spec.get("l6_avoidance", False)),
+        motif_geometries=motif_geometries,
     )
     warnings.extend(emit.warnings)
 

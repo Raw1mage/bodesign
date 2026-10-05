@@ -1,0 +1,69 @@
+[
+  {
+    "id": "TV-1",
+    "description": "Basic 3-part series voltage divider (U1 -> R1 -> R2 -> GND) produces drawn wires, 1 junction, in-situ GND, and passes fidelity",
+    "input": {
+      "components": [
+        {"ref": "U1", "symbol": "Regulator_Linear:AMS1117-3.3"},
+        {"ref": "R1", "symbol": "Device:R", "value": "20k"},
+        {"ref": "R2", "symbol": "Device:R", "value": "10k"}
+      ],
+      "nets": [
+        {"name": "VO", "nodes": ["U1.2", "R1.1"]},
+        {"name": "VOUT", "nodes": ["R1.2", "R2.1"]},
+        {"name": "GND", "nodes": ["R2.2", "U1.1"]}
+      ]
+    },
+    "expected": {
+      "junction_count": 1,
+      "collinear_fusion": false,
+      "in_situ_gnd_count": 1,
+      "fidelity_ok": true
+    }
+  },
+  {
+    "id": "TV-2",
+    "description": "IC power decoupling capacitor attaches in-situ outside pin and emits local GND glyph without global bus route",
+    "input": {
+      "components": [
+        {"ref": "U1", "symbol": "MCU_Module:RaspberryPi_Pico_2W"},
+        {"ref": "C1", "symbol": "Device:C", "value": "100nF"}
+      ],
+      "nets": [
+        {"name": "+3V3", "nodes": ["U1.36", "C1.1"]},
+        {"name": "GND", "nodes": ["U1.38", "C1.2"]}
+      ]
+    },
+    "expected": {
+      "in_situ_attached": true,
+      "global_gnd_wire_count": 0,
+      "in_situ_gnd_count": 1,
+      "fidelity_ok": true
+    }
+  },
+  {
+    "id": "TV-3",
+    "description": "btdongle 45-component real board benchmark achieves draftsman readability thresholds",
+    "input": {
+      "spec_path": "thesmart_products/04.btdongle/C03-EE/02_build/sch_gen/design.py"
+    },
+    "expected": {
+      "min_junctions": 20,
+      "max_stub_share": 0.40,
+      "min_subcircuit_ratio": 0.50,
+      "fidelity_ok": true
+    }
+  },
+  {
+    "id": "TV-4",
+    "description": "Human component nudge in KiCad is tagged user_pinned and preserved across AI re-placement",
+    "input": {
+      "initial_pos": {"R1": [100.0, 100.0]},
+      "human_nudge": {"R1": [115.0, 105.0]}
+    },
+    "expected": {
+      "user_pinned": true,
+      "retained_pos": [115.0, 105.0]
+    }
+  }
+]

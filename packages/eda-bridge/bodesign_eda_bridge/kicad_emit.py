@@ -55,6 +55,7 @@ class EmitComponent:
     x: float = 0.0
     y: float = 0.0
     unit: int = 1  # KiCad multi-unit symbol unit index (1-based); default single-unit
+    user_pinned: bool = False
 
 
 @dataclass(slots=True)
@@ -1167,6 +1168,7 @@ def emit_kicad_schematic(
     power_port_gate: str = "error",
     clusters: list | None = None,
     l6_avoidance: bool = False,
+    motif_geometries: list | None = None,
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
 
@@ -1255,8 +1257,9 @@ def emit_kicad_schematic(
     # the pin (off-grid endpoints read as `pin_not_connected` in ERC). Harmless to
     # label mode (global labels don't require grid alignment).
     for component in components:
-        component.x = _snap_grid(component.x)
-        component.y = _snap_grid(component.y)
+        if not getattr(component, "user_pinned", False):
+            component.x = _snap_grid(component.x)
+            component.y = _snap_grid(component.y)
 
     placements = {component.ref: component for component in components}
 
@@ -1876,7 +1879,21 @@ def emit_kicad_schematic(
                                   for c in _rr.conflicts],
                 })
 
-    for net in nets:
+    motif_ground_points = {}
+    motif_routes = {}
+    for host, geometry in (motif_geometries or []):
+        c = placements[host]
+        motif_routes.setdefault(geometry.net, []).append((c, geometry))
+        for node, relative in geometry.ground_glyphs.items():
+            pin = _pin_abs(*node)
+            expected = (round(c.x + relative[0], 4), round(c.y + relative[1], 4))
+            actual = (pin[0], round(pin[1] + 2.54, 4)) if pin else None
+            if actual != expected:
+                raise ValueError(f"MOTIF_GEOMETRY_DRIFT: {node}: {actual} != {expected}")
+            motif_ground_points[pin] = actual
+
+    # Local motif branches claim their short corridors before unrelated routes.
+    for net in sorted(nets, key=lambda n: n.name not in motif_routes):
         force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
         # side[i] = outward stub unit vector (dx, dy) in SHEET coords for endpoints[i]
@@ -1894,6 +1911,44 @@ def emit_kicad_schematic(
             endpoints.append(abs_pt)
             endpoint_sides.append(_pin_edge(ref, pin))
             endpoint_refs.append(ref)
+
+        local_motifs = motif_routes.get(net.name, [])
+        if drawn and not net_unresolved and local_motifs:
+            covered = {node for _, g in local_motifs for node in g.nodes}
+            if covered == set(net.nodes):
+                for host_component, geometry in local_motifs:
+                    tap = (round(host_component.x + geometry.tap[0], 4),
+                           round(host_component.y + geometry.tap[1], 4))
+                    points = [_pin_abs(*node) for node in geometry.nodes]
+                    for pt in points:
+                        if pt == tap:
+                            continue
+                        segment = (pt, tap)
+                        if _segment_fuses(segment, _other_net_segments(net.name)):
+                            raise ValueError(f"MOTIF_ROUTE_FUSION: {net.name}")
+                        if not _route_clears_points([pt, tap], _foreign_pin_points(net.nodes)):
+                            raise ValueError(f"MOTIF_FOREIGN_PIN_CONTACT: {net.name}")
+                        fusion_registry.setdefault(net.name, []).append(segment)
+                        _reserve_wire([pt, tap], net.name, endpoint_refs)
+                        wire_blocks.append(_wire_segment_block(*pt, *tap))
+                        _record_run(*pt, *tap, net.name)
+                        routed_segments.append((segment, frozenset(endpoint_refs)))
+                    if len(points) >= 3:
+                        junction_blocks.append(_junction_block(*tap))
+                        junction_points.append((*tap, net.name))
+                    _place_local_label(net.name, *tap, [points[0], tap])
+                continue
+
+        # Ground is infrastructure, never a page-wide daisy chain. Preserve the
+        # explicit power_ports=False contract by using labels in that case.
+        if drawn and _power_net_kind(net.name) == "gnd":
+            for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
+                if power_ports:
+                    local_edge = (0.0, 1.0) if abs_pt in motif_ground_points else edge
+                    power_endpoints.append((net.name, "gnd", *abs_pt, local_edge, ep_ref))
+                else:
+                    label_endpoints.append((net.name, *abs_pt, edge))
+            continue
 
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
@@ -2284,13 +2339,19 @@ def emit_kicad_schematic(
             anchor_x = px
             anchor_y = py
             lib_id = _power_symbol_lib_id(net_name, kind)
+            if net_name == "GND" and (px, py) in motif_ground_points:
+                lib_id = "power:GND"
             if lib_id not in embedded_defs:
-                embedded_defs[lib_id] = _power_symbol_def(lib_id, net_name, kind)
+                embedded_defs[lib_id] = (load_symbol(lib_id, symbol_dir)[0] if lib_id == "power:GND"
+                                         else _power_symbol_def(lib_id, net_name, kind))
             # port sits one stub-length out from the pin endpoint, ALONG the outward
             # vector, so it clears the body regardless of edge — single straight seg.
             port_x = round(anchor_x + nx * _STUB_MM, 4)
             port_y = round(anchor_y + ny * _STUB_MM, 4)
             final_stub_segs = [((anchor_x, anchor_y), (port_x, port_y))]
+            if (px, py) in motif_ground_points and any(
+                    _segment_fuses(s, _other_net_segments(net_name)) for s in final_stub_segs):
+                raise ValueError(f"MOTIF_GROUND_FUSION: {net_name} at {(px, py)}")
             wire_blocks.append(_wire_segment_block(anchor_x, anchor_y, port_x, port_y))
             _record_run(anchor_x, anchor_y, port_x, port_y, net_name)
             fusion_registry.setdefault(net_name, []).extend(final_stub_segs)
