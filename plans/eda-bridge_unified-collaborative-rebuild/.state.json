@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "state": "designed",
+  "profile": [],
+  "history": [
+    {
+      "from": null,
+      "to": "proposed",
+      "at": "2026-10-05T18:05:09.996Z",
+      "by": "pkcs12",
+      "mode": "new",
+      "reason": "initial spec created via plan-init.ts"
+    },
+    {
+      "from": "proposed",
+      "to": "designed",
+      "at": "2026-10-05T18:19:24.731Z",
+      "by": "pkcs12",
+      "mode": "promote",
+      "reason": "Duty officer approved DD-1 through DD-8; Task 0.3 models and contracts complete; dedicated IDEF0/GRAFCET validation and full planned-artifact lint passed; runtime acceptance remains unmeasured"
+    }
+  ],
+  "tasks_contract": {
+    "version": "1"
+  },
+  "outcome_contract": {
+    "version": "1"
+  }
+}

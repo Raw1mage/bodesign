@@ -1,0 +1,28 @@
+{
+  "diagram_title": "Produce an evidence-bound ECAD-MCAD candidate",
+  "node_reference": "A0",
+  "activities": [
+    {"id":"A1","title":"Resolve scoped design inputs","description":"Freeze source, license, frame and applicability evidence; report missing prerequisites.","decomposition":null},
+    {"id":"A2","title":"Build native candidate","description":"Compile circuit and feature DAG into isolated native candidates; resolve revision-bound anchors.","decomposition":null},
+    {"id":"A3","title":"Verify candidate scope","description":"Bind electrical, form and exact mechanical checks to combined artifact manifests.","decomposition":null},
+    {"id":"A4","title":"Authorize exact release","description":"Check freshness, baseline and explicit approval before release.","decomposition":null}
+  ],
+  "arrows": [
+    {"id":"I1","source":"EXTERNAL","target":"A1:input","type":"input","label":"Board, enclosure, references and design intent"},
+    {"id":"C1","source":"EXTERNAL","target":"A1:control","type":"control","label":"Source licenses, permissions and supported scope"},
+    {"id":"M1","source":"EXTERNAL","target":"A1:mechanism","type":"mechanism","label":"Ingress and evidence resolvers"},
+    {"id":"D1","source":"A1:output","target":"A2:input","type":"input","label":"Circuit, feature DAG, frame and pinned inputs"},
+    {"id":"C2","source":"EXTERNAL","target":"A2:control","type":"control","label":"Topology, anchors, capability limits and human locks"},
+    {"id":"M2","source":"EXTERNAL","target":"A2:mechanism","type":"mechanism","label":"Shared use cases and EE/ME execution ports"},
+    {"id":"D2","source":"A2:output","target":"A3:input","type":"input","label":"Board/enclosure candidates and export manifest"},
+    {"id":"C3","source":"EXTERNAL","target":"A3:control","type":"control","label":"Versioned electrical and clearance policies"},
+    {"id":"M3","source":"EXTERNAL","target":"A3:mechanism","type":"mechanism","label":"Native checkers and exact geometry backend"},
+    {"id":"D3","source":"A3:output","target":"A4:input","type":"input","label":"Artifact-bound verification records"},
+    {"id":"C4","source":"EXTERNAL","target":"A4:control","type":"control","label":"Exact-manifest human approval and current baseline"},
+    {"id":"M4","source":"EXTERNAL","target":"A4:mechanism","type":"mechanism","label":"Release and conflict guards"},
+    {"id":"O1","source":"A1:output","target":"EXTERNAL","type":"output","label":"Input gaps and applicability refusals"},
+    {"id":"O2","source":"A2:output","target":"EXTERNAL","type":"output","label":"Build failure or unsupported edit"},
+    {"id":"O3","source":"A3:output","target":"EXTERNAL","type":"output","label":"Findings and unexamined scope"},
+    {"id":"O4","source":"A4:output","target":"EXTERNAL","type":"output","label":"Approved release or explicit release refusal"}
+  ]
+}

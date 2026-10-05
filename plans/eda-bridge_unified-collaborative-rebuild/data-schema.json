@@ -1,0 +1,93 @@
+{
+  "version":"1.1.0",
+  "status":"target-contract-not-runtime-implementation",
+  "schemas":[
+    {"name":"ArtifactManifest","kind":"json","fields":[
+      {"name":"schema_version","type":"string","notes":"Required; reject unsupported major version."},
+      {"name":"revision_id","type":"string","notes":"Required immutable candidate identity."},
+      {"name":"artifacts","type":"ArtifactRef[]","notes":"Nonempty; unique scoped relative paths; each contains role, path, sha256 and byte_size; no traversal or phantom files."},
+      {"name":"dependencies","type":"DependencyRef[]","notes":"Source, library, tool and rule identities plus digest/version; unknown version blocks reproducible release."},
+      {"name":"manifest_sha256","type":"string","notes":"Digest of canonical payload excluding this field; sorted artifact paths, stable JSON keys, UTF-8; timestamps excluded from identity."}
+    ]},
+    {"name":"DesignRepresentations","kind":"json","fields":[
+      {"name":"intent_revision","type":"string","notes":"Desired behavior owned by approved requirements; not inferred from native edits."},
+      {"name":"native_manifest_sha256","type":"string","notes":"Current implementation identity; never silently replaced by intent."},
+      {"name":"circuit","type":"object","notes":"Stable component/pin/net IDs, explicit isolated and NC nodes, functional block applicability and evidence refs."},
+      {"name":"presentation","type":"object","notes":"Circuit revision ref, sheets, poses, wire/label geometry and human locks; no topology authority."},
+      {"name":"layout_constraints","type":"object","notes":"Board-class ID, explicit units/frame, outline/stackup/keepout/fixed connectors and provenance."},
+      {"name":"reconciliation","type":"enum:consistent|pending|conflict","notes":"Any unaccepted intent/native divergence prevents release."}
+    ]},
+    {"name":"VerificationRecord","kind":"json","fields":[
+      {"name":"subject_manifest_sha256","type":"string","notes":"Required exact examined subject; never a live substitute for delivered files."},
+      {"name":"execution","type":"enum:succeeded|failed|not-run","notes":"Tool execution, independent of engineering verdict."},
+      {"name":"verdict","type":"enum:pass|fail|indeterminate|not-applicable","notes":"Pass requires succeeded execution and complete nonempty applicable examination; not-applicable requires explicit applicability evidence."},
+      {"name":"coverage","type":"object","notes":"Required expected_ids, examined_ids, omitted[{id,reason}]; examined subset of expected; omitted exactly expected minus examined. Empty expected requires applicability proof, otherwise indeterminate."},
+      {"name":"tool_rule_dependencies","type":"DependencyRef[]","notes":"Required versions/digests and source anchors; all compared at release."},
+      {"name":"axis","type":"enum:electrical|form|mechanical|manufacturing","notes":"Form success never substitutes for electrical validation."},
+      {"name":"findings","type":"object[]","notes":"Stable codes and source/object anchors; empty list is not pass evidence."},
+      {"name":"raw_result_ref","type":"ArtifactRef|null","notes":"Preserve raw output when executed; null allowed only with explicit absence reason."},
+      {"name":"reason","type":"string|null","notes":"Required for failed execution, not-run, indeterminate or not-applicable."},
+      {"name":"freshness","type":"enum:current|stale|unknown","notes":"Derived by dependency comparison, not caller assertion; stale/unknown blocks release."}
+    ]},
+    {"name":"ChangeProposal","kind":"json","fields":[
+      {"name":"baseline_manifest_sha256","type":"string","notes":"Required compare-and-apply precondition."},
+      {"name":"supported_edit_classes","type":"string[]","notes":"Explicit versioned allowlist; initial schematic pose support does not imply PCB or arbitrary rotation support."},
+      {"name":"operations","type":"object[]","notes":"Stable target IDs, before/after values, evidence refs and affected checks; unsupported operation refuses the batch."},
+      {"name":"locked_object_ids","type":"string[]","notes":"Cannot change without separately recorded explicit unlock."},
+      {"name":"approval_ref","type":"string|null","notes":"Exact proposal approval; not manufacturing approval."},
+      {"name":"conflicts","type":"object[]","notes":"Nonempty stops before writes; baseline check and apply must share a concurrency guard."}
+    ]},
+    {"name":"ReleaseApproval","kind":"json","fields":[
+      {"name":"manifest_sha256","type":"string","notes":"Exact release including board, exports, BOM and library manifest."},
+      {"name":"decision","type":"enum:approved|rejected","notes":"Human-issued, never set by generator/checker."},
+      {"name":"actor","type":"string","notes":"Authenticated approval identity supplied by approved caller boundary."},
+      {"name":"recorded_at","type":"string","notes":"Timestamp of explicit decision; not a substitute for freshness."},
+      {"name":"required_checks","type":"string[]","notes":"Versioned release-policy check IDs; explicit justified not-applicable may satisfy applicability, not a missing check."}
+    ]},
+    {"name":"ReferenceAdoption","kind":"json","fields":[
+      {"name":"source","type":"object","notes":"Required upstream URL, commit, relevant paths and evidence kind: source/test-source/document-claim; execution evidence separate."},
+      {"name":"license","type":"object","notes":"Observed grant, notice paths, compatibility review and approval; unknown blocks extraction."},
+      {"name":"integration","type":"enum:selective-extraction|native-design|vendor-adapter|deferred","notes":"Named owning package, supported capability/version and unmeasured limits; does not imply installed dependency."}
+    ]},
+    {"name":"MechanicalBridge","kind":"json","fields":[
+      {"name":"board_manifest_sha256","type":"string","notes":"Exact native board and exported STEP source identity."},
+      {"name":"enclosure_manifest_sha256","type":"string","notes":"Exact candidate enclosure identity; part of combined verification subject."},
+      {"name":"frame","type":"object","notes":"Required mm units, right-handed axes, origin, board normal and rigid board_to_enclosure 4x4 matrix; reject reflection/scale/nonfinite transform."},
+      {"name":"models","type":"object[]","notes":"Stable object IDs, solid artifact hash, provenance, expected shape/height/service envelope; missing models listed, not invented."},
+      {"name":"fixed_constraints","type":"object[]","notes":"Outline, holes, connector poses and mating envelopes; each bound to source revision and frame."}
+    ]},
+    {"name":"FeatureGraph","kind":"json","fields":[
+      {"name":"schema_version","type":"string","notes":"bodesign-owned contract; not the upstream AGPL schema."},
+      {"name":"source_manifest_sha256","type":"string","notes":"Pinned bridge/input identity and backend capability revision."},
+      {"name":"nodes","type":"object[]","notes":"Unique stable id, operation enum enclosure|boss|cutout, depends_on IDs, typed parameters with units, anchor refs, constraints and evidence. Nonempty DAG; reject cycles, dangling refs, unknown operations."},
+      {"name":"anchors","type":"object[]","notes":"Object ID, semantic role, source revision, geometric predicate, tolerance and cardinality=1. Never accept arbitrary first face or stale topology index."},
+      {"name":"execution","type":"object","notes":"Deterministic topological ordering with stable ID tie-break; isolated candidate document; per-node receipt and output revision. No LLM during compile."}
+    ]},
+    {"name":"InterferenceRecord","kind":"json","fields":[
+      {"name":"subject_manifest_sha256","type":"string","notes":"Combined board/enclosure/transform/model/rule identities; wraps VerificationRecord axis mechanical."},
+      {"name":"method","type":"enum:aabb-broad-phase|exact-solid","notes":"AABB alone cannot satisfy exact mechanical release policy."},
+      {"name":"pairs","type":"object[]","notes":"Expected and examined stable object pairs, omission reasons, collision volume and min distance when computed; absence is null with reason, never zero."},
+      {"name":"policy","type":"object","notes":"Required physical clearance per pair, declared contacts, numerical tolerance and geometry backend/version. Undefined tolerance or clearance yields indeterminate."},
+      {"name":"coverage","type":"object","notes":"Expected model IDs, available validated solids and missing IDs; no proxy solid silently promoted to authoritative geometry."}
+    ]},
+    {"name":"EngineeringCalculation","kind":"json","fields":[
+      {"name":"model","type":"object","notes":"Formula identifier/version and topology applicability evidence; RC cutoff, crystal effective capacitance or applicable feedback voltage."},
+      {"name":"inputs","type":"object[]","notes":"Each numeric value has unit, conditions, source and uncertainty/assumption status; no default stray capacitance, Vref or heuristic load current as verified input."},
+      {"name":"result","type":"object|null","notes":"Computed value and limitations; absent prerequisites return null plus gap list, not a plausible nominal value."}
+    ]},
+    {"name":"CadExecutionJob","kind":"message","fields":[
+      {"name":"request_id","type":"string","notes":"Stable dedup identity, bound to immutable payload digest; same ID/different payload refused."},
+      {"name":"baseline_revision","type":"string","notes":"Native/cloud immutable revision plus write precondition. Unsupported atomic precondition means read-only until explicit serialization is proved."},
+      {"name":"capability_revision","type":"string","notes":"Vendor/tool version and supported operations; credential reference only, no secret in payload/log."},
+      {"name":"state","type":"enum:queued|running|succeeded|failed|cancelled-before-start|unknown","notes":"Pending cancellation is side-effect-free; running timeout maps to unknown until authoritative read-back; no blind retries or rollback claim."},
+      {"name":"receipt","type":"object|null","notes":"Node results, resulting revision and side effects. Unknown jobs map A2 indeterminate and block publication."}
+    ]},
+    {"name":"OperationOutcome","kind":"message","fields":[
+      {"name":"module","type":"enum:A1|A2|A3|A4","notes":"Matches IDEF0 and outcome table."},
+      {"name":"outcome","type":"enum:ok|failed|not-run|empty|indeterminate","notes":"Closed domain; unknown values rejected, never defaulted to success."},
+      {"name":"code","type":"string|null","notes":"Typed error/gap code when not ok."},
+      {"name":"subject_ref","type":"string|null","notes":"Manifest identity if available; absent before ingest is explicit."},
+      {"name":"details","type":"object","notes":"Gap list, coverage or conflict records; raw native results preserved."}
+    ]}
+  ]
+}

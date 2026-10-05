@@ -1,0 +1,21 @@
+[
+  {"title":"Candidate verification and exact-manifest release","participants":["Client","Adapter","Application","Worker","EvidenceStore","Human"],"messages":[
+    {"from":"Client","to":"Adapter","label":"Submit scoped source snapshot and intent revision"},
+    {"from":"Adapter","to":"Application","label":"Call shared use case with pinned manifest"},
+    {"from":"Application","to":"Worker","label":"Build candidate only after applicability and supported-scope checks"},
+    {"from":"Worker","to":"Application","label":"Return native candidate and complete file manifest or typed failure"},
+    {"from":"Application","to":"Worker","label":"Export native connectivity; run required checks on exact candidate"},
+    {"from":"Worker","to":"EvidenceStore","label":"Store raw outputs, versions, subject hashes and examined/omitted scope"},
+    {"from":"Application","to":"Human","label":"Show candidate and separate electrical/form verdicts; request exact-manifest approval only when eligible"},
+    {"from":"Human","to":"Application","label":"Approve or reject manifest; no response remains waiting, never implicit approval"},
+    {"from":"Application","to":"EvidenceStore","label":"Recheck current dependencies, baseline and approval under release guard"},
+    {"from":"Application","to":"Client","label":"Return authorized immutable release or explicit refusal; never reuse stale evidence"}
+  ]},
+  {"title":"Human baseline conflict","participants":["Human","Client","Application"],"messages":[
+    {"from":"Client","to":"Application","label":"Request patch based on manifest H1"},
+    {"from":"Human","to":"Client","label":"Save native edit producing H2"},
+    {"from":"Application","to":"Client","label":"Compare current baseline with H1 inside apply guard"},
+    {"from":"Client","to":"Application","label":"Return H2 mismatch"},
+    {"from":"Application","to":"Client","label":"BASELINE_CONFLICT; preserve all source bytes; require new proposal"}
+  ]}
+]
