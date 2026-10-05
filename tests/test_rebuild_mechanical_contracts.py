@@ -16,6 +16,8 @@ import unittest
 from bodesign_design_ir.rebuild_contracts import (
     ArtifactRef,
     CadExecutionJob,
+    CadJobRegistry,
+    DuplicateCadRequestError,
     EngineeringCalculation,
     FeatureAnchor,
     FeatureGraph,
@@ -172,14 +174,14 @@ class TestFeatureGraphAndAnchors(unittest.TestCase):
             id="base_box",
             operation="enclosure",
             depends_on=[],
-            parameters={"width": 100.0, "height": 50.0},
+            parameters={"width": {"value": 100.0, "unit": "mm"}, "height": {"value": 50.0, "unit": "mm"}},
             anchor_refs=["base_box_top_face"],
         )
         node_boss = FeatureNode(
             id="mounting_boss_1",
             operation="boss",
             depends_on=["base_box"],
-            parameters={"diameter": 6.0, "height": 10.0},
+            parameters={"diameter": {"value": 6.0, "unit": "mm"}, "height": {"value": 10.0, "unit": "mm"}},
         )
         graph = FeatureGraph(
             schema_version="1.0.0",
@@ -188,6 +190,44 @@ class TestFeatureGraphAndAnchors(unittest.TestCase):
             anchors=[anchor],
         )
         self.assertEqual(graph.execution["topological_order"], ["base_box", "mounting_boss_1"])
+        # No synthesized isolation claim
+        self.assertNotIn("isolated_candidate", graph.execution)
+
+    def test_feature_graph_schema_anchor_and_parameter_validation(self):
+        anchor = FeatureAnchor(
+            object_id="face_a", semantic_role="mating_face", source_revision="rev_1",
+            geometric_predicate="coplanar", tolerance=0.05,
+        )
+        node = FeatureNode(id="n1", operation="enclosure", anchor_refs=["face_a"],
+                           parameters={"w": {"value": 1.0, "unit": "mm"}})
+        # Unsupported schema version
+        with self.assertRaises(ValueError):
+            FeatureGraph(schema_version="2.0.0", source_manifest_sha256="e" * 64, nodes=[node], anchors=[anchor])
+        # Dangling anchor ref
+        with self.assertRaises(ValueError) as ctx:
+            FeatureGraph(schema_version="1.0.0", source_manifest_sha256="e" * 64,
+                         nodes=[FeatureNode(id="n2", operation="boss", anchor_refs=["ghost"])], anchors=[anchor])
+        self.assertIn("DANGLING_ANCHOR_REF", str(ctx.exception))
+        # Anchors bound to different source revisions
+        anchor_other = FeatureAnchor(
+            object_id="face_b", semantic_role="mating_face", source_revision="rev_2",
+            geometric_predicate="coplanar", tolerance=0.05,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            FeatureGraph(schema_version="1.0.0", source_manifest_sha256="e" * 64, nodes=[node], anchors=[anchor, anchor_other])
+        self.assertIn("ANCHOR_REVISION_MISMATCH", str(ctx.exception))
+        # Bare numeric parameter without unit
+        with self.assertRaises(ValueError):
+            FeatureGraph(schema_version="1.0.0", source_manifest_sha256="e" * 64,
+                         nodes=[FeatureNode(id="n3", operation="boss", parameters={"d": 6.0})])
+        # Caller-asserted isolation is refused
+        with self.assertRaises(ValueError):
+            FeatureGraph(schema_version="1.0.0", source_manifest_sha256="e" * 64, nodes=[node], anchors=[anchor],
+                         execution={"isolated_candidate": True})
+        # NaN tolerance rejected
+        with self.assertRaises(ValueError):
+            FeatureAnchor(object_id="x", semantic_role="r", source_revision="rev", geometric_predicate="p",
+                          tolerance=math.nan)
 
     def test_cycle_detection_reports_cycle_detected(self):
         # A -> B -> A cycle
@@ -272,6 +312,21 @@ class TestEngineeringCalculation(unittest.TestCase):
         self.assertIsNone(calc.result)
         self.assertTrue(any("Missing required input: dielectric_constant" in g for g in calc.gaps))
 
+    def test_result_without_inputs_is_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            EngineeringCalculation(
+                model={"formula_id": "f", "version": "1", "topology_applicable": True},
+                inputs=[],
+                result={"x": 1.0},
+            )
+        self.assertIn("non-empty sourced inputs", str(ctx.exception))
+        # Non-bool applicability flag rejected
+        with self.assertRaises(ValueError):
+            EngineeringCalculation(
+                model={"formula_id": "f", "version": "1", "topology_applicable": "yes"},
+                inputs=[{"name": "a", "value": 1, "unit": "u", "source": "s"}],
+            )
+
 
 class TestInterferenceRecord(unittest.TestCase):
     """Tests for InterferenceRecord and AABB-not-exact flag."""
@@ -320,10 +375,13 @@ class TestInterferenceRecord(unittest.TestCase):
         self.assertFalse(record_partial.is_exact_certified)
 
     def test_exact_solid_fully_covered_certifies(self):
+        # Certification requires EXECUTED pairs with collision + clearance results
         record_full = InterferenceRecord(
             subject_manifest_sha256="9" * 64,
             method="exact-solid",
-            pairs=[],
+            pairs=[
+                {"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2},
+            ],
             policy={
                 "required_clearance_mm": 0.5,
                 "declared_contacts": [],
@@ -338,6 +396,48 @@ class TestInterferenceRecord(unittest.TestCase):
             },
         )
         self.assertTrue(record_full.is_exact_certified)
+        self.assertEqual(record_full.certification_blockers, [])
+
+    def test_empty_pairs_or_invalid_policy_cannot_certify(self):
+        base_policy = {
+            "required_clearance_mm": 0.5,
+            "declared_contacts": [],
+            "tolerance_mm": 0.05,
+            "backend": "cad_kernel_exact",
+            "backend_version": "1.0.0",
+        }
+        cov = {"expected_model_ids": ["U1", "CONN1"], "available_solid_ids": ["U1", "CONN1"], "missing_ids": []}
+        # pairs=[] is absence of evidence
+        rec_empty = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
+                                       pairs=[], policy=dict(base_policy), coverage=cov)
+        self.assertFalse(rec_empty.is_exact_certified)
+        self.assertTrue(any("pairs=[]" in b for b in rec_empty.certification_blockers))
+        # Pair without executed collision result
+        rec_noexec = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
+                                        pairs=[{"a": "U1", "b": "CONN1"}], policy=dict(base_policy), coverage=cov)
+        self.assertFalse(rec_noexec.is_exact_certified)
+        # Colliding pair
+        rec_collide = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
+                                         pairs=[{"a": "U1", "b": "CONN1", "collides": True, "clearance_mm": 0.0}],
+                                         policy=dict(base_policy), coverage=cov)
+        self.assertFalse(rec_collide.is_exact_certified)
+        # Insufficient clearance
+        rec_short = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
+                                       pairs=[{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.3}],
+                                       policy=dict(base_policy), coverage=cov)
+        self.assertFalse(rec_short.is_exact_certified)
+        # NaN tolerance in policy
+        nan_policy = dict(base_policy, tolerance_mm=math.nan)
+        rec_nan = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
+                                     pairs=[{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2}],
+                                     policy=nan_policy, coverage=cov)
+        self.assertFalse(rec_nan.is_exact_certified)
+        # Declared contact pair is allowed to touch
+        contact_policy = dict(base_policy, declared_contacts=[["U1", "CONN1"]])
+        rec_contact = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
+                                         pairs=[{"a": "U1", "b": "CONN1", "collides": True, "clearance_mm": 0.0}],
+                                         policy=contact_policy, coverage=cov)
+        self.assertTrue(rec_contact.is_exact_certified)
 
 
 class TestReferenceAdoption(unittest.TestCase):
@@ -379,6 +479,29 @@ class TestReferenceAdoption(unittest.TestCase):
             integration="selective-extraction",
         )
         self.assertFalse(adoption_unapproved.is_extraction_allowed)
+
+    def test_string_false_is_not_approval_and_non_extraction_modes_do_not_extract(self):
+        src = {"url": "https://example.com/v", "commit": "c", "paths": ["a.c"], "evidence_kind": "source"}
+        # String 'false' (and any non-bool) is rejected outright, never coerced
+        with self.assertRaises(ValueError):
+            ReferenceAdoption(
+                source=src,
+                license={"grant": "MIT", "notice_paths": ["LICENSE"], "reviewed": True, "approved": "false"},
+                integration="selective-extraction",
+            )
+        with self.assertRaises(ValueError):
+            ReferenceAdoption(
+                source=src,
+                license={"grant": "MIT", "notice_paths": ["LICENSE"], "reviewed": "yes", "approved": True},
+                integration="selective-extraction",
+            )
+        # Cleared license but non-extraction mode: extraction is NOT allowed
+        deferred = ReferenceAdoption(
+            source=src,
+            license={"grant": "MIT", "notice_paths": ["LICENSE"], "reviewed": True, "approved": True},
+            integration="deferred",
+        )
+        self.assertFalse(deferred.is_extraction_allowed)
 
 
 class TestCadExecutionJob(unittest.TestCase):
@@ -423,6 +546,24 @@ class TestCadExecutionJob(unittest.TestCase):
         cancelled_running = job_running.cancel()
         self.assertFalse(cancelled_running)
         self.assertEqual(job_running.state, "running")
+
+    def test_registry_rejects_duplicate_request_id_and_payload(self):
+        reg = CadJobRegistry()
+        reg.register(CadExecutionJob(request_id="r1", payload_digest="p1",
+                                     baseline_revision="b1", capability_revision="c1"))
+        with self.assertRaises(DuplicateCadRequestError) as ctx:
+            reg.register(CadExecutionJob(request_id="r1", payload_digest="p2",
+                                         baseline_revision="b1", capability_revision="c1"))
+        self.assertIn("DUPLICATE_REQUEST_ID", str(ctx.exception))
+        with self.assertRaises(DuplicateCadRequestError) as ctx:
+            reg.register(CadExecutionJob(request_id="r2", payload_digest="p1",
+                                         baseline_revision="b1", capability_revision="c1"))
+        self.assertIn("DUPLICATE_PAYLOAD", str(ctx.exception))
+        # Empty baseline / capability revision rejected
+        with self.assertRaises(ValueError):
+            CadExecutionJob(request_id="r3", payload_digest="p3", baseline_revision="", capability_revision="c1")
+        with self.assertRaises(ValueError):
+            CadExecutionJob(request_id="r3", payload_digest="p3", baseline_revision="b1", capability_revision="")
 
 
 if __name__ == "__main__":

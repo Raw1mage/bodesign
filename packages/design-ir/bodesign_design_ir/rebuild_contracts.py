@@ -14,6 +14,24 @@ import math
 from typing import Any, Literal
 
 
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
+
+
+def _is_sha256_hex(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in _HEX_DIGITS for c in value)
+
+
+def _validate_scoped_relative_path(path: str, *, owner: str) -> str:
+    """Reject absolute paths and ANY '.', '..' or empty segment (a/.., a/./b, a//b)."""
+    norm = path.replace("\\", "/")
+    if norm.startswith("/"):
+        raise ValueError(f"{owner} path must be a scoped relative path without traversal: {path!r}")
+    for seg in norm.split("/"):
+        if seg in ("", ".", ".."):
+            raise ValueError(f"{owner} path must be a scoped relative path without traversal: {path!r}")
+    return norm
+
+
 # ---------------------------------------------------------------------------
 # Artifact & Dependency Reference Contracts
 # ---------------------------------------------------------------------------
@@ -31,11 +49,9 @@ class ArtifactRef:
             raise ValueError("ArtifactRef requires non-empty string role")
         if not self.path or not isinstance(self.path, str):
             raise ValueError("ArtifactRef requires non-empty string path")
-        # Relative path only; no leading slash, no traversal
-        norm = self.path.replace("\\", "/")
-        if norm.startswith("/") or norm.startswith("../") or "/../" in norm or norm == "..":
-            raise ValueError(f"ArtifactRef path must be a scoped relative path without traversal: {self.path!r}")
-        if not isinstance(self.sha256, str) or len(self.sha256) != 64 or not all(c in "0123456789abcdefABCDEF" for c in self.sha256):
+        # Relative path only; no leading slash, no '.'/'..'/empty segments
+        _validate_scoped_relative_path(self.path, owner="ArtifactRef")
+        if not _is_sha256_hex(self.sha256):
             raise ValueError(f"ArtifactRef requires 64-char hex sha256 digest, got {self.sha256!r}")
         if not isinstance(self.byte_size, int) or self.byte_size < 0:
             raise ValueError(f"ArtifactRef requires non-negative byte_size, got {self.byte_size!r}")
@@ -99,18 +115,32 @@ class DependencyRef:
 
 @dataclass
 class ArtifactManifest:
-    """Immutable release artifact manifest with canonical hash validation."""
+    """Immutable release artifact manifest with canonical hash validation.
+
+    Deep immutability: artifacts/dependencies are stored as tuples of frozen refs
+    and attribute assignment is refused after construction. `verify_integrity()`
+    recomputes the canonical digest and MUST be called at every decision boundary
+    that trusts `manifest_sha256` (defence against bypass via object.__setattr__).
+    """
     schema_version: str
     revision_id: str
-    artifacts: list[ArtifactRef]
-    dependencies: list[DependencyRef]
+    artifacts: tuple[ArtifactRef, ...]
+    dependencies: tuple[DependencyRef, ...]
     manifest_sha256: str = ""
 
     def __post_init__(self) -> None:
-        if not self.schema_version.startswith("1."):
+        if not isinstance(self.schema_version, str) or not self.schema_version.startswith("1."):
             raise ValueError(f"Unsupported schema_version: {self.schema_version!r} (expected 1.x)")
         if not self.revision_id:
             raise ValueError("ArtifactManifest requires non-empty revision_id")
+        artifacts = tuple(self.artifacts)
+        dependencies = tuple(self.dependencies)
+        if not all(isinstance(a, ArtifactRef) for a in artifacts):
+            raise ValueError("ArtifactManifest artifacts must be ArtifactRef instances")
+        if not all(isinstance(d, DependencyRef) for d in dependencies):
+            raise ValueError("ArtifactManifest dependencies must be DependencyRef instances")
+        object.__setattr__(self, "artifacts", artifacts)
+        object.__setattr__(self, "dependencies", dependencies)
         if not self.artifacts:
             raise ValueError("ArtifactManifest requires non-empty artifacts list")
 
@@ -124,11 +154,29 @@ class ArtifactManifest:
 
         computed = self.compute_canonical_sha256()
         if not self.manifest_sha256:
-            self.manifest_sha256 = computed
+            object.__setattr__(self, "manifest_sha256", computed)
         elif self.manifest_sha256.lower() != computed:
             raise ValueError(
                 f"MANIFEST_SHA256_MISMATCH: declared {self.manifest_sha256} != computed {computed}"
             )
+        object.__setattr__(self, "_sealed", True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if getattr(self, "_sealed", False):
+            raise AttributeError(f"ArtifactManifest is immutable; cannot set {name!r}")
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError(f"ArtifactManifest is immutable; cannot delete {name!r}")
+
+    def verify_integrity(self) -> str:
+        """Recompute canonical identity; raise MANIFEST_SHA256_MISMATCH on drift."""
+        computed = self.compute_canonical_sha256()
+        if self.manifest_sha256.lower() != computed:
+            raise ValueError(
+                f"MANIFEST_SHA256_MISMATCH: declared {self.manifest_sha256} != computed {computed}"
+            )
+        return computed
 
     def canonical_payload_dict(self) -> dict[str, Any]:
         """Payload excluding manifest_sha256, with sorted artifact paths."""
@@ -250,13 +298,24 @@ class ReferenceAdoption:
         for req in ("grant", "notice_paths", "reviewed", "approved"):
             if req not in self.license:
                 raise ValueError(f"ReferenceAdoption.license missing required field: {req!r}")
+        # Clearance flags must be real booleans: the string 'false' (or any
+        # truthy non-bool) is NOT approval and must not be coerced into one.
+        for flag in ("reviewed", "approved"):
+            if not isinstance(self.license[flag], bool):
+                raise ValueError(
+                    f"ReferenceAdoption.license.{flag} must be a bool, got {self.license[flag]!r}"
+                )
+        if not self.license.get("grant") or not isinstance(self.license["grant"], str):
+            raise ValueError("ReferenceAdoption.license.grant must be a non-empty string")
 
     @property
     def is_extraction_allowed(self) -> bool:
-        """License clearance: extraction permitted only with approved, reviewed grant."""
-        if self.integration == "selective-extraction":
-            return bool(self.license.get("approved") and self.license.get("reviewed"))
-        return True
+        """Extraction is permitted ONLY for the explicit 'selective-extraction' mode
+        with a reviewed AND approved license. Every other integration mode does not
+        extract, so the answer is False (never a permissive default)."""
+        if self.integration != "selective-extraction":
+            return False
+        return self.license["approved"] is True and self.license["reviewed"] is True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -384,6 +443,23 @@ class MechanicalBridge:
 # ---------------------------------------------------------------------------
 
 SUPPORTED_FEATURE_OPERATIONS = frozenset({"enclosure", "boss", "cutout"})
+FEATURE_GRAPH_SCHEMA_MAJOR = "1."
+
+
+def _validate_typed_parameters(node_id: str, parameters: dict[str, Any]) -> None:
+    """Every numeric parameter must be a typed {value, unit} record with a finite value."""
+    for key, val in parameters.items():
+        if isinstance(val, bool) or isinstance(val, (int, float)):
+            raise ValueError(
+                f"FeatureNode {node_id!r} parameter {key!r} is a bare number; "
+                "numeric parameters must be typed as {'value': <finite number>, 'unit': <str>}"
+            )
+        if isinstance(val, dict) and "value" in val:
+            if "unit" not in val or not isinstance(val["unit"], str) or not val["unit"]:
+                raise ValueError(f"FeatureNode {node_id!r} parameter {key!r} missing non-empty unit")
+            v = val["value"]
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                raise ValueError(f"FeatureNode {node_id!r} parameter {key!r} value must be finite, got {v!r}")
 
 
 @dataclass(frozen=True)
@@ -405,8 +481,11 @@ class FeatureAnchor:
             raise ValueError("FeatureAnchor source_revision is required")
         if self.cardinality != 1:
             raise ValueError(f"FeatureAnchor cardinality must be exactly 1, got {self.cardinality} (ambiguous anchors forbidden)")
-        if self.tolerance <= 0:
-            raise ValueError(f"FeatureAnchor tolerance must be positive, got {self.tolerance}")
+        if (not isinstance(self.tolerance, (int, float)) or isinstance(self.tolerance, bool)
+                or not math.isfinite(self.tolerance) or self.tolerance <= 0):
+            raise ValueError(f"FeatureAnchor tolerance must be a finite positive number, got {self.tolerance!r}")
+        if not self.geometric_predicate:
+            raise ValueError("FeatureAnchor geometric_predicate is required")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -468,7 +547,12 @@ class FeatureNode:
 
 @dataclass
 class FeatureGraph:
-    """bodesign-owned bounded acyclic feature compilation graph."""
+    """bodesign-owned bounded acyclic feature compilation graph.
+
+    `execution` carries only facts derived here (topological order). It never
+    synthesizes an `isolated_candidate` claim: isolation is proven by the
+    executor, not asserted by the graph contract.
+    """
     schema_version: str
     source_manifest_sha256: str
     nodes: list[FeatureNode]
@@ -476,8 +560,24 @@ class FeatureGraph:
     execution: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.schema_version, str) or not self.schema_version.startswith(FEATURE_GRAPH_SCHEMA_MAJOR):
+            raise ValueError(f"Unsupported FeatureGraph schema_version: {self.schema_version!r} (expected 1.x)")
+        if not _is_sha256_hex(self.source_manifest_sha256):
+            raise ValueError("FeatureGraph source_manifest_sha256 must be a 64-char hex digest")
         if not self.nodes:
             raise ValueError("FeatureGraph requires non-empty nodes list")
+
+        # Anchors: unique ids, revision linkage to the graph source
+        anchor_map: dict[str, FeatureAnchor] = {}
+        for a in self.anchors:
+            if not isinstance(a, FeatureAnchor):
+                raise ValueError("FeatureGraph anchors must be FeatureAnchor instances")
+            if a.object_id in anchor_map:
+                raise ValueError(f"DUPLICATE_ANCHOR_ID: {a.object_id!r}")
+            anchor_map[a.object_id] = a
+        revisions = {a.source_revision for a in self.anchors}
+        if len(revisions) > 1:
+            raise ValueError(f"ANCHOR_REVISION_MISMATCH: anchors bound to multiple source revisions {sorted(revisions)}")
 
         # Validate unique IDs and absence of cycles (DAG check via Kahn's algorithm)
         node_map: dict[str, FeatureNode] = {}
@@ -490,6 +590,10 @@ class FeatureGraph:
             node_map[n.id] = n
             in_degree[n.id] = 0
             adjacency[n.id] = []
+            _validate_typed_parameters(n.id, n.parameters)
+            for ref in n.anchor_refs:
+                if ref not in anchor_map:
+                    raise ValueError(f"DANGLING_ANCHOR_REF: Node {n.id!r} references undeclared anchor {ref!r}")
 
         for n in self.nodes:
             for dep in n.depends_on:
@@ -513,11 +617,12 @@ class FeatureGraph:
             unresolved = sorted([nid for nid, deg in in_degree.items() if deg > 0])
             raise ValueError(f"CYCLE_DETECTED: FeatureGraph contains cycle among nodes: {unresolved}")
 
-        # Record deterministic topological ordering in execution
-        self.execution = {
-            "topological_order": ordered,
-            "isolated_candidate": True,
-        }
+        # Record deterministic topological ordering; never synthesize isolation claims.
+        if "isolated_candidate" in self.execution and self.execution["isolated_candidate"] is True:
+            raise ValueError("FeatureGraph.execution.isolated_candidate=True cannot be declared by the graph contract")
+        execution = dict(self.execution)
+        execution["topological_order"] = ordered
+        self.execution = execution
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -558,9 +663,15 @@ class EngineeringCalculation:
         for req in ("formula_id", "version", "topology_applicable"):
             if req not in self.model:
                 raise ValueError(f"EngineeringCalculation.model missing {req!r}")
+        if not isinstance(self.model["topology_applicable"], bool):
+            raise ValueError("EngineeringCalculation.model.topology_applicable must be a bool")
+
+        # A result without inputs is an unsourced number: refuse it outright.
+        if self.result is not None and not self.inputs:
+            raise ValueError("EngineeringCalculation result requires non-empty sourced inputs")
 
         # Check for unverified inputs or missing applicability
-        if not self.model.get("topology_applicable"):
+        if self.model["topology_applicable"] is not True:
             self.result = None
             if "Topology not applicable for formula" not in self.gaps:
                 self.gaps.append("Topology not applicable for formula")
@@ -570,7 +681,7 @@ class EngineeringCalculation:
             for req in ("name", "unit", "source"):
                 if req not in inp:
                     raise ValueError(f"Calculation input missing {req!r}: {inp}")
-            if inp.get("value") is None or inp.get("source") is None:
+            if inp.get("value") is None or not inp.get("source"):
                 missing_inputs.append(inp.get("name", "unknown"))
             elif inp.get("is_assumed"):
                 self.limitations.append(f"Input {inp['name']} is unverified assumption from {inp['source']}")
@@ -608,6 +719,36 @@ class EngineeringCalculation:
 CAD_JOB_STATES = frozenset({"queued", "running", "succeeded", "failed", "cancelled-before-start", "unknown"})
 
 
+class DuplicateCadRequestError(ValueError):
+    """Raised when a request-id or payload digest has already been registered."""
+
+
+class CadJobRegistry:
+    """Deduplication ledger: one request_id and one payload_digest per job, ever.
+
+    Replaying a payload under a new id, or reusing an id, is refused — the
+    outcome of the original must be read back instead (no blind replay)."""
+
+    def __init__(self) -> None:
+        self._by_request: dict[str, "CadExecutionJob"] = {}
+        self._by_payload: dict[str, "CadExecutionJob"] = {}
+
+    def register(self, job: "CadExecutionJob") -> "CadExecutionJob":
+        if job.request_id in self._by_request:
+            raise DuplicateCadRequestError(f"DUPLICATE_REQUEST_ID: {job.request_id!r} already registered")
+        if job.payload_digest in self._by_payload:
+            prior = self._by_payload[job.payload_digest]
+            raise DuplicateCadRequestError(
+                f"DUPLICATE_PAYLOAD: digest {job.payload_digest!r} already submitted as {prior.request_id!r}"
+            )
+        self._by_request[job.request_id] = job
+        self._by_payload[job.payload_digest] = job
+        return job
+
+    def get(self, request_id: str) -> "CadExecutionJob | None":
+        return self._by_request.get(request_id)
+
+
 @dataclass
 class CadExecutionJob:
     """External CAD execution job contract with timeout=unknown and no blind replay."""
@@ -623,6 +764,10 @@ class CadExecutionJob:
             raise ValueError("CadExecutionJob request_id is required")
         if not self.payload_digest:
             raise ValueError("CadExecutionJob payload_digest is required")
+        if not self.baseline_revision:
+            raise ValueError("CadExecutionJob baseline_revision is required")
+        if not self.capability_revision:
+            raise ValueError("CadExecutionJob capability_revision is required")
         if self.state not in CAD_JOB_STATES:
             raise ValueError(f"CadExecutionJob state must be in {sorted(CAD_JOB_STATES)}, got {self.state!r}")
 

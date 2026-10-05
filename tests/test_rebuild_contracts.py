@@ -25,6 +25,7 @@ from bodesign_workflow_core.rebuild_contracts import (
     ChangeProposal,
     OperationOutcome,
     ReleaseApproval,
+    ReleasePolicy,
     VerificationRecord,
     evaluate_change_proposal,
     evaluate_release_eligibility,
@@ -63,6 +64,13 @@ class TestArtifactAndDependencyContracts(unittest.TestCase):
             ArtifactRef(role="board", path="/abs/path.pcb", sha256=digest, byte_size=10)
         with self.assertRaises(ValueError):
             ArtifactRef(role="board", path="sub/../../escape.pcb", sha256=digest, byte_size=10)
+        # Interior '..' and '.' segments (previously accepted)
+        with self.assertRaises(ValueError):
+            ArtifactRef(role="board", path="a/..", sha256=digest, byte_size=10)
+        with self.assertRaises(ValueError):
+            ArtifactRef(role="board", path="a/./b", sha256=digest, byte_size=10)
+        with self.assertRaises(ValueError):
+            ArtifactRef(role="board", path="a//b", sha256=digest, byte_size=10)
         # Invalid hash length
         with self.assertRaises(ValueError):
             ArtifactRef(role="board", path="board.pcb", sha256="tooshort", byte_size=10)
@@ -126,6 +134,29 @@ class TestArtifactAndDependencyContracts(unittest.TestCase):
         restored = ArtifactManifest.from_dict(m_dict)
         self.assertEqual(restored.manifest_sha256, manifest_sha)
 
+    def test_artifact_manifest_is_deeply_immutable_and_integrity_rechecked(self):
+        digest = hashlib.sha256(b"x").hexdigest()
+        manifest = ArtifactManifest(
+            schema_version="1.0.0",
+            revision_id="rev_A1",
+            artifacts=[ArtifactRef(role="board", path="b.kicad_pcb", sha256=digest, byte_size=1)],
+            dependencies=[DependencyRef(kind="tool", name="kicad", version="8.0.4")],
+        )
+        # Lists are frozen into tuples; attribute assignment is refused
+        self.assertIsInstance(manifest.artifacts, tuple)
+        with self.assertRaises(AttributeError):
+            manifest.revision_id = "rev_B"
+        with self.assertRaises(AttributeError):
+            manifest.manifest_sha256 = "0" * 64
+        self.assertEqual(manifest.verify_integrity(), manifest.manifest_sha256)
+        # Forced bypass is caught at the decision boundary
+        object.__setattr__(manifest, "revision_id", "rev_tampered")
+        with self.assertRaises(ValueError) as ctx:
+            manifest.verify_integrity()
+        self.assertIn("MANIFEST_SHA256_MISMATCH", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            check_baseline_preconditions(manifest, manifest.manifest_sha256)
+
 
 class TestDesignRepresentations(unittest.TestCase):
     """Tests for DesignRepresentations contract."""
@@ -171,9 +202,50 @@ class TestVerificationRecord(unittest.TestCase):
             axis="form",
             findings=[],
             freshness="current",
+            raw_snapshot={"status": "ok", "unmet": []},
         )
         self.assertEqual(rec.verdict, "pass")
         self.assertEqual(rec.freshness, "current")
+
+    def test_verification_record_pass_requires_raw_evidence_and_tool_deps(self):
+        coverage = {"expected_ids": ["n1"], "examined_ids": ["n1"], "omitted": []}
+        # No raw evidence and no explicit absence reason -> rejected
+        with self.assertRaises(ValueError) as ctx:
+            VerificationRecord(
+                subject_manifest_sha256=self.subject_sha,
+                execution="succeeded",
+                verdict="pass",
+                coverage=coverage,
+                tool_rule_dependencies=[self.tool_dep],
+                axis="form",
+                freshness="current",
+            )
+        self.assertIn("raw evidence", str(ctx.exception))
+        # Explicit absence reason is accepted
+        rec = VerificationRecord(
+            subject_manifest_sha256=self.subject_sha,
+            execution="succeeded",
+            verdict="pass",
+            coverage=coverage,
+            tool_rule_dependencies=[self.tool_dep],
+            axis="form",
+            freshness="current",
+            raw_evidence_absent_reason="tool emits no raw artifact; summary-only API",
+        )
+        self.assertEqual(rec.verdict, "pass")
+        # No tool/rule dependency identity -> rejected
+        with self.assertRaises(ValueError) as ctx:
+            VerificationRecord(
+                subject_manifest_sha256=self.subject_sha,
+                execution="succeeded",
+                verdict="pass",
+                coverage=coverage,
+                tool_rule_dependencies=[],
+                axis="form",
+                freshness="current",
+                raw_snapshot={"status": "ok"},
+            )
+        self.assertIn("tool_rule_dependencies", str(ctx.exception))
 
     def test_verification_record_rejects_pass_with_unexamined_or_omitted_ids(self):
         # Omitted items prevent PASS
@@ -281,6 +353,7 @@ class TestChangeProposalAndReleaseApproval(unittest.TestCase):
             recorded_at="2026-10-06T00:00:00Z",
             required_checks=["drc"],
         )
+        policy = ReleasePolicy(policy_id="release-default", version="1.0.0", required_checks=("drc",))
 
         dep = DependencyRef(kind="tool", name="drc", version="1.0")
         cov = {"expected_ids": ["t1"], "examined_ids": ["t1"], "omitted": []}
@@ -292,6 +365,7 @@ class TestChangeProposalAndReleaseApproval(unittest.TestCase):
             tool_rule_dependencies=[dep],
             axis="electrical",
             freshness="current",
+            raw_snapshot={"copper": 0, "unconnected": 0},
         )
 
         verifications = [passing_verification]
@@ -299,10 +373,64 @@ class TestChangeProposalAndReleaseApproval(unittest.TestCase):
             approval=approval,
             target_manifest_sha256=self.manifest_sha,
             verification_records=verifications,
-            current_dependencies={"drc": "1.0"},
+            current_dependencies=[dep],
+            policy=policy,
         )
         self.assertTrue(eligibility["eligible"])
         self.assertEqual(eligibility["reasons"], [])
+
+        # No policy: required checks cannot be derived from the approval alone
+        no_policy = evaluate_release_eligibility(
+            approval=approval,
+            target_manifest_sha256=self.manifest_sha,
+            verification_records=verifications,
+            current_dependencies=[dep],
+        )
+        self.assertFalse(no_policy["eligible"])
+        self.assertTrue(any("No explicit versioned release policy" in r for r in no_policy["reasons"]))
+
+        # Approval cannot reduce policy
+        wide_policy = ReleasePolicy(policy_id="release-default", version="1.1.0", required_checks=("drc", "si_check"))
+        reduced = evaluate_release_eligibility(
+            approval=approval,
+            target_manifest_sha256=self.manifest_sha,
+            verification_records=verifications,
+            current_dependencies=[dep],
+            policy=wide_policy,
+        )
+        self.assertFalse(reduced["eligible"])
+        self.assertTrue(any("approval cannot reduce policy" in r for r in reduced["reasons"]))
+        self.assertTrue(any("'si_check' has no verification record" in r for r in reduced["reasons"]))
+
+        # Empty policy is rejected at construction
+        with self.assertRaises(ValueError):
+            ReleasePolicy(policy_id="p", version="1", required_checks=())
+
+        # Axis names are not check ids: a record whose deps do not name the check does not cover it
+        axis_only_policy = ReleasePolicy(policy_id="p", version="1", required_checks=("electrical",))
+        axis_only = evaluate_release_eligibility(
+            approval=ReleaseApproval(
+                manifest_sha256=self.manifest_sha, decision="approved", actor="a",
+                recorded_at="t", required_checks=["electrical"],
+            ),
+            target_manifest_sha256=self.manifest_sha,
+            verification_records=verifications,
+            current_dependencies=[dep],
+            policy=axis_only_policy,
+        )
+        self.assertFalse(axis_only["eligible"])
+
+        # Caller-set freshness='current' with absent current deps -> unknown, blocks
+        absent_env = evaluate_release_eligibility(
+            approval=approval,
+            target_manifest_sha256=self.manifest_sha,
+            verification_records=verifications,
+            current_dependencies=None,
+            policy=policy,
+        )
+        self.assertFalse(absent_env["eligible"])
+        self.assertTrue(any("'unknown'" in r for r in absent_env["reasons"]))
+        self.assertEqual(passing_verification.freshness, "unknown")
 
 
 class TestOperationOutcomeContract(unittest.TestCase):
@@ -347,6 +475,31 @@ class TestOperationOutcomeContract(unittest.TestCase):
         out3 = wrap_operation_outcome(landing_empty, module="A4")
         self.assertEqual(out3.outcome, "empty")
         self.assertEqual(out3.code, "NO_NETS")
+
+    def test_wrap_operation_outcome_inner_refusal_and_unknown_status_never_ok(self):
+        # Inner handler refusal wrapped in a transport ok:true envelope (real MCP shape)
+        mcp_inner_refusal = {
+            "ok": True,
+            "result": {"ok": False, "error": {"code": "NETLIST_MISSING", "message": "no file"}},
+        }
+        out = wrap_operation_outcome(mcp_inner_refusal, module="A3")
+        self.assertEqual(out.outcome, "failed")
+        self.assertEqual(out.code, "NETLIST_MISSING")
+        # Raw transport preserved
+        self.assertEqual(out.details, mcp_inner_refusal)
+
+        # Unknown status string is never promoted to ok
+        unknown = {"ok": True, "result_status": "weird-state", "result": {"status": "weird-state"}}
+        out_unknown = wrap_operation_outcome(unknown, module="A3")
+        self.assertEqual(out_unknown.outcome, "indeterminate")
+        self.assertEqual(out_unknown.code, "UNKNOWN_STATUS_WEIRD-STATE")
+
+        # Inner status 'error' (server _apply_result_status flips ok) stays failed
+        server_error = {"ok": False, "result": {"status": "error", "note": "boom"},
+                        "result_status": "error", "error": "TOOL_REPORTED_ERROR"}
+        out_err = wrap_operation_outcome(server_error, module="A3")
+        self.assertEqual(out_err.outcome, "failed")
+        self.assertEqual(out_err.code, "TOOL_REPORTED_ERROR")
 
 
 class TestRebuildCompatAdapters(unittest.TestCase):

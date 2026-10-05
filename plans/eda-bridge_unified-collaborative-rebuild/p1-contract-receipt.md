@@ -80,3 +80,54 @@ All delivered files are strictly within the specified WRITE ALLOWLIST (new files
 8. `plans/eda-bridge_unified-collaborative-rebuild/p1-contract-receipt.md` (new)
 
 Zero modifications to existing files. Zero git commits or resets. Zero mocked transports.
+
+---
+
+## 4. Remediation Round (topic=p1-contract-remediation, 2026-10-06)
+
+**Base**: commit `b35e6c9cd2cfd6ebf3c0a41e939d866feb31466c` (P1 landed). Review verdict PARTIAL; 2.1/2.2/2.4 returned. Working tree left UNCOMMITTED for dispatcher inspection.
+
+### 4.1 Per-item status (partial → remediated)
+
+| # | Location (pre-fix) | Defect | Remediation | Status |
+|---|---|---|---|---|
+| 1 | C:441-511 | inner `result.ok=false` / unknown status could map to `ok` | `wrap_operation_outcome`: no-verdict statuses first (`empty`/`not-run`/`indeterminate`), then outer `ok:false` and inner `result.ok is False` → `failed` with inner error code; unknown status → `indeterminate` (`UNKNOWN_STATUS_*`); `ok` only on explicit `ok` status or transport ok with NO status field. New cell drives real MCP inner-refusal shape (`{"ok":true,"result":{"ok":false,"error":{"code":"NETLIST_MISSING"}}}`) and server `_apply_result_status` error shape through the wrapper. | remediated |
+| 2 | C:568-636 / W:345-399 | required_checks from approval only | New `ReleasePolicy` (frozen, versioned, empty/duplicate checks rejected). `resolve_required_checks(policy, approval)`: policy authoritative, approval may add, never reduce (reason emitted); missing policy is a blocking reason. Coverage keyed by tool/rule dependency name only (axis names are not check ids). | remediated |
+| 3 | W:320-342 / C:592-625 | identity by name only; caller freshness trusted | `evaluate_freshness` accepts `list[DependencyRef]`, matches on `(kind, name)`, compares version AND digest (unchanged version + changed digest = `stale`; kind mismatch/absent = `unknown`); legacy name→str map cannot bind both → `unknown`. `current_dependencies=None` → `unknown`. Freshness always recomputed in both `evaluate_release_eligibility` and `check_release_preconditions`; record field overwritten. | remediated |
+| 4 | D:100-159 / C:537,589 / D:35-37 | cached `manifest_sha256` trusted; `a/..`, `a/./b` accepted | `ArtifactManifest`: artifacts/dependencies frozen to tuples of frozen refs, `__setattr__`/`__delattr__` sealed, `verify_integrity()` recomputes canonical digest; both precondition guards call it at the boundary (tamper via `object.__setattr__` raises `MANIFEST_SHA256_MISMATCH`). Path validator rejects any `.`, `..`, or empty segment. | remediated |
+| 5 | C:290-299,338-347,365-368 / W:44-93 | raw lost without ref; fabricated `net_0..N`; empty→N/A | `VerificationRecord.raw_snapshot` carries deep copy when `raw_result_ref` absent; count-to-ID expansion deleted (no coverage supplied = unknown); `status=="empty"` → `indeterminate` unless `applicability_evidence` given. Contract: `pass` requires non-empty `tool_rule_dependencies` and (`raw_result_ref` or `raw_snapshot` or explicit `raw_evidence_absent_reason`). | remediated |
+| 6 | W:230-274 / C:526-565 | `proposal.conflicts` overwritten; allowlist ≠ capability; docstring implied atomic | Pre-existing conflicts preserved and merged (deduplicated). New `adapter_capabilities` axis: `None` → `CAPABILITY_UNVERIFIED` conflict, missing → `ADAPTER_CAPABILITY_MISSING`. Docstring states contract-only, not compare-and-apply. | remediated |
+| 7 | W:143-168 | `pairs=[]` certified | `certification_blockers` property: exact-solid only, no missing solids, finite non-negative tolerance/clearance, backend declared, executed pairs with bool `collides` + finite `clearance_mm`, declared contacts honoured; `pairs=[]` is a blocker. `is_exact_certified = not blockers`. | remediated |
+| 8 | D:478-520, 399-409, 557-582, 621-643, 254-259 | see fix list | FeatureGraph: schema 1.x, 64-hex source sha, unique anchors, `DANGLING_ANCHOR_REF`, `ANCHOR_REVISION_MISMATCH`, typed `{value, unit}` numeric parameters, no synthesized `isolated_candidate` (caller-asserted True refused). FeatureAnchor: NaN/inf/non-numeric tolerance rejected. EngineeringCalculation: `result` with empty inputs rejected; `topology_applicable` must be bool. `CadJobRegistry` rejects duplicate request-id and duplicate payload digest; empty baseline/capability revision rejected. ReferenceAdoption: `reviewed`/`approved` must be bool (string `'false'` raises); `is_extraction_allowed` True only for `selective-extraction` + both flags `is True`; every other mode → False. | remediated |
+| 9 | receipt | per-item status, NOT RUN, unmeasured IDs, ledger split | this section | remediated |
+
+### 4.2 Test execution (cwd ROOT, `__pycache__` cleared before each run)
+
+**P1 CONTRACT REGRESSION** — `./scripts/run_tests.sh test_rebuild_contracts test_rebuild_freshness test_rebuild_adapter_parity test_rebuild_mechanical_contracts`
+
+```
+Ran 62 tests in 2.648s
+OK
+EXIT=0
+```
+Ran 62 (was 53; +9 new cells: contracts 18, freshness 14, adapter_parity 6, mechanical 24) / fail 0 / err 0 / skip 0 / exit 0.
+
+**EXISTING ADAPTER** — `./scripts/run_tests.sh test_mcp_server test_landing_gate test_landing_gate_published_resolution`
+
+```
+Ran 83 tests in 5.959s
+FAILED (failures=4, errors=2, skipped=3)
+EXIT=1
+```
+Ran 83 / fail 4 / err 2 / skip 3 / exit 1 — identical IDs to the pre-remediation run (§2.2); no new regression.
+
+Pre-existing failure ledger, split by family:
+- **Registry drift IDs** (4): `test_converged_registry_tool_count`, `test_landed_verbs_mirror_gate_registry`, `test_registry_is_well_formed` (FAIL); `test_removed_tool_call_returns_typed_tool_landed` (ERROR).
+- **C00/C01 path IDs** (2): `test_run_tool_c00_scaffold_prd` (ERROR); `test_run_tool_c01_next_question_and_update_answers` (FAIL).
+
+### 4.3 Not measured this round
+
+- **AC12 / AC13 physical execution: NOT RUN.** No CAD kernel, no exact-solid collision, no AABB execution was performed. `InterferenceRecord` cells exercise the CONTRACT against hand-written pair records only.
+- **Full repository suite (§2.3) NOT re-run** this round; the 10-skip delta against the P0 baseline (52 → 62) remains with **unmeasured skip IDs**. The 3 skips in the EXISTING ADAPTER population are also not enumerated by ID (non-verbose unittest output).
+- No mutation or probe programme was executed (per work order).
+- `services/mcp/server.py`, `skills/bodesign/scripts/gate.py`, existing `contracts.py`, `__init__.py`: read-only, untouched.

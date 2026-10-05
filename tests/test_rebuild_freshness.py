@@ -21,6 +21,7 @@ from bodesign_design_ir.rebuild_contracts import (
 from bodesign_workflow_core.rebuild_contracts import (
     ChangeProposal,
     ReleaseApproval,
+    ReleasePolicy,
     VerificationRecord,
     evaluate_change_proposal,
     evaluate_freshness,
@@ -92,6 +93,22 @@ class TestDependencyDerivedFreshness(unittest.TestCase):
         current_env = {"kicad_cli": "8.0.4"}
         res = evaluate_freshness(current_env, [])
         self.assertEqual(res, "unknown")
+
+    def test_identity_binds_kind_name_version_and_digest(self):
+        recorded = DependencyRef(kind="rule", name="jlcpcb_4layer", version="v2.1", digest="a" * 64)
+        # Unchanged version + changed digest => STALE
+        cur_digest_changed = [DependencyRef(kind="rule", name="jlcpcb_4layer", version="v2.1", digest="b" * 64)]
+        self.assertEqual(evaluate_freshness(cur_digest_changed, [recorded]), "stale")
+        # Same identity, both match => current
+        cur_same = [DependencyRef(kind="rule", name="jlcpcb_4layer", version="v2.1", digest="a" * 64)]
+        self.assertEqual(evaluate_freshness(cur_same, [recorded]), "current")
+        # Same name, different kind => not the same dependency => unknown
+        cur_kind_diff = [DependencyRef(kind="tool", name="jlcpcb_4layer", version="v2.1", digest="a" * 64)]
+        self.assertEqual(evaluate_freshness(cur_kind_diff, [recorded]), "unknown")
+        # Current environment absent => unknown, regardless of caller-set record freshness
+        self.assertEqual(evaluate_freshness(None, [recorded]), "unknown")
+        # Legacy name->string map cannot bind both version and digest => unknown
+        self.assertEqual(evaluate_freshness({"jlcpcb_4layer": "v2.1"}, [recorded]), "unknown")
 
 
 class TestBaselineAndProposalMismatchEnforcement(unittest.TestCase):
@@ -183,6 +200,8 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             recorded_at="2026-10-06T01:00:00Z",
             required_checks=["drc_gate"],
         )
+        self.policy = ReleasePolicy(policy_id="release-default", version="1.0.0", required_checks=("drc_gate",))
+        self.raw = {"copper": 0, "unconnected": 0, "silk": 0}
 
     def test_post_validation_manifest_change_invalidates_prior_release(self):
         cov = {"expected_ids": ["item1"], "examined_ids": ["item1"], "omitted": []}
@@ -194,6 +213,7 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             tool_rule_dependencies=[self.dep],
             axis="electrical",
             freshness="current",
+            raw_snapshot=self.raw,
         )
 
         # Mutated manifest post-validation
@@ -211,6 +231,7 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             approvals=[self.valid_approval],
             verifications=[verification],
             current_dependencies=[self.dep],
+            policy=self.policy,
         )
         self.assertFalse(eligibility["eligible"])
         self.assertTrue(any("Approval manifest mismatch" in r or "!=" in r for r in eligibility["reasons"]))
@@ -226,6 +247,7 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             tool_rule_dependencies=[self.dep],
             axis="electrical",
             freshness="current",
+            raw_snapshot=self.raw,
         )
 
         # Current environment bumped drc_gate to 2.1.0
@@ -236,9 +258,40 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             approvals=[self.valid_approval],
             verifications=[verification],
             current_dependencies=[bumped_dep],
+            policy=self.policy,
         )
         self.assertFalse(eligibility["eligible"])
         self.assertTrue(any("must be 'current'" in r or "stale" in r for r in eligibility["reasons"]))
+
+        # Control: same environment, explicit policy -> eligible
+        ok = check_release_preconditions(
+            target_manifest=self.manifest,
+            approvals=[self.valid_approval],
+            verifications=[verification],
+            current_dependencies=[self.dep],
+            policy=self.policy,
+        )
+        self.assertTrue(ok["eligible"], ok["reasons"])
+
+        # Missing policy blocks; approval cannot stand in for policy
+        no_policy = check_release_preconditions(
+            target_manifest=self.manifest,
+            approvals=[self.valid_approval],
+            verifications=[verification],
+            current_dependencies=[self.dep],
+        )
+        self.assertFalse(no_policy["eligible"])
+
+        # Caller-set freshness='current' with absent env -> unknown
+        absent_env = check_release_preconditions(
+            target_manifest=self.manifest,
+            approvals=[self.valid_approval],
+            verifications=[verification],
+            current_dependencies=None,
+            policy=self.policy,
+        )
+        self.assertFalse(absent_env["eligible"])
+        self.assertEqual(verification.freshness, "unknown")
 
     def test_unapproved_release_blocks_release(self):
         rejected_approval = ReleaseApproval(
@@ -257,6 +310,7 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             tool_rule_dependencies=[self.dep],
             axis="electrical",
             freshness="current",
+            raw_snapshot=self.raw,
         )
 
         eligibility = check_release_preconditions(
@@ -264,6 +318,7 @@ class TestReleasePreconditionEnforcement(unittest.TestCase):
             approvals=[rejected_approval],
             verifications=[verification],
             current_dependencies=[self.dep],
+            policy=self.policy,
         )
         self.assertFalse(eligibility["eligible"])
         self.assertTrue(any("decision is 'rejected'" in r for r in eligibility["reasons"]))

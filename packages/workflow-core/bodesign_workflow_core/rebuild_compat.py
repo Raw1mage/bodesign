@@ -25,14 +25,16 @@ from bodesign_workflow_core.rebuild_contracts import (
     ChangeProposal,
     OperationOutcome,
     ReleaseApproval,
+    ReleasePolicy,
     VerificationRecord,
     evaluate_change_proposal,
     evaluate_freshness,
     evaluate_release_eligibility,
+    resolve_required_checks,
 )
 
 
-REBUILD_COMPAT_VERSION = "1.0.0"
+REBUILD_COMPAT_VERSION = "1.1.0"
 
 
 class CompatError(ValueError):
@@ -272,6 +274,7 @@ def wrap_raw_verification_result(
     freshness: Literal["current", "stale", "unknown"] = "unknown",
     reason: str | None = None,
     strict: bool = True,
+    applicability_evidence: str | None = None,
 ) -> VerificationRecord:
     """Wraps an existing raw verification result into a typed VerificationRecord.
 
@@ -283,6 +286,11 @@ def wrap_raw_verification_result(
        coverage, missing tool version, or non-current freshness raises CompatError.
        In non-strict mode, verdict is downgraded to 'indeterminate' with an explicit reason.
     4. Succeeded execution + zero findings alone DOES NOT imply PASS without complete coverage.
+    5. Coverage IDs are never fabricated from a count: the caller must supply them.
+    6. When `raw_result_ref` is absent, the deep-copied raw result rides on the record as
+       `raw_snapshot` so the evidence is preserved, not lost.
+    7. `status == 'empty'` is 'not-applicable' ONLY with explicit `applicability_evidence`;
+       otherwise it is 'indeterminate'.
     """
     if not isinstance(raw_result, dict) or not raw_result:
         raise CompatError(f"Cannot wrap empty raw_result for tool '{tool}'")
@@ -335,16 +343,8 @@ def wrap_raw_verification_result(
                     "examined_ids": examined,
                     "omitted": omitted,
                 }
-    elif tool == "readability_gate" and raw_snapshot.get("N", 0) > 0:
-        # Check if readability provided explicit N nets
-        n_count = raw_snapshot.get("N", 0)
-        net_ids = [f"net_{i}" for i in range(n_count)]
-        valid_coverage = {
-            "expected_ids": net_ids,
-            "examined_ids": net_ids,
-            "omitted": [],
-        }
-        coverage_known = True
+    # No coverage supplied: coverage is UNKNOWN. A bare count (e.g. readability `N`)
+    # is not an identity list and is never expanded into fabricated net_0..N ids.
 
     # 5. Determine tentative verdict
     critical_or_major_findings = [
@@ -352,7 +352,7 @@ def wrap_raw_verification_result(
     ]
 
     has_failures = bool(critical_or_major_findings) or (status_str == "failed")
-    is_empty_or_na = status_str == "empty"
+    is_empty = status_str == "empty"
     is_indeterminate = status_str == "indeterminate" or execution != "succeeded"
 
     tentative_verdict: Literal["pass", "fail", "indeterminate", "not-applicable"]
@@ -362,10 +362,16 @@ def wrap_raw_verification_result(
         tentative_verdict = "fail"
         if not tentative_reason:
             tentative_reason = f"Verification failed with {len(critical_or_major_findings)} blocking finding(s)"
-    elif is_empty_or_na:
-        tentative_verdict = "not-applicable"
-        if not tentative_reason:
-            tentative_reason = "No items eligible for scoring (empty subject)"
+    elif is_empty:
+        if applicability_evidence:
+            tentative_verdict = "not-applicable"
+            tentative_reason = f"Not applicable: {applicability_evidence}"
+        else:
+            tentative_verdict = "indeterminate"
+            tentative_reason = (
+                "Empty result without applicability evidence: cannot distinguish "
+                "'nothing to check' from 'nothing was checked'"
+            )
     elif is_indeterminate:
         tentative_verdict = "indeterminate"
         if not tentative_reason:
@@ -414,6 +420,7 @@ def wrap_raw_verification_result(
         raw_result_ref=raw_result_ref,
         reason=tentative_reason,
         freshness=freshness,
+        raw_snapshot=None if raw_result_ref is not None else raw_snapshot,
     )
 
 
@@ -432,26 +439,42 @@ def wrap_operation_outcome(
     Preserves raw transport details untouched under `details`.
     Maps transport status codes to the closed outcome set:
     ('ok', 'failed', 'not-run', 'empty', 'indeterminate').
+
+    Mapping order:
+    1. Explicit no-verdict statuses ('empty' / 'not-run' / 'indeterminate') map to
+       themselves. The landing runner emits these with `ok: false` + exit 2 and the
+       MCP path with `ok: true` + `result_status`; both are the SAME domain outcome.
+    2. Status 'failed', an outer `ok: false`, or an inner `result.ok is False`
+       (MCP handler refusal wrapped in a transport `ok: true` envelope) is 'failed'.
+       A refusal is never 'ok' regardless of any status string.
+    3. Only an explicit 'ok' status, or a transport `ok: true` with NO status
+       field at all, maps to 'ok'. An unknown status string is 'indeterminate'.
     """
     if not isinstance(raw_envelope, dict):
         raise CompatError(f"wrap_operation_outcome requires dict envelope, got {type(raw_envelope).__name__}")
 
     details = copy.deepcopy(raw_envelope)
+    inner = raw_envelope.get("result")
+    inner_dict = inner if isinstance(inner, dict) else None
 
-    # 1. Domain status inspection (checks status, result_status, or inner result.status)
-    status = str(raw_envelope.get("status", raw_envelope.get("result_status", ""))).lower()
-    if not status and isinstance(raw_envelope.get("result"), dict):
-        status = str(raw_envelope["result"].get("status", "")).lower()
+    def _code_from(container: dict[str, Any] | None, default: str) -> str:
+        if container is None:
+            return default
+        err = container.get("error")
+        if isinstance(err, dict) and err.get("code"):
+            return str(err["code"])
+        if isinstance(err, str) and err:
+            return err
+        if container.get("code"):
+            return str(container["code"])
+        return default
 
-    if status == "ok":
-        return OperationOutcome(
-            module=module,
-            outcome="ok",
-            code=None,
-            subject_ref=subject_ref,
-            details=details,
-        )
-    elif status == "empty":
+    # 1. Domain status inspection (status, result_status, or inner result.status)
+    status = str(raw_envelope.get("status", raw_envelope.get("result_status", "")) or "").lower()
+    if not status and inner_dict is not None:
+        status = str(inner_dict.get("status", "") or "").lower()
+
+    if status == "empty":
         code = str(raw_envelope.get("code", "EMPTY_RESULT"))
         return OperationOutcome(
             module=module,
@@ -488,20 +511,25 @@ def wrap_operation_outcome(
             details=details,
         )
 
-    # 2. Refusal / error envelope
+    # 2. Refusal precedence — outer transport refusal, then inner handler refusal.
     if raw_envelope.get("ok") is False:
-        err = raw_envelope.get("error", {})
-        code = str(err.get("code") if isinstance(err, dict) else raw_envelope.get("code") or "OPERATION_FAILED")
         return OperationOutcome(
             module=module,
             outcome="failed",
-            code=code,
+            code=_code_from(raw_envelope, "OPERATION_FAILED"),
+            subject_ref=subject_ref,
+            details=details,
+        )
+    if inner_dict is not None and inner_dict.get("ok") is False:
+        return OperationOutcome(
+            module=module,
+            outcome="failed",
+            code=_code_from(inner_dict, "HANDLER_REFUSED"),
             subject_ref=subject_ref,
             details=details,
         )
 
-    # 3. Default fallback for generic ok envelope
-    if raw_envelope.get("ok") is True:
+    if status == "ok":
         return OperationOutcome(
             module=module,
             outcome="ok",
@@ -510,9 +538,22 @@ def wrap_operation_outcome(
             details=details,
         )
 
+    # 3. Transport ok with NO domain status string at all (handler returned a
+    #    plain dict without `status`): accepted as 'ok' only when the inner result
+    #    carries no status field. A non-empty unknown status is never promoted.
+    if raw_envelope.get("ok") is True and not status:
+        return OperationOutcome(
+            module=module,
+            outcome="ok",
+            code=None,
+            subject_ref=subject_ref,
+            details=details,
+        )
+
+    # 4. Unknown status string -> indeterminate (explicitly typed), never 'ok'.
     return OperationOutcome(
         module=module,
-        outcome="failed",
+        outcome="indeterminate",
         code=f"UNKNOWN_STATUS_{status.upper() if status else 'UNSPECIFIED'}",
         subject_ref=subject_ref,
         details=details,
@@ -527,14 +568,19 @@ def check_baseline_preconditions(
     baseline_manifest: ArtifactManifest,
     proposed_baseline_sha256: str,
     proposal: ChangeProposal | None = None,
+    adapter_capabilities: set[str] | frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    """Precondition check on baseline manifest before any mutation.
+    """Contract-only precondition check on a baseline manifest before mutation.
 
-    Enforces that the baseline digest matches exactly and checks change proposal
-    conflicts against locked/pinned objects.
-    Preserves client source completely on conflict.
+    This is NOT an atomic compare-and-apply: it evaluates a snapshot and returns a
+    decision; the caller owns the write and must re-check (or lock) if the
+    workspace can change between this call and the write. Enforces that the
+    recomputed canonical digest of the baseline matches the proposed baseline
+    exactly and surfaces change-proposal conflicts (locked objects, unsupported
+    or unverified edit classes). Client source is never touched here.
     """
-    actual_sha = baseline_manifest.manifest_sha256
+    # Recompute canonical identity at the decision boundary (never trust the cached field)
+    actual_sha = baseline_manifest.verify_integrity()
     if proposed_baseline_sha256.lower() != actual_sha.lower():
         return {
             "allowed": False,
@@ -547,7 +593,7 @@ def check_baseline_preconditions(
         }
 
     if proposal is not None:
-        conflicts = evaluate_change_proposal(proposal, actual_sha)
+        conflicts = evaluate_change_proposal(proposal, actual_sha, adapter_capabilities)
         if conflicts:
             return {
                 "allowed": False,
@@ -569,15 +615,20 @@ def check_release_preconditions(
     target_manifest: ArtifactManifest,
     approvals: list[ReleaseApproval],
     verifications: list[VerificationRecord],
-    current_dependencies: list[DependencyRef] | dict[str, str] | None = None,
+    current_dependencies: list[DependencyRef] | dict[str, Any] | None = None,
+    policy: ReleasePolicy | None = None,
 ) -> dict[str, Any]:
     """Precondition check on release readiness before emission.
 
     Enforces:
     1. Human release approval exists and matches target manifest sha256.
-    2. All verification checks match target manifest sha256.
-    3. Verification evidence is evaluated for freshness; stale/unknown evidence blocks release.
-    4. All required check verdicts are 'pass' (or justified 'not-applicable').
+    2. Required checks come from the explicit versioned `policy`; approval may add
+       checks but can never reduce the policy; a missing/empty policy blocks release.
+    3. Every required check is covered by a verification record (by tool/rule name)
+       whose subject matches the target manifest (recomputed at this boundary).
+    4. Freshness is always derived from `current_dependencies` by full dependency
+       identity (kind, name, version, digest); caller-set freshness is never trusted.
+    5. All required check verdicts are 'pass' (or justified 'not-applicable').
     """
     if not approvals:
         return {
@@ -586,18 +637,7 @@ def check_release_preconditions(
         }
 
     reasons: list[str] = []
-    target_sha = target_manifest.manifest_sha256.lower()
-
-    # Normalize current dependencies
-    curr_deps_map: dict[str, str] | None = None
-    if current_dependencies is not None:
-        if isinstance(current_dependencies, dict):
-            curr_deps_map = current_dependencies
-        else:
-            curr_deps_map = {
-                dep.name: (dep.version or dep.digest or "")
-                for dep in current_dependencies
-            }
+    target_sha = target_manifest.verify_integrity().lower()
 
     # Check approvals
     for app in approvals:
@@ -609,7 +649,25 @@ def check_release_preconditions(
                 f"!= target manifest {target_sha[:12]}..."
             )
 
-    # Check verifications
+    # Required checks: policy is authoritative; approvals may only add.
+    required: list[str] = []
+    for app in approvals:
+        req, policy_reasons = resolve_required_checks(policy, app)
+        reasons.extend(policy_reasons)
+        for c in req:
+            if c not in required:
+                required.append(c)
+
+    records_by_check: dict[str, list[VerificationRecord]] = {}
+    for v in verifications:
+        for dep in v.tool_rule_dependencies:
+            records_by_check.setdefault(dep.name, []).append(v)
+
+    for check_id in required:
+        if not records_by_check.get(check_id):
+            reasons.append(f"Required check {check_id!r} has no verification record")
+
+    # Check every supplied verification record
     for v in verifications:
         # Subject manifest check
         if v.subject_manifest_sha256.lower() != target_sha:
@@ -618,11 +676,9 @@ def check_release_preconditions(
                 f"!= target manifest {target_sha[:12]}..."
             )
 
-        # Freshness evaluation
-        freshness = v.freshness
-        if curr_deps_map is not None:
-            freshness = evaluate_freshness(curr_deps_map, v.tool_rule_dependencies)
-            v.freshness = freshness
+        # Freshness is derived from the current environment, never trusted
+        freshness = evaluate_freshness(current_dependencies, v.tool_rule_dependencies)
+        v.freshness = freshness
 
         if freshness != "current":
             reasons.append(f"Verification evidence for axis {v.axis!r} is {freshness!r} (must be 'current')")
