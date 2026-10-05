@@ -25,6 +25,7 @@ import math
 import os
 import re
 import subprocess
+import typing
 import uuid as _uuid
 
 from .occupancy import LedgerRect, OccupancyLedger
@@ -1412,10 +1413,7 @@ def emit_kicad_schematic(
 
     def _record_run(x1: float, y1: float, x2: float, y2: float, net_name: str) -> None:
         """Record one emitted wire run's length. Called beside each wire_blocks append."""
-        wire_runs.append({
-            "net": net_name,
-            "len_mm": round(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5, 4),
-        })
+        globals()["_record_run"](x1, y1, x2, y2, net_name, wire_runs)
     # (net_name, x, y) endpoints routed to global-label fallback; emitted after
     # the net loop with a per-column anti-overlap pass so dense same-side pin
     # stacks (e.g. a large BGA drawn as a per-page subset) do not collide.
@@ -1560,74 +1558,14 @@ def emit_kicad_schematic(
     def _place_local_label(name: str, x: float, y: float, wp: list[tuple[float, float]]):
         """Emit a local label at (x,y), nudged along the route so its RENDERED text
         box clears every earlier label AND every in-body pin-name (M6-2 / DD-12).
-
-        The old version only checked a private `_local_label_boxes` list, so a
-        local label could still land on a pin-name box or a global label owned by
-        another symbol (the cross pin/label smear). We now test each candidate
-        coord against the SHARED ledger (label + pin_extent kinds, cross-owner) so
-        the label sees EVERY placed text box. When every candidate collides we
-        DOWN-GRADE (place at the route's far end, recorded) rather than the old
-        「last resort 原位硬放」 which stacked text (使用者鐵律：label 永不疊放).
-        The accepted box is reserved into the ledger so later labels avoid it too.
-        """
-        candidates: list[tuple[float, float]] = [(x, y)] + list(wp)
-        # also add intra-segment grid points for a finer nudge
-        for a, b in zip(wp, wp[1:]):
-            if abs(a[0] - b[0]) > abs(a[1] - b[1]):  # horizontal seg
-                step = 1.27 if b[0] >= a[0] else -1.27
-                cx = a[0]
-                while (step > 0 and cx <= b[0]) or (step < 0 and cx >= b[0]):
-                    candidates.append((round(cx, 2), a[1])); cx += step
-            else:  # vertical seg
-                step = 1.27 if b[1] >= a[1] else -1.27
-                cy = a[1]
-                while (step > 0 and cy <= b[1]) or (step < 0 and cy >= b[1]):
-                    candidates.append((a[0], round(cy, 2))); cy += step
-
-        def _clear(box: tuple[float, float, float, float]) -> bool:
-            # private list (byte-stable legacy guard) AND the shared ledger
-            # (label + pin_extent, cross-owner). A label box is (x0,x1,y0,y1);
-            # the ledger overlap test wants a rect, so probe via _bbox_overlap on
-            # the ledger's label/pin_extent rects.
-            if any(_bbox_overlap(box, pb) for pb in _local_label_boxes):
-                return False
-            bx0, bx1, by0, by1 = box
-            for r in ledger.rects:
-                # M6-8 (缺陷B): a local/net label must also clear power-port boxes,
-                # not only label/pin_extent — the power-port Value box (kind="power",
-                # the "GND"/rail glyph text) is reserved into the SAME ledger, and a
-                # label landing on it is the HSE_OUT⨯GND overlap the user flagged.
-                if r.kind not in ("label", "pin_extent", "power"):
-                    continue
-                if not (bx1 <= r.x0 or r.x1 <= bx0 or by1 <= r.y0 or r.y1 <= by0):
-                    return False
-            return True
-
-        def _commit(cx: float, cy: float, box: tuple[float, float, float, float]) -> None:
-            _local_label_boxes.append(box)
-            bx0, bx1, by0, by1 = box
-            if bx1 > bx0 and by1 > by0:
-                ledger.try_reserve(LedgerRect(bx0, by0, bx1, by1, name, "label"))
-                kb = (bx0 - 0.5, bx1 + 0.5, by0 - 0.5, by1 + 0.5)
-                text_keepout_boxes.append(kb)
-                ledger.try_reserve(LedgerRect(
-                    kb[0], kb[2], kb[1], kb[3],
-                    name, "text_keepout", source_layer="text_keepout"
-                ))
-            label_blocks.append(_local_label_block(name, cx, cy))
-
-        for cx, cy in candidates:
-            box = _label_bbox(name, cx, cy, False)
-            if _clear(box):
-                _commit(cx, cy, box)
-                return
-        # DOWN-GRADE (never stack): place at the route's FAR endpoint (the wire
-        # terminus, furthest from the crowded pin cluster) and record. This keeps
-        # the net named and ERC-valid while refusing to smear text on the pin
-        # cluster. Recorded via label_local_downgrades for machine observability.
-        fx, fy = (wp[-1] if wp else (x, y))
-        label_local_downgrades.append({"net": name, "at": [fx, fy]})
-        _commit(fx, fy, _label_bbox(name, fx, fy, False))
+        Delegates to module-level _place_local_label."""
+        globals()["_place_local_label"](
+            name, x, y, wp, ledger,
+            local_label_boxes=_local_label_boxes,
+            label_blocks=label_blocks,
+            text_keepout_boxes=text_keepout_boxes,
+            label_local_downgrades=label_local_downgrades,
+        )
 
     # DD-11 anti-fusion registry: net_name -> its list of registered wire segments
     # ((x1,y1),(x2,y2)). A new net's segments are checked against EVERY OTHER
@@ -1653,86 +1591,21 @@ def emit_kicad_schematic(
     routed_segments: list[tuple[tuple, frozenset]] = []
 
     def _other_net_segments(this_net: str) -> list[tuple]:
-        segs: list[tuple] = []
-        for nm, ss in fusion_registry.items():
-            if nm != this_net:
-                segs.extend(ss)
-        return segs
+        return globals()["_other_net_segments"](this_net, fusion_registry)
 
     def _segments_of(waypoints: list[tuple[float, float]]) -> list[tuple]:
-        return [(waypoints[i], waypoints[i + 1]) for i in range(len(waypoints) - 1)]
+        return globals()["_segments_of"](waypoints)
 
     def _guard_route(net_name: str, base_waypoints: list[tuple[float, float]],
                      extra_ok=None, *, interior_retry: bool = False,
                      obstacles: list[tuple[float, float, float, float]] | None = None):
-        """Return (waypoints, jogged: bool) whose segments clear every other net,
-        or (None, False) when _ROUTE_JOG_ATTEMPTS deterministic jogs and multi-channel
-        detours still fuse (→ caller down-grades to label). Guard only mutates geometry
-        when a collision exists, so collision-free input is byte-equivalent (R6).
-
-        extra_ok (BR_20260905, optional): an ADDITIONAL acceptance predicate
-        (waypoints -> bool) evaluated on every candidate, used by the caller to
-        fold the ledger-clearance gate INTO the jog loop. Before this, the ledger
-        gate ran AFTER the loop had already committed to one geometry, so a route
-        that merely grazed a label box was down-graded to a label stub with zero
-        retries -- the loop had a budget of 8 and the ledger gate a budget of 0,
-        and it was the budget-0 gate that decided the deliverable. A candidate is
-        accepted only when BOTH the fusion test AND extra_ok pass, so this cannot
-        admit any route the old code would have rejected; it can only keep
-        searching where the old code gave up.
-        """
-        others = _other_net_segments(net_name)
-
-        def _ok(wp, *, exempt: bool = False) -> bool:
-            if any(_segment_fuses(s, others, exempt_interior=exempt)
-                   for s in _segments_of(wp)):
-                return False
-            return True if extra_ok is None else bool(extra_ok(wp))
-
-        def _search(exempt: bool):
-            if _ok(base_waypoints, exempt=exempt):
-                return base_waypoints, False    # clean → untouched (byte-stable)
-            for attempt in range(_ROUTE_JOG_ATTEMPTS):
-                offset = _net_jog_steps(net_name, attempt)
-                jogged = _jog_free_axis(base_waypoints, offset)
-                if _ok(jogged, exempt=exempt):
-                    return jogged, True
-            # Phase 3.1: Multi-channel detours (mid-channel Z-routes outside obstacle columns)
-            if obstacles and len(base_waypoints) >= 2:
-                p1 = base_waypoints[0]
-                p2 = base_waypoints[-1]
-                q1 = base_waypoints[1] if len(base_waypoints) >= 4 else p1
-                q2 = base_waypoints[-2] if len(base_waypoints) >= 4 else p2
-                step = WIRE_KEEPOUT_MM
-                x_cols = set()
-                y_rows = set()
-                for b in obstacles:
-                    x_cols.add(_snap_grid(b[0] - step))
-                    x_cols.add(_snap_grid(b[1] + step))
-                    y_rows.add(_snap_grid(b[2] - step))
-                    y_rows.add(_snap_grid(b[3] + step))
-                mid_x = (q1[0] + q2[0]) / 2.0
-                mid_y = (q1[1] + q2[1]) / 2.0
-                for mx in sorted(x_cols, key=lambda x: abs(x - mid_x)):
-                    detour = _dedupe_waypoints([p1, q1, (mx, q1[1]), (mx, q2[1]), q2, p2])
-                    if _ok(detour, exempt=exempt):
-                        return detour, True
-                for my in sorted(y_rows, key=lambda y: abs(y - mid_y)):
-                    detour = _dedupe_waypoints([p1, q1, (q1[0], my), (q2[0], my), q2, p2])
-                    if _ok(detour, exempt=exempt):
-                        return detour, True
-            return None, False
-
-        # STRICT FIRST, ALWAYS. The exempt pass runs only after the strict search
-        # has exhausted every jog, so no route that is drawable today can move --
-        # the exemption can only convert a LABEL DOWN-GRADE into drawn copper,
-        # never re-route an accepted wire. That ordering is what makes this
-        # change byte-stable for every net that was already being drawn, and it
-        # is why the A/B geometry diff is the right acceptance test.
-        result = _search(False)
-        if result[0] is not None or not interior_retry:
-            return result
-        return _search(True)
+        return globals()["_guard_route"](
+            net_name, base_waypoints,
+            extra_ok=extra_ok,
+            fusion_registry=fusion_registry,
+            interior_retry=interior_retry,
+            obstacles=obstacles,
+        )
 
     # BR_20260708 wire keep-out: absolute SHEET body AABB per component ref, from
     # the symbol's own (rectangle ...) (the TRUE body extent — same source guard C
@@ -1830,27 +1703,13 @@ def emit_kicad_schematic(
     _PERPENDICULAR_OK_KINDS = frozenset({"wire"})
 
     def _route_clears_ledger(waypoints, host_refs, net_name=None) -> bool:
-        """round 7: the exemption set must include the net's OWN name.
-
-        Ledger rects are owned by their source: a body/pin_extent by the component
-        REF, a wire by the NET name. Before the wire layer actually held anything
-        this distinction was inert. Now that wires DO enter the ledger, a net's
-        own earlier segments would block its later ones -- a multi-node net is
-        routed hop by hop, and hop 2 legitimately meets hop 1 at their shared
-        chain pin. That is the same reasoning `_other_net_segments` already
-        encodes for the anti-fusion test (a net cannot fuse with itself), so the
-        two guards must agree or a 3-node star gets pushed onto global labels.
-
-        net_name=None keeps the pre-round-7 exemption set for any caller that has
-        no net in hand.
-        """
-        _exempt = set(host_refs)
-        if net_name is not None:
-            _exempt.add(net_name)
-        clear, _hit = ledger.path_clear(
-            waypoints, host_owners=frozenset(_exempt), kinds=_ROUTE_GUARD_KINDS,
-            perpendicular_ok_kinds=_PERPENDICULAR_OK_KINDS)
-        return clear
+        """round 7: the exemption set must include the net's OWN name. Delegates to module-level _route_clears_ledger."""
+        return globals()["_route_clears_ledger"](
+            waypoints,
+            endpoint_refs=host_refs,
+            net_name=net_name,
+            ledger=ledger,
+        )
 
     def _observe_wire_slot(waypoints, net_name) -> None:
         """M7-3b-i (DD-11): OBSERVE whether this accepted wire lands on its reserved
@@ -2239,44 +2098,11 @@ def emit_kicad_schematic(
                     label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
 
     def _assert_no_cross_net_junction() -> None:
-        """round 8 safety gate for perpendicular crossing pass-through.
-
-        Allowing a wire to CROSS another net's wire is safe for exactly one
-        reason: `.kicad_sch` connectivity is explicit, so two wires meeting at a
-        point with NO junction there are electrically separate. The moment a
-        junction dot lands on such a crossing, KiCad reads it as a connection and
-        the two nets are SHORTED -- with clean geometry, a plausible-looking
-        drawing, and nothing anywhere reporting a problem. That is precisely the
-        failure shape this repo has been chasing: the numbers look right and the
-        circuit is wrong.
-
-        So this is fail-loud (ValueError), not a warning and not a label
-        down-grade. A warning would let a shorted schematic reach `files`, and a
-        down-grade would silently redraw the net -- both leave the caller unable
-        to distinguish "no short" from "short we papered over".
-
-        Predicate: for every emitted junction at P owned by net N, P must not lie
-        on any segment belonging to a net other than N.
-        """
-        if not junction_points:
-            return
-        # The predicate itself lives at module level (`cross_net_junction_shorts`)
-        # so it can be exercised directly. That matters here: the router's own
-        # guards make a cross-net junction hard to provoke through natural input,
-        # and an assertion nobody can fire is indistinguishable from one that
-        # cannot fail -- the exact defect shape flagged in specbase's grafcet
-        # validator (an exemption branch guarded by an enum that never admits it).
-        shorts = cross_net_junction_shorts(junction_points, fusion_registry)
-        if shorts:
-            _detail = "; ".join(
-                f"junction of {s['junction_net']!r} at ({s['at'][0]}, {s['at'][1]}) "
-                f"sits on a wire of {s['shorted_to']!r}"
-                for s in shorts[:8])
-            raise ValueError(
-                f"CROSS_NET_JUNCTION_SHORT: {len(shorts)} junction(s) land on a "
-                f"DIFFERENT net's wire, which KiCad reads as an electrical "
-                f"connection -- these nets would be silently shorted. {_detail}"
-                + (f" (+{len(shorts) - 8} more)" if len(shorts) > 8 else ""))
+        """round 8 safety gate for perpendicular crossing pass-through. Delegates to module-level _assert_no_cross_net_junction."""
+        globals()["_assert_no_cross_net_junction"](
+            junction_points=junction_points,
+            fusion_registry=fusion_registry,
+        )
 
     # A1 / round 20: THE CALL SITE MOVED TO THE END OF EMIT -- see the call just
     # before `_schematic_document(...)` below. It used to run HERE, and here it is
@@ -3934,6 +3760,356 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
             return wp
     # fully boxed in: legacy endpoint-correct route (machine check will flag it).
     return candidates[0]
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.1 / Engine Seams Promotion: Promoted closures from emit_kicad_schematic
+# ---------------------------------------------------------------------------
+
+def _record_run(
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    net_name: str,
+    wire_runs: list[dict] | OccupancyLedger | None = None,
+) -> dict:
+    """Record one emitted wire run's length into `wire_runs`.
+
+    Appends and returns {"net": net_name, "len_mm": <hypot length rounded to 4 decimals>}.
+    If wire_runs is None or a non-list object, the run dictionary is still returned.
+    """
+    length = round(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5, 4)
+    run_entry = {
+        "net": net_name,
+        "len_mm": length,
+    }
+    if isinstance(wire_runs, list):
+        wire_runs.append(run_entry)
+    return run_entry
+
+
+def _other_net_segments(this_net: str, fusion_registry: dict[str, list[tuple]]) -> list[tuple]:
+    """Collect all registered wire segments belonging to nets other than `this_net`."""
+    segs: list[tuple] = []
+    for nm, ss in fusion_registry.items():
+        if nm != this_net:
+            segs.extend(ss)
+    return segs
+
+
+def _segments_of(waypoints: list[tuple[float, float]]) -> list[tuple]:
+    """Convert a polyline waypoint sequence into consecutive 2-point segment tuples."""
+    return [(waypoints[i], waypoints[i + 1]) for i in range(len(waypoints) - 1)]
+
+
+def _guard_route(
+    net_name: str,
+    base_waypoints: list[tuple[float, float]],
+    ledger: OccupancyLedger | None = None,
+    fusion_registry: dict[str, list[tuple]] | None = None,
+    extra_ok=None,
+    *,
+    interior_retry: bool = False,
+    obstacles: list[tuple[float, float, float, float]] | None = None,
+    endpoint_refs: typing.Collection[str] | None = None,
+    **kwargs,
+) -> tuple[list[tuple[float, float]] | None, bool]:
+    """Return (waypoints, jogged: bool) whose segments clear every other net,
+    or (None, False) when _ROUTE_JOG_ATTEMPTS deterministic jogs and multi-channel
+    detours still fuse (→ caller down-grades to label). Guard only mutates geometry
+    when a collision exists, so collision-free input is byte-equivalent (R6).
+
+    extra_ok (BR_20260905, optional): an ADDITIONAL acceptance predicate
+    (waypoints -> bool) evaluated on every candidate, used by the caller to
+    fold the ledger-clearance gate INTO the jog loop. Before this, the ledger
+    gate ran AFTER the loop had already committed to one geometry, so a route
+    that merely grazed a label box was down-graded to a label stub with zero
+    retries -- the loop had a budget of 8 and the ledger gate a budget of 0,
+    and it was the budget-0 gate that decided the deliverable. A candidate is
+    accepted only when BOTH the fusion test AND extra_ok pass, so this cannot
+    admit any route the old code would have rejected; it can only keep
+    searching where the old code gave up.
+    """
+    if isinstance(ledger, dict) and fusion_registry is None:
+        fusion_registry = ledger
+        ledger = kwargs.get("ledger")
+    if "fusion_registry" in kwargs and fusion_registry is None:
+        fusion_registry = kwargs["fusion_registry"]
+    if "ledger" in kwargs and ledger is None:
+        ledger = kwargs["ledger"]
+    if "extra_ok" in kwargs and extra_ok is None:
+        extra_ok = kwargs["extra_ok"]
+
+    others = _other_net_segments(net_name, fusion_registry) if fusion_registry else []
+
+    def _ok(wp, *, exempt: bool = False) -> bool:
+        if any(_segment_fuses(s, others, exempt_interior=exempt)
+               for s in _segments_of(wp)):
+            return False
+        if extra_ok is not None:
+            return bool(extra_ok(wp))
+        if ledger is not None:
+            return _route_clears_ledger(wp, endpoint_refs, net_name, ledger)
+        return True
+
+    def _search(exempt: bool):
+        if _ok(base_waypoints, exempt=exempt):
+            return base_waypoints, False    # clean → untouched (byte-stable)
+        for attempt in range(_ROUTE_JOG_ATTEMPTS):
+            offset = _net_jog_steps(net_name, attempt)
+            jogged = _jog_free_axis(base_waypoints, offset)
+            if _ok(jogged, exempt=exempt):
+                return jogged, True
+        # Phase 3.1: Multi-channel detours (mid-channel Z-routes outside obstacle columns)
+        if obstacles and len(base_waypoints) >= 2:
+            p1 = base_waypoints[0]
+            p2 = base_waypoints[-1]
+            q1 = base_waypoints[1] if len(base_waypoints) >= 4 else p1
+            q2 = base_waypoints[-2] if len(base_waypoints) >= 4 else p2
+            step = WIRE_KEEPOUT_MM
+            x_cols = set()
+            y_rows = set()
+            for b in obstacles:
+                x_cols.add(_snap_grid(b[0] - step))
+                x_cols.add(_snap_grid(b[1] + step))
+                y_rows.add(_snap_grid(b[2] - step))
+                y_rows.add(_snap_grid(b[3] + step))
+            mid_x = (q1[0] + q2[0]) / 2.0
+            mid_y = (q1[1] + q2[1]) / 2.0
+            for mx in sorted(x_cols, key=lambda x: abs(x - mid_x)):
+                detour = _dedupe_waypoints([p1, q1, (mx, q1[1]), (mx, q2[1]), q2, p2])
+                if _ok(detour, exempt=exempt):
+                    return detour, True
+            for my in sorted(y_rows, key=lambda y: abs(y - mid_y)):
+                detour = _dedupe_waypoints([p1, q1, (q1[0], my), (q2[0], my), q2, p2])
+                if _ok(detour, exempt=exempt):
+                    return detour, True
+        return None, False
+
+    # STRICT FIRST, ALWAYS. The exempt pass runs only after the strict search
+    # has exhausted every jog, so no route that is drawable today can move --
+    # the exemption can only convert a LABEL DOWN-GRADE into drawn copper,
+    # never re-route an accepted wire. That ordering is what makes this
+    # change byte-stable for every net that was already being drawn, and it
+    # is why the A/B geometry diff is the right acceptance test.
+    result = _search(False)
+    if result[0] is not None or not interior_retry:
+        return result
+    return _search(True)
+
+
+_ROUTE_GUARD_KINDS = frozenset({"label", "wire", "text_keepout"})
+_PERPENDICULAR_OK_KINDS = frozenset({"wire"})
+
+
+def _route_clears_ledger(
+    waypoints: list[tuple[float, float]],
+    endpoint_refs: typing.Collection[str] | None = None,
+    net_name: str | None = None,
+    ledger: OccupancyLedger | None = None,
+    *,
+    kinds: frozenset[str] = _ROUTE_GUARD_KINDS,
+    perpendicular_ok_kinds: frozenset[str] = _PERPENDICULAR_OK_KINDS,
+) -> bool:
+    """round 7: the exemption set must include the net's OWN name.
+
+    Ledger rects are owned by their source: a body/pin_extent by the component
+    REF, a wire by the NET name. Before the wire layer actually held anything
+    this distinction was inert. Now that wires DO enter the ledger, a net's
+    own earlier segments would block its later ones -- a multi-node net is
+    routed hop by hop, and hop 2 legitimately meets hop 1 at their shared
+    chain pin. That is the same reasoning `_other_net_segments` already
+    encodes for the anti-fusion test (a net cannot fuse with itself), so the
+    two guards must agree or a 3-node star gets pushed onto global labels.
+
+    net_name=None keeps the pre-round-7 exemption set for any caller that has
+    no net in hand.
+    """
+    if isinstance(net_name, OccupancyLedger) and ledger is None:
+        ledger = net_name
+        net_name = None
+    if ledger is None:
+        return True
+    _exempt = set(endpoint_refs or ())
+    if net_name is not None:
+        _exempt.add(net_name)
+    clear, _hit = ledger.path_clear(
+        waypoints,
+        host_owners=frozenset(_exempt),
+        kinds=kinds,
+        perpendicular_ok_kinds=perpendicular_ok_kinds,
+    )
+    return clear
+
+
+def _assert_no_cross_net_junction(
+    junction_points: list[tuple[float, float, str]] | tuple[float, float] | None = None,
+    fusion_registry: dict[str, list[tuple]] | str | None = None,
+    junction_registry: dict[str, list[tuple]] | None = None,
+    *,
+    net_name: str | None = None,
+    **kwargs,
+) -> None:
+    """round 8 safety gate for perpendicular crossing pass-through.
+
+    Allowing a wire to CROSS another net's wire is safe for exactly one
+    reason: `.kicad_sch` connectivity is explicit, so two wires meeting at a
+    point with NO junction there are electrically separate. The moment a
+    junction dot lands on such a crossing, KiCad reads it as a connection and
+    the two nets are SHORTED -- with clean geometry, a plausible-looking
+    drawing, and nothing anywhere reporting a problem. That is precisely the
+    failure shape this repo has been chasing: the numbers look right and the
+    circuit is wrong.
+
+    So this is fail-loud (ValueError), not a warning and not a label
+    down-grade. A warning would let a shorted schematic reach `files`, and a
+    down-grade would silently redraw the net -- both leave the caller unable
+    to distinguish "no short" from "short we papered over".
+
+    Predicate: for every emitted junction at P owned by net N, P must not lie
+    on any segment belonging to a net other than N.
+    """
+    if isinstance(fusion_registry, str):
+        # Called as _assert_no_cross_net_junction(junction_pt, net_name, junction_registry)
+        pt = junction_points
+        j_net = fusion_registry
+        reg = junction_registry or kwargs.get("fusion_registry", {})
+        j_pts = [(pt[0], pt[1], j_net)]
+        fusion_reg = reg
+    elif net_name is not None and isinstance(junction_points, tuple):
+        # Called as _assert_no_cross_net_junction(junction_pt, net_name=net_name, ...)
+        pt = junction_points
+        reg = fusion_registry or junction_registry or kwargs.get("fusion_registry", {})
+        j_pts = [(pt[0], pt[1], net_name)]
+        fusion_reg = reg
+    else:
+        j_pts = junction_points or kwargs.get("junction_points", [])
+        fusion_reg = fusion_registry or junction_registry or kwargs.get("fusion_registry", {})
+
+    if not j_pts or not fusion_reg:
+        return
+
+    shorts = cross_net_junction_shorts(j_pts, fusion_reg)
+    if shorts:
+        _detail = "; ".join(
+            f"junction of {s['junction_net']!r} at ({s['at'][0]}, {s['at'][1]}) "
+            f"sits on a wire of {s['shorted_to']!r}"
+            for s in shorts[:8])
+        raise ValueError(
+            f"CROSS_NET_JUNCTION_SHORT: {len(shorts)} junction(s) land on a "
+            f"DIFFERENT net's wire, which KiCad reads as an electrical "
+            f"connection -- these nets would be silently shorted. {_detail}"
+            + (f" (+{len(shorts) - 8} more)" if len(shorts) > 8 else ""))
+
+
+def _place_local_label(
+    name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    wp: list[tuple[float, float]] | None = None,
+    ledger: OccupancyLedger | None = None,
+    *,
+    net_name: str | None = None,
+    mid_x: float | None = None,
+    mid_y: float | None = None,
+    waypoints: list[tuple[float, float]] | None = None,
+    local_label_boxes: list[tuple[float, float, float, float]] | None = None,
+    label_blocks: list[str] | None = None,
+    text_keepout_boxes: list[tuple[float, float, float, float]] | None = None,
+    label_local_downgrades: list[dict] | None = None,
+    **kwargs,
+) -> tuple[float, float, tuple[float, float, float, float], bool]:
+    """Emit a local label at (x,y), nudged along the route so its RENDERED text
+    box clears every earlier label AND every in-body pin-name (M6-2 / DD-12).
+
+    The old version only checked a private `_local_label_boxes` list, so a
+    local label could still land on a pin-name box or a global label owned by
+    another symbol (the cross pin/label smear). We now test each candidate
+    coord against the SHARED ledger (label + pin_extent kinds, cross-owner) so
+    the label sees EVERY placed text box. When every candidate collides we
+    DOWN-GRADE (place at the route's far end, recorded) rather than the old
+    「last resort 原位硬放」 which stacked text (使用者鐵律：label 永不疊放).
+    The accepted box is reserved into the ledger so later labels avoid it too.
+    """
+    lbl_name = name if name is not None else (net_name or "")
+    pos_x = x if x is not None else (mid_x if mid_x is not None else 0.0)
+    pos_y = y if y is not None else (mid_y if mid_y is not None else 0.0)
+    pts = wp if wp is not None else (waypoints or [])
+
+    if local_label_boxes is None:
+        local_label_boxes = []
+    if label_blocks is None:
+        label_blocks = []
+    if text_keepout_boxes is None:
+        text_keepout_boxes = []
+    if label_local_downgrades is None:
+        label_local_downgrades = []
+
+    candidates: list[tuple[float, float]] = [(pos_x, pos_y)] + list(pts)
+    # also add intra-segment grid points for a finer nudge
+    for a, b in zip(pts, pts[1:]):
+        if abs(a[0] - b[0]) > abs(a[1] - b[1]):  # horizontal seg
+            step = 1.27 if b[0] >= a[0] else -1.27
+            cx = a[0]
+            while (step > 0 and cx <= b[0]) or (step < 0 and cx >= b[0]):
+                candidates.append((round(cx, 2), a[1]))
+                cx += step
+        else:  # vertical seg
+            step = 1.27 if b[1] >= a[1] else -1.27
+            cy = a[1]
+            while (step > 0 and cy <= b[1]) or (step < 0 and cy >= b[1]):
+                candidates.append((a[0], round(cy, 2)))
+                cy += step
+
+    def _clear(box: tuple[float, float, float, float]) -> bool:
+        # private list (byte-stable legacy guard) AND the shared ledger
+        # (label + pin_extent, cross-owner). A label box is (x0,x1,y0,y1);
+        # the ledger overlap test wants a rect, so probe via _bbox_overlap on
+        # the ledger's label/pin_extent rects.
+        if any(_bbox_overlap(box, pb) for pb in local_label_boxes):
+            return False
+        if ledger is not None:
+            bx0, bx1, by0, by1 = box
+            for r in ledger.rects:
+                # M6-8 (缺陷B): a local/net label must also clear power-port boxes,
+                # not only label/pin_extent — the power-port Value box (kind="power",
+                # the "GND"/rail glyph text) is reserved into the SAME ledger, and a
+                # label landing on it is the HSE_OUT⨯GND overlap the user flagged.
+                if r.kind not in ("label", "pin_extent", "power"):
+                    continue
+                if not (bx1 <= r.x0 or r.x1 <= bx0 or by1 <= r.y0 or r.y1 <= by0):
+                    return False
+        return True
+
+    def _commit(cx: float, cy: float, box: tuple[float, float, float, float]) -> None:
+        local_label_boxes.append(box)
+        bx0, bx1, by0, by1 = box
+        if ledger is not None and bx1 > bx0 and by1 > by0:
+            ledger.try_reserve(LedgerRect(bx0, by0, bx1, by1, lbl_name, "label"))
+            kb = (bx0 - 0.5, bx1 + 0.5, by0 - 0.5, by1 + 0.5)
+            text_keepout_boxes.append(kb)
+            ledger.try_reserve(LedgerRect(
+                kb[0], kb[2], kb[1], kb[3],
+                lbl_name, "text_keepout", source_layer="text_keepout"
+            ))
+        label_blocks.append(_local_label_block(lbl_name, cx, cy))
+
+    for cx, cy in candidates:
+        box = _label_bbox(lbl_name, cx, cy, False)
+        if _clear(box):
+            _commit(cx, cy, box)
+            return (cx, cy, box, False)
+
+    # DOWN-GRADE (never stack): place at the route's FAR endpoint (the wire
+    # terminus, furthest from the crowded pin cluster) and record. This keeps
+    # the net named and ERC-valid while refusing to smear text on the pin
+    # cluster. Recorded via label_local_downgrades for machine observability.
+    fx, fy = (pts[-1] if pts else (pos_x, pos_y))
+    label_local_downgrades.append({"net": lbl_name, "at": [fx, fy]})
+    box = _label_bbox(lbl_name, fx, fy, False)
+    _commit(fx, fy, box)
+    return (fx, fy, box, True)
 
 
 def check_wire_body_clearance(result: "SchematicEmitResult | object") -> list[dict]:

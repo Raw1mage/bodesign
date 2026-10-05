@@ -2,14 +2,14 @@
 
 ## Phase 1: Engine Seams Unlocking & SSOT Convergence (Low Risk, Pure Refactor)
 
-- [ ] 1.1 Promote 6 tightly-coupled nested closures in `kicad_emit.py` to top-level functions accepting explicit state arguments:
+- [x] 1.1 Promote 6 tightly-coupled nested closures in `kicad_emit.py` to top-level functions accepting explicit state arguments:
   - `_guard_route(net_name, waypoints, ledger, fusion_registry, ...)`
   - `_assert_no_cross_net_junction(junction_pt, net_name, junction_registry)`
   - `_route_clears_ledger(waypoints, endpoint_refs, net_name, ledger)`
   - `_route_clears_points(waypoints, avoid_points)`
   - `_record_run(x1, y1, x2, y2, net_name, ledger)`
   - `_place_local_label(net_name, mid_x, mid_y, waypoints, ledger)`
-- [ ] 1.2 Write isolated unit tests for the 6 promoted functions in `tests/test_kicad_emit_seams.py`.
+- [x] 1.2 Write isolated unit tests for the 6 promoted functions in `tests/test_kicad_emit_seams.py`.
 - [x] 1.3 Collapse duplicate cross-IC pairwise counting in `composer.py:2208-2231`:
   - Delete inline pairwise loop and `_is_ic` helper.
   - Call `capacity_plan.decide_route_policy` as the sole authority.
