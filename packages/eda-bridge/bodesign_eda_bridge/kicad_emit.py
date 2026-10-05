@@ -1542,9 +1542,18 @@ def emit_kicad_schematic(
     # are the intra-symbol text, NOT a second body. Owner-aware exclusion (M4-3a-2)
     # then treats same-owner body/pin_extent as non-conflicting and only flags
     # cross-owner structural overlap.
+    text_keepout_boxes: list[tuple[float, float, float, float]] = []
     for _bi, _bbox in enumerate(reserved_boxes):
         _bx_owner = reserved_owners[_bi] if _bi < len(reserved_owners) else f"reserved[{_bi}]"
         _ledger_reserve_box(_bbox, _bx_owner, "pin_extent")
+        bx0, bx1, by0, by1 = _bbox
+        if bx1 > bx0 and by1 > by0:
+            kb = (bx0 - 0.5, bx1 + 0.5, by0 - 0.5, by1 + 0.5)
+            text_keepout_boxes.append(kb)
+            ledger.try_reserve(LedgerRect(
+                kb[0], kb[2], kb[1], kb[3],
+                _bx_owner, "text_keepout", source_layer="text_keepout"
+            ))
 
     _local_label_boxes: list[tuple[float, float, float, float]] = list(reserved_boxes)
 
@@ -1599,6 +1608,12 @@ def emit_kicad_schematic(
             bx0, bx1, by0, by1 = box
             if bx1 > bx0 and by1 > by0:
                 ledger.try_reserve(LedgerRect(bx0, by0, bx1, by1, name, "label"))
+                kb = (bx0 - 0.5, bx1 + 0.5, by0 - 0.5, by1 + 0.5)
+                text_keepout_boxes.append(kb)
+                ledger.try_reserve(LedgerRect(
+                    kb[0], kb[2], kb[1], kb[3],
+                    name, "text_keepout", source_layer="text_keepout"
+                ))
             label_blocks.append(_local_label_block(name, cx, cy))
 
         for cx, cy in candidates:
@@ -1648,11 +1663,12 @@ def emit_kicad_schematic(
         return [(waypoints[i], waypoints[i + 1]) for i in range(len(waypoints) - 1)]
 
     def _guard_route(net_name: str, base_waypoints: list[tuple[float, float]],
-                     extra_ok=None, *, interior_retry: bool = False):
+                     extra_ok=None, *, interior_retry: bool = False,
+                     obstacles: list[tuple[float, float, float, float]] | None = None):
         """Return (waypoints, jogged: bool) whose segments clear every other net,
-        or (None, False) when _ROUTE_JOG_ATTEMPTS deterministic jogs still fuse
-        (→ caller down-grades to label). Guard only mutates geometry when a
-        collision exists, so collision-free input is byte-equivalent (R6).
+        or (None, False) when _ROUTE_JOG_ATTEMPTS deterministic jogs and multi-channel
+        detours still fuse (→ caller down-grades to label). Guard only mutates geometry
+        when a collision exists, so collision-free input is byte-equivalent (R6).
 
         extra_ok (BR_20260905, optional): an ADDITIONAL acceptance predicate
         (waypoints -> bool) evaluated on every candidate, used by the caller to
@@ -1681,6 +1697,30 @@ def emit_kicad_schematic(
                 jogged = _jog_free_axis(base_waypoints, offset)
                 if _ok(jogged, exempt=exempt):
                     return jogged, True
+            # Phase 3.1: Multi-channel detours (mid-channel Z-routes outside obstacle columns)
+            if obstacles and len(base_waypoints) >= 2:
+                p1 = base_waypoints[0]
+                p2 = base_waypoints[-1]
+                q1 = base_waypoints[1] if len(base_waypoints) >= 4 else p1
+                q2 = base_waypoints[-2] if len(base_waypoints) >= 4 else p2
+                step = WIRE_KEEPOUT_MM
+                x_cols = set()
+                y_rows = set()
+                for b in obstacles:
+                    x_cols.add(_snap_grid(b[0] - step))
+                    x_cols.add(_snap_grid(b[1] + step))
+                    y_rows.add(_snap_grid(b[2] - step))
+                    y_rows.add(_snap_grid(b[3] + step))
+                mid_x = (q1[0] + q2[0]) / 2.0
+                mid_y = (q1[1] + q2[1]) / 2.0
+                for mx in sorted(x_cols, key=lambda x: abs(x - mid_x)):
+                    detour = _dedupe_waypoints([p1, q1, (mx, q1[1]), (mx, q2[1]), q2, p2])
+                    if _ok(detour, exempt=exempt):
+                        return detour, True
+                for my in sorted(y_rows, key=lambda y: abs(y - mid_y)):
+                    detour = _dedupe_waypoints([p1, q1, (q1[0], my), (q2[0], my), q2, p2])
+                    if _ok(detour, exempt=exempt):
+                        return detour, True
             return None, False
 
         # STRICT FIRST, ALWAYS. The exempt pass runs only after the strict search
@@ -1769,7 +1809,7 @@ def emit_kicad_schematic(
     # golden-baseline path). Limiting the kinds prevents double-guarding a legal
     # detour that already clears the inflated body box from being false-rejected
     # by a pin-name box that pokes a hair past the body edge.
-    _ROUTE_GUARD_KINDS = frozenset({"label", "wire"})
+    _ROUTE_GUARD_KINDS = frozenset({"label", "wire", "text_keepout"})
     # round 8: a candidate segment that crosses an already-drawn wire PERPENDICULARLY
     # is a normal schematic X-crossing, not a defect. `.kicad_sch` connectivity is
     # EXPLICIT -- two wires crossing with no junction at that point are electrically
@@ -1952,7 +1992,7 @@ def emit_kicad_schematic(
 
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
-            _obst = _obstacles_excluding(endpoint_refs)
+            _obst = _obstacles_excluding(endpoint_refs) + text_keepout_boxes
             # M6-8 (使用者 SW-crossing feedback): give each endpoint its outward pin
             # escape vector so the wire leaves the pin STRAIGHT before elbowing —
             # the corner can no longer land back in the pin's own lane and cross the
@@ -1972,7 +2012,8 @@ def emit_kicad_schematic(
                 net.name, waypoints,
                 extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
                                      and _route_clears_points(wp, _avoid_pts)),
-                interior_retry=True)
+                interior_retry=True,
+                obstacles=_obst)
             if guarded is None:
                 # DD-11 fallback: jog exhausted → down-grade this net to label
                 # (collinearity-free by construction). Recorded, never silent. The
@@ -1982,9 +2023,14 @@ def emit_kicad_schematic(
                 _last_fuse = any(
                     _segment_fuses(s, _other_net_segments(net.name))
                     for s in _segments_of(waypoints))
+                _ledger_ok = _route_clears_ledger(waypoints, endpoint_refs, net.name)
                 fusion_label_fallbacks.append({
                     "net": net.name,
-                    "reason": "anti-fusion" if _last_fuse else "ledger-collision"})
+                    "reason": "anti-fusion" if _last_fuse else "ledger-collision",
+                    "conflict_type": "collinear-overlap" if _last_fuse else "ledger-intrusion",
+                    "collinear_overlap": bool(_last_fuse),
+                    "ledger_intrusion": bool(not _ledger_ok),
+                })
                 kind = _power_net_kind(net.name) if power_ports else None
                 for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
                     if kind is not None:
@@ -2005,7 +2051,7 @@ def emit_kicad_schematic(
             mid = waypoints[len(waypoints) // 2]
             _place_local_label(net.name, mid[0], mid[1], waypoints)
         elif drawn and not force_label and not net_unresolved and len(endpoints) >= 3:
-            _obst = _obstacles_excluding(endpoint_refs)
+            _obst = _obstacles_excluding(endpoint_refs) + text_keepout_boxes
             _avoid_pts = _foreign_pin_points(net.nodes)
             # BR_20260905: the multi-node bus used to be all-or-nothing -- ONE
             # grazing hop down-graded the WHOLE net to per-pin label stubs, with no
@@ -2037,6 +2083,9 @@ def emit_kicad_schematic(
             _cur_pts: list[tuple[float, float]] = [_chain_pts[0]] if _chain_pts else []
             _cur_segs: list[tuple] = []
             _hop_failed_reason: str | None = None
+            _hop_conflict_type: str | None = None
+            _hop_collinear_overlap: bool = False
+            _hop_ledger_intrusion: bool = False
             for _ha, _hb in zip(_chain_pts, _chain_pts[1:]):
                 _hw = _orthogonal_route(_ha, _hb, _obst)
                 # Hops already accepted for THIS net are legal neighbours (same net,
@@ -2064,16 +2113,22 @@ def emit_kicad_schematic(
                 _hg, _ = _guard_route(
                     net.name, _hw,
                     extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
-                                         and _route_clears_points(wp, _avoid_pts)))
+                                         and _route_clears_points(wp, _avoid_pts)),
+                    obstacles=_obst)
                 if _hg is None:
                     _last_fuse = any(
                         _segment_fuses(s, _other_net_segments(net.name))
                         for s in _segments_of(_hw))
+                    _ledger_ok = _route_clears_ledger(_hw, endpoint_refs, net.name)
                     # Record the reason for the FIRST blocked hop (unchanged
                     # observability); the net is no longer discarded because of it.
                     if _hop_failed_reason is None:
                         _hop_failed_reason = (
                             "anti-fusion" if _last_fuse else "ledger-collision")
+                        _hop_conflict_type = (
+                            "collinear-overlap" if _last_fuse else "ledger-intrusion")
+                        _hop_collinear_overlap = bool(_last_fuse)
+                        _hop_ledger_intrusion = bool(not _ledger_ok)
                     if _cur_segs:
                         _sig_frags.append({"pts": _cur_pts, "segs": _cur_segs})
                     _cur_pts = [_hb]
@@ -2093,7 +2148,11 @@ def emit_kicad_schematic(
                 _sig_frags.append({"pts": _cur_pts, "segs": _cur_segs})
             if _hop_failed_reason is not None:
                 fusion_label_fallbacks.append({
-                    "net": net.name, "reason": _hop_failed_reason,
+                    "net": net.name,
+                    "reason": _hop_failed_reason,
+                    "conflict_type": _hop_conflict_type,
+                    "collinear_overlap": _hop_collinear_overlap,
+                    "ledger_intrusion": _hop_ledger_intrusion,
                     # Distinguish "lost the whole net" from "lost one hop": these
                     # need different fixes and must never share one output.
                     "drawn_fragments": len(_sig_frags)})
@@ -3234,6 +3293,10 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
                 _rx0, _rx1, _ry0, _ry1 = _label_bbox_reg
                 if _rx1 > _rx0 and _ry1 > _ry0:
                     ledger.try_reserve(LedgerRect(_rx0, _ry0, _rx1, _ry1, name, "label"))
+                    ledger.try_reserve(LedgerRect(
+                        _rx0 - 0.5, _ry0 - 0.5, _rx1 + 0.5, _ry1 + 0.5,
+                        name, "text_keepout", source_layer="text_keepout"
+                    ))
             blocks.append(_global_label_block(name, lx, ly, edge, text_scale=page_scale))
     return blocks
 
@@ -3838,20 +3901,32 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
         candidates.append([p1, (x1, y2), p2])   # V-first
 
     if obstacles:
-        # Detour channels: a mid-column x (vertical mid-leg) or mid-row y
-        # (horizontal mid-leg) offset OUTSIDE every obstacle span, grid-snapped,
-        # tried nearest-to-farthest so the shortest detour wins. Bounds come from
-        # the obstacle union plus a keep-out step so the mid-leg runs clear.
+        # Detour channels: mid-column x (vertical mid-leg) or mid-row y
+        # (horizontal mid-leg) offset OUTSIDE obstacle spans, grid-snapped,
+        # tried nearest-to-farthest so the shortest detour wins.
+        step = WIRE_KEEPOUT_MM
+        x_cols = set()
+        y_rows = set()
+        for b in obstacles:
+            x_cols.add(_snap_grid(b[0] - step))
+            x_cols.add(_snap_grid(b[1] + step))
+            y_rows.add(_snap_grid(b[2] - step))
+            y_rows.add(_snap_grid(b[3] + step))
+
         ox0 = min(b[0] for b in obstacles)
         ox1 = max(b[1] for b in obstacles)
         oy0 = min(b[2] for b in obstacles)
         oy1 = max(b[3] for b in obstacles)
-        step = WIRE_KEEPOUT_MM
-        # vertical mid-leg columns just left / right of the obstacle union
-        for mx in (_snap_grid(ox0 - step), _snap_grid(ox1 + step)):
+        x_cols.add(_snap_grid(ox0 - step))
+        x_cols.add(_snap_grid(ox1 + step))
+        y_rows.add(_snap_grid(oy0 - step))
+        y_rows.add(_snap_grid(oy1 + step))
+
+        mid_x = (x1 + x2) / 2.0
+        mid_y = (y1 + y2) / 2.0
+        for mx in sorted(x_cols, key=lambda x: abs(x - mid_x)):
             candidates.append([p1, (mx, y1), (mx, y2), p2])
-        # horizontal mid-leg rows just above / below the obstacle union
-        for my in (_snap_grid(oy0 - step), _snap_grid(oy1 + step)):
+        for my in sorted(y_rows, key=lambda y: abs(y - mid_y)):
             candidates.append([p1, (x1, my), (x2, my), p2])
 
     for wp in candidates:

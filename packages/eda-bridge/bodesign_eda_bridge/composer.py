@@ -2340,7 +2340,7 @@ def compose_schematic(
                         adjacency[a].add(b)
                         adjacency[b].add(a)
 
-        from .motifs import detect_motifs, synthesize_motif_geometry
+        from .motifs import detect_motifs, synthesize_motif_geometry, assign_motif_lanes
         from .kicad_emit import _native_pitch_and_count, _vendor_sym_scale
         attachments = {}
         original_bboxes = dict(bboxes)
@@ -2348,22 +2348,27 @@ def compose_schematic(
             candidates = detect_motifs(raw_components, [
                 {"name": n.name, "nodes": n.nodes, "kind": net_kinds.get(n.name)} for n in nets])
             by_ref = {c["ref"]: c for c in parsed}
-            motif_pins, lanes = {}, {}
+            motif_pins = {}
+            active_motifs = []
             for motif in candidates:
                 member_refs = [motif.host[0], *(b[0] for b in motif.branches)]
                 if any(by_ref[r]["x"] is not None or by_ref[r]["y"] is not None for r in member_refs):
                     warnings.append(f"motif {motif.kind} at {motif.host}: explicit placement retained")
                     continue
                 for r in member_refs:
-                    lib = by_ref[r]["symbol"]
-                    pitch, count = _native_pitch_and_count(lib, symbol_dirs, _npitch_cache)
-                    scale = (1.0 if lib.partition(":")[0].startswith("u1_") else
-                             _vendor_sym_scale(page_scale, pitch, _page_floor, count))
-                    motif_pins[r] = load_symbol(lib, symbol_dirs, page_scale=scale)[1]
+                    if r not in motif_pins:
+                        lib = by_ref[r]["symbol"]
+                        pitch, count = _native_pitch_and_count(lib, symbol_dirs, _npitch_cache)
+                        scale = (1.0 if lib.partition(":")[0].startswith("u1_") else
+                                 _vendor_sym_scale(page_scale, pitch, _page_floor, count))
+                        motif_pins[r] = load_symbol(lib, symbol_dirs, page_scale=scale)[1]
+                active_motifs.append(motif)
+
+            assigned_lanes = assign_motif_lanes(active_motifs, motif_pins)
+            for motif in active_motifs:
                 host = motif.host[0]
-                lane = lanes.get(motif.host, 0)
+                lane = assigned_lanes.get(motif, 0)
                 geometry = synthesize_motif_geometry(motif, motif_pins, lane=lane)
-                lanes[motif.host] = lane + 1
                 motif_geometries.append((host, geometry))
                 for r, offset in geometry.offsets.items():
                     attachments[r] = (host, offset)

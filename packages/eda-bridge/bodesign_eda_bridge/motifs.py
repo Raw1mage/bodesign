@@ -158,3 +158,91 @@ def synthesize_motif_geometry(motif: Motif, pin_maps, *, lane: int = 0) -> Motif
         raise ValueError(f"MOTIF_PIN_GEOMETRY_MISSING: {exc}") from exc
     return MotifGeometry(offsets, grounds, alignments, motif.net,
                          (motif.host, *((b[0], b[1]) for b in motif.branches)), tap)
+
+
+def assign_motif_lanes(motifs: list[Motif], pin_maps: dict) -> dict[Motif, int]:
+    """Allocate non-colliding lateral lanes for motifs attached to host ICs.
+
+    Motifs attached to the same host IC and edge are assigned lanes (columns offset
+    by dx * (5.08 + lane * 12.7)) such that:
+      1. No two motifs in the same lane overlap vertically.
+      2. A motif's horizontal connection wire does not cross through any motif
+         in inner lanes (unless sharing the same host pin and net).
+      3. No outer lane motif's horizontal connection wire crosses through this motif.
+
+    Pins on each host edge are sorted by schematic Y descending (bottom to top),
+    so downward-hanging passives on lower pins take inner lanes, allowing higher
+    pins' horizontal wires to cross freely above them to reach outer lanes.
+    """
+    grouped: dict[tuple[str, int], list[Motif]] = {}
+    for m in motifs:
+        hp = pin_maps[m.host[0]][m.host[1]]
+        rot = int(hp[2]) % 360
+        key = (m.host[0], rot)
+        grouped.setdefault(key, []).append(m)
+
+    assignments: dict[Motif, int] = {}
+    for key, mlist in grouped.items():
+        # Sort by schematic Y descending (-hp[1] descending), then pin, then first branch ref
+        mlist.sort(
+            key=lambda m: (-pin_maps[m.host[0]][m.host[1]][1], m.host[1], m.branches[0][0]),
+            reverse=True,
+        )
+        placed_in_lane: dict[int, list[tuple[Motif, float, float, float]]] = {}
+        for m in mlist:
+            g0 = synthesize_motif_geometry(m, pin_maps, lane=0)
+            all_y = [g0.tap[1]]
+            all_y.extend(y for (x, y) in g0.pin_alignments.values())
+            all_y.extend(y for (x, y) in g0.ground_glyphs.values())
+            y_min = min(all_y) - 1.27
+            y_max = max(all_y) + 2.54
+            tap_y = g0.tap[1]
+
+            target_lane = 0
+            while True:
+                # Invariant 1: No vertical overlap with motifs in target_lane
+                inv1 = True
+                for (om, oy_min, oy_max, otap_y) in placed_in_lane.get(target_lane, []):
+                    if not (y_max < oy_min or y_min > oy_max):
+                        inv1 = False
+                        break
+                if not inv1:
+                    target_lane += 1
+                    continue
+
+                # Invariant 2: Horizontal wire at tap_y clears inner lanes k < target_lane
+                inv2 = True
+                for k in range(target_lane):
+                    for (om, oy_min, oy_max, otap_y) in placed_in_lane.get(k, []):
+                        if om.host == m.host and om.net == m.net:
+                            continue  # Parallel branch sharing same pin & net
+                        if oy_min <= tap_y <= oy_max:
+                            inv2 = False
+                            break
+                    if not inv2:
+                        break
+                if not inv2:
+                    target_lane += 1
+                    continue
+
+                # Invariant 3: Outer lanes' wires do not pass through this motif
+                inv3 = True
+                for j in [l for l in placed_in_lane if l > target_lane]:
+                    for (om, oy_min, oy_max, otap_y) in placed_in_lane.get(j, []):
+                        if om.host == m.host and om.net == m.net:
+                            continue
+                        if y_min <= otap_y <= y_max:
+                            inv3 = False
+                            break
+                    if not inv3:
+                        break
+                if not inv3:
+                    target_lane += 1
+                    continue
+
+                break
+
+            assignments[m] = target_lane
+            placed_in_lane.setdefault(target_lane, []).append((m, y_min, y_max, tap_y))
+
+    return assignments

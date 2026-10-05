@@ -438,18 +438,11 @@ class CollinearFusionComposeTests(unittest.TestCase):
                                  style="draftsman", validate=True, fidelity=True)
 
     def test_minimal_two_resistor_spec_still_shorts(self):
-        """XFAIL-style guard: this MUST raise until the fusion defect is fixed.
-
-        When it stops raising, that is the fix landing -- delete the raise
-        expectation and assert the partition instead. It must NOT be relaxed to
-        `try/except: pass`, which would make a fix and a regression identical."""
-        from bodesign_eda_bridge.fidelity import FidelityError
-        with self.assertRaises(FidelityError) as ctx:
-            self._compose(self.MINIMAL_SPEC, "min")
-        # Lock WHICH nodes move, so an unrelated fidelity failure cannot pass.
-        message = str(ctx.exception)
-        self.assertIn("R2.1", message)
-        self.assertIn("R2.2", message)
+        """Fix landed: no longer shorts or fuses; partition fidelity passes."""
+        res = self._compose(self.MINIMAL_SPEC, "min")
+        self.assertTrue(res.fidelity.ok)
+        self.assertEqual([], res.fidelity.fused)
+        self.assertEqual([], res.fidelity.disconnected)
 
     def test_one_more_cut_stops_reproducing(self):
         """Minimality control. If these start raising, the fixture is no longer

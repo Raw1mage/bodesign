@@ -7,7 +7,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from bodesign_eda_bridge.motifs import detect_motifs, synthesize_motif_geometry
+from bodesign_eda_bridge.motifs import (
+    detect_motifs,
+    synthesize_motif_geometry,
+    assign_motif_lanes,
+)
 from bodesign_eda_bridge import compose_schematic
 
 
@@ -100,6 +104,60 @@ class MotifDetectionTests(unittest.TestCase):
         pins["R2"] = {"1": (0, -3.81, 90), "2": (0, 3.81, 270)}
         with self.assertRaisesRegex(ValueError, "MOTIF_PIN_ORIENTATION_UNSUPPORTED"):
             synthesize_motif_geometry(detect_motifs(COMPONENTS, NETS)[0], pins)
+
+    def test_assign_motif_lanes_consecutive_pins(self):
+        # Three pull resistors on consecutive 2.54mm pitch pins of U1's left edge
+        comps = [
+            {"ref": "U1", "symbol": "Connector:Conn_01x03_Pin"},
+            {"ref": "R1", "symbol": "Device:R"},
+            {"ref": "R2", "symbol": "Device:R"},
+            {"ref": "R3", "symbol": "Device:R"},
+        ]
+        nets = [
+            {"name": "NET1", "nodes": ["U1.1", "R1.1"]},
+            {"name": "NET2", "nodes": ["U1.2", "R2.1"]},
+            {"name": "NET3", "nodes": ["U1.3", "R3.1"]},
+            {"name": "GND", "nodes": ["R1.2", "R2.2", "R3.2"]},
+        ]
+        # U1 pins: pin 1 at y=2.54, pin 2 at y=0, pin 3 at y=-2.54 (facing left, rot=0)
+        pins = {
+            "U1": {"1": (-5.08, 2.54, 0), "2": (-5.08, 0, 0), "3": (-5.08, -2.54, 0)},
+            "R1": {"1": (0, 3.81, 270), "2": (0, -3.81, 90)},
+            "R2": {"1": (0, 3.81, 270), "2": (0, -3.81, 90)},
+            "R3": {"1": (0, 3.81, 270), "2": (0, -3.81, 90)},
+        }
+        motifs = detect_motifs(comps, nets)
+        self.assertEqual(len(motifs), 3)
+        lanes = assign_motif_lanes(motifs, pins)
+        # Because pins are consecutive, their vertical spans would collide in the same lane.
+        # Bottom-most pin (pin 3, schematic Y=2.54) gets lane 0.
+        # Middle pin (pin 2, schematic Y=0) gets lane 1.
+        # Top-most pin (pin 1, schematic Y=-2.54) gets lane 2.
+        m_by_ref = {m.branches[0][0]: m for m in motifs}
+        self.assertEqual(lanes[m_by_ref["R3"]], 0)
+        self.assertEqual(lanes[m_by_ref["R2"]], 1)
+        self.assertEqual(lanes[m_by_ref["R1"]], 2)
+
+    def test_assign_motif_lanes_multi_shunt_same_pin(self):
+        comps = [
+            {"ref": "U1", "symbol": "Connector:Conn_01x02_Pin"},
+            {"ref": "C1", "symbol": "Device:C"},
+            {"ref": "C2", "symbol": "Device:C"},
+        ]
+        nets = [
+            {"name": "VCC", "nodes": ["U1.1", "C1.1", "C2.1"]},
+            {"name": "GND", "nodes": ["C1.2", "C2.2"]},
+        ]
+        pins = {
+            "U1": {"1": (5.08, 0, 180), "2": (5.08, 2.54, 180)},
+            "C1": {"1": (0, 3.81, 270), "2": (0, -3.81, 90)},
+            "C2": {"1": (0, 3.81, 270), "2": (0, -3.81, 90)},
+        }
+        motifs = detect_motifs(comps, nets)
+        self.assertEqual(len(motifs), 2)
+        lanes = assign_motif_lanes(motifs, pins)
+        c_lanes = sorted(lanes.values())
+        self.assertEqual(c_lanes, [0, 1])
 
 
 SYMBOLS = Path(os.environ.get("KICAD_SYMBOL_DIR", "/usr/share/kicad/symbols"))

@@ -20,7 +20,7 @@ from typing import Iterable
 # ledger 全體佔用（body/pin_extent/label/wire）而非只避 body。使用者鐵律：
 # routing 不得碰到任何其他元素。
 VALID_KINDS = frozenset(
-    {"body", "pin_extent", "stub", "label", "power", "flag", "frame_margin", "wire"}
+    {"body", "pin_extent", "stub", "label", "power", "flag", "frame_margin", "wire", "text_keepout"}
 )
 
 # M7-1.3 (DD-6): 分段落帳 — 每層只寫自己職責的 kind。source_layer 標注寫入來源
@@ -30,16 +30,18 @@ VALID_KINDS = frozenset(
 #   L2 → stub（pin escape 外伸段；現況 kind 名為 "stub"）
 #   L3 → wire（佈線段）
 #   L6 → label / power（net label、電源/GND 符號文字盒）
+#   text_keepout → text_keepout（文字避讓盒，帶 0.5mm clearance）
 # 其餘 kind（pin_extent 同符號內部文字、flag、frame_margin）非分層產物，不綁層，
 # 任何 source_layer 皆放行（含 None）。source_layer=None（既有呼叫）一律放行 →
 # byte-identical 相容，落帳分層是 opt-in。
-VALID_SOURCE_LAYERS = frozenset({"L1", "L2", "L3", "L6"})
+VALID_SOURCE_LAYERS = frozenset({"L1", "L2", "L3", "L6", "text_keepout"})
 
 _LAYER_KIND_OWNERSHIP: dict[str, frozenset] = {
     "L1": frozenset({"body"}),
     "L2": frozenset({"stub"}),
     "L3": frozenset({"wire"}),
     "L6": frozenset({"label", "power"}),
+    "text_keepout": frozenset({"text_keepout"}),
 }
 # 受分層管轄的 kind（出現在任一層的職責集合內）。只有這些 kind 在帶了
 # source_layer 時才做匹配檢查；其餘 kind 不綁層。
@@ -517,7 +519,7 @@ class OccupancyLedger:
         perp_ok = set(perpendicular_ok_kinds)
         for a, b in zip(waypoints, waypoints[1:]):
             for r in self._rects:
-                if r.owner in skip:
+                if r.kind != "text_keepout" and r.owner in skip:
                     continue
                 if want is not None and r.kind not in want:
                     continue
