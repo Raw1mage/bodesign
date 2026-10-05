@@ -167,3 +167,18 @@ Ran 83 / fail 4 / err 2 / skip 3 / exit 1 — identical IDs to §2.2 and §4.2 (
 - Full repository suite NOT run this round; no full-suite claim. 10-skip delta IDs and the 3 EXISTING ADAPTER skip IDs remain unenumerated.
 - No mutation or probe programme.
 - Coverage of `_TOOL_STATUS_MAPS` vocabularies against the real emitters (server handlers / gate.py) was not verified by executing those tools; the maps carry the status tokens observed in the adapter-parity population (`ok`/`empty`/`not-run`/`failed`) plus conservative extras (`clean`, `sat`/`unsat`). Unlisted real tokens degrade to `indeterminate`, never PASS.
+
+### 4.5 Officer roll-up (duty officer ses_04db7a1c5ffelvbxyLP1p6xlRH, 2026-10-06)
+
+**Commits**: round 1 landed as `7b0d8b5` (7 files); round 2 landed as `6363c54` (6 files: W, C, three test modules, this receipt). "Working tree left UNCOMMITTED" in §4 / §4.4 is historical worker status at hand-off time. `services/mcp/server.py` and `skills/bodesign/scripts/gate.py` excluded from both commits.
+
+**Measurement provenance**:
+- P1 CONTRACT REGRESSION: worker run `Ran 62 OK` (r1) / `Ran 67 OK` (r2); officer independent re-run after `__pycache__` clear: `Ran 62 OK` (r1, pre-commit 7b0d8b5) and `Ran 67 OK` (r2, pre-commit 6363c54). Both populations confirmed.
+- EXISTING ADAPTER: worker-measured only (`Ran 83 / fail 4 / err 2 / skip 3`); not independently re-run by officer.
+
+**Architecture review verdict (round 2)**: ACCEPT at declared CONTRACT scope; no additional round on items 3/5/7. Limits preserved for P2 consumption:
+- AC9 accepted for two named use cases / six cells only (readability_gate, verify_netlist_fidelity). Four registry-drift IDs remain officer-owned; two C00/C01 path IDs separately owned.
+- AC12 / AC13 physical execution NOT RUN. `is_exact_certified` on hand-written records is not executed CAD proof.
+- Full suite not re-run after remediation; skip IDs unmeasured.
+- `_TOOL_STATUS_MAPS` unverified against live emitters: P2 must validate the specific real checker outputs it consumes; unknown/unsupported tokens retain `indeterminate`.
+- `approved_margin_rule` is a contract representation of an externally approved exception, not authorization from the review. Production callers bind any exception to authorized policy/approval and subject scope; absent that, the conservative no-margin path applies.
