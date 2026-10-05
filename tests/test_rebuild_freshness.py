@@ -44,53 +44,50 @@ class TestDependencyDerivedFreshness(unittest.TestCase):
         self.lib_dep = DependencyRef(kind="library", name="device_symbols", digest="d" * 64)
 
     def test_current_when_all_dependencies_match(self):
-        current_env = {
-            "kicad_cli": "8.0.4",
-            "jlcpcb_4layer": "v2.1",
-            "device_symbols": "d" * 64,
-        }
+        current_env = [
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.4"),
+            DependencyRef(kind="rule", name="jlcpcb_4layer", version="v2.1"),
+            DependencyRef(kind="library", name="device_symbols", digest="d" * 64),
+        ]
         res = evaluate_freshness(current_env, [self.tool_dep, self.rule_dep, self.lib_dep])
         self.assertEqual(res, "current")
 
     def test_stale_when_tool_version_bumped(self):
         # Current tool updated to 8.0.5
-        current_env = {
-            "kicad_cli": "8.0.5",
-            "jlcpcb_4layer": "v2.1",
-            "device_symbols": "d" * 64,
-        }
+        current_env = [
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.5"),
+            DependencyRef(kind="rule", name="jlcpcb_4layer", version="v2.1"),
+            DependencyRef(kind="library", name="device_symbols", digest="d" * 64),
+        ]
         res = evaluate_freshness(current_env, [self.tool_dep, self.rule_dep, self.lib_dep])
         self.assertEqual(res, "stale")
 
     def test_stale_when_rule_version_changed(self):
         # DRC rule updated to v2.2
-        current_env = {
-            "kicad_cli": "8.0.4",
-            "jlcpcb_4layer": "v2.2",
-            "device_symbols": "d" * 64,
-        }
+        current_env = [
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.4"),
+            DependencyRef(kind="rule", name="jlcpcb_4layer", version="v2.2"),
+        ]
         res = evaluate_freshness(current_env, [self.tool_dep, self.rule_dep])
         self.assertEqual(res, "stale")
 
     def test_stale_when_library_digest_differs(self):
         # Library hash updated
-        current_env = {
-            "kicad_cli": "8.0.4",
-            "device_symbols": "e" * 64,
-        }
+        current_env = [
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.4"),
+            DependencyRef(kind="library", name="device_symbols", digest="e" * 64),
+        ]
         res = evaluate_freshness(current_env, [self.tool_dep, self.lib_dep])
         self.assertEqual(res, "stale")
 
     def test_unknown_when_dependency_missing_from_environment(self):
         # Environment does not have jlcpcb_4layer
-        current_env = {
-            "kicad_cli": "8.0.4",
-        }
+        current_env = [DependencyRef(kind="tool", name="kicad_cli", version="8.0.4")]
         res = evaluate_freshness(current_env, [self.tool_dep, self.rule_dep])
         self.assertEqual(res, "unknown")
 
     def test_unknown_when_no_dependencies_recorded(self):
-        current_env = {"kicad_cli": "8.0.4"}
+        current_env = [DependencyRef(kind="tool", name="kicad_cli", version="8.0.4")]
         res = evaluate_freshness(current_env, [])
         self.assertEqual(res, "unknown")
 
@@ -109,6 +106,28 @@ class TestDependencyDerivedFreshness(unittest.TestCase):
         self.assertEqual(evaluate_freshness(None, [recorded]), "unknown")
         # Legacy name->string map cannot bind both version and digest => unknown
         self.assertEqual(evaluate_freshness({"jlcpcb_4layer": "v2.1"}, [recorded]), "unknown")
+
+    def test_round2_untyped_legacy_never_current_and_conflicting_identities_unknown(self):
+        single_field = DependencyRef(kind="tool", name="kicad_cli", version="8.0.4")
+        # Untyped legacy name->string carries no kind: it binds NOTHING, even for single-field deps
+        self.assertEqual(evaluate_freshness({"kicad_cli": "8.0.4"}, [single_field]), "unknown")
+        # Typed dict values still bind
+        typed_env = {"anything": DependencyRef(kind="tool", name="kicad_cli", version="8.0.4")}
+        self.assertEqual(evaluate_freshness(typed_env, [single_field]), "current")
+        # Conflicting duplicate identity in the current environment => ambiguous => unknown
+        conflicting_env = [
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.4"),
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.5"),
+        ]
+        self.assertEqual(evaluate_freshness(conflicting_env, [single_field]), "unknown")
+        # Conflicting duplicate identity on the record side => unknown
+        conflicting_record = [
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.4"),
+            DependencyRef(kind="tool", name="kicad_cli", version="8.0.3"),
+        ]
+        self.assertEqual(evaluate_freshness([single_field], conflicting_record), "unknown")
+        # Identical duplicates are not a conflict
+        self.assertEqual(evaluate_freshness([single_field, single_field], [single_field]), "current")
 
 
 class TestBaselineAndProposalMismatchEnforcement(unittest.TestCase):

@@ -179,12 +179,51 @@ class InterferenceRecord:
 
     @property
     def certification_blockers(self) -> list[str]:
-        """Why this record cannot certify exact clearance (empty list == certifiable)."""
+        """Why this record cannot certify exact clearance (empty list == certifiable).
+
+        Coverage must be PROVEN, not implied:
+        - model populations reconcile: available ∪ missing == expected, disjoint, no dupes;
+        - pair accounting is explicit: `coverage.expected_pair_ids`, `examined_pair_ids`,
+          `omitted_pairs` (examined ∪ omitted-ids == expected; nothing omitted for PASS);
+        - every executed pair is a member of expected pairs and references available solids;
+        - every expected pair is executed (no silently absent pair).
+        Unknown coverage (any of the above absent or inconsistent) blocks.
+
+        DD-11: tolerance never relaxes the physical requirement. clearance < required
+        fails; required <= clearance < required + tolerance is within measurement noise
+        and is INDETERMINATE (blocks) unless `policy.approved_margin_rule` explicitly
+        carries {"approved": True, "approved_by": <actor>, "margin_mm": <finite >= 0>}
+        and clearance >= required - margin_mm.
+        """
         blockers: list[str] = []
         if self.method != "exact-solid":
             blockers.append(f"method {self.method!r} is broad-phase only; AABB overlap is not exact collision")
-        if bool(self.coverage.get("missing_ids")):
-            blockers.append(f"missing solids: {sorted(self.coverage['missing_ids'])}")
+
+        # --- Model population reconciliation ---
+        expected_models = self.coverage.get("expected_model_ids")
+        available = self.coverage.get("available_solid_ids")
+        missing = self.coverage.get("missing_ids")
+        if not all(isinstance(x, list) for x in (expected_models, available, missing)):
+            blockers.append("coverage model populations must be lists (expected_model_ids/available_solid_ids/missing_ids)")
+            expected_models, available, missing = [], [], []
+        exp_set = {str(x) for x in expected_models}
+        avail_set = {str(x) for x in available}
+        miss_set = {str(x) for x in missing}
+        if not exp_set:
+            blockers.append("coverage.expected_model_ids is empty: model population unknown")
+        if len(exp_set) != len(expected_models) or len(avail_set) != len(available) or len(miss_set) != len(missing):
+            blockers.append("coverage model id lists contain duplicates")
+        if avail_set & miss_set:
+            blockers.append(f"models both available and missing: {sorted(avail_set & miss_set)}")
+        if (avail_set | miss_set) != exp_set:
+            blockers.append(
+                f"model populations do not reconcile: available ∪ missing {sorted(avail_set | miss_set)} "
+                f"!= expected {sorted(exp_set)}"
+            )
+        if miss_set:
+            blockers.append(f"missing solids: {sorted(miss_set)}")
+
+        # --- Policy validity ---
         if not self._finite_nonneg(self.policy.get("tolerance_mm")):
             blockers.append(f"policy.tolerance_mm is not a finite non-negative number: {self.policy.get('tolerance_mm')!r}")
         if not self._finite_nonneg(self.policy.get("required_clearance_mm")):
@@ -193,17 +232,69 @@ class InterferenceRecord:
             blockers.append("policy.backend / backend_version must be declared")
         if not isinstance(self.policy.get("declared_contacts"), list):
             blockers.append("policy.declared_contacts must be a list")
+
+        # --- Explicit pair accounting ---
+        exp_pairs_raw = self.coverage.get("expected_pair_ids")
+        exam_pairs_raw = self.coverage.get("examined_pair_ids")
+        omitted_pairs_raw = self.coverage.get("omitted_pairs")
+        if not all(isinstance(x, list) for x in (exp_pairs_raw, exam_pairs_raw, omitted_pairs_raw)):
+            blockers.append(
+                "pair coverage unknown: coverage must declare expected_pair_ids, examined_pair_ids, omitted_pairs"
+            )
+            return blockers
+        exp_pairs = {self._pair_key(p) for p in exp_pairs_raw}
+        exam_pairs = {self._pair_key(p) for p in exam_pairs_raw}
+        omitted_keys = {self._pair_key(o.get("pair")) for o in omitted_pairs_raw if isinstance(o, dict)}
+        if None in exp_pairs or None in exam_pairs or None in omitted_keys:
+            blockers.append("pair ids must be 2-element [a, b] object-id pairs")
+            return blockers
+        if not exp_pairs:
+            blockers.append("coverage.expected_pair_ids is empty: pair population unknown")
+        if not exam_pairs <= exp_pairs:
+            blockers.append(f"examined pairs not in expected: {sorted(exam_pairs - exp_pairs)}")
+        if (exam_pairs | omitted_keys) != exp_pairs:
+            blockers.append(
+                f"pair accounting does not reconcile: examined ∪ omitted != expected "
+                f"(unaccounted {sorted(exp_pairs - exam_pairs - omitted_keys)})"
+            )
+        if omitted_keys:
+            blockers.append(f"omitted pairs: {sorted(omitted_keys)}")
+        for key in exp_pairs:
+            if not ({key[0], key[1]} <= exp_set):
+                blockers.append(f"expected pair {key} references models outside expected_model_ids")
+
         if not self.pairs:
             blockers.append("no executed pairs: pairs=[] is absence of evidence, not clearance")
             return blockers
-        contacts = {tuple(sorted(c)) for c in self.policy.get("declared_contacts", []) if isinstance(c, (list, tuple)) and len(c) == 2}
+        contacts = {self._pair_key(c) for c in self.policy.get("declared_contacts", []) or []}
+        contacts.discard(None)
         required = self.policy.get("required_clearance_mm")
         tol = self.policy.get("tolerance_mm")
+        margin_rule = self.policy.get("approved_margin_rule")
+        margin_ok = (
+            isinstance(margin_rule, dict)
+            and margin_rule.get("approved") is True
+            and bool(margin_rule.get("approved_by"))
+            and self._finite_nonneg(margin_rule.get("margin_mm"))
+        )
+        executed_keys: set[tuple[str, str]] = set()
         for i, pair in enumerate(self.pairs):
             if not isinstance(pair, dict) or "a" not in pair or "b" not in pair:
                 blockers.append(f"pair[{i}] missing object ids a/b")
                 continue
-            key = tuple(sorted((str(pair["a"]), str(pair["b"]))))
+            key = self._pair_key([pair["a"], pair["b"]])
+            if key is None:
+                blockers.append(f"pair[{i}] has invalid object ids")
+                continue
+            if key in executed_keys:
+                blockers.append(f"pair[{i}] {key} is a duplicate executed pair")
+            executed_keys.add(key)
+            if key not in exp_pairs:
+                blockers.append(f"pair[{i}] {key} is not a member of expected_pair_ids")
+            if key not in exam_pairs:
+                blockers.append(f"pair[{i}] {key} executed but not declared in examined_pair_ids")
+            if not ({key[0], key[1]} <= avail_set):
+                blockers.append(f"pair[{i}] {key} references a solid that is not available")
             if not isinstance(pair.get("collides"), bool):
                 blockers.append(f"pair[{i}] {key} has no executed collision result")
                 continue
@@ -215,9 +306,34 @@ class InterferenceRecord:
                 continue
             if pair["collides"]:
                 blockers.append(f"pair[{i}] {key} collides")
-            elif isinstance(required, (int, float)) and isinstance(tol, (int, float)) and clearance + tol < required:
+                continue
+            if not (self._finite_nonneg(required) and self._finite_nonneg(tol)):
+                continue  # policy blocker already recorded
+            if clearance < required:
+                if margin_ok and clearance >= required - margin_rule["margin_mm"]:
+                    continue  # explicit approved margin rule covers the shortfall
                 blockers.append(f"pair[{i}] {key} clearance {clearance} mm < required {required} mm")
+            elif clearance < required + tol:
+                if margin_ok:
+                    continue
+                blockers.append(
+                    f"pair[{i}] {key} clearance {clearance} mm is within tolerance band of required "
+                    f"{required} mm (tol {tol} mm): indeterminate without an approved margin rule"
+                )
+        # Every expected (non-omitted) pair must actually have been executed
+        not_executed = exam_pairs - executed_keys
+        if not_executed:
+            blockers.append(f"examined pairs with no executed result: {sorted(not_executed)}")
         return blockers
+
+    @staticmethod
+    def _pair_key(pair: Any) -> tuple[str, str] | None:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            return None
+        a, b = pair
+        if a is None or b is None or not str(a) or not str(b) or str(a) == str(b):
+            return None
+        return tuple(sorted((str(a), str(b))))  # type: ignore[return-value]
 
     @property
     def is_exact_certified(self) -> bool:
@@ -414,13 +530,15 @@ def evaluate_freshness(
     current_dependencies: dict[str, Any] | list[DependencyRef] | None,
     record_dependencies: list[DependencyRef],
 ) -> Literal["current", "stale", "unknown"]:
-    """Derive verification record freshness from dependency identity (kind, name, version, digest).
+    """Derive verification record freshness from FULL dependency identity (kind, name, version, digest).
 
-    - `current_dependencies` as list[DependencyRef] binds the full identity: a recorded
-      dep is matched on (kind, name); any recorded version or digest that differs from
-      the current one is 'stale' (unchanged version + changed digest is STALE).
-    - Legacy dict[str, str] (name -> version-or-digest) binds name only. If the record
-      carries BOTH version and digest, a single string cannot bind both -> 'unknown'.
+    - Current dependencies must be typed `DependencyRef`s (as a list, or as dict values).
+      A recorded dep is matched on (kind, name); any recorded version or digest that
+      differs from the current one is 'stale' (unchanged version + changed digest is STALE).
+    - Untyped legacy entries (name -> string) carry no kind and therefore bind nothing:
+      a record dep that can only be matched that way is 'unknown', never 'current'.
+    - Conflicting duplicate identities in the current environment (same (kind, name),
+      different version/digest) make the environment ambiguous -> 'unknown'.
     - Absent current environment (None) -> 'unknown'; caller-set freshness is never trusted.
     """
     if not record_dependencies:
@@ -429,48 +547,48 @@ def evaluate_freshness(
         return "unknown"
 
     by_identity: dict[tuple[str, str], DependencyRef] = {}
-    by_name: dict[str, Any] = {}
-    if isinstance(current_dependencies, dict):
-        for k, v in current_dependencies.items():
-            if isinstance(v, DependencyRef):
-                by_identity[(v.kind, v.name)] = v
-            else:
-                by_name[str(k)] = v
-    else:
-        for cur in current_dependencies:
-            if not isinstance(cur, DependencyRef):
-                return "unknown"
-            by_identity[(cur.kind, cur.name)] = cur
+    typed_current = (list(current_dependencies.values()) if isinstance(current_dependencies, dict)
+                     else list(current_dependencies))
+    for cur in typed_current:
+        if not isinstance(cur, DependencyRef):
+            # Untyped legacy entry: no kind -> cannot bind identity. Skip; any record
+            # dep that depended on it resolves to 'unknown' below.
+            continue
+        key = (cur.kind, cur.name)
+        prior = by_identity.get(key)
+        if prior is not None and (prior.version != cur.version or prior.digest != cur.digest):
+            # Conflicting duplicate identity: environment is ambiguous.
+            return "unknown"
+        by_identity[key] = cur
+
+    # Conflicting duplicate identities on the RECORD side are equally undecidable.
+    seen_record: dict[tuple[str, str], DependencyRef] = {}
+    for dep in record_dependencies:
+        key = (dep.kind, dep.name)
+        prior = seen_record.get(key)
+        if prior is not None and (prior.version != dep.version or prior.digest != dep.digest):
+            return "unknown"
+        seen_record[key] = dep
 
     verdict: Literal["current", "stale", "unknown"] = "current"
     for dep in record_dependencies:
         cur = by_identity.get((dep.kind, dep.name))
-        if cur is not None:
-            if dep.version is not None:
-                if cur.version is None:
-                    verdict = "unknown"
-                    continue
-                if cur.version != dep.version:
-                    return "stale"
-            if dep.digest is not None:
-                if cur.digest is None:
-                    verdict = "unknown"
-                    continue
-                if cur.digest != dep.digest:
-                    return "stale"
-            continue
-        legacy = by_name.get(dep.name)
-        if legacy is None:
-            # Missing dependency in current environment (or kind mismatch)
+        if cur is None:
+            # Missing in current environment, kind mismatch, or only an untyped legacy entry
             verdict = "unknown"
             continue
-        if dep.version is not None and dep.digest is not None:
-            # A bare string cannot bind both version and digest.
-            verdict = "unknown"
-            continue
-        recorded = dep.version if dep.version is not None else dep.digest
-        if recorded != str(legacy):
-            return "stale"
+        if dep.version is not None:
+            if cur.version is None:
+                verdict = "unknown"
+                continue
+            if cur.version != dep.version:
+                return "stale"
+        if dep.digest is not None:
+            if cur.digest is None:
+                verdict = "unknown"
+                continue
+            if cur.digest != dep.digest:
+                return "stale"
     return verdict
 
 
@@ -525,6 +643,23 @@ def resolve_required_checks(policy: ReleasePolicy | None, approval: ReleaseAppro
     return required, reasons
 
 
+CHECK_IDENTITY_KINDS = frozenset({"tool", "rule"})
+
+
+def index_records_by_check(records: list[VerificationRecord]) -> dict[str, list[VerificationRecord]]:
+    """Map check id -> records whose CHECKER identity names it.
+
+    Only `tool` and `rule` dependency kinds are checker identities. A `source` or
+    `library` dependency that happens to share a check's name does NOT satisfy it.
+    """
+    by_check: dict[str, list[VerificationRecord]] = {}
+    for r in records:
+        for dep in r.tool_rule_dependencies:
+            if dep.kind in CHECK_IDENTITY_KINDS:
+                by_check.setdefault(dep.name, []).append(r)
+    return by_check
+
+
 def evaluate_release_eligibility(
     approval: ReleaseApproval | None,
     target_manifest_sha256: str,
@@ -536,7 +671,8 @@ def evaluate_release_eligibility(
 
     Required checks come from the explicit versioned `policy` (approval may add, never
     reduce). Each required check must be covered by a verification record whose
-    tool/rule dependency names include the check id (axis names are NOT check ids).
+    `tool`/`rule` dependency identity names the check id (axis names and
+    source/library dependency names are NOT check ids).
     Freshness is always recomputed from `current_dependencies`; a caller-set
     `freshness='current'` with absent current deps evaluates to 'unknown'.
     """
@@ -555,11 +691,8 @@ def evaluate_release_eligibility(
     required_checks, policy_reasons = resolve_required_checks(policy, approval)
     reasons.extend(policy_reasons)
 
-    # Index records by tool/rule dependency name (the check identity)
-    records_by_key: dict[str, list[VerificationRecord]] = {}
-    for r in verification_records:
-        for dep in r.tool_rule_dependencies:
-            records_by_key.setdefault(dep.name, []).append(r)
+    # Index records by checker identity (tool/rule kinds only)
+    records_by_key = index_records_by_check(verification_records)
 
     # 2. Required Checks Coverage & Verdict
     for check_id in required_checks:

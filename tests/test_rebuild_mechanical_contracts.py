@@ -331,6 +331,31 @@ class TestEngineeringCalculation(unittest.TestCase):
 class TestInterferenceRecord(unittest.TestCase):
     """Tests for InterferenceRecord and AABB-not-exact flag."""
 
+    BASE_POLICY = {
+        "required_clearance_mm": 0.5,
+        "declared_contacts": [],
+        "tolerance_mm": 0.05,
+        "backend": "cad_kernel_exact",
+        "backend_version": "1.0.0",
+    }
+    FULL_COVERAGE = {
+        "expected_model_ids": ["U1", "CONN1"],
+        "available_solid_ids": ["U1", "CONN1"],
+        "missing_ids": [],
+        "expected_pair_ids": [["U1", "CONN1"]],
+        "examined_pair_ids": [["U1", "CONN1"]],
+        "omitted_pairs": [],
+    }
+
+    def _rec(self, pairs, policy=None, coverage=None, method="exact-solid"):
+        return InterferenceRecord(
+            subject_manifest_sha256="9" * 64,
+            method=method,
+            pairs=pairs,
+            policy=dict(policy if policy is not None else self.BASE_POLICY),
+            coverage=dict(coverage if coverage is not None else self.FULL_COVERAGE),
+        )
+
     def test_aabb_broad_phase_cannot_certify_exact_pass(self):
         # AC13: AABB overlap is not exact collision; AABB broad-phase cannot certify exact clearance
         record_aabb = InterferenceRecord(
@@ -376,68 +401,103 @@ class TestInterferenceRecord(unittest.TestCase):
 
     def test_exact_solid_fully_covered_certifies(self):
         # Certification requires EXECUTED pairs with collision + clearance results
-        record_full = InterferenceRecord(
-            subject_manifest_sha256="9" * 64,
-            method="exact-solid",
-            pairs=[
-                {"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2},
-            ],
-            policy={
-                "required_clearance_mm": 0.5,
-                "declared_contacts": [],
-                "tolerance_mm": 0.05,
-                "backend": "cad_kernel_exact",
-                "backend_version": "1.0.0",
-            },
-            coverage={
-                "expected_model_ids": ["U1", "CONN1"],
-                "available_solid_ids": ["U1", "CONN1"],
-                "missing_ids": [],
-            },
-        )
+        # and explicit, reconciled model + pair coverage.
+        record_full = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2}])
         self.assertTrue(record_full.is_exact_certified)
         self.assertEqual(record_full.certification_blockers, [])
 
     def test_empty_pairs_or_invalid_policy_cannot_certify(self):
-        base_policy = {
-            "required_clearance_mm": 0.5,
-            "declared_contacts": [],
-            "tolerance_mm": 0.05,
-            "backend": "cad_kernel_exact",
-            "backend_version": "1.0.0",
-        }
-        cov = {"expected_model_ids": ["U1", "CONN1"], "available_solid_ids": ["U1", "CONN1"], "missing_ids": []}
+        base_policy = self.BASE_POLICY
+        cov = self.FULL_COVERAGE
         # pairs=[] is absence of evidence
-        rec_empty = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
-                                       pairs=[], policy=dict(base_policy), coverage=cov)
+        rec_empty = self._rec([])
         self.assertFalse(rec_empty.is_exact_certified)
         self.assertTrue(any("pairs=[]" in b for b in rec_empty.certification_blockers))
         # Pair without executed collision result
-        rec_noexec = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
-                                        pairs=[{"a": "U1", "b": "CONN1"}], policy=dict(base_policy), coverage=cov)
+        rec_noexec = self._rec([{"a": "U1", "b": "CONN1"}])
         self.assertFalse(rec_noexec.is_exact_certified)
         # Colliding pair
-        rec_collide = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
-                                         pairs=[{"a": "U1", "b": "CONN1", "collides": True, "clearance_mm": 0.0}],
-                                         policy=dict(base_policy), coverage=cov)
+        rec_collide = self._rec([{"a": "U1", "b": "CONN1", "collides": True, "clearance_mm": 0.0}])
         self.assertFalse(rec_collide.is_exact_certified)
         # Insufficient clearance
-        rec_short = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
-                                       pairs=[{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.3}],
-                                       policy=dict(base_policy), coverage=cov)
+        rec_short = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.3}])
         self.assertFalse(rec_short.is_exact_certified)
         # NaN tolerance in policy
         nan_policy = dict(base_policy, tolerance_mm=math.nan)
-        rec_nan = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
-                                     pairs=[{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2}],
-                                     policy=nan_policy, coverage=cov)
+        rec_nan = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2}], policy=nan_policy)
         self.assertFalse(rec_nan.is_exact_certified)
         # Declared contact pair is allowed to touch
         contact_policy = dict(base_policy, declared_contacts=[["U1", "CONN1"]])
-        rec_contact = InterferenceRecord(subject_manifest_sha256="9" * 64, method="exact-solid",
-                                         pairs=[{"a": "U1", "b": "CONN1", "collides": True, "clearance_mm": 0.0}],
-                                         policy=contact_policy, coverage=cov)
+        rec_contact = self._rec([{"a": "U1", "b": "CONN1", "collides": True, "clearance_mm": 0.0}], policy=contact_policy)
         self.assertTrue(rec_contact.is_exact_certified)
+        self.assertIsNotNone(cov)
+
+    def test_round2_coverage_must_be_proven_not_implied(self):
+        clean_pair = {"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 1.2}
+        # Legacy coverage without pair accounting: unknown coverage blocks
+        legacy_cov = {"expected_model_ids": ["U1", "CONN1"], "available_solid_ids": ["U1", "CONN1"], "missing_ids": []}
+        rec = self._rec([clean_pair], coverage=legacy_cov)
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("pair coverage unknown" in b for b in rec.certification_blockers))
+        # Model populations do not reconcile: expected has U2, neither available nor missing
+        bad_models = dict(self.FULL_COVERAGE, expected_model_ids=["U1", "CONN1", "U2"])
+        rec = self._rec([clean_pair], coverage=bad_models)
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("do not reconcile" in b for b in rec.certification_blockers))
+        # Model both available and missing
+        overlap = dict(self.FULL_COVERAGE, missing_ids=["CONN1"])
+        rec = self._rec([clean_pair], coverage=overlap)
+        self.assertTrue(any("both available and missing" in b for b in rec.certification_blockers))
+        # Expected pair omitted silently: expected has 2 pairs, only one examined, none declared omitted
+        three = dict(self.FULL_COVERAGE,
+                     expected_model_ids=["U1", "CONN1", "U2"], available_solid_ids=["U1", "CONN1", "U2"],
+                     expected_pair_ids=[["U1", "CONN1"], ["U1", "U2"]])
+        rec = self._rec([clean_pair], coverage=three)
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("unaccounted" in b for b in rec.certification_blockers))
+        # Pair declared omitted: accounted but blocks
+        three_omitted = dict(three, omitted_pairs=[{"pair": ["U1", "U2"], "reason": "no solid"}])
+        rec = self._rec([clean_pair], coverage=three_omitted)
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("omitted pairs" in b for b in rec.certification_blockers))
+        # Pair examined but no executed result for it
+        three_exam = dict(three, examined_pair_ids=[["U1", "CONN1"], ["U1", "U2"]])
+        rec = self._rec([clean_pair], coverage=three_exam)
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("no executed result" in b for b in rec.certification_blockers))
+        # Executed pair not in expected population
+        rec = self._rec([clean_pair, {"a": "U1", "b": "GHOST", "collides": False, "clearance_mm": 5.0}])
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("not a member of expected_pair_ids" in b for b in rec.certification_blockers))
+        # Fully accounted 2-pair population certifies
+        rec = self._rec([clean_pair, {"a": "U1", "b": "U2", "collides": False, "clearance_mm": 2.0}], coverage=three_exam)
+        self.assertTrue(rec.is_exact_certified, rec.certification_blockers)
+
+    def test_round2_tolerance_never_relaxes_required_clearance(self):
+        # DD-11: required 0.5, tol 0.05. clearance 0.47 (< required) must NOT pass via tolerance.
+        rec = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.47}])
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("< required" in b for b in rec.certification_blockers))
+        # Within tolerance band above requirement (0.52): indeterminate, blocks
+        rec = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.52}])
+        self.assertFalse(rec.is_exact_certified)
+        self.assertTrue(any("within tolerance band" in b for b in rec.certification_blockers))
+        # Clear of the band (0.55 == required + tol) certifies
+        rec = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.55}])
+        self.assertTrue(rec.is_exact_certified, rec.certification_blockers)
+        # Explicit approved margin rule covers shortfall within margin
+        margin_policy = dict(self.BASE_POLICY,
+                             approved_margin_rule={"approved": True, "approved_by": "me_lead", "margin_mm": 0.05})
+        rec = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.47}], policy=margin_policy)
+        self.assertTrue(rec.is_exact_certified, rec.certification_blockers)
+        # ...but not beyond the approved margin
+        rec = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.40}], policy=margin_policy)
+        self.assertFalse(rec.is_exact_certified)
+        # Unapproved margin rule (approved: "true" string) does not count
+        bad_margin = dict(self.BASE_POLICY,
+                          approved_margin_rule={"approved": "true", "approved_by": "x", "margin_mm": 0.05})
+        rec = self._rec([{"a": "U1", "b": "CONN1", "collides": False, "clearance_mm": 0.47}], policy=bad_margin)
+        self.assertFalse(rec.is_exact_certified)
 
 
 class TestReferenceAdoption(unittest.TestCase):

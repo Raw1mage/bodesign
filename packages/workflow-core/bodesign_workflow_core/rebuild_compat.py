@@ -30,6 +30,7 @@ from bodesign_workflow_core.rebuild_contracts import (
     evaluate_change_proposal,
     evaluate_freshness,
     evaluate_release_eligibility,
+    index_records_by_check,
     resolve_required_checks,
 )
 
@@ -257,6 +258,35 @@ _FINDING_ADAPTERS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]] =
     "constraint_solve": _adapt_constraint_solve_findings,
 }
 
+# Registered per-tool status vocabularies. A raw `status` string is only meaningful
+# relative to the checker that emitted it; a tool without a registered map, or a
+# status outside its map, can never be read as "executed successfully".
+# Classes: succeeded | failed | not-run | empty | indeterminate.
+_COMMON_STATUS_CLASSES: dict[str, str] = {
+    "ok": "succeeded",
+    "pass": "succeeded",
+    "passed": "succeeded",
+    "failed": "failed",
+    "fail": "failed",
+    "error": "failed",
+    "not-run": "not-run",
+    "empty": "empty",
+    "indeterminate": "indeterminate",
+}
+
+_TOOL_STATUS_MAPS: dict[str, dict[str, str]] = {
+    "drc_gate": dict(_COMMON_STATUS_CLASSES, clean="succeeded"),
+    "si_check": dict(_COMMON_STATUS_CLASSES),
+    "readability_gate": dict(_COMMON_STATUS_CLASSES),
+    "verify_netlist_fidelity": dict(_COMMON_STATUS_CLASSES),
+    "crosscheck": dict(_COMMON_STATUS_CLASSES),
+    "spice": dict(_COMMON_STATUS_CLASSES),
+    "erc": dict(_COMMON_STATUS_CLASSES, clean="succeeded"),
+    "constraint_solve": dict(_COMMON_STATUS_CLASSES, sat="succeeded", unsat="failed"),
+}
+
+_NOT_RUN_CODES = frozenset({"READABILITY_STATS_ABSENT", "ENV_RAW_RESULT_MISSING"})
+
 
 # ---------------------------------------------------------------------------
 # 2.1 Raw Verification Result Wrapping
@@ -291,6 +321,11 @@ def wrap_raw_verification_result(
        `raw_snapshot` so the evidence is preserved, not lost.
     7. `status == 'empty'` is 'not-applicable' ONLY with explicit `applicability_evidence`;
        otherwise it is 'indeterminate'.
+    8. A tool without a registered status map, or a raw status outside that map, can
+       never be read as executed-success. Unknown tool -> strict: CompatError
+       (TOOL_STATUS_MAP_UNREGISTERED), non-strict: 'indeterminate'. Unrecognized or
+       absent status -> 'indeterminate' (never PASS). Only an explicit recognized
+       success status, with a real status token, is eligible for PASS.
     """
     if not isinstance(raw_result, dict) or not raw_result:
         raise CompatError(f"Cannot wrap empty raw_result for tool '{tool}'")
@@ -298,21 +333,39 @@ def wrap_raw_verification_result(
     # Raw results preserved untouched
     raw_snapshot = copy.deepcopy(raw_result)
 
+    # 0. Tool must have a registered status vocabulary
+    status_map = _TOOL_STATUS_MAPS.get(tool)
+    if status_map is None:
+        if strict:
+            raise CompatError(
+                f"TOOL_STATUS_MAP_UNREGISTERED: tool '{tool}' has no registered status mapping; "
+                "its raw result cannot be interpreted as a verification verdict"
+            )
+        status_map = {}
+
     # 1. Adapt findings
     adapter = _FINDING_ADAPTERS.get(tool)
     if adapter:
         findings = adapter(raw_snapshot)
     else:
-        # Fallback to existing findings if present in raw
+        # Unregistered adapter: only pass through explicit findings already present in raw
         findings = [dict(f) for f in raw_snapshot.get("findings", []) if isinstance(f, dict)]
 
-    # 2. Determine execution state
-    status_str = str(raw_snapshot.get("status", "")).lower()
-    if status_str == "not-run" or raw_snapshot.get("code") in ("READABILITY_STATS_ABSENT", "ENV_RAW_RESULT_MISSING"):
+    # 2. Classify the raw status through the tool's registered vocabulary
+    raw_status = raw_snapshot.get("status")
+    status_str = str(raw_status).lower() if isinstance(raw_status, str) else ""
+    status_class = status_map.get(status_str) if status_str else None
+    status_recognized = status_class is not None
+
+    if status_class == "not-run" or raw_snapshot.get("code") in _NOT_RUN_CODES:
         execution: Literal["succeeded", "failed", "not-run"] = "not-run"
-    elif raw_snapshot.get("ok") is False or status_str == "failed":
+        status_class = "not-run"
+    elif raw_snapshot.get("ok") is False or status_class == "failed":
         execution = "failed"
+        status_class = "failed"
     else:
+        # Includes recognized success/empty/indeterminate AND unrecognized/absent status.
+        # 'succeeded' here means "the tool ran"; verdict eligibility is decided below.
         execution = "succeeded"
 
     # 3. Assess dependency version knowledge
@@ -351,9 +404,10 @@ def wrap_raw_verification_result(
         f for f in findings if f.get("severity") in ("critical", "major")
     ]
 
-    has_failures = bool(critical_or_major_findings) or (status_str == "failed")
-    is_empty = status_str == "empty"
-    is_indeterminate = status_str == "indeterminate" or execution != "succeeded"
+    has_failures = bool(critical_or_major_findings) or (status_class == "failed")
+    is_empty = status_class == "empty"
+    is_unrecognized = not status_recognized and execution == "succeeded"
+    is_indeterminate = status_class == "indeterminate" or execution != "succeeded" or is_unrecognized
 
     tentative_verdict: Literal["pass", "fail", "indeterminate", "not-applicable"]
     tentative_reason: str | None = reason or raw_snapshot.get("reason")
@@ -374,12 +428,22 @@ def wrap_raw_verification_result(
             )
     elif is_indeterminate:
         tentative_verdict = "indeterminate"
-        if not tentative_reason:
+        if is_unrecognized:
+            if not status_map:
+                tentative_reason = f"Tool '{tool}' has no registered status mapping; result cannot be read as a verdict"
+            else:
+                tentative_reason = (
+                    f"Status {raw_status!r} is not a recognized checker result for tool '{tool}' "
+                    f"(recognized: {sorted(status_map)}); cannot be read as success"
+                )
+        elif not tentative_reason:
             tentative_reason = f"Execution inconclusive ({status_str or 'incomplete'})"
     else:
-        # Clean execution and zero blocking findings.
+        # Explicit recognized success status, zero blocking findings.
         # Check invariants: Unknown coverage/version/freshness MUST REJECT, NEVER default to PASS.
         rejection_reasons: list[str] = []
+        if status_class != "succeeded":
+            rejection_reasons.append(f"status class {status_class!r} is not an explicit success")
         if not coverage_known:
             rejection_reasons.append("unknown or incomplete coverage")
         if not deps_known:
@@ -658,10 +722,8 @@ def check_release_preconditions(
             if c not in required:
                 required.append(c)
 
-    records_by_check: dict[str, list[VerificationRecord]] = {}
-    for v in verifications:
-        for dep in v.tool_rule_dependencies:
-            records_by_check.setdefault(dep.name, []).append(v)
+    # Checker identity = tool/rule kinds only; source/library names never satisfy a check
+    records_by_check = index_records_by_check(verifications)
 
     for check_id in required:
         if not records_by_check.get(check_id):

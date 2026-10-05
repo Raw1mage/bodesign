@@ -432,6 +432,46 @@ class TestChangeProposalAndReleaseApproval(unittest.TestCase):
         self.assertTrue(any("'unknown'" in r for r in absent_env["reasons"]))
         self.assertEqual(passing_verification.freshness, "unknown")
 
+    def test_round2_check_identity_is_tool_or_rule_kind_only(self):
+        policy = ReleasePolicy(policy_id="p", version="1", required_checks=("drc",))
+        approval = ReleaseApproval(
+            manifest_sha256=self.manifest_sha, decision="approved", actor="a",
+            recorded_at="t", required_checks=["drc"],
+        )
+        cov = {"expected_ids": ["t1"], "examined_ids": ["t1"], "omitted": []}
+        # A LIBRARY dependency named 'drc' must NOT satisfy the 'drc' check
+        lib_named_like_check = DependencyRef(kind="library", name="drc", version="1.0")
+        rec_lib = VerificationRecord(
+            subject_manifest_sha256=self.manifest_sha, execution="succeeded", verdict="pass",
+            coverage=cov, tool_rule_dependencies=[lib_named_like_check], axis="electrical",
+            freshness="current", raw_snapshot={"copper": 0},
+        )
+        res = evaluate_release_eligibility(
+            approval=approval, target_manifest_sha256=self.manifest_sha,
+            verification_records=[rec_lib], current_dependencies=[lib_named_like_check], policy=policy,
+        )
+        self.assertFalse(res["eligible"])
+        self.assertTrue(any("'drc' has no verification record" in r for r in res["reasons"]))
+        # The same through the compat guard
+        guard = check_release_preconditions(
+            target_manifest=self.manifest, approvals=[approval], verifications=[rec_lib],
+            current_dependencies=[lib_named_like_check], policy=policy,
+        )
+        self.assertFalse(guard["eligible"])
+        self.assertTrue(any("'drc' has no verification record" in r for r in guard["reasons"]))
+        # A RULE dependency named 'drc' does satisfy it
+        rule_dep = DependencyRef(kind="rule", name="drc", version="1.0")
+        rec_rule = VerificationRecord(
+            subject_manifest_sha256=self.manifest_sha, execution="succeeded", verdict="pass",
+            coverage=cov, tool_rule_dependencies=[rule_dep], axis="electrical",
+            freshness="current", raw_snapshot={"copper": 0},
+        )
+        res_ok = evaluate_release_eligibility(
+            approval=approval, target_manifest_sha256=self.manifest_sha,
+            verification_records=[rec_rule], current_dependencies=[rule_dep], policy=policy,
+        )
+        self.assertTrue(res_ok["eligible"], res_ok["reasons"])
+
 
 class TestOperationOutcomeContract(unittest.TestCase):
     """Tests for OperationOutcome contract and envelope wrapping."""
@@ -583,6 +623,63 @@ class TestRebuildCompatAdapters(unittest.TestCase):
                 freshness="unknown",
                 strict=True,
             )
+
+    def test_round2_unknown_tool_or_unrecognized_status_never_passes(self):
+        full_cov = {"expected_ids": ["n1"], "examined_ids": ["n1"], "omitted": []}
+        dep = DependencyRef(kind="tool", name="mystery_checker", version="1.0")
+        # Unregistered tool with a plausible success-looking raw result, full coverage/deps/freshness
+        raw_unknown_tool = {"status": "ok", "findings": []}
+        with self.assertRaises(CompatError) as ctx:
+            wrap_raw_verification_result(
+                tool="mystery_checker", raw_result=raw_unknown_tool,
+                subject_manifest_sha256=self.subject_sha, axis="electrical",
+                tool_rule_dependencies=[dep], coverage=full_cov, freshness="current", strict=True,
+            )
+        self.assertIn("TOOL_STATUS_MAP_UNREGISTERED", str(ctx.exception))
+        rec = wrap_raw_verification_result(
+            tool="mystery_checker", raw_result=raw_unknown_tool,
+            subject_manifest_sha256=self.subject_sha, axis="electrical",
+            tool_rule_dependencies=[dep], coverage=full_cov, freshness="current", strict=False,
+        )
+        self.assertEqual(rec.verdict, "indeterminate")
+        self.assertIn("no registered status mapping", rec.reason)
+
+        # Registered tool, MISSING status: zero findings must not read as success
+        drc_dep = DependencyRef(kind="tool", name="drc_gate", version="2.0")
+        rec_missing = wrap_raw_verification_result(
+            tool="drc_gate", raw_result={"copper": 0, "unconnected": 0, "silk": 0},
+            subject_manifest_sha256=self.subject_sha, axis="electrical",
+            tool_rule_dependencies=[drc_dep], coverage=full_cov, freshness="current", strict=True,
+        )
+        self.assertEqual(rec_missing.verdict, "indeterminate")
+        self.assertIn("not a recognized checker result", rec_missing.reason)
+
+        # Registered tool, UNRECOGNIZED status string
+        rec_weird = wrap_raw_verification_result(
+            tool="drc_gate", raw_result={"status": "probably-fine", "copper": 0},
+            subject_manifest_sha256=self.subject_sha, axis="electrical",
+            tool_rule_dependencies=[drc_dep], coverage=full_cov, freshness="current", strict=True,
+        )
+        self.assertEqual(rec_weird.verdict, "indeterminate")
+        self.assertIn("'probably-fine'", rec_weird.reason)
+
+        # Registered tool, explicit recognized success -> PASS
+        rec_pass = wrap_raw_verification_result(
+            tool="drc_gate", raw_result={"status": "clean", "copper": 0, "unconnected": 0},
+            subject_manifest_sha256=self.subject_sha, axis="electrical",
+            tool_rule_dependencies=[drc_dep], coverage=full_cov, freshness="current", strict=True,
+        )
+        self.assertEqual(rec_pass.verdict, "pass")
+        self.assertEqual(rec_pass.raw_snapshot, {"status": "clean", "copper": 0, "unconnected": 0})
+
+        # Recognized failure status for a registered tool still fails
+        rec_fail = wrap_raw_verification_result(
+            tool="constraint_solve", raw_result={"solver_verdict": "unsat", "status": "unsat"},
+            subject_manifest_sha256=self.subject_sha, axis="electrical",
+            tool_rule_dependencies=[DependencyRef(kind="tool", name="constraint_solve", version="1")],
+            coverage=full_cov, freshness="current",
+        )
+        self.assertEqual(rec_fail.verdict, "fail")
 
 
 if __name__ == "__main__":
