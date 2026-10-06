@@ -43,7 +43,46 @@ RUN pip install --no-cache-dir uv \
  && UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.13 atopile==0.12.5 \
  && ato --version
 
+# elkjs layered presentation engine (DD-15; DD-9 clearance:
+# plans/eda-bridge_unified-collaborative-rebuild/dd9-clearance-elkjs.md, conditions 3-6).
+# Node = official nodejs.org 22.x maintenance-LTS tarball, pinned patch + platform,
+# sha256 checked against SHASUMS256.txt (that file's detached signature was verified
+# with the nodejs release key 5BE8A3F6C8A5C01D106C0AD820B1A390B168D356 on
+# 2026-10-06; the digest below is copied from it). No NodeSource, no apt node.
+# Unsupported arch fails explicitly. Node/npm bundled licenses are retained
+# under /opt/node (LICENSE + node_modules/npm/LICENSE). xz-utils is the only
+# system prerequisite for the .tar.xz extraction.
+ARG NODE_VERSION=22.23.3
+ARG NODE_SHA256_LINUX_X64=df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de
+RUN set -eu; \
+    arch="$(uname -m)"; \
+    case "$arch" in x86_64) node_arch=x64; node_sha="${NODE_SHA256_LINUX_X64}" ;; \
+      *) echo "E_NODE_ARCH_UNSUPPORTED: no pinned Node ${NODE_VERSION} digest for ${arch}" >&2; exit 1 ;; esac; \
+    apt-get update && apt-get install -y --no-install-recommends xz-utils && rm -rf /var/lib/apt/lists/*; \
+    curl -fsSLo /opt/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz"; \
+    echo "${node_sha}  /opt/node.tar.xz" | sha256sum -c -; \
+    mkdir -p /opt/node && tar -xJf /opt/node.tar.xz -C /opt/node --strip-components=1; \
+    rm /opt/node.tar.xz; \
+    /opt/node/bin/node --version; /opt/node/bin/npm --version
+ENV PATH="/opt/node/bin:$PATH" BODESIGN_NODE_BIN=/opt/node/bin/node
+
+# Lockfile-based production dependency layer: exactly elkjs@0.12.0 (integrity in
+# the lock equals the clearance value; `npm ci` fails loud on mismatch). No
+# globals, no lifecycle scripts, web-worker stays out. Installed BEFORE the
+# `COPY packages` below so a code-only change does not re-run npm.
+WORKDIR /app/packages/eda-bridge/elk
+COPY packages/eda-bridge/elk/package.json packages/eda-bridge/elk/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+ && test "$(npm ls --all --parseable --omit=dev | grep -c node_modules)" = "1"
+WORKDIR /app
+
 COPY packages /app/packages
+# Re-verify AFTER the COPY layer: the installed elkjs must still be exactly the
+# npm-ci'd 0.12.0 whose integrity the lockfile pins (a host node_modules copied
+# over it would be caught here; .dockerignore also excludes it).
+RUN cd /app/packages/eda-bridge/elk \
+ && test "$(npm ls --all --parseable --omit=dev | grep -c node_modules)" = "1" \
+ && node -e "const p=require('elkjs/package.json'); if (p.version!=='0.12.0') throw new Error('elkjs '+p.version); require('elkjs/lib/elk.bundled.js'); console.log('elkjs', p.version, 'ok')"
 COPY services /app/services
 
 # R9 skill-shipping BOTH halves from ONE source + R15 usage-doctrine one-source

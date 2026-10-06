@@ -1,0 +1,14 @@
+{
+  "name": "bodesign-elk-runner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bounded ELK layered runner for bodesign eda-bridge (DD-15 / DD-9 clearance). One Node child per emit: stdin JSON graph -> stdout JSON solution.",
+  "license": "UNLICENSED",
+  "main": "runner.cjs",
+  "engines": {
+    "node": ">=22.0.0 <23"
+  },
+  "dependencies": {
+    "elkjs": "0.12.0"
+  }
+}

@@ -19,3 +19,4 @@ venv/
 # research: keep analysis .md, exclude bulky upstream paper sources
 docs/research/arxiv/*/src/
 docs/research/arxiv/*/*.bin
+packages/eda-bridge/elk/node_modules

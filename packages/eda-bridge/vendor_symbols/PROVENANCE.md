@@ -29,3 +29,11 @@
 - 交叉驗證報告：`~/.cache/claude-work/draftsman-v2/ballout_crosscheck.json`
 
 **結論**：vendor CAD 與 authoritative ballout 為同一顆 die 的權威資料，pin 定義可信度達 gate 級，可作為 Phase 1 單圖繪製的 symbol 幾何來源。fab 前仍建議以 ST STM32CubeMX 最終覆核（README 既有建議）。
+
+## Bodesign_Presentation.kicad_sym — PESD5V0L4UF_Boxed (R6 presentation asset)
+
+- **Status**: project-authored from datasheet facts; license pending owner decision; not cleared for redistribution or global promotion; internal review use only. No SPDX identifier is asserted.
+- **Scope**: pin function / topology / presentation only. NON-FABRICABLE: the library Footprint property is intentionally EMPTY; no PCB / package / BOM / fab release. Footprint defect filed at `/home/pkcs12/products/thesmart_products/issues/BR_20261006_d1_pesd5v0l4uf_footprint_sot363_contradicts_datasheet_sot886.md`.
+- **Facts taken from**: Nexperia PESDxL4UF/UG/UW data sheet, Document ID PESDXL4UF_G_W_4, Rev. 04 (28 Feb 2008); file sha256 `62d2166079ebe42ac5d37b1fe704abde1a59b5a1c74d48daf50dc9682bcf036a`; URL `https://assets.nexperia.com/documents/data-sheet/PESDXL4UF_G_W.pdf`. Table 3 (p.2 of 17), PESD3V3L4UF/PESD5V0L4UF rows: 1 cathode (diode 1), 2 common anode, 3 cathode (diode 2), 4 cathode (diode 3), 5 common anode, 6 cathode (diode 4).
+- **Geometry**: freshly drawn generic shapes (rectangle, diode triangle/bar, bus, junction dots). No KiCad library polyline and no Nexperia illustration was copied. Pin placement is a presentation choice (K1..K4 left, common-anode pins 2 and 5 stacked on one right tip); only pin function/connectivity is binding.
+- **Use**: selected per run, per ref (D1 only) through a copied candidate spec and `symbol_dirs`; NOT registered in `symbol_resolver._VENDOR_MAP`.

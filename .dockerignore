@@ -38,3 +38,4 @@ skills/bodesign/engines/datasheets
 .pytest_cache
 .artifacts
 .work
+packages/eda-bridge/elk/node_modules
