@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o xm.net xm.kicad_sch",
+    "kicad-cli sch export svg -o <dir> xm.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "fa961ffe75f5a81fa1888fd718d920d942a9bbbec12632e3af8808fbb1c249cc",
+  "render_sha256": "8b37e608303bf4aae1fa89129c92229cd211db1ff2314b254ed47be5e561cb29",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "xm.kicad_sch": "6182109855067eff229b6da892fdc0b4175f68888ea6b82f855de45ab90c8b7f"
+  }
+}

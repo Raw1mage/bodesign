@@ -1,0 +1,14 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o power_rail.net power_rail.kicad_sch  # regenerated 2026-10-06 from the CP3 sch bytes; archived .net (05:49-05:50) predates the sch (06:43)",
+    "kicad-cli sch export svg -o svg/power_rail.svg power_rail.kicad_sch  # archived render re-export is byte-identical modulo <title> date"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "0e217b2e39dd5288ace1563154a8e77967232ebb2cd4960073faf6948d63fe87",
+  "note": "historical CP3 archive; the archived .net is NOT the export of these sch bytes (55 min older). measure() against the archived .net must report provenance=mismatch.",
+  "render_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "power_rail.kicad_sch": "e91672c4f35990263274ca5f57c72a5ba543b41aa45004ac64ccc6809dc2f933"
+  }
+}

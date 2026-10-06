@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o ac3_wire_cross.net ac3_wire_cross.kicad_sch",
+    "kicad-cli sch export svg -o svg --no-background-color ac3_wire_cross.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "e92b8f9cd3fae747583c61d1f9dd4f86b3c1b03cc1391274efead782980fa517",
+  "render_sha256": "fe4dd202430b4f5999c324413e083346271da01438d32940aae06da1e58f539e",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "ac3_wire_cross.kicad_sch": "55058743e66c395dc7d6c576612209eed039db731027ce1267965ad6302104f5"
+  }
+}

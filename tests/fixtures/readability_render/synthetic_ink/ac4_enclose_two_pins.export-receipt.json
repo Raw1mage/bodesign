@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o ac4_enclose_two_pins.net ac4_enclose_two_pins.kicad_sch",
+    "kicad-cli sch export svg -o svg --no-background-color ac4_enclose_two_pins.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "eb37ce7499385d3ca1400adb6b03ab4e48d0f79845bbed1b184e3081fee6de95",
+  "render_sha256": "08c7cddc26059e3411273614442b6bc856d0059c4ad33f2c4183f5d0a6246976",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "ac4_enclose_two_pins.kicad_sch": "2c845462b2a2e32e3a06165375b3ccb066993d984b929f09f60ebe2f3447ee26"
+  }
+}

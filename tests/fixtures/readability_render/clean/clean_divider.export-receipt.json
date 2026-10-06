@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o clean_divider.net clean_divider.kicad_sch",
+    "kicad-cli sch export svg -o <dir> clean_divider.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "7c6b2d9a14c961f75078d05ed9b1bde5015a647c6c8c4f5d96dd2a86dd92d52d",
+  "render_sha256": "01be7b193daad9696560fe94b22b4a6efad41b1f2931a0dfb844e25d9671861b",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "clean_divider.kicad_sch": "606b142d71c2c0d8dddc9cb97c63e64294b971e5a2139d2ef68a53983e7dde62"
+  }
+}

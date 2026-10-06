@@ -1,0 +1,201 @@
+(kicad_sch
+  (version 20250114)
+  (generator "bodesign-s1-fixture")
+  (generator_version "9.0")
+  (uuid "b1f1b1f1-0000-4000-8000-000000000001")
+  (paper "A4")
+  (lib_symbols
+(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 50 50 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "b1f1b1f1-0000-4000-8000-0000000000a1")
+    (property "Reference" "R1" (at 52.54 48.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 52.54 51.27 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 50 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "b1f1b1f1-0000-4000-8000-0000000000a2"))
+    (pin "2" (uuid "b1f1b1f1-0000-4000-8000-0000000000a3"))
+    (instances (project "b1" (path "/b1f1b1f1-0000-4000-8000-000000000001" (reference "R1") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 70 50 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "b1f1b1f1-0000-4000-8000-0000000000b1")
+    (property "Reference" "R2" (at 72.54 48.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 72.54 51.27 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 70 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "b1f1b1f1-0000-4000-8000-0000000000b2"))
+    (pin "2" (uuid "b1f1b1f1-0000-4000-8000-0000000000b3"))
+    (instances (project "b1" (path "/b1f1b1f1-0000-4000-8000-000000000001" (reference "R2") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 60 60 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "b1f1b1f1-0000-4000-8000-0000000000c1")
+    (property "Reference" "R3" (at 62.54 58.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 62.54 61.27 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 60 60 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "b1f1b1f1-0000-4000-8000-0000000000c2"))
+    (pin "2" (uuid "b1f1b1f1-0000-4000-8000-0000000000c3"))
+    (instances (project "b1" (path "/b1f1b1f1-0000-4000-8000-000000000001" (reference "R3") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 90 50 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "b1f1b1f1-0000-4000-8000-0000000000d1")
+    (property "Reference" "R4" (at 92.54 48.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 92.54 51.27 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 90 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "b1f1b1f1-0000-4000-8000-0000000000d2"))
+    (pin "2" (uuid "b1f1b1f1-0000-4000-8000-0000000000d3"))
+    (instances (project "b1" (path "/b1f1b1f1-0000-4000-8000-000000000001" (reference "R4") (unit 1))))
+  )
+  (wire (pts (xy 50 46.19) (xy 50 40)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d01"))
+  (wire (pts (xy 50 40) (xy 60 40)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d02"))
+  (wire (pts (xy 60 40) (xy 70 40)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d03"))
+  (wire (pts (xy 70 40) (xy 70 46.19)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d04"))
+  (wire (pts (xy 60 56.19) (xy 60 40)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d05"))
+  (junction (at 60 40) (diameter 0) (color 0 0 0 0) (uuid "b1f1b1f1-0000-4000-8000-00000000e001"))
+  (wire (pts (xy 90 46.19) (xy 90 40)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d06"))
+  (wire (pts (xy 90 40) (xy 100 40)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d07"))
+  (wire (pts (xy 100 40) (xy 100 60)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d08"))
+  (wire (pts (xy 100 60) (xy 90 60)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d09"))
+  (wire (pts (xy 90 60) (xy 90 53.81)) (stroke (width 0) (type default)) (uuid "b1f1b1f1-0000-4000-8000-00000000d0a"))
+  (global_label "SHUNT" (shape bidirectional) (at 100 50 0) (effects (font (size 1.27 1.27)) (justify right)) (uuid "b1f1b1f1-0000-4000-8000-00000000f04"))
+  (global_label "GND" (shape bidirectional) (at 50 53.81 270) (effects (font (size 1.27 1.27)) (justify right)) (uuid "b1f1b1f1-0000-4000-8000-00000000f01"))
+  (global_label "GND" (shape bidirectional) (at 70 53.81 270) (effects (font (size 1.27 1.27)) (justify right)) (uuid "b1f1b1f1-0000-4000-8000-00000000f02"))
+  (global_label "GND" (shape bidirectional) (at 60 63.81 270) (effects (font (size 1.27 1.27)) (justify right)) (uuid "b1f1b1f1-0000-4000-8000-00000000f03"))
+  (sheet_instances (path "/" (page "1")))
+)

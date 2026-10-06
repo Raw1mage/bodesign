@@ -1,0 +1,14 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o battery.net battery.kicad_sch  # regenerated 2026-10-06 from the CP3 sch bytes; archived .net (05:49-05:50) predates the sch (06:43)",
+    "kicad-cli sch export svg -o svg/battery.svg battery.kicad_sch  # archived render re-export is byte-identical modulo <title> date"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "a4ee6688fae01deab2bc5c60b198cf93d350e4599eb27d3a0c1f2d476e4ffe66",
+  "note": "historical CP3 archive; the archived .net is NOT the export of these sch bytes (55 min older). measure() against the archived .net must report provenance=mismatch.",
+  "render_sha256": "ee3a50a6174be8b2da2e33ceeb1a221ebb955e8336a37a5a3404e2956f229d9b",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "battery.kicad_sch": "71375ea2e32a0d787add272131d33c8ae885474c67baadf45ed76219dea38f61"
+  }
+}

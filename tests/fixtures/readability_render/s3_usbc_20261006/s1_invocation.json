@@ -1,0 +1,177 @@
+{
+ "calibration_record": {
+  "classes": {
+   "a": {
+    "accepting": [],
+    "rejecting": [
+     {
+      "artifact_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+      "decision_ref": "cp3/usbc.reviewer-cp3.md#NO"
+     }
+    ]
+   },
+   "b": {
+    "accepting": [],
+    "rejecting": [
+     {
+      "artifact_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289",
+      "decision_ref": "cp3/power_rail.reviewer-cp3.md#NO"
+     }
+    ]
+   },
+   "c": {
+    "accepting": [],
+    "rejecting": [
+     {
+      "artifact_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+      "decision_ref": "cp3/usbc.reviewer-cp3.md#NO"
+     },
+     {
+      "artifact_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289",
+      "decision_ref": "cp3/power_rail.reviewer-cp3.md#NO"
+     },
+     {
+      "artifact_sha256": "ee3a50a6174be8b2da2e33ceeb1a221ebb955e8336a37a5a3404e2956f229d9b",
+      "decision_ref": "cp3/battery.reviewer-cp3.md#NO"
+     }
+    ]
+   },
+   "d": {
+    "accepting": [],
+    "rejecting": [
+     {
+      "artifact_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+      "decision_ref": "cp3/usbc.reviewer-cp3.md#NO"
+     }
+    ]
+   },
+   "e": {
+    "accepting": [],
+    "rejecting": [
+     {
+      "artifact_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289",
+      "decision_ref": "cp3/power_rail.reviewer-cp3.md#NO"
+     },
+     {
+      "artifact_sha256": "ee3a50a6174be8b2da2e33ceeb1a221ebb955e8336a37a5a3404e2956f229d9b",
+      "decision_ref": "cp3/battery.reviewer-cp3.md#NO"
+     }
+    ]
+   }
+  },
+  "policy_digest": "443bbb0185d5a914",
+  "schema": "s1-calibration-record-v2",
+  "supported_scope": {
+   "classes": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e"
+   ],
+   "rotations": [
+    0
+   ]
+  },
+  "version": "s1-cal-r3"
+ },
+ "declared_pin_nets": {
+  "C1.1": "VBUS",
+  "C1.2": "GND",
+  "D1.1": "VBUS_CON",
+  "D1.2": "GND",
+  "D1.3": "CC1",
+  "D1.4": "CC2",
+  "D1.5": "GND",
+  "F1.1": "VBUS_CON",
+  "F1.2": "VBUS",
+  "J1.A1": "GND",
+  "J1.A12": "GND",
+  "J1.A4": "VBUS_CON",
+  "J1.A5": "CC1",
+  "J1.A9": "VBUS_CON",
+  "J1.B1": "GND",
+  "J1.B12": "GND",
+  "J1.B4": "VBUS_CON",
+  "J1.B5": "CC2",
+  "J1.B9": "VBUS_CON",
+  "J1.S1": "GND",
+  "R1.1": "CC1",
+  "R1.2": "GND",
+  "R2.1": "CC2",
+  "R2.2": "GND"
+ },
+ "export_receipt": "native/usbc.export-receipt.json",
+ "local_exceptions": {
+  "C1.2": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "D1.2": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "D1.5": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "J1.A1": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "J1.A12": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "J1.B1": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "J1.B12": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "J1.S1": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "R1.2": "continuation: GND carried by global_label (power_ports=False, forced label policy)",
+  "R2.2": "continuation: GND carried by global_label (power_ports=False, forced label policy)"
+ },
+ "module_sha256": "da6822556ea743e97f51c797a97a18d4ae367cb5bd217b9d2580a598f5b8ea69",
+ "policy": {
+  "coord_eps_mm": 0.01,
+  "corridor_band_mm": 2.54,
+  "corridor_min_pins": 2,
+  "frame_margin_mm": 12.0,
+  "frozen_on": "2026-10-06",
+  "local_net_max_nodes_k": 4,
+  "page_grid_cell_mm": 10.0,
+  "page_use_gate": null,
+  "pin_tip_band_mm": 1.27,
+  "rotation_support": "0/90/180/270 + mirror implemented; calibrated at 0 only",
+  "text_graphics_clearance_mm": 0.25,
+  "text_overlap_ratio": 0.15,
+  "version": "s1-readability-policy-v1"
+ },
+ "policy_digest": "443bbb0185d5a914",
+ "required_local_pairs": [
+  [
+   "J1.A4",
+   "J1.A9"
+  ],
+  [
+   "J1.A4",
+   "J1.B4"
+  ],
+  [
+   "J1.A4",
+   "J1.B9"
+  ],
+  [
+   "J1.A4",
+   "F1.1"
+  ],
+  [
+   "J1.A4",
+   "D1.1"
+  ],
+  [
+   "F1.2",
+   "C1.1"
+  ],
+  [
+   "J1.A5",
+   "R1.1"
+  ],
+  [
+   "J1.A5",
+   "D1.3"
+  ],
+  [
+   "J1.B5",
+   "R2.1"
+  ],
+  [
+   "J1.B5",
+   "D1.4"
+  ]
+ ],
+ "required_local_pairs_mode": "explicit"
+}

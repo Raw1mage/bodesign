@@ -1,0 +1,186 @@
+(kicad_sch
+  (version 20250114)
+  (generator "bodesign")
+  (generator_version "9.0")
+  (uuid "a1054c47-7711-48fb-9bb0-ecce77966c85")
+  (paper "A4")
+  (title_block
+    (title "brd - mcu")
+    (date "2026-10-06")
+    (rev "v1.0")
+    (company "bodesign")
+  )
+  (lib_symbols
+(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 35.56 41.91 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "c3b81ec4-e609-4762-a321-57101f4950d7")
+    (property "Reference" "R2" (at 38.1 40.64 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 38.1 43.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 35.56 41.91 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "58289079-60a0-4dda-9fdb-06f8048b9b42"))
+    (pin "2" (uuid "fff41963-5168-4752-a0f5-19058d25b32b"))
+    (instances (project "mcu" (path "/14a1d2e7-83cd-437d-9a56-7019dd23bdd0/9651ca8f-5b40-4728-a89c-a98da59b1470" (reference "R2") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 88.9 41.91 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "46225943-011d-44d0-afba-3ced47b513a1")
+    (property "Reference" "R3" (at 91.44 40.64 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 91.44 43.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 88.9 41.91 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "f1e733c3-dfbc-4bbb-a081-f132e8c4ddf9"))
+    (pin "2" (uuid "c475a55a-787a-43c1-9868-48f8601099e4"))
+    (instances (project "mcu" (path "/14a1d2e7-83cd-437d-9a56-7019dd23bdd0/9651ca8f-5b40-4728-a89c-a98da59b1470" (reference "R3") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 142.24 41.91 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "d4b759a1-49ba-4171-b3f2-a52a81857a47")
+    (property "Reference" "R4" (at 144.78 40.64 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 144.78 43.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 142.24 41.91 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "dfddf1cd-62ec-4370-b270-0714fd2589d2"))
+    (pin "2" (uuid "e1707dfb-951f-4130-9a2f-85a448e02577"))
+    (instances (project "mcu" (path "/14a1d2e7-83cd-437d-9a56-7019dd23bdd0/9651ca8f-5b40-4728-a89c-a98da59b1470" (reference "R4") (unit 1))))
+  )
+  (no_connect (at 88.9 45.72) (uuid "3dbdcddf-908d-4bd3-9607-6cf1ed662731"))
+  (global_label "NET_X" (shape bidirectional) (at 35.56 38.1 90)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "ec7a71eb-1faa-49a2-87d6-91c743af9d65"))
+  (label "NET_Y" (at 35.56 45.72 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "9e454549-d5c9-4ba2-9492-6967b07b2740"))
+  (label "NET_Y" (at 88.9 38.1 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "616bda09-2050-4936-860d-1781657d0605"))
+  (sheet_instances (path "/9651ca8f-5b40-4728-a89c-a98da59b1470" (page "3")))
+)

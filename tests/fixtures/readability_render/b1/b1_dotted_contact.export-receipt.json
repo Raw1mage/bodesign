@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o b1_dotted_contact.net b1_dotted_contact.kicad_sch",
+    "kicad-cli sch export svg -o <dir> b1_dotted_contact.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "3e5fce5cb0c20ebffb9f4b7122d9059e70d7c190feb0321b8ca7bab79d3a84ca",
+  "render_sha256": "11fc987275346723d57cc452e3c80431d5623409453b648df9c49ebc537e531c",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "b1_dotted_contact.kicad_sch": "306a0dabc4f2b94580fc6aa5a1f5b25d239f5089dfd220edcbc1bb9ef15ad542"
+  }
+}

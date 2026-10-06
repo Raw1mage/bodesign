@@ -1,0 +1,14 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o native/usbc.net out/usbc.kicad_sch",
+    "kicad-cli sch export svg -o native/svg --no-background-color out/usbc.kicad_sch",
+    "kicad-cli sch erc -o native/usbc.erc.json --format json --severity-all out/usbc.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "aed12f2f50943e7293e5d8c3df91450716423f23d2971ee11d16c230e164fa8a",
+  "render_sha256": "28bd7d5e7355ec5e6711439700d18fb4c564c8ce7899a18cee45679c398e91c8",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "usbc.kicad_sch": "dcfdc6b2e6ac2d830922b6e56cd02190ccd30439dc3e495dc66918ba20095bf5"
+  }
+}

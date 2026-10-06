@@ -1,0 +1,14 @@
+{
+  "commands": [
+    "kicad-cli sch export netlist --format kicadsexpr -o usbc.net usbc.kicad_sch  # regenerated 2026-10-06 from the CP3 sch bytes; archived .net (05:49-05:50) predates the sch (06:43)",
+    "kicad-cli sch export svg -o svg/usbc.svg usbc.kicad_sch  # archived render re-export is byte-identical modulo <title> date"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "6c963a02ffb3af0e29e7782897869e189f50b0297e313328e61b1d7ee22fbdef",
+  "note": "historical CP3 archive; the archived .net is NOT the export of these sch bytes (55 min older). measure() against the archived .net must report provenance=mismatch.",
+  "render_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "usbc.kicad_sch": "63432d2fe61134d3f78cbfd542b6add59eff25a1f401104593aef1e8796f2760"
+  }
+}
