@@ -237,6 +237,11 @@ class KiCadValidationResult:
     erc_classification: "ErcClassification | None" = None
 
 
+#: Round 5 / Amendment A: name argument of the uuid5 that derives a package
+#: outline rectangle's uuid from its owning symbol's uuid.
+OUTLINE_UUID_RULE_NAME = "presentation.outline"
+
+
 def _uid() -> str:
     return str(_uuid.uuid4())
 
@@ -404,7 +409,9 @@ def _page_pitch_floor(components, symbol_dir) -> float:
     The main chip is the u1_ variant, ALREADY emitted at page_scale, so its
     in-symbol adjacent pitch IS the rendered pitch (the number the user reads).
     A chip-less peripheral page (no u1_ variant) borrows the project-wide
-    _PROJECT_MAIN_PITCH_FLOOR_MM (DD-30).
+    _PROJECT_MAIN_PITCH_FLOOR_MM (DD-30) ONLY when u1_ variants are present in
+    the project's symbol libraries. When no u1_ variants exist, the board is not a
+    large-chip design with scaled variants, so return standard 2.54 mm native pitch.
     """
     _cache: dict[str, tuple[float, int]] = {}
     for component in components:
@@ -412,7 +419,16 @@ def _page_pitch_floor(components, symbol_dir) -> float:
             pitch, _n = _native_pitch_and_count(component.lib_id, symbol_dir, _cache)
             if pitch > 0.0:
                 return pitch
-    return _PROJECT_MAIN_PITCH_FLOOR_MM
+    dirs = [symbol_dir] if isinstance(symbol_dir, (str, Path)) else list(symbol_dir or [])
+    has_u1 = False
+    for d in dirs:
+        p = Path(d)
+        if p.is_dir() and any(p.glob("u1_*.kicad_sym")):
+            has_u1 = True
+            break
+    if has_u1:
+        return _PROJECT_MAIN_PITCH_FLOOR_MM
+    return 2.54
 
 
 def load_symbol(lib_id: str, symbol_dir: str | Path | list = DEFAULT_SYMBOL_DIR,
@@ -957,6 +973,9 @@ def _pin_name_extents(block: str) -> list[tuple[str, float, float, float]]:
     text is drawn on the OPPOSITE side (into the body). No-name pins are skipped.
     Used to reserve the pin-name box so net labels avoid the in-body text smear.
     """
+    _pn_idx = block.find("(pin_names")
+    if _pn_idx != -1 and "hide yes" in block[_pn_idx:_pn_idx + 150]:
+        return []
     out: list[tuple[str, float, float, float]] = []
     for pin_match in PIN_RE.finditer(block):
         x = float(pin_match.group(1)); y = float(pin_match.group(2)); rot = float(pin_match.group(3))
@@ -1019,7 +1038,8 @@ def _place_symbol_props(component: "EmitComponent",
                         occupied: list[tuple[float, float, float, float]],
                         page_scale: float = 1.0,
                         body_box: tuple[float, float, float, float] | None = None,
-                        frame_box: tuple[float, float, float, float] | None = None
+                        frame_box: tuple[float, float, float, float] | None = None,
+                        pin_map: dict[str, tuple[float, float]] | None = None
                         ) -> tuple[float, float, float, float, tuple, tuple]:
     """Pick clear anchor positions for a component's Reference and Value text.
 
@@ -1031,6 +1051,13 @@ def _place_symbol_props(component: "EmitComponent",
     placed prop box. Returns (rx, ry, vx, vy, ref_box, val_box)."""
     ref, val = component.ref, component.value or ""
     cx, cy = component.x, component.y
+    pin_tip_boxes = []
+    if pin_map:
+        for ep in pin_map.values():
+            abs_px = cx + ep[0]
+            abs_py = cy - ep[1]
+            pin_tip_boxes.append((abs_px - 1.27, abs_px + 1.27, abs_py - 1.27, abs_py + 1.27))
+    all_pin_boxes = list(pin_boxes) + pin_tip_boxes
     # DD-20: the legacy ladder was a FIXED-mm ladder (max ±7.62). For a large part
     # whose drawn body half-extent scales with pin count (a HEXASPI PSRAM body is
     # ~40mm half-width, a buck ~28mm), EVERY fixed tier still lands the refdes/value
@@ -1077,7 +1104,13 @@ def _place_symbol_props(component: "EmitComponent",
         half_h = max(cy - _by0, _by1 - cy)
     else:
         half_w = half_h = 0.0
+    if pin_tip_boxes:
+        _pt_x0 = min(pb[0] for pb in pin_tip_boxes); _pt_x1 = max(pb[1] for pb in pin_tip_boxes)
+        _pt_y0 = min(pb[2] for pb in pin_tip_boxes); _pt_y1 = max(pb[3] for pb in pin_tip_boxes)
+        half_w = max(half_w, cx - _pt_x0, _pt_x1 - cx)
+        half_h = max(half_h, cy - _pt_y0, _pt_y1 - cy)
     _prop_h = _PIN_NAME_CH_MM * page_scale + _LABEL_VMARGIN_MM
+    _row = _prop_h  # one text-row height (ref above center, value below)
     _clear = _PIN_NAME_OFFSET_MM * page_scale + _prop_h  # one row + offset past edge
     _ox = half_w + _clear   # x distance that clears the body's right/left edge
     _oy = half_h + _clear   # y distance that clears the body's bottom/top edge
@@ -1093,16 +1126,25 @@ def _place_symbol_props(component: "EmitComponent",
     # symbol whose pin names hug the edges (short names, clear center band) this
     # wins; on a dense-center BGA the clash test rejects it and the body-relative
     # tiers below take over (fallback, never force-center onto pin text).
-    _row = _prop_h  # one text-row height (ref above center, value below)
-    ladder = [
-        (0.0, -_row, 0.0, _row),        # DD-25: geometric center band (tried first)
-        (2.54, -1.27, 2.54, 1.27),      # legacy (byte-stable when center is occupied)
-        (2.54, -_oy, 2.54, _oy),        # above / below, past the body height
-        (_ox, -_prop_h, _ox, _prop_h),  # right of body, split by one row
-        (-_ox, -_prop_h, -_ox, _prop_h),# left of body, split by one row
-        (_ox, -_oy, _ox, _oy),          # far right, past body corner
-        (-_ox, -_oy, -_ox, _oy),        # far left, past body corner
-    ]
+    is_passive_or_discrete = not component.ref.startswith(("U", "IC"))
+    if is_passive_or_discrete:
+        ladder = [
+            (2.54, -1.27, 2.54, 1.27),      # right of body (off plates for C, right of R)
+            (_ox, -_prop_h, _ox, _prop_h),  # right of body, split by one row (adjacent)
+            (_ox, -_oy, _ox, _oy),          # far right
+            (-_ox, -_prop_h, -_ox, _prop_h),# left of body
+            (2.54, -_oy, 2.54, _oy),        # above / below
+        ]
+    else:
+        ladder = [
+            (0.0, -_row, 0.0, _row),        # DD-25: geometric center band (tried first)
+            (2.54, -1.27, 2.54, 1.27),      # legacy (byte-stable when center is occupied)
+            (2.54, -_oy, 2.54, _oy),        # above / below, past the body height
+            (_ox, -_prop_h, _ox, _prop_h),  # right of body, split by one row
+            (-_ox, -_prop_h, -_ox, _prop_h),# left of body, split by one row
+            (_ox, -_oy, _ox, _oy),          # far right, past body corner
+            (-_ox, -_oy, -_ox, _oy),        # far left, past body corner
+        ]
     # Bug2: the body graphic is an obstacle for EVERY tier's clash test, so a tier
     # that clears the (empty) pin_boxes but sits on the plates is correctly rejected.
     # DD-25 exception: the geometric-CENTER tier (index 0) INTENTIONALLY sits inside
@@ -1121,7 +1163,7 @@ def _place_symbol_props(component: "EmitComponent",
     # full-body exemption so large-IC centering (03a U1/U2, whose graphics extent
     # IS the frame and whose center band is clear) is unchanged.
     _obstacles = ([body_box] if body_box is not None else [])
-    if frame_box is not None and body_box is not None and frame_box != body_box:
+    if (frame_box is not None and body_box is not None and frame_box != body_box) or (is_passive_or_discrete and body_box is not None):
         # interior graphics = the drawn-graphics box; the center tier must clear it.
         _center_obstacles = [body_box]
     else:
@@ -1130,12 +1172,12 @@ def _place_symbol_props(component: "EmitComponent",
         _tier_obstacles = _center_obstacles if _tier_i == 0 else _obstacles
         rb = _prop_text_box(ref, cx + rdx, cy + rdy, page_scale)
         vb = _prop_text_box(val, cx + vdx, cy + vdy, page_scale) if val else None
-        clash = any(_bbox_overlap(rb, pb) for pb in pin_boxes) or \
+        clash = any(_bbox_overlap(rb, pb) for pb in all_pin_boxes) or \
                 any(_bbox_overlap(rb, pb) for pb in occupied) or \
                 any(_bbox_overlap(rb, pb) for pb in _tier_obstacles)
         if vb is not None:
             clash = clash or _bbox_overlap(rb, vb) or \
-                    any(_bbox_overlap(vb, pb) for pb in pin_boxes) or \
+                    any(_bbox_overlap(vb, pb) for pb in all_pin_boxes) or \
                     any(_bbox_overlap(vb, pb) for pb in occupied) or \
                     any(_bbox_overlap(vb, pb) for pb in _tier_obstacles)
         if not clash:
@@ -1170,8 +1212,20 @@ def emit_kicad_schematic(
     clusters: list | None = None,
     l6_avoidance: bool = False,
     motif_geometries: list | None = None,
+    title: str | None = None,
+    cross_sheet_nets: set[str] | frozenset | None = None,
+    presentation_solution=None,
 ) -> SchematicEmitResult:
     """Emit a `.kicad_sch` + `.kicad_pro` from placed components and a net list.
+
+    presentation_solution (DD-15 engine mode): a validated
+    `elk_layout.PresentationSolution`. When supplied, the three legacy routing
+    loops below (motif / 2-pin / bus) are NOT entered; wires, junctions and local
+    label anchors come from the solution verbatim and only the native
+    serialization + run bookkeeping of this emitter is reused. Nets the solution
+    lists as `undrawn` take the ordinary label / power-port continuation. The
+    engine path never falls back to the legacy router: a pin whose emitted tip
+    differs from the solution's tip, or a motif list on an engine sheet, raises.
 
     page_scale (CCM sheet-coherence contract): the per-page symbols were drawn at
     a large in-symbol pin pitch (pin_pitch / 2.54). At page_scale == 1.0 EVERY
@@ -1206,6 +1260,7 @@ def emit_kicad_schematic(
     composer's route stats and the actual emission cannot drift apart).
     """
     drawn = connection_style in ("wire", "auto")
+    cross_sheet_set = set(cross_sheet_nets or ())
     root = Path(project_dir)
     root.mkdir(parents=True, exist_ok=True)
     root_uuid = _uid()
@@ -1252,6 +1307,36 @@ def emit_kicad_schematic(
         # when the part draws no (rectangle) (passives — L_U5 arc, cap plates).
         graphics_rects[component.lib_id] = _graphics_bbox(definition)
 
+    # DD-15 round 3 (engine path only): per-component native orientation. The
+    # embedded definition is NOT edited (KiCad applies `(at .. rot) (mirror ..)` to
+    # it); the emitter's local pin map and rects are mapped by the same function the
+    # engine used, so a pin tip here is the tip the engine routed to. Refused (no
+    # guess) when the transform cannot be honoured reliably.
+    _engine_orient: dict[str, str] = dict(getattr(presentation_solution, "orientations", None) or {})
+    _lib_orient: dict[str, str] = {}
+    for _ref, _o in _engine_orient.items():
+        _c = next((c for c in components if c.ref == _ref), None)
+        if _c is None or _c.lib_id not in embedded_defs:
+            raise ValueError(f"ENGINE_ORIENT_UNRESOLVED: orientation {_o!r} declared for "
+                             f"{_ref}, which is not an embedded placed symbol")
+        if _o not in ORIENTATIONS:
+            raise ValueError(f"ENGINE_ORIENT_UNKNOWN: {_ref} orientation {_o!r}; "
+                             f"supported {sorted(ORIENTATIONS)}")
+        if _o == "R0":
+            continue
+        if _pin_name_extents(embedded_defs[_c.lib_id]):
+            raise ValueError(f"ENGINE_ORIENT_UNSUPPORTED: {_ref} ({_c.lib_id}) draws visible "
+                             f"pin names; their text is not modelled under {_o}")
+        if _lib_orient.setdefault(_c.lib_id, _o) != _o or any(
+                c.lib_id == _c.lib_id and c.ref != _ref and _engine_orient.get(c.ref, "R0") != _o
+                for c in components):
+            raise ValueError(f"ENGINE_ORIENT_SHARED_LIB: {_c.lib_id} is placed with different "
+                             f"orientations; the local pin map is per library symbol")
+    for _lib, _o in _lib_orient.items():
+        pin_maps[_lib] = orient_pins(_o, pin_maps[_lib])
+        body_rects[_lib] = orient_rect(_o, body_rects.get(_lib))
+        graphics_rects[_lib] = orient_rect(_o, graphics_rects.get(_lib))
+
     # Snap every component onto KiCad's 1.27 mm connection grid. Library pin local
     # offsets are grid-multiples, so once the symbol origin is on-grid the absolute
     # pin endpoint is too — which is what lets a drawn wire end actually merge with
@@ -1276,7 +1361,10 @@ def emit_kicad_schematic(
     # per-pair inference here is deleted and delegated. Lazy import breaks the cycle
     # (capacity_plan imports LANE_PITCH_MM from this module).
     from .capacity_plan import NetConn as _NetConn, decide_route_policy as _decide_policy
-    _pin_ct = {ref: len(pin_maps.get(c.lib_id, {})) for ref, c in placements.items()}
+    _pin_ct = {
+        ref: (len(pin_maps.get(c.lib_id, {})) if ref.startswith(("U", "IC")) else 2)
+        for ref, c in placements.items()
+    }
     _policy = _decide_policy(
         [_NetConn(name=_net.name, nodes=tuple(_net.nodes)) for _net in nets],
         _pin_ct,
@@ -1395,6 +1483,7 @@ def emit_kicad_schematic(
         )
 
     label_blocks: list[str] = []
+    _outline_blocks: list[str] = []
     wire_blocks: list[str] = []
     junction_blocks: list[str] = []
     # round 8: (x, y, net_name) for every junction dot emitted, parallel to
@@ -1489,13 +1578,50 @@ def emit_kicad_schematic(
             _fsy_b = component.y - _fly1
             _frame_box = (component.x + _flx0, component.x + _flx1,
                           min(_fsy_a, _fsy_b), max(_fsy_a, _fsy_b))
-        rx, ry, vx, vy, rb, vb = _place_symbol_props(component, pin_name_boxes, prop_boxes, page_scale, _body_box, _frame_box)
+        _eng_prop = (getattr(presentation_solution, "props", None) or {}).get(component.ref)
+        if _eng_prop is not None:
+            # DD-15 engine path: Reference/Value anchors were chosen on the solved
+            # layout against real wires/hulls/flags (elk_layout.place_ink); the
+            # legacy ladder is not consulted. Engine boxes are (x0,y0,x1,y1).
+            rx, ry = _eng_prop.ref_at
+            vx, vy = _eng_prop.val_at
+            _b = _eng_prop.ref_box
+            rb = (_b[0], _b[2], _b[1], _b[3])
+            vb = None
+            if _eng_prop.val_box is not None:
+                _b = _eng_prop.val_box
+                vb = (_b[0], _b[2], _b[1], _b[3])
+            prop_boxes.append(rb)
+            if vb is not None:
+                prop_boxes.append(vb)
+        else:
+            rx, ry, vx, vy, rb, vb = _place_symbol_props(
+                component, pin_name_boxes, prop_boxes, page_scale, _body_box, _frame_box,
+                pin_maps.get(component.lib_id, {}))
         prop_owners.append(component.ref)          # rb (Reference box) always appended
         if vb is not None:
             prop_owners.append(component.ref)      # vb (Value box) appended when present
+        _eng_outline = (getattr(presentation_solution, "outlines", None) or {}).get(component.ref)
+        _sym_uuid = _uid() if _eng_outline is not None else None
         symbol_blocks.append(
-            _symbol_instance_block(component, project_name, root_uuid, rx, ry, vx, vy)
+            _symbol_instance_block(component, project_name, root_uuid, rx, ry, vx, vy,
+                                   orientation=_engine_orient.get(component.ref, "R0"),
+                                   symbol_uuid=_sym_uuid)
         )
+        if _eng_outline is not None:
+            # Round 5 / Amendment A (engine path only): ONE dashed NON-ELECTRICAL
+            # package outline (native sheet rectangle). Package membership only. No
+            # native (group) is emitted; the D1<->rectangle tie is the data-layer
+            # ownership record written into the solution below.
+            _ob = _eng_outline["outline"]
+            _rect_uuid = str(_uuid.uuid5(_uuid.UUID(_sym_uuid), OUTLINE_UUID_RULE_NAME))
+            _outline_blocks.append(
+                f'  (rectangle (start {_ob[0]} {_ob[1]}) (end {_ob[2]} {_ob[3]})\n'
+                f'    (stroke (width 0.1524) (type dash)) (fill (type none))\n'
+                f'    (uuid "{_rect_uuid}"))')
+            _eng_outline["symbol_uuid"] = _sym_uuid
+            _eng_outline["rect_uuid"] = _rect_uuid
+            _eng_outline["uuid_rule"] = f'rect_uuid = uuid5(D1_symbol_uuid, "{OUTLINE_UUID_RULE_NAME}")'
     # Reserved occupancy for the label/power placers: pin names + prop texts.
     reserved_boxes: list[tuple[float, float, float, float]] = pin_name_boxes + prop_boxes
     # M4-3a-1: owners parallel to reserved_boxes (pin_name_owners then prop_owners),
@@ -1559,6 +1685,8 @@ def emit_kicad_schematic(
         """Emit a local label at (x,y), nudged along the route so its RENDERED text
         box clears every earlier label AND every in-body pin-name (M6-2 / DD-12).
         Delegates to module-level _place_local_label."""
+        if name in cross_sheet_set:
+            return
         globals()["_place_local_label"](
             name, x, y, wp, ledger,
             local_label_boxes=_local_label_boxes,
@@ -1615,8 +1743,9 @@ def emit_kicad_schematic(
     # keyed by ref (drawn-wire routers exclude the wire's OWN host refs so the pin
     # approach leg is allowed to touch its own body).
     wire_obstacle_boxes: dict[str, tuple[float, float, float, float]] = {}
+    uninflated_body_boxes: dict[str, tuple[float, float, float, float]] = {}
     for component in components:
-        rect = body_rects.get(component.lib_id)
+        rect = graphics_rects.get(component.lib_id) or body_rects.get(component.lib_id)
         if rect is not None:
             rx0, ry0, rx1, ry1 = rect
             xs = [component.x + rx0, component.x + rx1]
@@ -1630,13 +1759,21 @@ def emit_kicad_schematic(
         if not xs:
             continue
         m = WIRE_KEEPOUT_MM
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+        # Uninflated body box: shrunk by 0.1 mm so pin tips outside the boundary clear it
+        uninflated_body_boxes[component.ref] = (
+            x_min + 0.1, x_max - 0.1, y_min + 0.1, y_max - 0.1)
         wire_obstacle_boxes[component.ref] = (
-            min(xs) - m, max(xs) + m, min(ys) - m, max(ys) + m)
+            x_min - m, x_max + m, y_min - m, y_max + m)
 
     def _obstacles_excluding(host_refs) -> list[tuple[float, float, float, float]]:
-        """All keep-out body boxes EXCEPT the wire's own host component(s)."""
+        """All keep-out body boxes EXCEPT the wire's own host component(s),
+        plus uninflated body boxes of host component(s) so wires cannot slice THROUGH them."""
         skip = set(host_refs)
-        return [box for ref, box in wire_obstacle_boxes.items() if ref not in skip]
+        obst = [box for ref, box in wire_obstacle_boxes.items() if ref not in skip]
+        obst.extend([box for ref, box in uninflated_body_boxes.items() if ref in skip])
+        return obst
 
     # BR_20260905 (§4.2): absolute sheet point of EVERY placed pin. The body
     # keep-out boxes above cannot serve this purpose -- a pin sticks OUT of its
@@ -1778,6 +1915,79 @@ def emit_kicad_schematic(
                                   for c in _rr.conflicts],
                 })
 
+    # ---- DD-15 engine path: consume the validated presentation solution -------
+    _legacy_nets = nets
+    if presentation_solution is not None:
+        _legacy_nets = []
+        _sol = presentation_solution
+        if motif_geometries:
+            raise ValueError(
+                "ENGINE_MOTIF_UNSUPPORTED: motif geometries were supplied together "
+                "with a presentation solution; the engine adapter does not model "
+                "motifs yet and the sheet is refused rather than drawn without them.")
+        _drawn = set(_sol.drawn_nets)
+        _policy_conflict = sorted(_drawn & _crossic_label)
+        if _policy_conflict:
+            raise ValueError(
+                f"ENGINE_POLICY_CONFLICT: the cross-IC label policy forces "
+                f"{_policy_conflict} onto labels but the engine drew them; refused "
+                f"rather than silently re-labelling an engine route.")
+        # The solution's pin tips were computed from the same symbol scale this
+        # emitter embeds; any drift means a later scaling moved a port (DD-15).
+        _drift = []
+        for (_ref, _pin), _tip in _sol.pin_tips.items():
+            _here = _pin_abs(_ref, _pin)
+            if _here is None or abs(_here[0] - _tip[0]) > 1e-3 or abs(_here[1] - _tip[1]) > 1e-3:
+                _drift.append({"pin": f"{_ref}.{_pin}", "solution": list(_tip),
+                               "emitter": list(_here) if _here else None})
+        if _drift:
+            raise ValueError(f"ENGINE_PIN_DRIFT: {len(_drift)} pin tip(s) differ between "
+                             f"the solution and the emitted symbols: {_drift[:6]}")
+        for net in nets:
+            endpoints = []
+            endpoint_sides = []
+            endpoint_refs = []
+            for ref, pin in net.nodes:
+                abs_pt = _pin_abs(ref, pin)
+                if abs_pt is None:
+                    unresolved.append(f"{ref}.{pin}")
+                    continue
+                endpoints.append(abs_pt)
+                endpoint_sides.append(_pin_edge(ref, pin))
+                endpoint_refs.append(ref)
+            if net.name in _drawn:
+                _hosts = frozenset(endpoint_refs)
+                _segs = list(_sol.segments.get(net.name, ()))
+                fusion_registry[net.name] = list(_segs)
+                for (a, b) in _segs:
+                    _reserve_wire([a, b], net.name, endpoint_refs)
+                    wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
+                    _record_run(a[0], a[1], b[0], b[1], net.name)
+                    routed_segments.append(((a, b), _hosts))
+                for (jx, jy) in _sol.junctions.get(net.name, ()):
+                    junction_blocks.append(_junction_block(jx, jy))
+                    junction_points.append((jx, jy, net.name))
+                # Engine-chosen anchors (own-net, clear of foreign ink) replace the
+                # legacy longest-segment-midpoint heuristic on this path only.
+                _lp = _sol.local_labels.get(net.name)
+                if _lp is not None and net.name not in cross_sheet_set:
+                    label_blocks.append(_local_label_block(net.name, _lp.at[0], _lp.at[1]))
+                    _local_label_boxes.append((_lp.box[0], _lp.box[2], _lp.box[1], _lp.box[3]))
+                _fp = _sol.flags.get(net.name)
+                if _fp is not None and net.name in cross_sheet_set:
+                    label_blocks.append(_global_label_block(
+                        net.name, _fp.at[0], _fp.at[1], _fp.edge, text_scale=page_scale))
+                    _local_label_boxes.append((_fp.box[0], _fp.box[2], _fp.box[1], _fp.box[3]))
+                continue
+            # undrawn on the engine path: the same continuation the legacy `else`
+            # branch applies (power port when allowed, else a per-pin label).
+            kind = _power_net_kind(net.name) if power_ports else None
+            for abs_pt, edge, ep_ref in zip(endpoints, endpoint_sides, endpoint_refs):
+                if kind is not None:
+                    power_endpoints.append((net.name, kind, abs_pt[0], abs_pt[1], edge, ep_ref))
+                else:
+                    label_endpoints.append((net.name, abs_pt[0], abs_pt[1], edge))
+
     motif_ground_points = {}
     motif_routes = {}
     for host, geometry in (motif_geometries or []):
@@ -1792,7 +2002,9 @@ def emit_kicad_schematic(
             motif_ground_points[pin] = actual
 
     # Local motif branches claim their short corridors before unrelated routes.
-    for net in sorted(nets, key=lambda n: n.name not in motif_routes):
+    # (`_legacy_nets` is empty on the DD-15 engine path: these loops are the
+    # legacy router and are not entered there.)
+    for net in sorted(_legacy_nets, key=lambda n: n.name not in motif_routes):
         force_label = label_nets is not None and net.name in label_nets
         endpoints: list[tuple[float, float]] = []
         # side[i] = outward stub unit vector (dx, dy) in SHEET coords for endpoints[i]
@@ -1851,7 +2063,12 @@ def emit_kicad_schematic(
 
         # Drawn-wire mode: 2 pins → L-route; 3+ pins → trunk + stubs + junctions.
         if drawn and not force_label and not net_unresolved and len(endpoints) == 2:
-            _obst = _obstacles_excluding(endpoint_refs) + text_keepout_boxes
+            _avoid_pts = _foreign_pin_points(net.nodes)
+            _foreign_pin_boxes = [
+                (px - 1.27, px + 1.27, py - 1.27, py + 1.27)
+                for px, py in _avoid_pts
+            ]
+            _obst = _obstacles_excluding(endpoint_refs) + text_keepout_boxes + _foreign_pin_boxes
             # M6-8 (使用者 SW-crossing feedback): give each endpoint its outward pin
             # escape vector so the wire leaves the pin STRAIGHT before elbowing —
             # the corner can no longer land back in the pin's own lane and cross the
@@ -1866,11 +2083,11 @@ def emit_kicad_schematic(
             # jog ladder tried against it, rather than being down-graded to a label
             # stub on the first graze. A net still labelled after the full ladder is
             # reported below with the reason the LAST candidate failed on.
-            _avoid_pts = _foreign_pin_points(net.nodes)
             guarded, jogged = _guard_route(
                 net.name, waypoints,
                 extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
-                                     and _route_clears_points(wp, _avoid_pts)),
+                                     and _route_clears_points(wp, _avoid_pts)
+                                     and _route_clears_pin_tips(wp, _avoid_pts)),
                 interior_retry=True,
                 obstacles=_obst)
             if guarded is None:
@@ -1907,11 +2124,16 @@ def emit_kicad_schematic(
                 wire_blocks.append(_wire_segment_block(a[0], a[1], b[0], b[1]))
                 _record_run(a[0], a[1], b[0], b[1], net.name)
                 routed_segments.append(((a, b), _hosts))
-            mid = waypoints[len(waypoints) // 2]
-            _place_local_label(net.name, mid[0], mid[1], waypoints)
+            if net.name not in cross_sheet_set and len(endpoints) > 2:
+                mid = waypoints[len(waypoints) // 2]
+                _place_local_label(net.name, mid[0], mid[1], waypoints)
         elif drawn and not force_label and not net_unresolved and len(endpoints) >= 3:
-            _obst = _obstacles_excluding(endpoint_refs) + text_keepout_boxes
             _avoid_pts = _foreign_pin_points(net.nodes)
+            _foreign_pin_boxes = [
+                (px - 1.27, px + 1.27, py - 1.27, py + 1.27)
+                for px, py in _avoid_pts
+            ]
+            _obst = _obstacles_excluding(endpoint_refs) + text_keepout_boxes + _foreign_pin_boxes
             # BR_20260905: the multi-node bus used to be all-or-nothing -- ONE
             # grazing hop down-graded the WHOLE net to per-pin label stubs, with no
             # jog retry at all (the 2-pin path had 3, this path had 0). Since the
@@ -1945,8 +2167,10 @@ def emit_kicad_schematic(
             _hop_conflict_type: str | None = None
             _hop_collinear_overlap: bool = False
             _hop_ledger_intrusion: bool = False
+            _pt_side = dict(zip(endpoints, endpoint_sides))
             for _ha, _hb in zip(_chain_pts, _chain_pts[1:]):
-                _hw = _orthogonal_route(_ha, _hb, _obst)
+                _escape = [_pt_side.get(_ha, (0.0, 0.0)), _pt_side.get(_hb, (0.0, 0.0))]
+                _hw = _orthogonal_route(_ha, _hb, _obst, escape=_escape)
                 # Hops already accepted for THIS net are legal neighbours (same net,
                 # they meet at shared pins by construction), so they are excluded
                 # from the fusion test -- only OTHER nets' segments are collisions.
@@ -1972,7 +2196,8 @@ def emit_kicad_schematic(
                 _hg, _ = _guard_route(
                     net.name, _hw,
                     extra_ok=lambda wp: (_route_clears_ledger(wp, endpoint_refs, net.name)
-                                         and _route_clears_points(wp, _avoid_pts)),
+                                         and _route_clears_points(wp, _avoid_pts)
+                                         and _route_clears_pin_tips(wp, _avoid_pts)),
                     obstacles=_obst)
                 if _hg is None:
                     _last_fuse = any(
@@ -2077,10 +2302,11 @@ def emit_kicad_schematic(
             # cross-net fusion defect (a junction landing mid-span on another
             # net's wire, `_route_clears_points` being vertex-only) is NOT
             # addressed here and stays open.
-            for _frag in _sig_frags:
-                _ftrunk = _frag["segs"][0]
-                _place_local_label(net.name, _ftrunk[0][0], _ftrunk[0][1],
-                                   [_ftrunk[0], _ftrunk[1]])
+            if net.name not in cross_sheet_set:
+                for _frag in _sig_frags:
+                    _ftrunk = _frag["segs"][0]
+                    _place_local_label(net.name, _ftrunk[0][0], _ftrunk[0][1],
+                                       [_ftrunk[0], _ftrunk[1]])
         else:
             # label fallback: power, single-pin, unresolved, or style=label
             # power_ports=False (dense castellated-edge / connector pages, e.g. the
@@ -2156,16 +2382,10 @@ def emit_kicad_schematic(
                                                 avail_y=_paper_avail_y(paper),
                                                 avail_x=_paper_avail_x(paper),
                                                 ledger=ledger,
-                                                # BR_20260802 (c4): this was hardcoded True, which made the
-                                                # `l6_avoidance` parameter declared at the top of this function
-                                                # DEAD — AST-verified 0 reads in the body, against 10 reads of
-                                                # page_scale as a control. Callers could compute the flag and
-                                                # thread it in, and it was silently discarded. L6 displacement
-                                                # (bounded by _L6_AVOID_MAX_STEPS x 1.0mm = 64mm) is the only
-                                                # path that can produce the measured 1.57-53.38mm anchor moves;
-                                                # DD-20 tops out at ~7mm on this page's longest label (14 ch).
                                                 l6_avoidance=l6_avoidance,
-                                                graphics_boxes=_label_graphics_boxes))
+                                                graphics_boxes=_label_graphics_boxes,
+                                                cross_sheet_nets=(None if cross_sheet_nets is None
+                                                                  else cross_sheet_set)))
 
     # Power ports: one KiCad power-port symbol per GND/supply endpoint, replacing
     # the label stack. A stub wire joins the pin endpoint to the port so the port
@@ -2234,8 +2454,11 @@ def emit_kicad_schematic(
             port_x = round(anchor_x + nx * _STUB_MM, 4)
             port_y = round(anchor_y + ny * _STUB_MM, 4)
             final_stub_segs = [((anchor_x, anchor_y), (port_x, port_y))]
+            # Motif ground guard is an ELECTRICAL fusion check; the router's
+            # corridor-spacing heuristic (same-line disjoint segments) is not one.
             if (px, py) in motif_ground_points and any(
-                    _segment_fuses(s, _other_net_segments(net_name)) for s in final_stub_segs):
+                    _segment_fuses(s, _other_net_segments(net_name), corridor=False)
+                    for s in final_stub_segs):
                 raise ValueError(f"MOTIF_GROUND_FUSION: {net_name} at {(px, py)}")
             wire_blocks.append(_wire_segment_block(anchor_x, anchor_y, port_x, port_y))
             _record_run(anchor_x, anchor_y, port_x, port_y, net_name)
@@ -2393,7 +2616,8 @@ def emit_kicad_schematic(
 
     schematic = _schematic_document(
         root_uuid, embedded_defs.values(), symbol_blocks, label_blocks, wire_blocks, junction_blocks,
-        nc_blocks=nc_blocks, paper=paper,
+        nc_blocks=nc_blocks, paper=paper, title=title or project_name,
+        outline_blocks=_outline_blocks,
     )
     schematic_path = root / f"{project_name}.kicad_sch"
     schematic_path.write_text(schematic, encoding="utf-8")
@@ -2436,28 +2660,89 @@ def emit_kicad_schematic(
     )
 
 
+#: Native symbol orientations the engine path may serialize (DD-15, round 3).
+#: id -> (KiCad `(at ... ROT)` angle, mirror axis or None). Local (y-up) point map:
+#: R0 (x,y); R180 (-x,-y); MX `(mirror x)` (x,-y); MY `(mirror y)` (-x,y).
+ORIENTATIONS: dict[str, tuple[int, str | None]] = {
+    "R0": (0, None), "R180": (180, None), "MX": (0, "x"), "MY": (0, "y"),
+}
+
+
+def orient_point(orientation: str, x: float, y: float) -> tuple[float, float]:
+    """Symbol-local (y-up) point under a native orientation."""
+    if orientation not in ORIENTATIONS:
+        raise ValueError(f"unknown symbol orientation {orientation!r}; "
+                         f"supported: {sorted(ORIENTATIONS)}")
+    if orientation == "R0":
+        return (x, y)
+    if orientation == "R180":
+        return (-x, -y)
+    if orientation == "MX":
+        return (x, -y)
+    return (-x, y)
+
+
+def orient_pin_angle(orientation: str, a: float) -> float:
+    """KiCad pin angle under a native orientation (R180: a+180; MX: -a; MY: 180-a)."""
+    if orientation == "R0":
+        return a % 360
+    if orientation == "R180":
+        return (a + 180) % 360
+    if orientation == "MX":
+        return (-a) % 360
+    if orientation == "MY":
+        return (180 - a) % 360
+    raise ValueError(f"unknown symbol orientation {orientation!r}")
+
+
+def orient_pins(orientation: str, pins: dict) -> dict:
+    out = {}
+    for k, v in pins.items():
+        x, y = orient_point(orientation, float(v[0]), float(v[1]))
+        out[k] = (round(x, 4), round(y, 4)) + (
+            (round(orient_pin_angle(orientation, float(v[2])), 4),) if len(v) > 2 else ())
+    return out
+
+
+def orient_rect(orientation: str, r):
+    """Axis-aligned local rect (x0,y0,x1,y1) under a native orientation."""
+    if r is None:
+        return None
+    a = orient_point(orientation, r[0], r[1])
+    b = orient_point(orientation, r[2], r[3])
+    return (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+
+
 def _symbol_instance_block(component: EmitComponent, project_name: str, root_uuid: str,
                           rx: float | None = None, ry: float | None = None,
-                          vx: float | None = None, vy: float | None = None) -> str:
+                          vx: float | None = None, vy: float | None = None,
+                          orientation: str = "R0", symbol_uuid: str | None = None) -> str:
     """Emit one placed-symbol s-expr. rx/ry/vx/vy override the Reference/Value text
     anchors (chosen by `_place_symbol_props` to clear pin-name text); when omitted
     they fall back to the legacy fixed offset so callers that don't need collision
     avoidance stay byte-stable."""
-    ref_uuid = _uid()
+    ref_uuid = symbol_uuid or _uid()
     unit = int(getattr(component, "unit", 1) or 1)
     pin_uuids = "\n".join(f'    (pin "{number}" (uuid "{_uid()}"))' for number in ("1", "2"))
     rx = component.x + 2.54 if rx is None else rx
     ry = component.y - 1.27 if ry is None else ry
     vx = component.x + 2.54 if vx is None else vx
     vy = component.y + 1.27 if vy is None else vy
+    rot, mirror = ORIENTATIONS[orientation]
+    mirror_s = f" (mirror {mirror})" if mirror else ""
+    # Measured (KiCad 9.0.9 SVG): a field's justification is relative to the symbol
+    # orientation, so R180/MY turn `(justify left)` into text that grows LEFT of its
+    # anchor. `right` there draws the text rightward of the anchor, i.e. where the
+    # engine's ink model reserved it.
+    just = "right" if orientation in ("R180", "MY") else "left"
     return f'''  (symbol
     (lib_id "{component.lib_id}")
-    (at {component.x} {component.y} 0)
+    (at {component.x} {component.y} {rot}){mirror_s}
     (unit {component.unit})
     (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
     (uuid "{ref_uuid}")
-    (property "Reference" "{component.ref}" (at {round(rx, 4)} {round(ry, 4)} 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Value" "{component.value}" (at {round(vx, 4)} {round(vy, 4)} 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Reference" "{component.ref}" (at {round(rx, 4)} {round(ry, 4)} 0) (effects (font (size 1.27 1.27)) (justify {just})))
+    (property "Value" "{component.value}" (at {round(vx, 4)} {round(vy, 4)} 0) (effects (font (size 1.27 1.27)) (justify {just})))
     (property "Footprint" "{component.footprint}" (at {component.x} {component.y} 0) (effects (font (size 1.27 1.27)) (hide yes)))
 {pin_uuids}
     (instances (project "{project_name}" (path "/{root_uuid}" (reference "{component.ref}") (unit {unit}))))
@@ -3003,6 +3288,7 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
                             ledger: "OccupancyLedger | None" = None,
                             l6_avoidance: bool = False,
                             graphics_boxes: list[tuple[float, float, float, float]] | None = None,
+                            cross_sheet_nets: set[str] | None = None,
                             ) -> list[str]:
     """Emit global labels with per-column anti-overlap staggering.
 
@@ -3123,7 +3409,11 @@ def _staggered_label_blocks(endpoints: list[tuple[str, float, float]],
                         _rx0 - 0.5, _ry0 - 0.5, _rx1 + 0.5, _ry1 + 0.5,
                         name, "text_keepout", source_layer="text_keepout"
                     ))
-            blocks.append(_global_label_block(name, lx, ly, edge, text_scale=page_scale))
+            is_global = (cross_sheet_nets is None) or (name in cross_sheet_nets)
+            if is_global:
+                blocks.append(_global_label_block(name, lx, ly, edge, text_scale=page_scale))
+            else:
+                blocks.append(_local_label_block(name, lx, ly))
     return blocks
 
 
@@ -3347,8 +3637,50 @@ def _point_strictly_interior(pt: tuple[float, float], seg: tuple) -> bool:
     return not (at_a or at_b)
 
 
+def _corridor_clash(s1: tuple, s2: tuple, min_separation: float = 2.54) -> bool:
+    """True iff two axis-aligned segments belonging to different nets share an axis
+    or run parallel with overlapping projection within min_separation."""
+    a1, b1 = s1
+    a2, b2 = s2
+    ax1 = _seg_axis(a1, b1)
+    ax2 = _seg_axis(a2, b2)
+    if ax1 is None or ax2 is None or ax1 != ax2:
+        return False
+    if ax1 == "h":
+        if abs(a1[1] - a2[1]) < _FUSION_EPS:
+            return True
+        lo1, hi1 = sorted((a1[0], b1[0]))
+        lo2, hi2 = sorted((a2[0], b2[0]))
+        overlap = min(hi1, hi2) - max(lo1, lo2)
+        if overlap > _FUSION_EPS:
+            return abs(a1[1] - a2[1]) < min_separation - _FUSION_EPS
+    else:
+        if abs(a1[0] - a2[0]) < _FUSION_EPS:
+            return True
+        lo1, hi1 = sorted((a1[1], b1[1]))
+        lo2, hi2 = sorted((a2[1], b2[1]))
+        overlap = min(hi1, hi2) - max(lo1, lo2)
+        if overlap > _FUSION_EPS:
+            return abs(a1[0] - a2[0]) < min_separation - _FUSION_EPS
+    return False
+
+
+def _route_clears_pin_tips(waypoints: list[tuple[float, float]],
+                           avoid_points, margin: float = 1.27) -> bool:
+    """True iff no segment of waypoints passes within margin of any foreign pin tip."""
+    if not avoid_points:
+        return True
+    for a, b in zip(waypoints, waypoints[1:]):
+        for px, py in avoid_points:
+            box = (px - margin, px + margin, py - margin, py + margin)
+            if _seg_hits_box(a, b, box):
+                return False
+    return True
+
+
 def _segment_fuses(seg: tuple, other_net_segs: list[tuple],
-                   *, exempt_interior: bool = False) -> bool:
+                   *, exempt_interior: bool = False, min_separation: float = 2.54,
+                   corridor: bool = True) -> bool:
     """True iff `seg` would electrically fuse with any segment belonging to a
     DIFFERENT net: collinear interval overlap, or either endpoint on the other
     segment (and vice versa, to catch a foreign endpoint on THIS segment).
@@ -3377,6 +3709,8 @@ def _segment_fuses(seg: tuple, other_net_segs: list[tuple],
     """
     for o in other_net_segs:
         if _collinear_overlap(seg, o):
+            return True
+        if corridor and _corridor_clash(seg, o, min_separation):
             return True
         for _pt, _other in ((seg[0], o), (seg[1], o)):
             if not _point_on_segment(_pt, _other):
@@ -3747,6 +4081,10 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
         x_cols.add(_snap_grid(ox1 + step))
         y_rows.add(_snap_grid(oy0 - step))
         y_rows.add(_snap_grid(oy1 + step))
+        x_cols.add(_snap_grid(ox0 - 2 * step))
+        x_cols.add(_snap_grid(ox1 + 2 * step))
+        y_rows.add(_snap_grid(oy0 - 2 * step))
+        y_rows.add(_snap_grid(oy1 + 2 * step))
 
         mid_x = (x1 + x2) / 2.0
         mid_y = (y1 + y2) / 2.0
@@ -3754,6 +4092,11 @@ def _orthogonal_route(p1: tuple[float, float], p2: tuple[float, float],
             candidates.append([p1, (mx, y1), (mx, y2), p2])
         for my in sorted(y_rows, key=lambda y: abs(y - mid_y)):
             candidates.append([p1, (x1, my), (x2, my), p2])
+        # Outer rectangular margin corridors for far-side connections
+        for mx in (_snap_grid(ox0 - step), _snap_grid(ox1 + step), _snap_grid(ox0 - 2 * step), _snap_grid(ox1 + 2 * step)):
+            for my in (_snap_grid(oy0 - step), _snap_grid(oy1 + step), _snap_grid(oy0 - 2 * step), _snap_grid(oy1 + 2 * step)):
+                candidates.append([p1, (mx, y1), (mx, my), (x2, my), p2])
+                candidates.append([p1, (x1, my), (mx, my), (mx, y2), p2])
 
     for wp in candidates:
         if _waypoints_clear(wp, obstacles):
@@ -3846,6 +4189,8 @@ def _guard_route(
     def _ok(wp, *, exempt: bool = False) -> bool:
         if any(_segment_fuses(s, others, exempt_interior=exempt)
                for s in _segments_of(wp)):
+            return False
+        if obstacles and not _waypoints_clear(wp, obstacles):
             return False
         if extra_ok is not None:
             return bool(extra_ok(wp))
@@ -4227,9 +4572,24 @@ def _bus_route(endpoints: list[tuple[float, float]],
     return segments, junctions
 
 
-def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks, wire_blocks=(), junction_blocks=(), nc_blocks=(), paper: str = "A4") -> str:
+def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks,
+                        wire_blocks=(), junction_blocks=(), nc_blocks=(), paper: str = "A4",
+                        title: str = "", date: str = "", rev: str = "v1.0", company: str = "bodesign",
+                        outline_blocks=()) -> str:
+    from datetime import date as _dt_date
+    _date_str = date or _dt_date.today().isoformat()
+    _title_str = title or "bodesign"
+    _title_block = (
+        "  (title_block\n"
+        f'    (title "{_title_str}")\n'
+        f'    (date "{_date_str}")\n'
+        f'    (rev "{rev}")\n'
+        f'    (company "{company}")\n'
+        "  )\n"
+    )
     lib_symbols = "\n".join(definitions)
-    body = "\n".join([*symbol_blocks, *wire_blocks, *junction_blocks, *nc_blocks, *label_blocks])
+    body = "\n".join([*symbol_blocks, *wire_blocks, *junction_blocks, *nc_blocks, *label_blocks,
+                      *outline_blocks])
     return (
         "(kicad_sch\n"
         f'  (version {SCHEMATIC_VERSION})\n'
@@ -4237,6 +4597,7 @@ def _schematic_document(root_uuid: str, definitions, symbol_blocks, label_blocks
         '  (generator_version "9.0")\n'
         f'  (uuid "{root_uuid}")\n'
         f'  (paper "{paper}")\n'
+        f"{_title_block}"
         f"  (lib_symbols\n{lib_symbols}\n  )\n"
         f"{body}\n"
         '  (sheet_instances (path "/" (page "1")))\n'

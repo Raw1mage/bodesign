@@ -26,6 +26,22 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+
+def _bootstrap_packages() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    packages_dir = repo_root / "packages"
+    if packages_dir.is_dir():
+        roots = [str(d) for d in sorted(packages_dir.iterdir()) if d.is_dir()]
+        for s in reversed(roots):
+            if s not in sys.path:
+                sys.path.insert(0, s)
+        existing = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+        merged = roots + [p for p in existing if p not in roots]
+        os.environ["PYTHONPATH"] = os.pathsep.join(merged)
+
+
+_bootstrap_packages()
+
 SERVER_NAME = "bodesign"
 SERVER_VERSION = "0.3.0"
 
@@ -180,6 +196,42 @@ def _h_compose(a: dict) -> Any:
         out["sheet_fit"] = r.sheet_fit.to_dict()
     if r.ink_metrics is not None:
         out["ink_metrics"] = r.ink_metrics
+    return out
+
+
+def _h_emit_multisheet(a: dict) -> Any:
+    if a.get("presentation_baseline") is not None:
+        # DD-13: a supplied human baseline is never bypassed; no fall-through to emit_multisheet.
+        from bodesign_workflow_core.human_presentation import ingest_human_presentation
+        return ingest_human_presentation(a)
+    # Direct submodule import for the same reason `_h_declare_circuit` uses one:
+    # this path needs kicad_emit but not the whole package surface.
+    from bodesign_eda_bridge.hierarchical import (HierarchicalEmitError,
+                                                  PartitionError,
+                                                  emit_multisheet)
+    kwargs: dict = {}
+    if a.get("symbol_dirs") is not None:
+        kwargs["symbol_dir"] = a["symbol_dirs"]
+    for key in ("paper", "connection_style", "power_ports", "subsystem_views", "view_local_max_nodes", "trim_small_replicas"):
+        if a.get(key) is not None:
+            kwargs[key] = a[key]
+    try:
+        result = emit_multisheet(a["out_dir"], a["project_name"], a["spec"], **kwargs)
+    except (PartitionError, HierarchicalEmitError) as error:
+        # A contract violation is returned as DATA, not raised: the caller needs the
+        # machine code to branch on, and `ok:false` keeps it distinguishable from a
+        # transport failure. `files: []` states that nothing was written.
+        return {"ok": False, "error": {"code": error.code, "message": error.message,
+                                       "details": error.details},
+                "files": [], "emit_mode": None}
+    out = result.to_dict()
+    out["ok"] = True
+    out["sheet_count"] = len(result.leaf_paths)
+    out["leaf_component_counts"] = {
+        name: leaf.component_count for name, leaf in result.leaf_results.items()}
+    out["unresolved_pins"] = {
+        name: leaf.unresolved_pins for name, leaf in result.leaf_results.items()
+        if leaf.unresolved_pins}
     return out
 
 
@@ -1232,6 +1284,24 @@ TOOLS: list[dict] = [
                 "connection_style": {"type": "string", "enum": ["label", "wire", "auto"]}, "measure_ink": {"type": "boolean"},
                  "fidelity": {"type": "boolean", "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."},
                  "expect_sha": {"type": "object", "description": "BR_20260802, optional {path: sha256}: assert the bytes on disk BEFORE composing; a mismatch raises COMPOSE_INPUT_SHA_MISMATCH instead of returning a structurally perfect result that describes a version you already replaced. Every response carries `inputs` (symbol libraries actually read, with sha256/mtime/bytes, plus spec_sha256) whether or not you declare this \u2014 but reading that record is your discipline, while declaring the digest moves the check into the tool. Use it whenever the inputs live somewhere they can change underneath you (a container copy, a network mount, another session's worktree)."}}, "required": ["out_dir", "project_name", "spec"]}},
+    {"name": "bodesign_emit_multisheet", "handler": _h_emit_multisheet,
+     "description": "Emit a HIERARCHICAL schematic \u2014 one root `.kicad_sch` carrying a sheet block per subsystem, plus one leaf `.kicad_sch` per sheet \u2014 from a spec whose components carry an explicit `sheet` field. This is the multi-page counterpart of bodesign_compose_schematic, which always emits ONE flat page no matter how many subsystems the spec describes. ROUTE SELECTION IS BY DECLARATION, NOT BY COUNT: no `sheet` on any component takes the original flat path unchanged; ANY explicit declaration \u2014 INCLUDING exactly one distinct sheet name \u2014 takes the root+N-leaf path. The two are never equated, so asking for one sheet explicitly is distinguishable from asking for nothing. `sheet` is the ONLY assignment channel: it is never inferred from `group`, from net topology, or from a catch-all, and it is ALL-OR-NOTHING (a partially declared spec raises E_UNASSIGNED_REFS rather than inventing a bucket for the remainder). `group` keeps its cluster meaning and is scoped PER SHEET \u2014 the cluster key is the ordered pair (sheet, group), so equal group strings on different sheets are independent clusters. Each sheet name is used VERBATIM as the leaf filename stem and is validated against ^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$ with NO silent sanitization (E_SHEET_NAME_INVALID / E_SHEET_NAME_EMPTY), and a stem equal to project_name is refused (E_SHEET_NAME_COLLISION) because the leaf write would otherwise truncate the root while the file set still looked complete. CROSS-SHEET NETS: a net whose nodes span sheets is emitted on every leaf holding at least one of its nodes, under its own name, forced onto global_label connectivity \u2014 same-named global labels on two leaves join into one net (measured on real kicad-cli 9.0.9). No endpoint is ever dropped; node accounting is re-checked against the input and a node whose ref is on no sheet is reported as an orphan warning rather than silently discarded. FAILURE CLEANUP removes ONLY paths this call created: a path that already exists raises E_OUTPUT_PATH_OCCUPIED before anything is written, so a pre-existing user file can never be in the rollback set. `files` lists real files on disk only \u2014 a phantom entry raises E_FILES_MANIFEST_PHANTOM rather than shipping a manifest that names something absent. Contract violations return ok:false with a machine `error.code` and files:[] (nothing written), NOT a partial success. Needs KiCad symbol libraries to resolve pins; it does not run ERC \u2014 arbitrate the output with kicad-cli or bodesign_export_netlist.",
+     "schema": {"type": "object", "properties": {
+                "out_dir": _STR, "project_name": _STR,
+                "spec": {"type": "object",
+                         "description": "compose_schematic spec shape PLUS the `sheet` field: {components: [{ref, symbol, value?, footprint?, group?, sheet?, x?, y?}], nets: [{name, nodes: ['REF.PIN', ...]}], nc?: ['REF.PIN', ...]}. A component carrying BOTH x and y keeps them; otherwise it gets a deterministic per-sheet grid slot (partial coordinates are NOT completed \u2014 inventing the missing half would be a fabricated placement). A net node that is not REF.PIN raises E_NET_NODE_MALFORMED instead of being filtered out, because dropping it deletes a declared endpoint while the net still looks complete."},
+                "symbol_dirs": {"type": "array", "items": _STR,
+                                "description": "custom KiCad symbol .kicad_sym parent dir(s), as an ARRAY (single-type declaration per BR_20260730b: an anyOf/untyped argument gets stringified in transit)."},
+                "paper": {"type": "string", "description": "page size for every sheet, default A4."},
+                "connection_style": {"type": "string", "enum": ["label", "wire", "auto"],
+                                     "description": "within-leaf connectivity. Cross-sheet nets are ALWAYS forced to label regardless, because a drawn wire cannot cross a file boundary."},
+                "power_ports": {"type": "boolean"},
+                "subsystem_views": {"type": "object", "description": "sheet name -> list of net names to expand as local replica views on that sheet (presentation-only; home sheet keeps BOM/netlist identity)"},
+                "view_local_max_nodes": {"type": "integer"},
+                "presentation_baseline": {"type": "object", "description": "S2 human ingestion: {schema_version:'1.x', source:'human', source_dir, root, files:[{path,sha256}], libraries:[{name,version|digest}], kicad_version:'9.0'}. Inspect/derive only; proposal-only; apply NOT IMPLEMENTED."},
+                "declared_circuit": {"type": "object", "description": "{revision, nets:[{name,nodes:['R1.1',..]}], nc:[..], isolated:[..]} (required with presentation_baseline)."},
+                "requested_operations": {"type": "array", "items": {"type": "object"}, "description": "default []; each becomes a ChangeProposal operation, never applied."}},
+                "required": ["out_dir", "project_name", "spec"]}},
     {"name": "bodesign_emit_layout", "handler": _h_layout,
      "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board — pass larger values for bigger/denser layouts instead of the small-board grid. consider: bodesign_kb_query.",
      "schema": {"type": "object", "properties": {"out_dir": _STR, "project_name": _STR, "components": {"type": "array"},
