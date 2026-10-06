@@ -241,6 +241,17 @@ detail." Officer formalization, accepted:
    triggered on btdongle (all cross-module links are single nets).
 5. Logic beyond wiring (timing, sequencing, protocol) belongs to design documents,
    not schematic pages.
+- R-F clarification (user, 2026-10-07, after Review 21 ACCEPT-marginal on 00.overview-v5:
+  J1 orphaned, U2 visually cut off from the power side): item 2 excludes rail/GND
+  SYMBOLS. The board's PRIMARY POWER TRANSFER (J1→U1 VBUS, U1→U2 SYS, J2↔U1 BATT) is
+  a functional link of this product and IS drawn as a dashed link on 00. Ground is
+  never drawn. 00.overview-v6 follows. Outcome: r14 landed (manifest root
+  `623fca73…` → `9e20483e…` after Reviews 21/22 were appended to reviews.md; 390
+  entries, officer-verified 0 non-OK); Review 22 (blind, image-only, ses_eed00e490) on v6 =
+  ACCEPT — all six blocks linked, J1→U1→U2 power spine traceable from drawn links
+  alone; residual: "charge control / status" label slightly right of span centre.
+  C03 presentation layer is at standard; remaining C03 residual is the 11-page
+  "6 K4" label crossed by the CC2 vertical (geometry, next 11 round).
 - Peripherals (2-terminal parts) live on the page of the pin they serve; a peripheral
   shared by two modules is drawn once, on its primary module's page, and referenced
   from the other.
@@ -248,6 +259,186 @@ detail." Officer formalization, accepted:
   58-net partition stay invariant. Module repetition across pages is a presentation
   view of ONE physical instance (DD/Astra: instance identity preserved via explicit
   mapping; no cloned electrical instances).
+
+User ruling R-G (2026-10-07, deliverable directory layout, two rulings same session):
+1. "Do not open subdirectories on your own. Emit trial artifacts in their original
+   location." The officer-opened `candidate-r11/` was dissolved; all pages live at
+   the deliverable root.
+2. "`btdongle_ms/` holds only human-viewable image files. Machine-readable
+   deliverables move to `outputs/`." Layout:
+   - `~/products/bodesign/btdongle_ms/`: `NN.<name>-vN.{png,pdf}`, `README.md`
+     (index), `.history/` (superseded images only).
+   - `~/products/bodesign/outputs/btdongle_ms/`: `*.kicad_sch`, `editable/`,
+     `pin_inventory_*.md`, `.src/` (generators, netlists, ERC, bbox, review corpus,
+     manifest), `.history/` machine files.
+   - One manifest at `outputs/btdongle_ms/.src/hashes.sha256` binding both trees.
+   Naming rule NN-vN (R-C ruling, Round 572) applies to both trees.
+3. Environment finding (same day): `~/products` is not version-controlled and is
+   watched by gdrive-bisync; the daemon re-created deleted files twice. Eight sealed
+   top-level images vanished before 01:46 and were restored by the officer from
+   byte-identical scratch originals (sha 8/8). Tracked as a harness BR; no sync
+   configuration touched by agents.
+
+User ruling R-H (2026-10-07, scope of this rebuild): "In this rebuild plan, all
+C00–C04 deliverables must be brought to standard. C01 must produce a product
+render (Blender raised by user); C02 must produce a printable STL; C03 the schematic
+set and related data; C04 a Gerber copper-layer render." Confirmed as the original
+design intent (architecture.md §C01/C02/C03/C04 entries). Officer formalization:
+1. One amendment covers all five stages; Astra integrates per-stage DDs for
+   human-viewable deliverable + independent blind-review acceptance axis, mirroring
+   the C03 method proven on btdongle (declaration invariant, presentation layer
+   separate, agent hand-draft as producer, blind review, manifest binding, NN-vN
+   naming, human/machine tree split per R-G).
+2. Execution order: C03 close-out (ERC adjudication, BOM export, 00 block names) →
+   C04 (Gerber copper render; same board) → C02 (printable STL) → C01 (product
+   render) → C00 (PRD docx check).
+3. C01 renderer: user asked why Blender was not chosen originally. Measured: the
+   repo has zero Blender references in source/specs/plans; the only renderer is
+   pyrender/EGL (`eda-bridge/model_render.py`, shared by C02 enclosure + C04 board).
+   No recorded decision against Blender exists — it was never evaluated. Blender
+   adoption goes through DD-9 clearance (GPL-2+ tool used as external subprocess,
+   headless `blender -b` feasibility in the ee image, image size, license of any
+   addon) before any implementation. Not a fallback: pyrender stays until Blender
+   is cleared or rejected on evidence.
+
+## 3.2 R-H integration draft (Astra, 2026-10-07, topic R-H-scope-amendment)
+
+Status: DRAFT amendment, not implementation authorization. DD IDs below are stage
+placeholders; allocate the next unused DD IDs at integration (DD-1..15 unchanged).
+R-H restores C00–C04 as delivery scope; it does not erase stage dependencies or turn
+previews into engineering acceptance.
+
+COMMON DD — producer-independent, stage-bound presentation authority
+- Each stage binds in ONE manifest: approved declaration, candidate revision,
+  producer/toolchain identity, machine evidence, independent visual review.
+- User-approved geometry/placement/intent outranks machine proposals; agent hand
+  drafting is a PRODUCER, not human approval. Changes are baseline-bound proposals.
+- R-G preserved: human PNG/PDF + index in the human tree; editable sources, STL,
+  Gerbers, data and evidence in the machine tree; no new directory allocation.
+- Filenames `NN.<stage>-<name>-vN`; one coherent revision per artifact set; history
+  retained; every view names its source revision and carries visible DRAFT status.
+- A review ACCEPT cannot override a failed/unmeasured deterministic gate; a passing
+  gate cannot substitute for an intelligible view. No silent producer fallback.
+
+DD-C01 — product appearance and intent
+- Human: `NN.c01-product-vN.png` (declared exterior views), `NN.c01-cmf-vN.png`,
+  review PDF. Machine: scene/source, assets, camera/light/material recipe, tokens,
+  manifest.
+- Invariants: approved ID direction, CMF tokens, interface/face layout, envelope, with
+  source attribution. Missing appearance/geometry stays unresolved, never invented.
+- Producer: TBD by clearance + benchmark; pyrender is the explicit baseline, neither
+  presumed sufficient nor automatically replaced.
+- Checkable: source/asset completeness, token→material assignment, declared view/
+  camera coverage, dimension/interface conformance where geometry exists, render
+  success, version binding. Pixel colour is not material/finish certification.
+- Blind review: what product/use is shown; identify controls, connectors, status
+  indications, user orientation; which materials/finishes differ; what is obscured or
+  contradictory. Compare afterwards to the frozen ID brief.
+- Not claimed: electrical correctness, physical CMF approval, colour accuracy,
+  ergonomics, manufacturability.
+
+DD-C02 — printable enclosure geometry
+- Human: `NN.c02-enclosure-vN.png`, `NN.c02-exploded-vN.png`, section/clearance PDF.
+  Machine: real per-part STL, parametric source, STEP only when genuinely exported,
+  units/print-profile metadata, reports.
+- Invariants: versioned constraint set — board envelope, component heights, holes,
+  connector faces/openings, wall/clearance, assembly interfaces, coordinate frames.
+- Producers: existing OpenSCAD/build123d in ME worker, both on the same constraints,
+  per-export evidence, no assumed equivalence.
+- Gate: non-empty valid mesh, manifold/watertight, orientation, scale, measured wall/
+  clearance/fit vs declared thresholds; process/material/nozzle/build-volume/
+  orientation assumptions + slicer check for any qualified "printable" claim.
+- Blind review: how parts assemble, how the board is supported, which opening serves
+  which interface, access/clearance/print-orientation concerns; section/exploded
+  views must expose hidden relations.
+- Not claimed: watertight ≠ printable; no physical print, tolerance fit, strength,
+  thermal/fire/IP, production approval without evidence.
+
+DD-C04 — placement and actual copper presentation
+- Human: `NN.c04-placement-vN.png`, `NN.c04-<layer>-vN.png` for EVERY declared copper
+  layer, labelled stack/orientation composite PDF. Machine: editable PCB, exact
+  Gerber/drill set, BOM/CPL where applicable, gate reports.
+- Invariants: frozen C03 pin/net partition, qualified footprint/pad mapping, board/
+  mechanical constraints, stackup, net classes, DRC rules. Changes are separate
+  proposals, never aesthetic corrections.
+- Producers: approved human placement first; agent placement is a proposal;
+  constrained engine placement/routing within locks. Existing workers remain the
+  execution boundary.
+- Gate: final filled-board DRC + pad/net-vs-actual-copper connectivity + complete
+  unrouted/short/open coverage; bind the exact exported Gerber/drill set and verify
+  export parity/connectivity (not merely board net attributes). If Gerber-level
+  parity cannot be measured, mark UNMEASURED — a Gerber preview or PCB DRC does not
+  prove those bytes. Export-for-review ≠ authorized fabrication release.
+- Blind review: locate main ICs/connectors + support groups; explain visible power/
+  signal/return organization, orientation, layer legend; identify congestion, access,
+  isolation/clearance concerns without claiming invisible connectivity.
+- Not claimed: SI/EMC/thermal, fabrication readiness, assembly correctness; send-to-
+  fab keeps deterministic gates + explicit user approval.
+
+C00/C03 closure anchors
+- C00: `NN.c00-prd-vN.docx` in machine tree + human PDF; check requirements/source/
+  decision coverage, cross-stage consistency, render/readability — not mere existence.
+- C03: preserve accepted module book, exact native/netlist baseline, reviewer scope;
+  finish ERC adjudication, BOM coverage, J1/U1/U2 overview naming. Pin-group equality
+  is not relabelled as complete electrical validation.
+
+Blender DD-9 decision gate (no prior rejection exists; absence of references is not
+an evaluation)
+- Pin exact release/source/binary digest; verify actual GPL licence/redistribution
+  obligations. Subprocess use is not blanket clearance for bundled assets, addons or
+  linked code. Inventory addons, deps, fonts/textures/models, notices; default NO
+  optional addon until cleared. Separate project output rights from tool
+  redistribution.
+- Evaluate headless `blender -b` in the proposed EE image on an AUTHORIZED build
+  host; record CPU/GPU/EGL needs, image/build/cold-start/render-time/memory deltas,
+  failure behaviour. No core heavy dependency. EE hosting is a deployment candidate,
+  not permission to move C02 geometry ownership out of ME; decide renderer
+  ownership/reuse explicitly before integration.
+- Freeze scene/units/cameras/lights/materials/colour management/seed/backend/version;
+  measure reproducibility; declare comparison tolerance (no bit-identical GPU promise);
+  separate stable geometry from stochastic rendering.
+- Matched C01 subjects through pyrender AND Blender, same ID intent/views; compare
+  fidelity, missing features, blinded comprehension/CMF acceptance, operational
+  budgets fixed BEFORE selection. Retain pyrender if it meets required views/quality
+  at acceptable cost; adopt Blender only if it demonstrably closes a required gap and
+  clears licence/runtime/reproducibility. Neither passes → report BLOCKED; no
+  automatic fallback or forced replacement.
+
+Order ruling
+- Output sequence stays R-H §2 (C03 close-out → C04 → C02 → C01 → C00 doc check), BUT
+  C00 requirements and frozen C01/C02 mechanical inputs are validated BEFORE C04 entry.
+- Missing/contradictory footprint, board outline, connector face or envelope BLOCKS
+  production C04; obtain upstream decisions, never invent geometry. The known D1
+  footprint conflict (SOT-363 vs SOT886, thesmart_products BR 2026-10-06) must be
+  resolved before this board enters C04.
+- C01 last is acceptable only because its ID/CMF constraints already exist or are
+  resolved earlier; C00 cannot be deferred as the source of requirements.
+- C04 transfer from C03: intent-first/module-aware placement, locks, native evidence,
+  two-axis review. Schematic page partition and "all IC pins visible" do NOT transfer
+  literally to PCB geometry.
+- No new user ruling round is needed to PROPOSE a C04 spike under R-H; freeze
+  board-specific constraints and obtain approval of the placement candidate.
+  Mechanical/electrical/scope conflicts → ASK. Do not assume reroute-on-human-
+  placement is already proven.
+- Packaging/build-host and S4 commit gates unchanged.
+
+User ruling (2026-10-07, after reading §3.2): draft APPROVED as written; C03 close-out
+dispatch authorized (ERC adjudication, BOM export, 00 block names J1/U1/U2; Sonnet 5.5,
+one round, table deliverable). Astra allocates the formal DD IDs for §3.2 at
+integration. Same ruling on the D1 footprint path: the three conflicting ★ bindings
+in thesmart_products are not to be adjudicated by this officer — the user orders a NEW
+thesmart_products duty-officer session; the D1 BR is handed to it. Still not
+implementation authorization for C04/C02/C01/C00.
+
+D1 block LIFTED (2026-10-07, thesmart_products ★ ses_eed1fb0b6ffelFUGhmXVSGcp3z,
+BR §5 option (a)): design.py:84-89 now declares `Package_TO_SOT_SMD:SOT-886` with
+datasheet provenance (PESDXL4UF_G_W Rev.04 Table 1 p.1 / Table 4 p.3 / Fig 13 p.12;
+pads 1..6 = pins 1..6, netlist nodes unchanged). Officer-verified on disk: design.py
+bytes + generated/sch_bodesign/btdongle.net SOT-363 count 0 (mtime 04:22 same day).
+Uncommitted in that repo; commit is their authorization. Consequence here: the
+module book (11.j1_usb-v3, editable/usbc) still carries SOT-363 → REAL footprint
+mismatch, to be closed by a baseline-bound ChangeProposal (11.j1_usb-v4) after the
+C03 close-out round, not by editing page files mid-round.
 
 ## 4. Not changed
 

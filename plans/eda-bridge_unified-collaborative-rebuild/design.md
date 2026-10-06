@@ -305,6 +305,100 @@ not evidence for five leaves or all layouts. S4 in the officer draft is a separa
 commit decision, NOT task 3.3d or permission to commit. Task 3.3d retains the original
 five-leaf deliverable; source preservation and nine historical NO results remain.
 
+## Approved R-B / R-H integration (2026-10-07)
+
+Authority: `amendment-presentation-authority-20261006.md` §3.1 R-B through R-H,
+§3.2 and its user approval note. DD-1..15 are unchanged. The following decisions
+are approved target contracts, not implementation or release evidence.
+
+### DD-16: PresentationPlan and IC-centric design comprehension
+
+Circuit identity and page composition have separate authority. A versioned
+PresentationPlan declares page roles/order, home pages, complete pin/unit coverage,
+local-support relationships, interfaces, intent references and human locks. Import
+legacy sheet fields explicitly as a baseline; never silently repartition them.
+ICs/connectors have complete, intelligible pin coverage without an arbitrary pin-count
+threshold. Off-page labels cannot hide local support relationships. Exceptions need
+named targets, justification and explicit approval. Preserve physical instance identity
+and account for multi-unit, hidden/stacked and NC pins. Later approved R-D'/R-E/R-F
+module-book views may reference one physical instance through explicit identity mapping;
+they are not cloned electrical instances. Preserve the accepted five-home-page book.
+Agent hand drafting is a producer, not human approval. Intent comprehension is reviewed
+separately from traceability and instrument calibration; historical ACCEPTs retain scope.
+
+### DD-17: COMMON stage-bound presentation and evidence
+
+C00–C04 delivery is in scope. Each stage binds declaration, candidate, producer/toolchain,
+checks and independent review in one manifest. Approved human constraints outrank
+machine proposals; changes require baseline-bound ChangeProposal, never fallback.
+R-G separates human PNG/PDF/index from machine sources/data/evidence; both use
+`NN.<stage>-<name>-vN` with coherent revisions, source identity, visible DRAFT/non-approval
+status and preserved history. No directory creation is authorized by this decision.
+Review cannot override failed/unmeasured required gates; gates cannot prove comprehension.
+
+### DD-18: C01 product appearance and intent
+
+Deliver product/CMF PNG views and review PDF, plus scene, assets, camera/light/material
+recipe and tokens. Preserve sourced ID direction, CMF, face/interface layout and envelope.
+Renderer is TBD: pyrender is the explicit baseline pending DD-9 clearance and comparison.
+Check source/assets, token assignments, view coverage, render success and geometry-based
+dimension/interface conformance. Blind reviewers identify product/use, controls, ports,
+status, orientation, apparent finishes and obscured/contradictory features before comparison
+with the frozen brief. No electrical, physical CMF, colour-accuracy, ergonomic or
+manufacturability approval follows from pixels.
+
+### DD-19: C02 printable enclosure geometry
+
+Deliver enclosure/exploded PNG and section/clearance PDF; machine artifacts are real
+per-part STL, parametric source, genuine STEP when available, units and print profile.
+OpenSCAD/build123d remain ME producers over the same sourced constraint set: board
+envelope/heights, holes, connector faces/openings, walls, clearance, assembly and frames.
+Check nonempty valid manifold/watertight mesh, orientation/scale, measured wall/fit/
+clearance against thresholds. A printable claim also needs declared process/material/
+nozzle/build-volume/orientation and slicer evidence. Blind review asks how parts assemble,
+support the board and expose interfaces/access; hidden relations need sections/explosions.
+Watertight is not sufficient for printability; no physical print, fit, strength, thermal,
+fire/IP or production certification without corresponding evidence.
+
+### DD-20: C04 placement and actual copper presentation
+
+Deliver placement PNG, every declared copper-layer PNG and labelled stack/orientation
+PDF from the exact Gerber set; retain editable PCB, Gerber/drill, applicable BOM/CPL and
+reports. Freeze C03 pin/net partition, qualified footprint/pad mapping, mechanics,
+stackup, net classes and DRC rules. Approved human placement leads; agent proposals and
+constrained engines respect locks in existing workers. Final filled-board DRC and actual
+copper connectivity must cover unrouted/short/open populations. Bind exports and measure
+Gerber parity/connectivity separately; unavailable checks remain unmeasured, never a
+preview-derived PASS. Blind reviewers locate ICs/connectors/support, explain visible
+power/signal/return organization and identify congestion/access/isolation concerns.
+No SI/EMC/thermal, assembly or fabrication guarantee follows from a view. Review export
+is not send-to-fab authorization; explicit user approval and deterministic gates remain.
+
+### Closure, renderer decision and dependency order
+
+C03 close-out preserves the module book/native baseline and review scope while adjudicating
+ERC, exporting coverage-checked BOM and naming overview blocks J1/U1/U2. C00 delivers
+PRD DOCX plus human PDF with requirements/source/decision coverage, cross-stage consistency
+and rendered readability checks. Pin-group equality is not complete electrical validation.
+Blender clearance under DD-9 pins release/source/binary digest, actual licence obligations,
+addons/dependencies/assets/notices and output rights; subprocess use is not blanket clearance.
+Evaluate headless `blender -b` on an authorized build host, proposed EE-image costs and
+CPU/GPU/EGL/failure behavior; no core heavy dependency or transfer of ME geometry ownership.
+Freeze scene/units/cameras/lights/materials/colour/seed/backend; measure reproducibility with
+declared tolerance, not an assumed bit-identical GPU render. Compare matched C01 subjects
+against pyrender with predeclared quality/operational budgets and blind review. Retain
+pyrender if adequate; adopt Blender only on demonstrated benefit and cleared obligations;
+neither passes means blocked, not automatic fallback. Renderer ownership is explicit.
+Output order: C03 close-out → C04 → C02 → C01 → C00 document check. BEFORE C04,
+validate C00 requirements and frozen C01/C02 geometry/ID inputs. Missing/contradictory
+footprints, outline, connector faces or envelope block entry; resolve the D1 SOT-363 versus
+SOT886 BR before this board enters C04. Owner: thesmart_products duty officer
+`ses_eed1fb0b6ffelFUGhmXVSGcp3z`; consume its verified resolution, do not repair it here.
+C04 inherits intent, locks and dual-axis review, not schematic partition rules. A spike
+proposal needs no new generic ruling, but concrete placement approval and conflict ASK
+remain required. Rerouting after human placement is not presumed proven. Build-host,
+packaging and user-controlled S4 commit gates remain; only C03 close-out is dispatched.
+
 ## Amendment Risks / Trade-offs
 
 - Contract work can become a second framework: require one real formal-entrypoint slice before further abstraction.

@@ -1,5 +1,5 @@
 {
-  "version":"1.1.0",
+  "version":"1.2.0",
   "status":"target-contract-not-runtime-implementation",
   "schemas":[
     {"name":"ArtifactManifest","kind":"json","fields":[
@@ -103,6 +103,34 @@
       {"name":"verdict","type":"enum:pass|fail|indeterminate|not-applicable","notes":"Unknown/uncalibrated required classes cannot pass; N/A requires explicit applicability evidence."},
       {"name":"human_review_ref","type":"string|null","notes":"Independent final reviewer decision bound to exact artifacts; instrument pass alone is not delivery acceptance."},
       {"name":"does_not_authorize","type":"string[]","notes":"Must include electrical_correctness, fidelity and manufacturing_release. Wrap as VerificationRecord axis=form with raw evidence retained."}
+    ]},
+    {"name":"PresentationPlan","kind":"json","fields":[
+      {"name":"baseline_refs","type":"object","notes":"DD-16: circuit/native/source digests and proposal identity; legacy sheet assignments imported explicitly, never electrical authority."},
+      {"name":"pages","type":"object[]","notes":"Stable page id, role, order, primary refs, functional groups, headings and source-backed intent; approved module views allowed, never cloned electrical instances."},
+      {"name":"instance_coverage","type":"object[]","notes":"Physical instance/path identity, home-page or approved module-view mapping, full unit/pin inventory including hidden, stacked, NC and isolated pins; no pin-count threshold exemption."},
+      {"name":"local_support_and_interfaces","type":"object[]","notes":"Declared local support relationships; net/pin-specific remote endpoint and destination page. Remote membership alone does not justify hiding local connections."},
+      {"name":"exceptions_and_locks","type":"object","notes":"Per-ref/pin/net justification, explicit approval provenance, locked geometry and old-to-new identity mapping; agent hand drafting cannot issue human approval."}
+    ]},
+    {"name":"StagePresentationContract","kind":"json","fields":[
+      {"name":"stage","type":"enum:C00|C01|C02|C03|C04","notes":"DD-17 common; DD-18 C01, DD-19 C02, DD-20 C04. Target contract, not an implemented capability claim."},
+      {"name":"declaration","type":"object","notes":"Required immutable source refs: C00 requirements/decisions; C01 ID direction/CMF/interface/envelope; C02 constraint set/frames; C03 circuit/native baseline; C04 net partition, qualified footprint-pad map, mechanical/stackup/net-class/DRC rules."},
+      {"name":"producer","type":"object","notes":"Explicit producer, toolchain/version, approved locks and proposal ref. Human-approved baseline outranks proposals; no failure-triggered fallback. C01 renderer undecided until clearance; C02 OpenSCAD/build123d ME; C04 constrained EE adapters."},
+      {"name":"artifact_set","type":"object","notes":"ArtifactManifest binding human PNG/PDF/index and machine editable source/data/evidence under R-G; NN.<stage>-<name>-vN naming, coherent revision, source identity and visible DRAFT status. C01 scenes/tokens; C02 per-part STL/process metadata; C03 schematic/netlist/BOM; C04 PCB/every copper layer/Gerber/drill; C00 DOCX plus PDF."},
+      {"name":"required_checks","type":"object[]","notes":"Versioned check IDs, thresholds, applicability, expected coverage and VerificationRecord refs: C01 assets/tokens/views/geometric conformance; C02 mesh/manifold/watertight/scale/wall/clearance and slicer process; C04 filled-board DRC, actual-copper partition and exported-set parity; C03 ERC adjudication/BOM; C00 source/requirement consistency."},
+      {"name":"review_refs","type":"string[]","notes":"Independent StageVisualReview records; never substitute for required machine checks or human release approval."},
+      {"name":"blocks_and_nonclaims","type":"object","notes":"Explicit omissions and prohibited claims; D1 footprint conflict and missing upstream constraints block C04. Watertight is not printable; preview is not copper validation; appearance is not CMF approval. Packaging and S4 decisions remain separate."}
+    ]},
+    {"name":"StageVisualReview","kind":"json","fields":[
+      {"name":"subject_manifest_sha256","type":"string","notes":"Exact image/set identity plus frozen declaration reference; no cross-revision review reuse."},
+      {"name":"protocol","type":"object","notes":"Stage, protocol version, reviewer identity/model, independent artifact-only questions and answers, then comparison with frozen intent. Label traceability and intent axes separately."},
+      {"name":"questions","type":"string[]","notes":"C01 product/use/interfaces/finish/ambiguity; C02 assembly/support/openings/access; C04 IC/support placement, visible power/signal/return, orientation/layers/congestion. C03 whole-pin/local/remote traceability plus design intent; C00 document comprehension/consistency."},
+      {"name":"decision","type":"enum:accept|reject|unmeasured","notes":"Scoped judgment with residuals and limitations; not instrument calibration, electrical certification, successful physical print or human approval."}
+    ]},
+    {"name":"RendererDecision","kind":"json","fields":[
+      {"name":"adoption_ref","type":"string","notes":"DD-9 ReferenceAdoption: exact Blender release/source/binary digest, actual licences, addons/dependencies/assets, notices and redistribution/output rights. No blanket subprocess exemption."},
+      {"name":"execution_profile","type":"object","notes":"Authorized build host, proposed headless EE image/backend, CPU/GPU/EGL, renderer ownership, image/build/cold-start/render/memory measurements or explicit unavailable reasons; no core heavy dependency or ME geometry migration."},
+      {"name":"comparison","type":"object","notes":"Matched pyrender/Blender subjects, frozen ID/views/scene/units/materials/colour management/seed/version, predeclared quality/cost budgets and reproducibility tolerances; no assumed GPU pixel identity."},
+      {"name":"decision","type":"enum:pending|retain-pyrender|adopt-blender|blocked","notes":"Evidence-backed choice; neither passes means blocked. Approval is separate; pending does not permit installation, implementation or fallback."}
     ]},
     {"name":"OperationOutcome","kind":"message","fields":[
       {"name":"module","type":"enum:A1|A2|A3|A4","notes":"Matches IDEF0 and outcome table."},

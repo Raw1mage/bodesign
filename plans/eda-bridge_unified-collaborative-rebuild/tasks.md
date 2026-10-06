@@ -64,3 +64,26 @@ separate scoped approval after local P4; they are not implied implementation tas
 - [ ] 6.1 Run a second real-project delivery and semantic compatibility comparisons.
 - [ ] 6.2 Obtain explicit cutover approval, publish version/rollback procedure and synchronize current architecture.
 - [ ] 6.3 Retain legacy data and user worktrees; retire entrypoints only by a separately approved migration decision.
+
+## 7. Approved R-B / R-H delivery queue (DD-16..20, 2026-10-07)
+
+This queue extends rather than checks off sections 2–6. Source: amendment §3.1 R-B
+and §3.2 with its approval note. C03 module-book closure is officer-reported;
+its pin-group equality and visual reviews do not complete electrical closure.
+Only C03 close-out is currently dispatched to Sonnet. Other implementation needs
+separate allocation; build-host and S4 commit decisions remain unchanged.
+
+- [ ] 7.1 Materialize DD-16 PresentationPlan and intent-review contract with complete pin/unit/NC accounting, approved module views, local-support relationships, exception approvals and baseline mappings; consume existing book evidence without re-partitioning or relabelling earlier reviews.
+- [x] 7.2 Close C03: adjudicate ERC findings, export/check same-revision BOM coverage, update overview block names to J1/U1/U2 and bind module-book/native/netlist/data evidence. Owner: dispatched Sonnet producer; acceptance AC21, no duplicate implementation here. Officer-verified 2026-10-07: manifest root `ff8115dc…` (352 entries, 0 non-OK), 07–11 page files byte-unchanged (mtime 03:43 < run 04:38), ERC 336 rows (REAL 1: PWR_FLAG declared in design.py:308 but absent from every sheet), BOM 45 refs missing 0 / extra 0 / mismatch 1 (D1 SOT-363 vs SSOT SOT-886), 00.overview-v5 + book PDF v8 (6 pages). Remainder as ChangeProposals: 11.j1_usb-v4 (D1 footprint), PWR_FLAG on VBUS_CON/VBUS, page-specific wire-UUID seeds (46/63 UUIDs duplicated across pages). Blind review of 00 v5 not yet run.
+- [ ] 7.3 Before C04, verify C00 requirements and frozen C01/C02 envelope, board outline, connector faces, stackup and qualified footprint/pad mapping. Resolve the D1 SOT-363/SOT886 BR with thesmart_products duty officer ses_eed1fb0b6ffelFUGhmXVSGcp3z and consume its verified resolution. Unresolved D1 or upstream conflicts BLOCK this board's C04 entry (R15, AC22).
+- [ ] 7.4 C04 / DD-20: propose and obtain placement approval; retain locks, generate actual copper-layer views plus editable PCB/Gerber/drill set; measure final DRC, copper connectivity and export parity separately; independently review intent/placement and exact layer views (AC22). Reuse section 5 work, not a second routing implementation.
+- [ ] 7.5 C02 / DD-19: consume the frozen board/constraint revision through OpenSCAD/build123d in ME; deliver per-part STL and assembly/section views, mesh/wall/clearance and declared-process slicer checks; disclose physical-print limits (AC23). Reuse 5.4 and DD-10/11.
+- [ ] 7.6 Blender / DD-9 clearance: pin release and binary/source integrity; inventory tool/addon/dependency/asset licences and obligations; decide renderer ownership, with no optional addon or installation before clearance. No assumed rejection or automatic replacement of pyrender.
+- [ ] 7.7 Blender benchmark on an authorized host: freeze matched C01 scenes, view/CMF intent, colour management, seeds/backend and comparison tolerances; measure headless EE-image feasibility, image/build/start/render/memory deltas and blind-review results against pyrender. Decide retain/adopt/blocked against predeclared budgets; ME geometry ownership unchanged (AC25). Host unavailable means BLOCKED, not fabricated metrics.
+- [ ] 7.8 C01 / DD-18: selected cleared producer emits product/CMF views, editable source/scene and token bindings; verify assets, view coverage and supported geometric conformance, then blind review against frozen ID intent; retain non-approval markers (AC24).
+- [ ] 7.9 C00 final document check: deliver NN.c00-prd-vN.docx plus human PDF through the approved document pipeline; check requirements/source/decision coverage, cross-stage consistency and rendered readability. Requirements remain upstream of 7.3, not deferred until this task (AC26).
+- [ ] 7.10 Bind C00–C04 sets under DD-17/R-G human-machine tree separation, NN.<stage>-<name>-vN naming, history and one manifest; record all gate/review omissions and explicit non-claims. Architecture Sync and release approval are separate from document completion (AC27).
+
+Output order: 7.2 → 7.4 → 7.5 → 7.8 → 7.9; 7.3 is a prerequisite to 7.4,
+and 7.6–7.7 precede any Blender selection for 7.8. This order never permits
+invented upstream geometry, automatic fallback, unapproved fabrication or a commit.

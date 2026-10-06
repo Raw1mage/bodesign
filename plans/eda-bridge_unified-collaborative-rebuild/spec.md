@@ -120,6 +120,42 @@ from electrical correctness. Engine output SHALL remain editable native KiCad.
 - **WHEN** archived PNG/SVG cannot be bound to native objects or render transforms
 - **THEN** affected class coverage is unmeasured/indeterminate, not zero defects or calibrated PASS.
 
+### Requirement: R13 IC-centric presentation and intent (DD-16)
+
+PresentationPlan SHALL separate page composition from electrical identity and account
+for every applicable IC/connector pin, unit, hidden/stacked pin and NC on its home
+view. Local support connections SHALL be visible; remote labels require declared
+destinations and explicit exceptions. User-approved module-book view mappings are
+retained without creating extra physical instances. Agent drafts are not approval.
+
+#### Scenario: Page composition changes
+- **WHEN** a new producer or partition is proposed
+- **THEN** a baseline-bound ChangeProposal preserves physical-instance/pin/net identities and locks; both native conformance and independent intent comprehension are checked.
+
+### Requirement: R14 C00-C04 stage-bound delivery (DD-17..20)
+
+Each stage SHALL publish the human/machine artifact sets, invariant declaration,
+producer identity, deterministic evidence, blind review and non-claims specified
+in design.md DD-17..20 and closure anchors. All files SHALL share one revision-bound
+manifest and NN.<stage>-<name>-vN naming under R-G. Stage acceptance requires both
+engineering coverage and intelligible views; neither axis substitutes for the other.
+
+#### Scenario: Attractive but unverified output
+- **WHEN** an image is accepted but mesh printability, copper/export connectivity or other required checks are missing
+- **THEN** preserve the visual verdict and report engineering acceptance blocked/indeterminate, never manufacture a release approval.
+
+### Requirement: R15 Upstream order and renderer decision
+
+Output order SHALL be C03 closure, C04, C02, C01, then C00 document check; upstream
+C00 requirements and C01/C02 geometry constraints SHALL be validated before C04.
+The known D1 footprint conflict SHALL block this board's C04 entry until resolved
+by its owning project. Blender selection SHALL follow the DD-9 gate in design.md;
+no renderer is chosen by absence of an earlier evaluation or by silent fallback.
+
+#### Scenario: Missing C04 prerequisite or renderer clearance
+- **WHEN** footprint/outline/connector/envelope authority conflicts, or required renderer permission/runtime evidence is absent
+- **THEN** report the specific blocker and owner; do not invent geometry, install a substitute, or equate review exports with fabrication authorization.
+
 ## Acceptance Checks
 
 - [ ] AC1: P0 records versioned source/library/toolchain baselines and distinguishes existing failures from unavailable prerequisites.
@@ -143,3 +179,14 @@ from electrical correctness. Engine output SHALL remain editable native KiCad.
 - [ ] AC17 (S2 / 3.3b): Formal entrypoint accepts a complete human native sheet set plus declared circuit and dependencies; inspect/derive leaves every source byte unchanged. Approved candidate patches preserve untouched object spans/UUIDs and pinned geometry. Changed baseline, unsupported syntax/edit, missing sheet or topology disagreement produces refusal/conflict/proposal before mutation. Synthetic cases do not replace the pending authorized human fixture.
 - [ ] AC18 (S3 / 3.3c): Pinned/license-cleared elkjs in the EE worker produces one editable usbc leaf through the formal path without legacy routing fallback. Final symbol-port coordinates, quantized routes, labels and native exported topology agree; calibrated S1 plus independent visual review accept the exact native-rendered candidate. Record runtime/image costs and unsupported cases; no five-leaf claim.
 - [ ] AC19 (3.3d): All five named subsystem leaves plus root, native files and human-viewable renders are delivered; each has matching final hashes, independent readable-leaf acceptance and separate native electrical/replica fidelity evidence. Prior nine NO verdicts remain historical failures. Existing child visual AC-14 remains required and is not master AC14.
+
+### R-H acceptance additions (target checks, not completion claims)
+
+- [ ] AC20: DD-16 plan/native comparison accounts for all physical-instance pins and approved view mappings; blind intent review identifies function, local support and remote destinations without reconstructing fragmented chips. Traceability and intent remain separate axes.
+- [ ] AC21: C03 closure preserves the accepted module book and baseline; ERC findings are adjudicated, BOM coverage recorded, and overview names identify J1/U1/U2. Pin-group equality alone is not electrical approval.
+- [ ] AC22: C04 entry records resolved D1 footprint/pad mapping and frozen upstream requirements, geometry and stackup; final filled-board DRC, actual copper connectivity and export parity have explicit coverage. Every copper layer has a bound human render and independent review. Missing Gerber checks cannot pass by PCB DRC alone.
+- [ ] AC23: C02 real per-part STL passes declared mesh/scale/wall/clearance checks and qualified print-profile/slicer checks; exploded/section review explains assembly and interfaces. Unmeasured physical fit and production properties remain non-claims.
+- [ ] AC24: C01 scene/assets/material tokens/views conform to the approved ID brief with source hashes; blind review recovers product use and interface/appearance intent. No electrical, physical CMF or manufacturability approval is inferred.
+- [ ] AC25: Blender/pyrender decision records exact licences/assets/dependencies, authorized-host headless feasibility and measured costs/reproducibility against predeclared budgets on matched subjects. Selection is explicit; neither passing means blocked.
+- [ ] AC26: C00 PRD DOCX and human PDF have source/decision/requirement coverage and cross-stage consistency plus readable rendering; requirements were available before dependent work, not deferred until document closure.
+- [ ] AC27: Each stage's NN-vN human/machine set has one manifest, exact reviewer and checker subjects, preserved history, explicit non-claims and separate release approval; no packaging or S4 commit authorization is inferred.
