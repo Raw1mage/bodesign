@@ -34,7 +34,10 @@ copy AGPL code, upload designs or add cloud credentials.
 
 - [ ] 3.1 Consume reviewed seam-promotion receipt from the collaborative plan; do not duplicate its active worker tasks.
 - [ ] 3.2 Bind supported functional blocks and existing motifs to circuit/presentation separation.
-- [ ] 3.3 Integrate multi-sheet and C03 evidence through the formal entrypoint; obtain outstanding child-plan acceptance rather than copying checkmarks.
+- [ ] 3.3a S1: Implement DD-14 instrument and calibrated classes (a)-(f); meet AC16 with pinned rejected and accepted examples, explicit missing archive cells and no router edits. Fable 5.1 under officer dispatch.
+- [ ] 3.3b S2: Implement explicit human-draft baseline ingestion and approved patch/reconciliation boundary through the formal entrypoint; meet AC17. Authorized human fixture pending; no automatic repartition or restyling.
+- [ ] 3.3c S3: Spike pinned/license-cleared elkjs layered in the EE worker at the DD-15 presentation-solution seam; meet AC18 on usbc without legacy fallback. Requires S1 calibration for acceptance.
+- [ ] 3.3d Deliver all five human-viewable subsystem leaves through the formal entrypoint; meet AC19 and obtain child visual/electrical acceptance, not copied checkmarks. 3.5 packages the same validated revision.
 - [ ] 3.4 Resolve or explicitly bound PC-001 coverage and waiver behavior; test empty, isolated and NC cases.
 - [ ] 3.5 Deliver same-revision schematic/netlist/BOM/library/companion bundle with separate electrical and form results.
 - [ ] 3.6 Converge reused-sheet annotation and S-expression codec with native-version tests; preserve upstream MIT notices where code is extracted.

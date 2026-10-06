@@ -82,6 +82,28 @@
       {"name":"state","type":"enum:queued|running|succeeded|failed|cancelled-before-start|unknown","notes":"Pending cancellation is side-effect-free; running timeout maps to unknown until authoritative read-back; no blind retries or rollback claim."},
       {"name":"receipt","type":"object|null","notes":"Node results, resulting revision and side effects. Unknown jobs map A2 indeterminate and block publication."}
     ]},
+    {"name":"PresentationBaseline","kind":"json","fields":[
+      {"name":"schema_version","type":"string","notes":"Versioned original contract; reject unsupported major versions."},
+      {"name":"source","type":"enum:human|engine|legacy","notes":"Explicit selection, not a fallback chain. Supplied human baseline cannot be bypassed."},
+      {"name":"native_sheet_hashes","type":"object[]","notes":"Complete root and leaves: scoped path, SHA256, byte size, native version. Dependencies and sheet references resolved before mutation."},
+      {"name":"pinned_object_ids","type":"string[]","notes":"Scoped sheet/instance/UUID identities; human mode protects all pre-existing presentation objects, not only this explicit subset."},
+      {"name":"baseline_manifest_sha256","type":"string","notes":"P1 ArtifactManifest binding exact native bytes and library dependencies."},
+      {"name":"declared_circuit_revision","type":"string","notes":"Separate topology authority; differences produce ChangeProposal, never silent reconciliation."},
+      {"name":"engine_ref","type":"object|null","notes":"Engine mode pins version, package integrity, license/notice clearance and layout options; human/legacy modes explicitly null."},
+      {"name":"edit_policy","type":"object","notes":"Inspect/derive default. Explicit supported edit classes, approved ChangeProposal and before-write baseline guard for candidate-only edits. Preserve untouched byte spans; unsupported syntax refuses."}
+    ]},
+    {"name":"ReadabilityReport","kind":"json","fields":[
+      {"name":"subject_manifest_sha256","type":"string","notes":"P1 binding of exact native sheet set, exported netlist and native SVG/raster artifacts."},
+      {"name":"presentation_baseline_ref","type":"string","notes":"Baseline identity; evidence cannot be reused after presentation changes."},
+      {"name":"render_context","type":"object","notes":"Renderer/version, artifact hashes, viewBox-to-mm transform, viewing scale, stroke and text metrics. Missing mapping is indeterminate."},
+      {"name":"policy_ref","type":"object","notes":"Version/digest, calibrated tolerances, local-net K and explicit applicability rules. Page-use 50% is not a universal default."},
+      {"name":"classes","type":"object[]","notes":"Exactly a-f: junction ambiguity; contact/crossing ambiguity; local wired-path completeness; series-path legibility; foreign-net corridors; text/scale/page use. Each includes expected_ids, examined_ids, omitted with reasons, applicability, measurements, verdict and localized native-ID/render-region findings. Separate actual electrical error from perceptual ambiguity."},
+      {"name":"calibration_ref","type":"object","notes":"Pinned CP1-CP3 rejection matrix plus reviewed accepting/corrected cases, per-class confusion/coverage, missing assets and policy version; no generic always-NO acceptance."},
+      {"name":"execution","type":"enum:succeeded|failed|not-run","notes":"Independent of form verdict and calibration state."},
+      {"name":"verdict","type":"enum:pass|fail|indeterminate|not-applicable","notes":"Unknown/uncalibrated required classes cannot pass; N/A requires explicit applicability evidence."},
+      {"name":"human_review_ref","type":"string|null","notes":"Independent final reviewer decision bound to exact artifacts; instrument pass alone is not delivery acceptance."},
+      {"name":"does_not_authorize","type":"string[]","notes":"Must include electrical_correctness, fidelity and manufacturing_release. Wrap as VerificationRecord axis=form with raw evidence retained."}
+    ]},
     {"name":"OperationOutcome","kind":"message","fields":[
       {"name":"module","type":"enum:A1|A2|A3|A4","notes":"Matches IDEF0 and outcome table."},
       {"name":"outcome","type":"enum:ok|failed|not-run|empty|indeterminate","notes":"Closed domain; unknown values rejected, never defaulted to success."},

@@ -103,6 +103,23 @@ identity and uncertain execution outcomes without retrying unknown mutations.
 - **WHEN** the caller loses confirmation after native execution started
 - **THEN** outcome remains unknown, client source is not claimed restored, and read-back reconciliation precedes any new mutation.
 
+### Requirement: R12 Presentation authority and calibrated readability
+
+The system SHALL select human baseline, layered engine or legacy compatibility
+explicitly. Human presentation is immutable unless an approved baseline-bound
+ChangeProposal authorizes named edits. Import or engine failure SHALL NOT select a
+lower-priority source. Readability SHALL bind native semantic identities to rendered
+geometry and report DD-14 classes (a)-(f), unknowns and calibration independently
+from electrical correctness. Engine output SHALL remain editable native KiCad.
+
+#### Scenario: Human draft disagrees with declared circuit
+- **WHEN** native export differs from the declared circuit
+- **THEN** preserve source bytes, report topology differences and issue a reconciliation proposal; do not reroute, repartition or silently choose either topology.
+
+#### Scenario: Readability instrumentation lacks matching source assets
+- **WHEN** archived PNG/SVG cannot be bound to native objects or render transforms
+- **THEN** affected class coverage is unmeasured/indeterminate, not zero defects or calibrated PASS.
+
 ## Acceptance Checks
 
 - [ ] AC1: P0 records versioned source/library/toolchain baselines and distinguishes existing failures from unavailable prerequisites.
@@ -120,3 +137,9 @@ identity and uncertain execution outcomes without retrying unknown mutations.
 - [ ] AC13: AABB false-positive, exact collision, clearance violation and authorized contact are distinguished; exact-unavailable cannot pass required mechanical checks.
 - [ ] AC14: Missing Vref/parasitics/ESD rule scope and absent routing counts cannot become numeric defaults or release PASS.
 - [ ] AC15: Pending cancellation, running timeout, cloud revision conflict and unsupported CAD capabilities preserve honest outcome and prevent blind replay.
+- [ ] AC16 (S1 / 3.3a; corpus amendment approved 2026-10-06): Historical CP1/CP2 cells (6) remain permanently blocked, never passed. The replacement calibration corpus comprises (i) CP3 rejecting cells ×3 (archived, reviewer-adjudicated); (ii) every S3 engine-spike output that receives an independent fresh-eyes review, entered as rejecting or accepting per that review; and (iii) hand-built paired cases (clean/b1 family), entered as accepting only after an independent review, until then labelled `hand-verified, unadjudicated`. AC16 `calibrated` status requires at least one adjudicated rejecting AND at least one independently reviewed accepting entry per class a–e; class f follows its own explicit applicability ruling. Versioned per-class thresholds, populations, false positives/negatives, localized evidence and omissions remain required; no always-NO or raw-wire-end proxy. Fresh-eyes remains the final delivery gate. See [S1 receipt: approved corpus amendment](s1-instrument-receipt.md#approved-ac16-corpus-amendment-2026-10-06).
+  - Corpus membership does not certify input provenance: CP3 archived netlist mismatch remains disclosed and its diagnostic findings do not become a verified paired measurement. Calibration records bind the policy, subject/declared-input hashes and independently reviewed evidence; unadjudicated extras are not confirmed false positives.
+  - S3 may produce and submit its first leaf for independent review before calibration closes, subject to separate officer dispatch and DD-9 clearance. That leaf is an accepting candidate, not a presumed YES. This removes the dispatch circularity, not AC18's final calibrated-S1 acceptance requirement. Until the per-class conditions are evidenced, calibration remains partial and 3.3a remains unchecked; `verdict_scope="a-e"` does not imply class-f or six-class PASS.
+- [ ] AC17 (S2 / 3.3b): Formal entrypoint accepts a complete human native sheet set plus declared circuit and dependencies; inspect/derive leaves every source byte unchanged. Approved candidate patches preserve untouched object spans/UUIDs and pinned geometry. Changed baseline, unsupported syntax/edit, missing sheet or topology disagreement produces refusal/conflict/proposal before mutation. Synthetic cases do not replace the pending authorized human fixture.
+- [ ] AC18 (S3 / 3.3c): Pinned/license-cleared elkjs in the EE worker produces one editable usbc leaf through the formal path without legacy routing fallback. Final symbol-port coordinates, quantized routes, labels and native exported topology agree; calibrated S1 plus independent visual review accept the exact native-rendered candidate. Record runtime/image costs and unsupported cases; no five-leaf claim.
+- [ ] AC19 (3.3d): All five named subsystem leaves plus root, native files and human-viewable renders are delivered; each has matching final hashes, independent readable-leaf acceptance and separate native electrical/replica fidelity evidence. Prior nine NO verdicts remain historical failures. Existing child visual AC-14 remains required and is not master AC14.

@@ -7,9 +7,12 @@
 ## 1. 這個 repo 是什麼
 
 bodesign = 獨立的 **MCP server**，把 C00–C07 硬體設計（PCB）生命週期暴露成 `bodesign_*` 工具。
-- 宿主無關、可獨立對外營運：UDS（本機 `.run/bodesign.sock`）。TCP `:8077` 只綁在容器內、
+- **開發與部署架構解耦**：本系統嚴格落實「**在 repo 開發，deploy 到 docker；repo 和 docker 可以是不同的主機**」的拓撲。
+  - **Repo（唯一真實來源 SSOT）**：程式碼、單元測試、規格、計畫與技能定義留在開發工作機（如 WSL 本機）。
+  - **Docker（服務執行階段 Runtime）**：封裝 heavy EDA 工具鏈與 MCP 服務，運行於專屬伺服器（如 DockerLab CT105）或本機。
+- 宿主無關、可獨立對外營運：UDS（本機 `.run/bodesign.sock`）或 LAN HTTP（如 DockerLab CT105 `:8177`）。TCP `:8077` 只綁在容器內、
   **不對 host publish**（BR_20260730d：publish 會把未認證的 `POST /invoke` 暴露在所有介面上）；
-  對外 HTTP 應由 gateway 擺在 socket 前面。
+  對外 HTTP 應由 gateway / Ingress 擺在前面，且必須封閉 `/invoke`。
 - 與配套的 `bodesign` skill（C00-C07 workflow 腦 + kicad/kidoc 引擎）成對；verification 工具會回呼 skill 引擎。
 - 核心哲學：**展示**可靠度（對照已知良品交叉檢核 + KiCad/SPICE/EMC 確定性驗證），而非宣稱。
   LLM 只做上游抽取／裁決，驗證與比對全程不參與。
@@ -34,16 +37,40 @@ bodesign = 獨立的 **MCP server**，把 C00–C07 硬體設計（PCB）生命�
    = BLOCKING，不臆測。
 5. **不主動新增 fallback mechanism**，除非使用者明確批准（見全域 AGENTS.md §11）。
 
-## 3. Runtime / 啟動
+## 3. 開發與部署架構紀律（Runtime & Topology）
 
-**本節涵蓋兩條各自獨立的上線路徑：容器（`mcpctl.sh` / `webctl.sh`）與 skill 投影
-（`opencode skill resync`）。兩者互不觸發** —— `rebuild` 不會更新 published skill，
-`resync` 不會重建容器。改了 `services/` / `packages/` 走前者，改了 `skills/` 走後者，
-兩邊都改就兩邊都要跑。
+### 3.1 核心拓撲：在 Repo 開發，Deploy 到 Docker，主機可分離
 
-### 3.1 容器
+bodesign 嚴格貫徹**開發環境與執行階段解耦**架構：
 
-bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端，per-user project `bodesign-${USER}`）：
+1. **在 Repo 開發（唯一真實來源 SSOT）**：
+   - 所有原始碼、Git 版控、單元測試（`./scripts/run_tests.sh`）、規劃規格（`plans/`、`specs/`）、技能源頭（`skills/`）**一律留在開發者主機（WSL 本機 `/home/pkcs12/projects/bodesign`）**。
+   - 嚴禁直接在遠端 Docker 主機上做 ad-hoc 原始碼修改，確保 Repo 永遠是唯一真實來源。
+2. **Deploy 到 Docker（重度運算執行階段）**：
+   - Docker 容器負責封裝重度 EDA 工具鏈（KiCad、ngspice、freerouting、LibreDWG 等）並暴露 MCP 服務端點。
+3. **Repo 與 Docker 可以是不同的主機（跨主機分離部署）**：
+   - **遠端生產模式（DockerLab 模式，如 CT105: 192.168.100.141:8177）**：
+     - Docker 部署於專屬伺服器，由 LAN 提供標準 MCP 服務（Port 8177）。
+     - WSL 本機不常駐 Docker 容器（執行 `./mcpctl.sh stop` 釋放 WSL 記憶體與 CPU），只保留純 Repo。
+     - 客戶端（`~/.config/opencode/mcp-apps.json`、`mcp.json`）指向遠端端點：`http://192.168.100.141:8177/mcp/`。
+   - **本地開發模式（Local Dev 模式，WSL 同機）**：
+     - 當需要本機快速迭代或離線開發時，透過 `BODESIGN_DEV=1 ./mcpctl.sh start` 在 WSL 本機掛載原始碼啟動。
+     - 一旦切換至遠端 DockerLab 提供服務，WSL 本機容器必須除役（`./mcpctl.sh stop`），嚴禁雙重實例競態。
+
+#### 跨主機部署與交付天條（4 大紀律）
+
+1. **變更發布 SOP**：
+   WSL Repo 修改 ➔ 本地單元測試（`./scripts/run_tests.sh`）全綠 ➔ 打包映像檔（`Dockerfile`/`Dockerfile.core`）推送到 LAN Registry（`registore.thesmart.cc/bodesign:<tag>`） ➔ 目標 Docker 主機拉取映像檔並重載（如 `docker compose up -d`） ➔ 遠端 MCP 煙霧與一致性驗證。
+2. **邊界防護（BR_20260730d 天條）**：
+   容器內部端口（`8077`）嚴禁跨主機直接 publish；對外暴露必須透過 Ingress（Nginx sidecar），且 Ingress 必須以 403 Forbidden 封閉未授權的 `POST /invoke` 端點，僅開放 `/healthz`、`/mcp`、`/files`。
+3. **唯讀外部資料庫掛載**：
+   如 Component KB (`ragbase.sqlite`) 跨主機唯讀掛載，來源資料庫必須執行 `PRAGMA wal_checkpoint(TRUNCATE);` 與 `PRAGMA journal_mode=DELETE;`，杜絕 WAL 唯讀掛載造成 `attempt to write a readonly database` 錯誤。
+4. **服務與技能雙獨立路徑**：
+   容器（`mcpctl.sh` / DockerLab）與 skill 投影（`opencode skill resync`）互不觸發。改了 `services/` / `packages/` 走 Docker 發布，改了 `skills/` 走投影，兩邊都改就兩邊都要跑。
+
+### 3.2 本地容器管理（`./mcpctl.sh`）
+
+bodesign 本機 MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端，per-user project `bodesign-${USER}`）：
 - `./mcpctl.sh start | restart | rebuild | stop | status | log`
 - **Dev loop（改 code 不重建 image）**：`BODESIGN_DEV=1 ./mcpctl.sh start`（首次 build + 綁定原始碼掛載），
   之後 `BODESIGN_DEV=1 ./mcpctl.sh restart` 數秒生效。**只有改依賴（requirements/Dockerfile）才 `rebuild`**。
@@ -52,7 +79,7 @@ bodesign MCP server 只透過 **`./mcpctl.sh`** 管理（docker-compose 後端�
   維持 workers 模式（避免 rebuild 悄悄退回 monolith 並 orphan workers）。`BODESIGN_WORKERS=0` 強制退回。
 - 禁止手工 `docker run` / 直接起 server 繞過 `mcpctl.sh`。
 
-### 3.2 skill 投影
+### 3.3 skill 投影
 
 `skills/bodesign/`、`skills/bodesign-kb/` 是 repo SSOT，上線路徑是 **capability projection**，
 **不是** `mcpctl.sh rebuild`：

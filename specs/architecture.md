@@ -161,3 +161,36 @@ Frontend axis: the web frontend is a KiCad companion dashboard, not a KiCad-nati
 External datasheet policy: automatic public web downloads are disabled by default. `/knowledge/external-fetch` is a fail-fast policy gate that returns an approval-required response; accepted inputs before approval are user-provided PDFs/text and docxmcp-derived source chunks.
 
 Vault diagnostics: `bodesign_vault_diagnostics` and `GET /vault/diagnostics` are the supported inspection path for live server-vault state. They run inside the same `BODESIGN_VAULT_DIR` storage boundary as normal vault tools, report DB presence/size plus a queue preview, and must not fall back to a temporary vault or require direct host access to Docker volume internals.
+
+## Approved Target Convergence — 2026-10-06 (Not Yet Implemented)
+
+The duty officer approved the architectural baseline in
+`plans/eda-bridge_unified-collaborative-rebuild/design.md` DD-1 through DD-8.
+Intent owns desired behavior; native KiCad owns current implementation; frozen
+manifests/netlists and verification records describe a specific release. Circuit
+topology, schematic presentation and physical constraints remain separate linked
+models. MCP and landing adapters converge on shared application use cases while
+core/EE/ME execution boundaries remain. Artifact-bound coverage, freshness and
+explicit approval govern release; baseline-aware proposals preserve human edits.
+
+This is a target-state amendment, not a report that the runtime has migrated.
+The master plan maps existing C03, multi-sheet and collaborative child plans
+without transferring their completion claims or overwriting active work. Astra
+owns planning/review; Gemini implements under duty-officer dispatch. P0 establishes
+the actual versioned baseline after design completion; P1-P5 require their own
+scoped dispatch and acceptance. Historical statements above about universal IR
+authority, client-only analysis and folder-only readiness must be reconciled at
+the relevant migration milestone, not silently applied as contradictory defaults.
+
+### Reference-Ingestion Amendment (Awaiting Acceptance)
+
+The master plan now records five source-pinned external reference assessments in
+`reference-evaluation.md`. Its DD-9..DD-12 propose selective MIT codec/annotation
+reuse, native evidence-backed analysis/release policy, and a bounded design-ir
+Feature Graph lowered by the existing ME worker. A board/enclosure bridge binds
+STEP solids, coordinate frames, anchors and exact mechanical checks to revisions;
+AABB broad-phase is not a clearance verdict. Optional vendor adapters require
+license, capability, credentials and data-egress approval; no proprietary runtime
+or upstream AGPL code is adopted by this amendment. These are not shipped features.
+The duty officer holds master P0 dispatch until the amended design receipt is
+accepted; existing independent collaborative work continues.

@@ -161,6 +161,150 @@ jobs can be cancelled without side effects. A lost response while running is unk
 read back the native revision and resolve it before any retry. No hardcoded upstream
 port, raw unauthenticated TCP bridge or secret-bearing log is part of this design.
 
+## Presentation Authority Amendment (2026-10-06)
+
+This section supersedes the officer draft's DD-13..15 wording where it differs.
+DD-1..12 retain their IDs and scope. User-authorized developers for this amendment
+are Fable 5.1 and Astra 6; this is a scoped exception to DD-8, not a fleet-wide change.
+The paused slice-A working tree is preserved. No further local router repair rounds
+are authorized; legacy N=1 compatibility is pinned by snapshot under DD-7, not reset
+to an older commit. S1-S3 are implementation work, not completed by this design.
+
+### DD-13: Explicit presentation authority, not an automatic fallback chain
+
+Priority is human draft > explicitly selected layered engine > explicitly selected
+legacy compatibility. A supplied human baseline cannot be bypassed after an import
+failure. Engine failure cannot fall back to the legacy router or label-only wiring.
+Human-authored placements, wire geometry, text, styles, UUIDs and sheet structure
+are authoritative presentation, but not automatic electrical or readability approval.
+An engine candidate is editable native KiCad and may be explicitly adopted by the
+human as a new human baseline. Existing human objects then remain protected.
+
+**S2 formal ingestion contract:** extend the existing `emit_multisheet` application
+entrypoint with a scoped `presentation_baseline` manifest: complete root/leaf
+`.kicad_sch` set, root path, per-file hashes, declared circuit revision, required
+library dependencies and pinned object IDs. Validate local relative sheet references,
+unique identities and native version support; missing sheets, ambiguous instance
+mapping or unavailable dependencies refuse before writes. No unrestricted host paths.
+Default mode is inspect/derive: preserve every input file byte-for-byte and produce
+netlist, BOM, ERC, companions, readability and reconciliation evidence separately.
+
+The agent may PROPOSE missing values/footprints, annotation or label completion,
+but not apply them under a generic 'repetitive work' permission. Each mutation needs
+a P1 ChangeProposal naming baseline hash, object UUID/field, supported edit class,
+before/after value, approval and affected checks. Apply only to a separate candidate
+with the baseline check and write under the same guard. Untouched files and native
+object byte spans are retained; if the editor cannot preserve unknown syntax and
+unchanged spans, that edit class is unsupported. Rendering is read-only. No automatic
+sheet repartition, renumbering, library replacement, page fitting or relocation of
+human objects. New objects need explicit addition permission and collision checks;
+the agent may not move existing objects to make room. Changed source => conflict.
+
+Native-export topology mismatch creates a reconciliation ChangeProposal referencing
+declared circuit and native manifests, with fused/split/missing/NC/isolated differences.
+Neither topology wins silently. Missing pins or connections are proposals, not an
+automatic repair. Human input fixture remains pending user supply/permission; a
+synthetic fixture proves only the ingestion contract, not real-user acceptance.
+
+### DD-14: Reviewer-aligned instrument with explicit calibration limits
+
+Read native objects, pin geometry and exported net identity together with the native
+SVG's visible geometry. Bind all three to exact sheet hashes and renderer version,
+viewBox/unit transform, stroke/text extents and declared viewing scale. Raster-only
+or unmatched assets cannot establish semantic classes. Missing mapping/geometry is
+indeterminate, never zero defects. This instrument models cited failure classes;
+it is not claimed to be equivalent to all human perception.
+
+Classes (a)-(f), each with expected/examined/omitted object populations:
+- (a) Junction ambiguity: normalized incident branches, segment interiors and pin
+  tips versus native junction semantics; flag misleading dot-on-pin placement with
+  an evidence region. Raw wire-end count is not a valid degree calculation.
+- (b) Cross-net contact and crossing ambiguity: distinguish native shorts from
+  electrically separate crossings that visually suggest contact, with OR without
+  dots. Same-net T branches with missing visible junctions are a separate finding.
+- (c) Local wired-path completeness: declared intra-sheet required pin pairs must
+  have visible wire paths, not labels alone. K and eligible nets are explicit policy;
+  power symbols, cross-sheet continuations, NC and display-only replicas have named
+  applicability/exemption records, never a blanket label prohibition.
+- (d) Series-path legibility: compare declared terminal roles, native net partition
+  and normalized drawn-wire paths (labels excluded). Distinguish actual bypass from
+  apparent continuity/near-contact across a series device. Electrical equality alone
+  cannot establish perceptual success; unresolved ambiguity requests human review.
+- (e) Foreign-net collinear/near-collinear corridors and pin-row proximity: use
+  rendered stroke width and explicit clearance, including segments ending on pin
+  rows; distinguish true overlap from visually unresolved separation.
+- (f) Text/graphics clearance, clipping, legible scale and occupied page area:
+  report units and denominators excluding frame/title block. Bounding-box page-use
+  alone is not quality (one long wire can inflate it). 50% is a calibration candidate,
+  not an approved universal floor. Reuse child tests only if their population matches.
+
+S1 calibration requires a hash-pinned CP1-CP3 manifest with nine reviewer decisions
+and localized class labels. Every archived rejection must remain non-passing with
+matching evidence, not merely a generic NO. Missing historical native/render pairs
+are unmeasured calibration cells, not recreated archives. Include independently
+reviewed acceptable examples for each applicable class and paired corrected cases
+so an always-NO detector cannot pass. Freeze policy/tolerances before evaluation;
+report per-class false positives/negatives and omissions, not just total agreement.
+Uncalibrated classes cannot authorize PASS. Fresh-eyes review remains the final
+delivery gate; S1 does not replace it or weaken electrical fidelity. Master DD-14
+is distinct from child-plan DD-14/DD-16 and child visual AC-14.
+
+### DD-15: Adopt ELK layered through a bounded EE adapter
+
+Recommendation: `elkjs` ELK layered with orthogonal edge routing, fixed-side/fixed
+position ports and explicit node dimensions. Use it as a pinned external dependency,
+not copied algorithm source. Upstream package metadata observed on 2026-10-06
+declares `EPL-2.0 OR GPL-3.0-or-later`; select the EPL-2.0 option subject to grant/notice
+review, exact package version/integrity and transitive license clearance before shipping.
+Do not adopt netlistsvg as the native emitter. Graphviz ortho is not the selected
+engine: this seam needs symbol-port and label constraints, not only box-to-box edges.
+No engine is assumed to guarantee readable electrical diagrams before S3 measures it.
+
+Evidence inspected: `https://raw.githubusercontent.com/kieler/elkjs/master/package.json`
+(reported 0.13.0, moving branch, NOT a frozen dependency selection);
+`https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html`
+documents orthogonal routing with arbitrary port constraints and compound graphs;
+`https://graphviz.org/docs/attrs/splines/` explicitly states ortho does not handle
+ports or, in dot, edge labels. S3 must pin and test the actual chosen release.
+
+Core owns schemas and policy; the existing EE worker runs bounded Node/elkjs jobs
+and native KiCad export/render. `Dockerfile.ee` will need a pinned Node runtime and
+lockfile-based production dependency layer. Record image-size/build/startup deltas
+in S3 rather than inventing a cost estimate; no new JVM, service or listening port.
+The inspected `Dockerfile.ee:22-23,91` already installs Java for freerouting but
+does not explicitly install Node; this is Dockerfile evidence, not a live-image probe.
+No runtime download or network lookup. Timeout/unsupported graph yields explicit
+failure. Installation and Docker edits belong to officer-dispatched S3, not this plan.
+
+**Exact seam (working tree inspected 2026-10-06):** in
+`hierarchical.emit_hierarchical_schematic`, replace ONLY the engine-mode
+`auto_layout`/`layout_sheet` block immediately before `emit_kicad_schematic`
+(currently lines 1334-1369). Resolve the final rendered symbol dimensions and pin
+positions first, including scale/unit stacking, so later scaling cannot move ports.
+Pass one validated presentation solution containing poses, per-net edge sections,
+junctions and label anchors. In `emit_kicad_schematic`, engine mode consumes it
+instead of the motif/legacy routing loop beginning at `motif_ground_points`
+(currently line 1837), including the two-pin route at 1908 and bus route at 1974.
+Reuse native wire/junction serialization and run bookkeeping, not `_guard_route`
+as a post-engine repair. Grid quantization and validation occur before serialization;
+invalid quantized routes fail, not locally reroute. Human mode bypasses this emitter
+for retained native objects entirely.
+
+Motifs are rigid compound nodes with exposed fixed ports and preserved internal
+wires. Map canonical net hyperedges explicitly; routing junctions are presentation
+objects, not new circuit devices. All body/pin/text extents are layout constraints;
+native render + S1 checks still verify the result. Engine coordinates cannot move
+human locks. Existing post-emission `fit_page`, continuation insertion, replica
+annotation and instance-path rewriting must be suppressed for human bytes or
+represented in the engine candidate before final hash/render checks, never mutate
+an already validated solution invisibly.
+
+S3 acceptance is one usbc candidate through the formal path, exact native topology,
+calibrated S1 report and an independent readable-leaf verdict. It is a checkpoint,
+not evidence for five leaves or all layouts. S4 in the officer draft is a separate
+commit decision, NOT task 3.3d or permission to commit. Task 3.3d retains the original
+five-leaf deliverable; source preservation and nine historical NO results remain.
+
 ## Amendment Risks / Trade-offs
 
 - Contract work can become a second framework: require one real formal-entrypoint slice before further abstraction.
