@@ -87,6 +87,7 @@ from .routing import (
     via_in_pad,
     widen_bus_tracks,
 )
+from .c04_gate import C04GateInputError, c04_placement_geometry_gate
 
 __all__ = [
     "DEFAULT_AUTOROUTE_PASSES",
@@ -121,6 +122,8 @@ __all__ = [
     "si_status",
     "via_in_pad",
     "widen_bus_tracks",
+    "c04_placement_geometry_gate",
+    "C04GateInputError",
     "BomResult",
     "ComposeResult",
     "EmitComponent",

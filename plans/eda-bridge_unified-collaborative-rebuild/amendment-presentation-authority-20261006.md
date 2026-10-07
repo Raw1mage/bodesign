@@ -440,6 +440,18 @@ module book (11.j1_usb-v3, editable/usbc) still carries SOT-363 → REAL footpri
 mismatch, to be closed by a baseline-bound ChangeProposal (11.j1_usb-v4) after the
 C03 close-out round, not by editing page files mid-round.
 
+User ruling R-I (2026-10-07, after the question "is this building the real product or
+developing bodesign?"): **dual track**. The btdongle board is the SPECIMEN; bodesign
+grows capability on it in the same rounds. Each C04 round therefore has two
+deliverables: (A) the product artefact in `~/products` (Sonnet hand-draft producer,
+same method as C03); (B) the bodesign tool/test that judges (A), landed in
+`packages/` + `tests/` with (A) as fixture. Acceptance of a round shifts from "the
+specimen looks right" to "the bodesign gate decides correctly on the specimen"
+(positive + negative control). Hand-drafting that leaves no tool behind is a
+method note, not progress. ASK-1..4 of `c04-entry-freeze-20261007.md` §3.1 ruled by
+the user as product owner (D-3 repealed; Option A 28×93 carrier; ETA6003 supersedes
+OD-1; 3-pin JST-PH).
+
 ## 4. Not changed
 
 P1 contracts (7b0d8b5 / 6363c54 / d190480) accepted. Partition, replica, netlist
