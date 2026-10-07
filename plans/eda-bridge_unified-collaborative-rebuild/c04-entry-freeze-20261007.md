@@ -422,6 +422,86 @@ Ruling: r2 is the ACCEPTED PLACEMENT BASELINE for routing (Reviews 23/24 never
 questioned block partition; Review 24 full-res pass ACCEPT). No label round needed;
 r3 = routing on this placement.
 
+## 4.7 C02' round 1 outcome (officer, 2026-10-07, under R-J sandbox rule)
+
+Track A (ses_eee1a92f4): `c04_board_manifest-v1.json` (consumed_board_sha256 =
+r2 board), build123d source, `c02p_enclosure_{lower,upper}-v1.stl`, STEP (real
+export, not re-imported), three PNG (iso / exploded / section), gates report;
+manifest root `d70e0939…` 434 entries, officer `sha256sum -c` 0 non-OK. Mounting
+holes: 3 proposed (H1 2,2 / H2 26,2 / H3 26.5,60.2; drill 1.8), 4th impossible on r2
+at ≥ 1.0 mm courtyard clearance (grid search, best 0.564) → `feedback_to_c04_r3`.
+Track B (ses_ef0e7e310): `bodesign_c04_board_manifest`, `bodesign_c02_mesh_gate`
+M-01..06, 30 tests (officer rerun Ran 30 / OK / skipped=1).
+
+Officer ran Track B on Track A STLs: M-01/M-02 pass both parts (0 boundary, 0
+non-manifold, 0 inconsistent edges), M-04 min wall 1.5 / 0.9997 ≥ 0.8 pass; M-06 chain
+pass — but ONLY against the producer's own hand-written `c04_board_manifest-v1.json`
+(outline `8975fdfd…`, holes `10154c1f…` = hash of its 3 *proposed* holes); M-03
+unmeasured (no expected bbox given), M-05 unmeasured (no `board_placement_mm`).
+Producer's own trimesh numbers agree.
+
+Correction (r2 Track B, `bodesign_c02_chain_check` recomputing from the .kicad_pcb,
+officer rerun): outline recompute `6e66f4e9…` ≠ consumed `8975fdfd…` FAIL; mounting
+holes recompute `4f53cda1…` (board has none) ≠ consumed `10154c1f…` FAIL; the producer's
+board-manifest file is STALE_BOARD_MANIFEST on both hashes + schema. So the r1 M-06
+"pass" proved only that the producer's two files agree with each other — gap 1 below.
+The proposed holes must live in a C02' inputs file, not in the board packet, until C04
+r3 drills them.
+
+Review 25 (blind, ses_eea92c8a9) = ACCEPT-marginal: concept readable (tray + lid,
+board on shelf over one cylindrical cell, 3 pin posts, UI holes in lid, USB at one
+end); section fill single-colour hides board / shelf / cell distinction; lid has no
+retention; shelf bridges the cell bay unsupported for FDM; no outside view of the USB
+end, no plan view, no section through lid holes.
+
+**Capability gaps surfaced (bodesign work for C02' r2):**
+1. Chain §2.3 currently closes only between the producer's own two ends: producer's
+   `exported_outline_sha256` = `8975fdfd…`, bodesign `c04_board_manifest` on the same
+   board = `6e66f4e9…` (different outline sub-schema). Ruling: the bodesign tool's
+   packet is the SSOT; C02' must consume the tool's output, not a hand-written manifest.
+2. M-05 needs `board_placement_mm` in the C02' manifest; the mesh gate must read it from
+   `c02_manifest_path`. Producer frame note "CAD = (x,-y,z)" is a convention, not a
+   registration.
+3. Section/exploded renders need per-body colour (board / shelf / cell / shell) and a
+   declared view set (add USB-end exterior, plan, lid-hole section) — DD-19(a) view
+   coverage becomes a checkable item, not a producer choice.
+SANDBOX-ASSUMPTIONS (wall 2.0, clearance 0.5, split z 5.0, 18650 cavity, pin
+posts, no retention) stand as specimen decisions; lid retention and FDM bridge are
+r2 specimen items, not user questions.
+
+## 4.8 C02' round 2 outcome (officer, 2026-10-07)
+
+Track A r2: manifest root `d6208ab0…` 459 entries (officer 0 non-OK). Board packet is
+now the bodesign tool's own output (`c04_board_manifest/1`, outline `6e66f4e9…`,
+holes [] `4f53cda1…`); proposed holes + heights + normals live in `c02p_inputs-v2.json`
+citing the packet sha. STL/STEP frame made board-relative so registration is a pure
+translation `board_placement_mm=[-100,-50,0]`. Six declared views + extra screw section.
+Specimen fixes: 3× M1.6 screws lid→posts, slot roofs cut to split plane and closed by lid
+tongues (0 overhang clusters), SW1 slot labelled.
+
+Track B r2: `c02_mesh_gate` reads placement from the C02' manifest (M-05 measured);
+`bodesign_c02_view_coverage` (DD-19(a) six-view set, PNG validity + min px);
+`bodesign_c02_chain_check` (recompute from .kicad_pcb, STALE_UPSTREAM / STALE_BOARD
+kinds). Tests: test_c02_chain 17, test_c02_mesh_gate 34 (officer rerun OK). Real-world
+negative control: r1 files FAIL chain_check (outline + holes + stale board-manifest file).
+
+Officer positive control on r2: chain_check ok (3/3 pass); mesh gate M-01/02/04 pass
+(wall 0.9997 / 0.8497), **M-05 pass 0.30 ≥ 0.25 (placement_source=c02_manifest)**,
+M-06 pass; view_coverage 6/6 pass (r1 was 1/6). M-03 unmeasured only because no bbox
+declared in the officer call.
+
+Review 26 (blind, ses_eea628ff1) = ACCEPT-marginal: assembly, openings, battery and board
+placement traceable from the six views; per-body colour + legend readable. Open items:
+button interface not mechanically closed (SW2 top z 1.5 vs lid inner z 6.5, no actuator
+cap); board-to-post retention not shown (lid clamps board, nothing fixes it); J2 in
+legend has no opening; 0.5 mm cell web thin for FDM; plan view 1000×2170 needs tiling;
+view to add = section through H3 (lid→post→PCB→shelf→tray).
+
+Ruling: **r2 is the accepted C02' baseline for the chain**; the two mechanical gaps
+(actuator caps / board retention) are specimen items for C02' r3 after C04 r3 drills the
+holes. Capability lesson: view coverage by filename proves presence, not that a view
+exposes the relation a reviewer needs — DD-19(e) questions remain the human axis.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).

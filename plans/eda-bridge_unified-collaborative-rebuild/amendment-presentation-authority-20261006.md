@@ -452,6 +452,23 @@ method note, not progress. ASK-1..4 of `c04-entry-freeze-20261007.md` §3.1 rule
 the user as product owner (D-3 repealed; Option A 28×93 carrier; ETA6003 supersedes
 OD-1; 3-pin JST-PH).
 
+User ruling R-J (2026-10-07, after S6 commit, verbatim intent): "對於產品，我沒有任何實質的
+要求或決定。你以各種產品可能的需求，去沙盤推演，然後把需要的 bodesign 工作職能建立起來。"
+Consequences:
+1. btdongle is a SANDBOX SPECIMEN for C00–C04 capability, not a real product. Product
+   requirements and decisions are made by the officer as sandbox assumptions, labelled
+   `SANDBOX-ASSUMPTION` in the freeze/receipt files; they are NOT routed to the user and
+   NOT routed to thesmart_products for decision-log landing. PO-1..4 (§3.1 of the C04
+   freeze) are downgraded to sandbox assumptions retroactively; the text already landed in
+   thesmart_products stays as-is (no further dispatch there).
+2. Only bodesign matters go to the user: capability boundary, licence/runtime clearance
+   (DD-9), commit authorization, deployment.
+3. Each round's acceptance axis is "which bodesign tool / gate / contract grew this round
+   and does it decide correctly on the specimen (positive + negative control)". Specimen
+   quality is a by-product. A round that only improves the specimen is a method note.
+4. Order stays §3.2: C02' (board-manifest consumption, mounting-hole / opening feedback)
+   → C04 r3 (routing + Gerber copper render gate) → C01 render → C00 docx check.
+
 ## 4. Not changed
 
 P1 contracts (7b0d8b5 / 6363c54 / d190480) accepted. Partition, replica, netlist

@@ -519,7 +519,7 @@ class McpServerTests(unittest.TestCase):
         "bodesign_c00_emit_prd_docx", "bodesign_c01_generate_concept_image",
         "bodesign_c02_export_skp", "bodesign_c02_export_step", "bodesign_c02_export_stl",
         "bodesign_c02_project_svg", "bodesign_c02_render_enclosure",
-        "bodesign_c02_voice_to_design", "bodesign_c04_placement_geometry_gate", "bodesign_cache_close", "bodesign_cache_export",
+        "bodesign_c02_voice_to_design", "bodesign_c04_placement_geometry_gate", "bodesign_c04_board_manifest", "bodesign_c02_mesh_gate", "bodesign_c02_chain_check", "bodesign_c02_view_coverage", "bodesign_cache_close", "bodesign_cache_export",
         "bodesign_cache_provision", "bodesign_check_c03", "bodesign_clean_micro_stubs",
         "bodesign_component_fetch", "bodesign_component_search", "bodesign_compose_schematic",
         "bodesign_dwg_to_dxf", "bodesign_dxf_to_dwg", "bodesign_emit_doc", "bodesign_emit_fab",

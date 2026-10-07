@@ -88,6 +88,9 @@ from .routing import (
     widen_bus_tracks,
 )
 from .c04_gate import C04GateInputError, c04_placement_geometry_gate
+from .c04_manifest import c04_board_manifest
+from .c02_mesh_gate import C02MeshInputError, c02_mesh_gate
+from .c02_chain import C02ChainInputError, c02_chain_check, c02_view_coverage
 
 __all__ = [
     "DEFAULT_AUTOROUTE_PASSES",
@@ -123,6 +126,12 @@ __all__ = [
     "via_in_pad",
     "widen_bus_tracks",
     "c04_placement_geometry_gate",
+    "c04_board_manifest",
+    "c02_mesh_gate",
+    "c02_chain_check",
+    "c02_view_coverage",
+    "C02ChainInputError",
+    "C02MeshInputError",
     "C04GateInputError",
     "BomResult",
     "ComposeResult",
