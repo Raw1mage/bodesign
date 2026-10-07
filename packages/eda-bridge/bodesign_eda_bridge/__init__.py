@@ -89,6 +89,7 @@ from .routing import (
 )
 from .c04_gate import C04GateInputError, c04_placement_geometry_gate
 from .c04_manifest import c04_board_manifest
+from .c04_gerber import c04_gerber_gate
 from .c02_mesh_gate import C02MeshInputError, c02_mesh_gate
 from .c02_chain import C02ChainInputError, c02_chain_check, c02_view_coverage
 
@@ -127,6 +128,7 @@ __all__ = [
     "widen_bus_tracks",
     "c04_placement_geometry_gate",
     "c04_board_manifest",
+    "c04_gerber_gate",
     "c02_mesh_gate",
     "c02_chain_check",
     "c02_view_coverage",

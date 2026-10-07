@@ -502,6 +502,83 @@ Ruling: **r2 is the accepted C02' baseline for the chain**; the two mechanical g
 holes. Capability lesson: view coverage by filename proves presence, not that a view
 exposes the relation a reviewer needs — DD-19(e) questions remain the human axis.
 
+## 4.9 C04 round 3 — routing + copper views (officer, 2026-10-07)
+
+Track A r3 (ses_eee1a92f4): `btdongle_c04-v3.kicad_pcb` (48 fp = 45 + H1..H3 NPTH 1.8;
+stackup §1.5 with core 1.06 so sum 1.60; net classes §1.6); freerouting 1.9.0 in
+`bodesign-ee` (host preflight not-ready: jar/java/xvfb absent); 371 tracks / 87 vias;
+pours In1 GND solid, B.Cu GND flood, In2 SYS patch. DRC --severity-all
+--schematic-parity: 0 unconnected / 0 parity / 0 shorts; 10 items = 1 REAL clearance
+(U1.7 NTC vs EP 0.20 < 0.25), 4 REAL items_not_allowed (H1/H2 inside the stock Pico RF
+rule area), 2 Pico paste-only (tool), 3 lib_footprint (presentation). Gerbers-v3: 14
+files, X2 on, protel ext. Copper views rendered from the gerbers (pygerber, common
+Edge.Cuts frame, drill overlay): `01.c04-{F.Cu,In1.Cu,In2.Cu,B.Cu}-v3.png`,
+`-copper-composite-v3.png`, `-copper-stack-v3.pdf` (5 pp); plus pcbnew `-routed-v3.png`
+and `-placement-v3.png`. Orientation USB-bottom kept (matches placement PNG; brief said
+USB-top — accepted). Manifest root `d5c4081d…` 507 entries (officer 0 non-OK).
+Brief rules NOT met (reported, not hidden): Power_High 0.26 mm not ≥ 0.50 (QFN-16
+escape), BAT_EXT 1 via not ≥ 2; CC lengths 15.2 / 23.8 mm with no declared threshold.
+Board manifest v3 holes sha `788c668d…` → C02' chain is STALE; C02' r3 must re-consume.
+Caveat: core thickness sed-patched after the router run (clean rerun not byte-identical).
+
+Track B (ses_ef0e7e310): `bodesign_c04_gerber_gate` G-01 parity / G-02 copper
+connectivity from gerber bytes (exact analytic, 1 µm join, plated drill spans) / G-03
+keepout on copper / G-04 render–gerber sha binding; placement gate GATE-05 delegates
+when `gerber_dir` is given. test_c04_gerber_gate 35 (officer rerun OK). Synthetic
+negatives: open, short, barrel open, missing/extra flash, outline shift, keepout copper.
+Also ruled: specimen tests are shape-only (test_c02_chain stale verdict test replaced,
+17 OK).
+
+**Officer positive control on v3 gerbers (first real board):** G-03 PASS (no copper in
+KO-01 on any layer, from gerber bytes); G-01 FAIL / G-02 FAIL / G-04 FAIL — all three
+are TOOL-MODEL GAPS, not copper defects: G-01 missing_flash ×7 per side are NPTH pads
+(H1–H3, SW1 pegs, J1 shell pegs; KiCad emits no flash); G-02 sole offender GND
+barrel_open at J1.S1 = oval drill exported as an Excellon slot the reader does not parse;
+G-04 bound 0 = no sidecars yet. Dispatched r3b: NPTH = drill-only (rule keyed on pad
+type/layers, not ref prefix), slot drills as stadium hits, fixtures for both; Track A
+emits `<stem>.json` sidecars. Capability lesson: a real routed board exercised two
+aperture/drill classes the synthetic fixture lacked — the fixture set must include NPTH
+and slot drills from now on.
+
+Review 27 (blind, copper views, ses_ee9f527fb) = ACCEPT-marginal: all five images same
+orientation, outline + drills on each; In1 solid GND with KO-01 cut, antipads not
+thermals; In2 SYS patch ~25–35 % copper; KO-01 empty on every layer; captions legible,
+composite legend distinguishes layers. Engineer flags: power nets indistinguishable from
+signals (uniform fine width — matches the 0.26 mm finding), two acid-trap approaches at
+the module pad column, sharp jogs in the charger cluster, a few unstitched B.Cu flood
+islands near H3 and under U1. These are r4 specimen items.
+
+### 4.9.1 r3b–r3d gate calibration on the real board (officer rulings)
+
+Each red on v3 was traced to a discriminating fact before any rule changed:
+- G-01 NPTH: pad type `np_thru_hole` with no copper layer or size ≤ drill → drill-only
+  (listed, not required flash). G-02 slots: Excellon G85 / routed slots and board `(drill
+  oval)` → stadium hits. Both now have synthetic fixtures (`slot.kicad_pcb`).
+- G-04 scope: gerber-derived layer renders only (F/B/In<n>.Cu, copper-composite);
+  placement/routed PNGs → out_of_scope.
+- GATE-01: 51 mismatches = 51 (ref,pin) nodes listed in both a real net and an
+  `unconnected-*` block in `book_modules-v2.net` (0 duplicate net names); old loader let
+  the last block win. Rule: real net wins; two distinct real nets on one pin = conflict,
+  never collapsed. NPTH-only footprints = non_electrical, not extra.
+- GATE-03: the 8 U2 pads inside KO-01 are F.Paste-only (stock Pico RF region); only
+  copper-bearing pads offend. Remaining U2 courtyard/footprint hit is by construction
+  (KO-01 IS the Pico antenna, §1.4 forbids *discrete* components) → keepout `owner_ref`;
+  owner courtyard/footprint exempt and disclosed, owner COPPER pads still offend,
+  non-owner unchanged; unknown owner_ref fails fast.
+
+**Final officer run on v3** (gerber_dir + human_dir + KO-01 owner_ref=U2, netlist
+book_modules-v2.net): **ok=True, GATE-C04-01..07 all pass, unmeasured []**; GATE-05
+delegated G-01..G-04 all pass. Tests: test_c04_placement_gate 62 / OK, test_c04_gerber_gate
+47 / OK (officer rerun). Full suite 2742 / f16 / e40 / s56 vs d8e1a02 baseline: the only
+id containing c04_/c02_ is `test_c00_orchestration…test_c04_dispatched_only_after_its_upstream`
+(stage name, pre-existing at d8e1a02 in a detached worktree). +1 error vs the older
+cfcf393 baseline unattributed.
+
+**r3 ruling: C04 r3 is the accepted routed baseline** (DD-20 gate measured end-to-end for
+the first time; GATE-05 no longer literal unmeasured). Specimen residue → r4: U1.7 NTC
+clearance 0.20, H1/H2 in Pico RF rule area, Power_High 0.26 mm, BAT_EXT 1 via, acid-trap
+approaches, B.Cu islands. Chain: C02' r3 re-consumes holes sha `788c668d…`.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).

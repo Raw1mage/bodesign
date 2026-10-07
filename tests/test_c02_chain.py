@@ -199,12 +199,19 @@ HUMAN = os.path.expanduser("~/products/bodesign/btdongle_ms")
 
 @unittest.skipUnless(os.path.isdir(HUMAN), "btdongle human tree not on disk")
 class ViewCoverageSpecimen(unittest.TestCase):
-    def test_track_a_r1_tree_shape_and_fails_the_default_set(self):
+    def test_live_human_tree_report_shape_only(self):
+        # SHAPE only: the live deliverable tree moves, so no verdict (ok / missing) is asserted here.
+        # The negative control is synthetic (test_one_missing_fails_with_list).
         r = c02_view_coverage(human_dir=HUMAN)
-        self.assertFalse(r["ok"])  # r1 shipped iso/exploded/section only; the DD-19(a) set is wider
-        for v in ("exterior-usb-end", "plan", "section-lid-ui"):
-            self.assertIn(v, r["missing"])
-        self.assertEqual(r["status"], "fail")
+        self.assertIsInstance(r["ok"], bool)
+        present = {v for v, e in r["views"].items() if e["status"] == "present"}
+        self.assertEqual(present | set(r["missing"]), set(DEFAULT_VIEWS))
+        self.assertFalse(present & set(r["missing"]))
+        for v in present:
+            f = r["views"][v]["file"]
+            p = f if os.path.isabs(f) else os.path.join(HUMAN, f)
+            self.assertTrue(os.path.isfile(p), p)
+            self.assertGreater(os.path.getsize(p), 0, p)
 
 
 class ServerRegistration(unittest.TestCase):

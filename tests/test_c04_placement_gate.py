@@ -466,5 +466,163 @@ class R2Passes(unittest.TestCase):
             self.assertEqual(r["gates"][g]["status"], "pass", (g, r["gates"][g]["offenders"][:5], r["gates"][g]["measured"].get("unmeasured_items")))
 
 
+def _pos_text():
+    with open(POS) as fh:
+        return fh.read()
+
+
+def _net_text():
+    with open(NET) as fh:
+        return fh.read()
+
+
+_R1_END = '(net 2 "N2") (uuid "c04a0000-0000-4000-8000-0000000004f1"))\n'
+
+
+def _with_r1_pad3(layers):
+    t = _pos_text()
+    assert _R1_END in t
+    pad = '\t\t(pad "3" smd rect (at -3 0) (size 0.6 0.6) (layers %s))\n' % layers
+    return t.replace(_R1_END, _R1_END + pad)
+
+
+class Gate03NonCopperPads(unittest.TestCase):
+    KO = [{"name": "KO-P", "x": 1.5, "y": 4.5, "w": 1.0, "h": 1.0}]  # over R1 pad 3 at (2,5), outside R1 courtyard
+
+    def _g(self, text):
+        return gate_mod.gate_keepout(gate_mod.load_board(text), gate_mod._validate_keepouts(self.KO))
+
+    def test_paste_only_pad_in_keepout_passes_and_is_listed(self):
+        g = self._g(_with_r1_pad3('"F.Paste"'))
+        # pad kind: not an offender. footprint kind is unchanged by ruling: the paste pad lies outside the
+        # courtyard, so it still widens the footprint bbox and that (declared) kind alone remains.
+        self.assertNotIn("pad", {o["kind"] for o in g["offenders"]})
+        self.assertEqual({o["kind"] for o in g["offenders"]}, {"footprint"})
+        nc = g["measured"]["non_copper_pads_in_keepout"]
+        self.assertEqual([(n["ref"], n["pad"]) for n in nc], [("R1", "3")])
+        self.assertEqual(nc[0]["layers"], ["F.Paste"])
+
+    def test_copper_pad_in_keepout_still_fails(self):
+        g = self._g(_with_r1_pad3('"F.Cu" "F.Mask"'))
+        self.assertEqual(g["status"], "fail")
+        self.assertIn(("R1", "pad"), {(o["ref"], o["kind"]) for o in g["offenders"]})
+        self.assertEqual(g["measured"]["non_copper_pads_in_keepout"], [])
+
+    def test_courtyard_kind_unchanged(self):
+        ko = [{"name": "KO-C", "x": 4.0, "y": 4.0, "w": 3.0, "h": 3.0}]
+        g = gate_mod.gate_keepout(gate_mod.load_board(_pos_text()), gate_mod._validate_keepouts(ko))
+        self.assertEqual({o["kind"] for o in g["offenders"]}, {"pad", "courtyard", "footprint"})
+
+
+class Gate01NonElectricalAndDedup(unittest.TestCase):
+    H1 = ('\t(footprint "MountingHole:MountingHole_1.8mm" (layer "F.Cu") (uuid "c04a0000-0000-4000-8000-0000000000f9") (at 2 2)\n'
+          '\t\t(property "Reference" "H1" (at 0 0 0) (layer "F.Fab") (uuid "c04a0000-0000-4000-8000-0000000001f9") (effects (font (size 1 1) (thickness 0.15))))\n'
+          '\t\t(pad "" np_thru_hole circle (at 0 0) (size 1.8 1.8) (drill 1.8) (layers "*.Cu" "*.Mask"))\n\t)\n')
+    EXTRA_C = ('\t(footprint "R" (layer "F.Cu") (uuid "c04a0000-0000-4000-8000-0000000000fa") (at 2 2)\n'
+               '\t\t(property "Reference" "R9" (at 0 0 0) (layer "F.Fab") (uuid "c04a0000-0000-4000-8000-0000000001fa") (effects (font (size 1 1) (thickness 0.15))))\n'
+               '\t\t(pad "1" smd rect (at 0 0) (size 0.6 0.6) (layers "F.Cu" "F.Mask"))\n\t)\n')
+
+    def _par(self, board_text, net_text):
+        return gate_mod.gate_parity(gate_mod.load_board(board_text), gate_mod.load_netlist(net_text), None)
+
+    def _dup_net(self, first=False):
+        blk = '    (net (code "4") (name "unconnected-(R1-Pad1)")\n      (node (ref "R1") (pin "1")))\n'
+        n = _net_text()
+        if first:
+            return n.replace("  (nets\n", "  (nets\n" + blk)
+        return n.rstrip()[:-2] + "\n" + blk + "))"
+
+    def test_npth_footprint_is_non_electrical_not_extra(self):
+        t = _pos_text().rstrip()[:-1] + self.H1 + ")\n"
+        g = self._par(t, _net_text())
+        self.assertEqual(g["status"], "pass", g["offenders"])
+        self.assertEqual(g["measured"]["non_electrical"], ["H1"])
+        self.assertEqual(g["measured"]["extra"], [])
+
+    def test_copper_footprint_not_in_netlist_is_still_extra(self):
+        t = _pos_text().rstrip()[:-1] + self.EXTRA_C + ")\n"
+        g = self._par(t, _net_text())
+        self.assertEqual(g["status"], "fail")
+        self.assertEqual(g["measured"]["extra"], ["R9"])
+        self.assertEqual(g["measured"]["non_electrical"], [])
+
+    def test_duplicate_unconnected_block_collapses_either_order(self):
+        for first in (False, True):
+            nl = gate_mod.load_netlist(self._dup_net(first))
+            self.assertEqual(nl["dedup"]["nodes_listed_in_several_nets"], 1)
+            self.assertEqual(nl["dedup"]["collapsed"], 1)
+            self.assertEqual(nl["pins"]["R1"]["1"], "N1")
+            g = self._par(_pos_text(), self._dup_net(first))
+            self.assertEqual(g["status"], "pass", (first, g["offenders"]))
+            self.assertEqual(g["measured"]["netlist_dedup"]["conflicts"], [])
+
+    def test_real_net_swap_still_fails_after_dedup(self):
+        t = _pos_text()
+        a = '(net 1 "N1") (uuid "c04a0000-0000-4000-8000-0000000003f1")'
+        self.assertIn(a, t)
+        g = self._par(t.replace(a, '(net 3 "GND") (uuid "c04a0000-0000-4000-8000-0000000003f1")'), self._dup_net())
+        self.assertEqual(g["status"], "fail")
+        self.assertEqual([(m["ref"], m["pad"], m["kind"], m["netlist_net"]) for m in g["measured"]["mismatch"]],
+                         [("R1", "1", "net_mismatch", "N1")])
+
+    def test_two_distinct_real_nets_on_one_pin_is_a_conflict_offender(self):
+        n = _net_text().replace('(node (ref "R1") (pin "1"))', '(node (ref "R1") (pin "1")) (node (ref "R1") (pin "1"))')
+        blk = '    (net (code "5") (name "OTHER")\n      (node (ref "R1") (pin "1")))\n'
+        n = n.rstrip()[:-2] + "\n" + blk + "))"
+        g = self._par(_pos_text(), n)
+        self.assertEqual(g["status"], "fail")
+        self.assertIn("netlist_conflict", [o["kind"] for o in g["offenders"]])
+
+
+class Gate03OwnerRef(unittest.TestCase):
+    # R1 courtyard x[4,6] y[4.4,5.6]; R1 pads x[4.2,4.8] and [5.2,5.8]. This box touches the courtyard only.
+    BOX = {"name": "KO-O", "x": 3.0, "y": 4.0, "w": 1.1, "h": 2.0}
+    # this box also covers R1 pad 1
+    BOX_PAD = {"name": "KO-OP", "x": 3.0, "y": 4.0, "w": 2.0, "h": 2.0}
+
+    def _g(self, ko):
+        return gate_mod.gate_keepout(gate_mod.load_board(_pos_text()), gate_mod._validate_keepouts([ko]))
+
+    def test_owner_courtyard_inside_passes_with_owner_exempt(self):
+        g = self._g({**self.BOX, "owner_ref": "R1"})
+        self.assertEqual(g["status"], "pass", g["offenders"])
+        ex = g["measured"]["owner_exempt"]
+        self.assertEqual([(e["ref"], e["kinds"]) for e in ex], [("R1", ["courtyard", "footprint"])])
+
+    def test_no_owner_same_box_still_fails(self):
+        g = self._g(self.BOX)
+        self.assertEqual(g["status"], "fail")
+        self.assertEqual({(o["ref"], o["kind"]) for o in g["offenders"]}, {("R1", "courtyard"), ("R1", "footprint")})
+        self.assertEqual(g["measured"]["owner_exempt"], [])
+
+    def test_non_owner_courtyard_inside_still_fails(self):
+        g = self._g({**self.BOX, "owner_ref": "R2"})
+        self.assertEqual(g["status"], "fail")
+        self.assertEqual({(o["ref"], o["kind"]) for o in g["offenders"]}, {("R1", "courtyard"), ("R1", "footprint")})
+        self.assertEqual(g["measured"]["owner_exempt"], [])
+
+    def test_owner_copper_pad_inside_still_fails(self):
+        g = self._g({**self.BOX_PAD, "owner_ref": "R1"})
+        self.assertEqual(g["status"], "fail")
+        self.assertEqual({(o["ref"], o["kind"]) for o in g["offenders"]}, {("R1", "pad")})
+        self.assertEqual(g["offenders"][0]["pad"], "1")
+        self.assertEqual(g["measured"]["owner_exempt"][0]["kinds"], ["courtyard", "footprint"])
+
+    def test_owner_paste_only_pad_stays_in_non_copper_list(self):
+        g = gate_mod.gate_keepout(gate_mod.load_board(_with_r1_pad3('"F.Paste"')), gate_mod._validate_keepouts(
+            [{"name": "KO-P", "x": 1.5, "y": 4.5, "w": 1.0, "h": 1.0, "owner_ref": "R1"}]))
+        self.assertEqual(g["status"], "pass", g["offenders"])
+        self.assertEqual([(n["ref"], n["pad"]) for n in g["measured"]["non_copper_pads_in_keepout"]], [("R1", "3")])
+        self.assertEqual(g["measured"]["owner_exempt"][0]["kinds"], ["footprint"])
+
+    def test_unknown_owner_ref_fails_fast(self):
+        with self.assertRaisesRegex(C04GateInputError, "owner_ref 'ZZ9' is not a footprint"):
+            self._g({**self.BOX, "owner_ref": "ZZ9"})
+
+    def test_bad_owner_ref_type_rejected(self):
+        with self.assertRaisesRegex(C04GateInputError, "owner_ref must be a non-empty string"):
+            self._g({**self.BOX, "owner_ref": 5})
+
+
 if __name__ == "__main__":
     unittest.main()

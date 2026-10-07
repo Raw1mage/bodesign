@@ -390,7 +390,10 @@ def load_board(text: str) -> dict:
             lyr = _kid(p, "layers") or []
             sides = [sd for sd, names in (("F", ("F.Cu", "*.Cu")), ("B", ("B.Cu", "*.Cu")))
                      if any(n in lyr for n in names)]
+            copper = any(isinstance(n, str) and (n == "*.Cu" or n.endswith(".Cu")) for n in lyr)
             pads.append({"number": num, "net": _net_name(_kid(p, "net")), "bbox": box, "sides": sides,
+                         "type": p[2] if len(p) > 2 and isinstance(p[2], str) else "", "copper": copper,
+                         "layers": [n for n in lyr[1:] if isinstance(n, str)],
                          "through": any(isinstance(s, str) and s.startswith("*.Cu") for s in lyr)
                          or (len(p) > 2 and p[2] in ("thru_hole", "np_thru_hole"))})
         cpts: list[tuple[float, float]] = []
@@ -474,7 +477,7 @@ def load_netlist(text: str) -> dict:
                 raise C04GateInputError("C04_GATE_NETLIST_FIELD: comp without (ref ...)")
             fpn = _kid(c, "footprint")
             refs[r[1]] = fpn[1] if fpn and len(fpn) > 1 else ""
-    pins: dict[str, dict[str, str]] = {}
+    cand: dict[tuple[str, str], list[str]] = {}
     for nets in _kids(exp, "nets"):
         for n in _kids(nets, "net"):
             nm = _kid(n, "name")
@@ -484,8 +487,32 @@ def load_netlist(text: str) -> dict:
                 r, p = _kid(nd, "ref"), _kid(nd, "pin")
                 if not r or not p or len(r) < 2 or len(p) < 2:
                     raise C04GateInputError(f"C04_GATE_NETLIST_FIELD: node without ref/pin in net {nm[1]!r}")
-                pins.setdefault(r[1], {})[p[1]] = nm[1]
-    return {"refs": refs, "pins": pins}
+                cand.setdefault((r[1], p[1]), []).append(nm[1])
+    # Netlist-side artefact: KiCad netlists may list one (ref,pin) in several nets, a real net plus one or
+    # more ``unconnected-*`` blocks. Collapse: a real net wins over unconnected-* blocks; only-unconnected
+    # terminals are ONE unconnected terminal; two DISTINCT real nets stay a conflict (never collapsed).
+    pins: dict[str, dict[str, str]] = {}
+    multi = 0
+    collapsed = 0
+    conflicts: list[dict] = []
+    for (r, p), names in sorted(cand.items()):
+        uniq = list(dict.fromkeys(names))
+        if len(names) > 1:
+            multi += 1
+        real = [n for n in uniq if not n.startswith("unconnected-")]
+        if len(real) > 1:
+            conflicts.append({"ref": r, "pin": p, "nets": real})
+            chosen = real[0]
+        elif real:
+            chosen = real[0]
+            collapsed += 1 if len(uniq) > 1 else 0
+        else:
+            chosen = uniq[0]
+            collapsed += 1 if len(uniq) > 1 else 0
+        pins.setdefault(r, {})[p] = chosen
+    dedup = {"nodes_listed_in_several_nets": multi, "collapsed": collapsed, "conflicts": conflicts,
+             "rule": "real net wins over unconnected-*; only-unconnected = one unconnected terminal; distinct real nets = conflict (offender)"}
+    return {"refs": refs, "pins": pins, "dedup": dedup}
 
 
 # ----------------------------------------------------------------------------------- gates
@@ -501,7 +528,12 @@ def gate_parity(board: dict, nl: dict, expected_ref_count: int | None) -> dict:
             raise C04GateInputError(f"C04_GATE_BOARD_FIELD: duplicate footprint reference {fp['ref']!r}")
         b_refs[fp["ref"]] = fp
     missing = sorted(set(nl["refs"]) - set(b_refs))
-    extra = sorted(set(b_refs) - set(nl["refs"]))
+    all_extra = sorted(set(b_refs) - set(nl["refs"]))
+    # A board footprint with no copper pad (NPTH-only / no pads) is non-electrical: listed, not extra.
+    non_electrical = [r for r in all_extra
+                      if all(p.get("type") == "np_thru_hole" or not p.get("copper", True) for p in b_refs[r]["pads"])]
+    extra = [r for r in all_extra if r not in non_electrical]
+    conflicts = (nl.get("dedup") or {}).get("conflicts", [])
     mismatch: list[dict] = []
     for ref in sorted(set(nl["refs"]) & set(b_refs)):
         want = nl["pins"].get(ref, {})
@@ -523,10 +555,12 @@ def gate_parity(board: dict, nl: dict, expected_ref_count: int | None) -> dict:
         if len(b_refs) != expected_ref_count:
             count_off.append({"kind": "ref_count", "expected": expected_ref_count, "board": len(b_refs)})
     measured = {"board_refs": len(b_refs), "netlist_refs": len(nl["refs"]), "missing": missing, "extra": extra,
+                "non_electrical": non_electrical, "netlist_dedup": nl.get("dedup"),
                 "mismatch": mismatch, "expected_ref_count": expected_ref_count,
                 "counts": {"missing": len(missing), "extra": len(extra), "mismatch": len(mismatch)}}
     offenders = ([{"ref": r, "kind": "missing_ref"} for r in missing] + [{"ref": r, "kind": "extra_ref"} for r in extra]
-                 + mismatch + count_off)
+                 + mismatch + count_off
+                 + [{"kind": "netlist_conflict", **c} for c in conflicts])
     return _gate("pass" if not offenders else "fail", measured, offenders)
 
 
@@ -598,7 +632,11 @@ def _validate_keepouts(keepouts: Any) -> list[dict]:
         if layer is not None and layer not in _KEEPOUT_LAYERS:
             gaps.append(f"keepouts[{i}].layer {layer!r} not in {list(_KEEPOUT_LAYERS)}")
             continue
-        out.append({"name": k["name"], "box": (x, y, x + w, y + h), "layer": layer})
+        owner = k.get("owner_ref")
+        if owner is not None and (not isinstance(owner, str) or not owner):
+            gaps.append(f"keepouts[{i}].owner_ref must be a non-empty string when given")
+            continue
+        out.append({"name": k["name"], "box": (x, y, x + w, y + h), "layer": layer, "owner_ref": owner})
     if gaps:
         raise C04GateInputError("C04_GATE_INPUT_FIELD: " + "; ".join(gaps))
     return out
@@ -619,27 +657,46 @@ def gate_keepout(board: dict, keepouts: list[dict]) -> dict:
         return _gate("unmeasured", {"reason": "keepouts=[] declared: nothing to intersect, a vacuous pass is not issued",
                                     "keepouts": 0}, [])
     offenders: list[dict] = []
+    non_copper: list[dict] = []
+    owner_exempt: list[dict] = []
+    refs_on_board = {fp["ref"] for fp in board["footprints"]}
     for ko in keepouts:
+        if ko.get("owner_ref") and ko["owner_ref"] not in refs_on_board:
+            raise C04GateInputError(f"C04_GATE_INPUT_FIELD: keepout {ko['name']!r} owner_ref {ko['owner_ref']!r} is not a footprint on the board")
         for fp in board["footprints"]:
             if ko["layer"] and not (fp["side"] == ko["layer"] or any(p["through"] for p in fp["pads"])):
                 continue
             hits: list[tuple[str, str]] = []
             for p in fp["pads"]:
                 if _boxes_hit(p["bbox"], ko["box"]):
-                    hits.append(("pad", p["number"]))
+                    if p.get("copper", True):
+                        hits.append(("pad", p["number"]))
+                    else:
+                        non_copper.append({"keepout": ko["name"], "ref": fp["ref"], "pad": p["number"],
+                                           "type": p.get("type"), "layers": p.get("layers")})
             fb = _fp_boxes(fp)
             if fb["courtyard"] is not None and _boxes_hit(fb["courtyard"], ko["box"]):
                 hits.append(("courtyard", ""))
             if fb["footprint"] is not None and _boxes_hit(fb["footprint"], ko["box"]):
                 hits.append(("footprint", ""))
+            if ko.get("owner_ref") == fp["ref"]:
+                exempt = sorted({k for k, _ in hits if k in ("courtyard", "footprint")})
+                if exempt:
+                    owner_exempt.append({"keepout": ko["name"], "ref": fp["ref"], "kinds": exempt})
+                hits = [h for h in hits if h[0] not in ("courtyard", "footprint")]
             for kind, pad in hits:
                 o = {"keepout": ko["name"], "ref": fp["ref"], "kind": kind}
                 if pad:
                     o["pad"] = pad
                 offenders.append(o)
-    measured = {"keepouts": [{"name": k["name"], "box_mm": [round(v, 4) for v in k["box"]], "layer": k["layer"]}
+    measured = {"keepouts": [{"name": k["name"], "box_mm": [round(v, 4) for v in k["box"]], "layer": k["layer"],
+                              "owner_ref": k.get("owner_ref")}
                              for k in keepouts],
                 "footprints_examined": len(board["footprints"]), "offender_count": len(offenders),
+                "non_copper_pads_in_keepout": non_copper,
+                "owner_exempt": owner_exempt,
+                "owner_rule": "keepout owner_ref: that footprint's courtyard/footprint kinds are exempt (listed in owner_exempt); its copper pads still count",
+                "pad_rule": "pad kind counts only pads with >=1 copper layer; non-copper pads (paste/mask-only) are listed, not offenders",
                 "layer_filter_note": "layer, when given, selects footprints on that side or with through pads"}
     return _gate("pass" if not offenders else "fail", measured, offenders)
 
@@ -902,18 +959,37 @@ def gate_courtyard_gap(board: dict, gap_mm: float) -> dict:
 
 
 def gate_copper_gerber() -> dict:
-    """GATE-C04-05: ALWAYS unmeasured here (placement-only gate)."""
+    """GATE-C04-05 without ``gerber_dir``: unmeasured (placement-only); with it see ``_gerber_delegate``."""
     return _gate("unmeasured",
                  {"reason": "placement-only gate: no routing, filled-board DRC, copper continuity or Gerber parity is measured; "
                             "an unrouted placed board is never converted to a copper PASS (DD-C04 (d))",
                   "placement_only": True}, [])
 
 
+def _gerber_delegate(board_path: str, gerber_dir: str, kos: list, human_dir: str | None) -> dict:
+    """GATE-C04-05 via the gerber gate. The keepouts are re-expressed in the public schema (x,y,w,h)."""
+    from .c04_gerber import c04_gerber_gate
+    pub = [{"name": k["name"], "x": k["box"][0], "y": k["box"][1], "w": k["box"][2] - k["box"][0],
+            "h": k["box"][3] - k["box"][1], **({"layer": k["layer"]} if k["layer"] else {})} for k in kos]
+    r = c04_gerber_gate(board_path, gerber_dir, pub, human_dir=human_dir)
+    core = [r["gates"][g]["status"] for g in ("G-01", "G-02", "G-03")]
+    status = "fail" if "fail" in core else ("unmeasured" if "unmeasured" in core else "pass")
+    offenders = [dict(o, sub_gate=g) for g in ("G-01", "G-02", "G-03") for o in r["gates"][g]["offenders"]]
+    return _gate(status, {"delegated_to": "bodesign_c04_gerber_gate", "sub_gate_status": {g: v["status"] for g, v in r["gates"].items()},
+                          "gerber_gate": r, "note": "G-04 is reported in gerber_gate, not part of this status"}, offenders)
+
+
 def c04_placement_geometry_gate(board_path: str, netlist_path: str, keepouts: list | None = None, *,
                        edge_margin_mm: float | None = None, expected_ref_count: int | None = None,
                        silk_clearance_mm: float | None = None, courtyard_gap_mm: float | None = None,
-                       ref_text_layers: list | None = None) -> dict:
+                       ref_text_layers: list | None = None, gerber_dir: str | None = None,
+                       human_dir: str | None = None) -> dict:
     """Run GATE-C04-01..07 on a placed .kicad_pcb against its netlist. Never mutates inputs.
+
+    05 = ``unmeasured`` (placement-only) unless ``gerber_dir`` is given, in which case it delegates to
+    ``c04_gerber_gate`` (G-01 parity, G-02 copper connectivity, G-03 keepout on copper, G-04 render binding with
+    optional ``human_dir``) and surfaces its worst status: fail > unmeasured > pass; the sub-gate result is
+    under ``gates["GATE-C04-05"]["measured"]["gerber_gate"]``. Only a delegated pass counts toward ``ok``.
 
     06 = reference-text vs pad/courtyard clearance (``silk_clearance_mm``, default 0.15, text layers
     ``ref_text_layers``, default F/B.SilkS + F/B.Fab); 07 = pairwise courtyard polygon gap
@@ -952,11 +1028,12 @@ def c04_placement_geometry_gate(board_path: str, netlist_path: str, keepouts: li
         "GATE-C04-02": gate_courtyard(board_path),
         "GATE-C04-03": gate_keepout(board, kos),
         "GATE-C04-04": gate_edge_margin(board, margin),
-        "GATE-C04-05": gate_copper_gerber(),
+        "GATE-C04-05": gate_copper_gerber() if gerber_dir is None else _gerber_delegate(board_path, gerber_dir, kos, human_dir),
         "GATE-C04-06": gate_silk(board, silk, tlayers),
         "GATE-C04-07": gate_courtyard_gap(board, cgap),
     }
-    return {"ok": all(gates[g]["status"] == "pass" for g in GATE_IDS if g != "GATE-C04-05"),
+    return {"ok": all(gates[g]["status"] == "pass" for g in GATE_IDS
+                      if g != "GATE-C04-05" or gerber_dir is not None),
             "gates": gates,
             "unmeasured_gates": [g for g in GATE_IDS if gates[g]["status"] == "unmeasured"],
             "inputs": {"board_sha256": _sha256(board_path), "netlist_sha256": _sha256(netlist_path)},
