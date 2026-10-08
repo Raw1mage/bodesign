@@ -516,7 +516,7 @@ class McpServerTests(unittest.TestCase):
         "bodesign_analyze_emc", "bodesign_analyze_thermal", "bodesign_analyzer_selfcheck",
         "bodesign_apply_pad_intrinsic_overrides", "bodesign_ato_build", "bodesign_autoroute",
         "bodesign_autoroute_preflight", "bodesign_bga_escape_capacity",
-        "bodesign_c00_emit_prd_docx", "bodesign_c01_generate_concept_image",
+        "bodesign_c00_emit_prd_docx", "bodesign_c00_prd_gate", "bodesign_c01_generate_concept_image",
         "bodesign_c02_export_skp", "bodesign_c02_export_step", "bodesign_c02_export_stl",
         "bodesign_c02_project_svg", "bodesign_c02_render_enclosure",
         "bodesign_c02_voice_to_design", "bodesign_c04_placement_geometry_gate", "bodesign_c04_board_manifest", "bodesign_c04_gerber_gate", "bodesign_c04_routing_gate", "bodesign_c02_mesh_gate", "bodesign_c02_chain_check", "bodesign_c02_view_coverage", "bodesign_c01_scene_gate", "bodesign_cache_close", "bodesign_cache_export",

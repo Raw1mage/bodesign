@@ -786,6 +786,42 @@ left recess labelled or removed; footer line wrapped (no text may leave the canv
 should grow a canvas-bounds check for caption boxes in the next Track B round); cmf 3D
 viewport enlarged to show every bound surface. (c) S11 pool = freeze §4.11 addendum + §4.12.
 
+### 4.13 C00 PRD r1 ruling (2026-10-08) — tasks 7.9 / AC26, dual track
+
+Track A producer codex `ses_ee531212e` (PRD rebased on PO-1..4 via served docxmcp); Track B codex
+`ses_ee53095f3` (`bodesign_c00_prd_gate` P-01..P-05, 28 tests incl. negative controls, 5 files,
+uncommitted → S12 pool). Officer verification: manifest `55b8f2dc…` 672 entries, `-c` 0 non-OK;
+`12.c00-prd-v1.docx` `f4bf66db…`, `.pdf` `84fb797c…`; `c00_prd_manifest-v3.json` `47d72956…`
+(v1/v2 in `.history/`); gate receipt `c00p_r1_gate-v1.json` `76d397b2…` ok=true, P-01..P-05 pass
+(repo function @ HEAD `3b274f6`); DOCX XML requirement coverage 89/89, bridge 58/58 both directions.
+
+Incident and ruling — NFR table body loss: host LibreOffice 24.2.7.2 dropped all nine body rows of
+表 3 (a `tblHeader`+`cantSplit` table starting at a page break); container LibreOffice 25.2.3.2
+(docxmcp's own) renders them. Proven by one-reviewer-per-image blind reads (t3-07/t3-08 vs
+preview-08/final-07), not by text extraction — `pdftotext` reports 85/89 on BOTH renders
+(extraction artifact; the four IDs wrap "NFR-"/"0N"). Ruling: (a) PDF path = docxmcp container
+soffice via `docker exec`, label recorded in manifest with both version strings; host soffice
+rejected. (b) The forcing gap is docxmcp's: `preview` discards its PDF and `from_markdown` ignores
+header args → `docxmcp/issues/BR_20261008_preview_discards_pdf_and_from_markdown_ignores_header_args_forcing_host_soffice_detour.md`,
+BRNS'd to docxmcp ★ (guest, not tracked). (c) Gate contract is the chain SSOT (§4.7 applies to
+C00): manifest was re-emitted v2 (explicit path keys, requirement_ids = bridge FR/NFR/E only,
+decision_ids = `### D-n/PO-n` headings) and v3 (`expects_in_bom`/`expects_absent_from_bom`), the
+gate was not adapted.
+
+Review 31 (three blind reads, READ_OK): cover carries `DRAFT — not approved PRD / sandbox specimen`
++ `未取得人工核准`, no clipping; 表 1 (page 2) 12 rows, no overflow. Residuals, not blocking, r2
+list: (1) **TOC empty** — only the F9 placeholder renders (LibreOffice does not populate Word TOC
+fields; sanctioned pipeline must emit a pre-populated TOC or the PDF must be produced after a field
+update); (2) header `作者` still the template placeholder and `V 1.0` (from_markdown gap, BR above);
+(3) cover title wraps mid-word (`規`/`格書`) and the DRAFT subtitle orphans `specimen`; (4) source
+filename v1.2 vs body/bridge R6/v0.6 disclosed on cover and in manifest, not resolved upstream.
+Harness note: one `task(general)` job again delivered two mutually exclusive completion events for
+the same image (r31-03); adjudicated by `pdftotext` of the page — the second report matched, the
+first was fabricated. Same family as opencode BR_20261008 (subagent reads); evidence appended there.
+
+S12 pool = `c00_prd_gate.py`, `test_c00_prd_gate.py` (+ shared `__init__`/`server.py`/
+`test_mcp_server.py` with S10 `c01_scene_gate`) + this §4.13.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
