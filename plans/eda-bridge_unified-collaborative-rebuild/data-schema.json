@@ -1,5 +1,5 @@
 {
-  "version":"1.2.0",
+  "version":"1.3.0",
   "status":"target-contract-not-runtime-implementation",
   "schemas":[
     {"name":"ArtifactManifest","kind":"json","fields":[
@@ -139,5 +139,46 @@
       {"name":"subject_ref","type":"string|null","notes":"Manifest identity if available; absent before ingest is explicit."},
       {"name":"details","type":"object","notes":"Gap list, coverage or conflict records; raw native results preserved."}
     ]}
-  ]
+  ],
+  "presentation_plan": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "PresentationPlan",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schema_version", "revision_id", "status", "baseline_refs", "generator", "pages", "home_pages", "instance_coverage", "local_support", "interfaces", "intent_refs", "review_evidence", "human_locks", "exceptions", "evidence_gaps"],
+    "properties": {
+      "schema_version": {"const": "presentation_plan/1.0.0"},
+      "revision_id": {"$ref": "#/$defs/text"},
+      "status": {"const": "DRAFT - not human approval"},
+      "baseline_refs": {"type": "object", "additionalProperties": false, "required": ["netlist", "legacy_netlist", "book_pdf", "bundle_manifest", "hashes_root", "legacy_sheet_mapping"], "properties": {
+        "netlist": {"$ref": "#/$defs/artifact"}, "legacy_netlist": {"$ref": "#/$defs/artifact"}, "book_pdf": {"$ref": "#/$defs/artifact"}, "bundle_manifest": {"$ref": "#/$defs/artifact"}, "hashes_root": {"$ref": "#/$defs/digest"},
+        "legacy_sheet_mapping": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["ref", "Sheetname", "Sheetfile", "sheetpath", "home_page"], "properties": {"ref": {"$ref": "#/$defs/text"}, "Sheetname": {"$ref": "#/$defs/text"}, "Sheetfile": {"$ref": "#/$defs/text"}, "sheetpath": {"$ref": "#/$defs/text"}, "home_page": {"$ref": "#/$defs/text"}}, "additionalProperties": false}}
+      }},
+      "generator": {"$ref": "#/$defs/artifact"},
+      "pages": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id", "role", "order", "primary_refs", "native", "image", "intent_refs"], "properties": {"id": {"$ref": "#/$defs/text"}, "role": {"enum": ["overview", "home", "interface"]}, "order": {"type": "integer", "minimum": 1}, "primary_refs": {"$ref": "#/$defs/texts"}, "native": {"$ref": "#/$defs/artifact"}, "image": {"$ref": "#/$defs/artifact"}, "intent_refs": {"$ref": "#/$defs/texts"}}, "additionalProperties": false}},
+      "home_pages": {"$ref": "#/$defs/texts"},
+      "instance_coverage": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["ref", "physical_id", "role", "home_page", "units", "pins", "views"], "properties": {"ref": {"$ref": "#/$defs/text"}, "physical_id": {"$ref": "#/$defs/text"}, "role": {"enum": ["ic", "connector", "support"]}, "home_page": {"$ref": "#/$defs/text"}, "units": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}}, "pins": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/pin"}}, "views": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/view"}}}, "additionalProperties": false}},
+      "local_support": {"type": "array", "items": {"$ref": "#/$defs/relationship"}},
+      "interfaces": {"type": "array", "items": {"$ref": "#/$defs/interface"}},
+      "intent_refs": {"$ref": "#/$defs/texts"},
+      "review_evidence": {"type": "array", "items": {"$ref": "#/$defs/review"}},
+      "human_locks": {"type": "array", "items": {"$ref": "#/$defs/decision"}},
+      "exceptions": {"type": "array", "items": {"$ref": "#/$defs/decision"}},
+      "evidence_gaps": {"$ref": "#/$defs/texts"}
+    },
+    "$defs": {
+      "text": {"type": "string", "minLength": 1},
+      "texts": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+      "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "artifact": {"type": "object", "required": ["path", "sha256"], "properties": {"path": {"$ref": "#/$defs/text"}, "sha256": {"$ref": "#/$defs/digest"}}, "additionalProperties": false},
+      "approval": {"type": ["object", "null"], "required": ["actor", "source", "decision"], "properties": {"actor": {"$ref": "#/$defs/text"}, "source": {"$ref": "#/$defs/text"}, "decision": {"enum": ["approved", "rejected"]}}, "additionalProperties": false},
+      "decision": {"type": "object", "required": ["id", "target", "justification", "approval"], "properties": {"id": {"$ref": "#/$defs/text"}, "target": {"$ref": "#/$defs/text"}, "justification": {"$ref": "#/$defs/text"}, "approval": {"$ref": "#/$defs/approval"}}, "additionalProperties": false},
+      "pin": {"type": "object", "required": ["pin", "unit", "state", "page", "net", "hidden", "stacked_with"], "properties": {"pin": {"$ref": "#/$defs/text"}, "unit": {"type": "integer", "minimum": 1}, "state": {"enum": ["placed", "off-page-label", "NC", "hidden-stacked"]}, "page": {"$ref": "#/$defs/text"}, "net": {"$ref": "#/$defs/text"}, "hidden": {"type": "boolean"}, "stacked_with": {"$ref": "#/$defs/texts"}}, "additionalProperties": false},
+      "occurrence": {"type": "object", "required": ["pin", "state", "destination", "relationship_id", "exception_id"], "properties": {"pin": {"$ref": "#/$defs/text"}, "state": {"enum": ["placed", "off-page-label", "NC", "hidden-stacked"]}, "destination": {"type": ["string", "null"]}, "relationship_id": {"type": ["string", "null"]}, "exception_id": {"type": ["string", "null"]}}, "additionalProperties": false},
+      "view": {"type": "object", "required": ["page", "native_uuid", "physical_id", "approval_provenance", "review_ids", "pins"], "properties": {"page": {"$ref": "#/$defs/text"}, "native_uuid": {"$ref": "#/$defs/text"}, "physical_id": {"$ref": "#/$defs/text"}, "approval_provenance": {"$ref": "#/$defs/text"}, "review_ids": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 6}}, "pins": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/occurrence"}}}, "additionalProperties": false},
+      "relationship": {"type": "object", "required": ["id", "anchor_ref", "anchor_pins", "page", "support_refs", "evidence_ref"], "properties": {"id": {"$ref": "#/$defs/text"}, "anchor_ref": {"$ref": "#/$defs/text"}, "anchor_pins": {"$ref": "#/$defs/texts"}, "page": {"$ref": "#/$defs/text"}, "support_refs": {"$ref": "#/$defs/texts"}, "evidence_ref": {"$ref": "#/$defs/text"}}, "additionalProperties": false},
+      "interface": {"type": "object", "required": ["id", "net", "endpoints", "evidence_ref"], "properties": {"id": {"$ref": "#/$defs/text"}, "net": {"$ref": "#/$defs/text"}, "endpoints": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["ref", "pin", "page"], "properties": {"ref": {"$ref": "#/$defs/text"}, "pin": {"$ref": "#/$defs/text"}, "page": {"$ref": "#/$defs/text"}}, "additionalProperties": false}}, "evidence_ref": {"$ref": "#/$defs/text"}}, "additionalProperties": false},
+      "review": {"type": "object", "required": ["review_id", "evidence_class", "source", "line_range", "scope_note"], "properties": {"review_id": {"type": "integer", "minimum": 6}, "evidence_class": {"enum": ["producer_review_verbatim", "officer_summary"]}, "source": {"$ref": "#/$defs/artifact"}, "line_range": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}}, "scope_note": {"$ref": "#/$defs/text"}}, "additionalProperties": false}
+    }
+  }
 }

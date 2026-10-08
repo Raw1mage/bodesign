@@ -816,6 +816,15 @@ def _h_c02_mesh_gate(a: dict) -> Any:
         return {"ok": False, "error": str(e)}
 
 
+def _h_c03_presentation_gate(a: dict) -> Any:
+    from bodesign_eda_bridge.c03_presentation_gate import C03PresentationInputError, c03_presentation_gate
+    try:
+        return c03_presentation_gate(a.get("plan_path"), a.get("schema_path"),
+                                     a.get("netlist_path"), a.get("human_dir"))
+    except C03PresentationInputError as e:
+        return {"ok": False, "error": str(e)}
+
+
 def _h_c00_prd_gate(a: dict) -> Any:
     from bodesign_eda_bridge.c00_prd_gate import C00PrdInputError, c00_prd_gate
     try:
@@ -1358,6 +1367,11 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c02_mesh_gate", "handler": _h_c02_mesh_gate,
      "description": "C02 printable-enclosure mesh gates (DD-19), pure python, per STL part: M-01 nonempty valid mesh (triangle/degenerate/non-finite counts); M-02 half-edge topology after 1e-5 mm vertex weld: manifold (each edge shared by exactly 2 faces), watertight (no boundary edge), consistent orientation (no same-direction twin) and positive signed volume (inverted shell fails); M-03 bbox extents vs expected_bbox_mm within bbox_tol_mm (axis-ordered, no rotation; units assumed mm); M-04 wall thickness: ray from sampled face centroids along -normal, first-hit distance vs wall_min_mm (sampled normal-direction distance, NOT a true minimum thickness; limits are returned in measured.limits; unmeasured unless M-02 passes). Assembly: M-05 board clearance needs board_manifest_path + clearance_min_mm + explicit board_placement_mm [dx,dy,dz] (registration is never guessed) and tests that the extruded board outline vertices sit inside the cavity at >= clearance; translation only, component heights not modelled, necessary-not-sufficient; otherwise unmeasured with a reason, never pass. M-06 chain: c02_manifest_path consumed_board_outline_sha256 == board manifest exported_outline_sha256 (absent => unmeasured). trimesh, if importable, is a cross-check only and never changes a verdict. Returns {ok, parts:{name:{M-01..M-04}}, assembly:{M-05,M-06}, unmeasured_gates, inputs}. Watertight is not printable: no slicer/process/fit/strength claim. consider: bodesign_c04_board_manifest.",
      "schema": {"type": "object", "properties": {"stl_path": _STR, "stl_paths": {"type": "array", "items": _STR}, "wall_min_mm": {"type": "number"}, "clearance_min_mm": {"type": "number"}, "expected_bbox_mm": {"description": "[x,y,z] extents for every part, or {basename:[x,y,z]}"}, "bbox_tol_mm": {"type": "number", "description": "required when expected_bbox_mm is given"}, "board_manifest_path": _STR, "c02_manifest_path": _STR, "board_placement_mm": {"type": "array", "items": {"type": "number"}, "description": "[dx,dy,dz] mm translating board manifest coordinates into STL coordinates"}, "wall_samples": {"type": "integer"}}, "required": ["wall_min_mm"]}},
+    {"name": "bodesign_c03_presentation_gate", "handler": _h_c03_presentation_gate,
+     "description": "DD-16 read-only PresentationPlan gate: PP-01 closed v1 schema/version; PP-02 physical ref/pin/unit/NC accounting against netlist library inventory and exact embedded native symbols (approved repeated views, real net wins over unconnected-*); PP-03 every declared off-page label binds a named local-support/destination or approved named exception; PP-04 declared home set equals exported book leaves and bound native/image files on disk; PP-05 locks/exceptions name target, justification and supplied approval. Missing symbol/unit facts fail fast, never default unit 1. Does not measure actual visible wires, image readability, comprehension, approval authenticity, electrical correctness or release. Never writes approval or any input. schema_path is data-schema.json with presentation_plan or its extracted standalone schema; all four paths required.",
+     "schema": {"type": "object", "properties": {"plan_path": _STR, "schema_path": _STR,
+                 "netlist_path": _STR, "human_dir": _STR},
+                 "required": ["plan_path", "schema_path", "netlist_path", "human_dir"]}},
     {"name": "bodesign_c00_prd_gate", "handler": _h_c00_prd_gate,
      "description": "AC26 pure-Python PRD evidence gate: P-01 disk SHA256 and declared approved pipeline; P-02 bridge/manifest/markdown/DOCX requirement-ID coverage; P-03 decision citations; P-04 optional BOM tokens and board outline consistency; P-05 PDF header/trailer and explicit page-object count. Missing optional stage inputs are unmeasured. Fonts, overflow, comprehension and approval are not measured; pipeline identity is declared, not execution attestation.",
      "schema": {"type": "object", "properties": {"manifest_path": _STR, "requirements_bridge_path": _STR,

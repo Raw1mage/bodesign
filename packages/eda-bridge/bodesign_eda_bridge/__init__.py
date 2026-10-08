@@ -95,8 +95,11 @@ from .c02_mesh_gate import C02MeshInputError, c02_mesh_gate
 from .c02_chain import C02ChainInputError, c02_chain_check, c02_view_coverage
 from .c01_scene_gate import C01SceneInputError, c01_scene_gate
 from .c00_prd_gate import C00PrdInputError, c00_prd_gate
+from .c03_presentation_gate import C03PresentationInputError, c03_presentation_gate
 
 __all__ = [
+    "C03PresentationInputError",
+    "c03_presentation_gate",
     "C00PrdInputError",
     "c00_prd_gate",
     "C01SceneInputError",

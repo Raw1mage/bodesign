@@ -63,7 +63,7 @@ RUN set -eu; \
     echo "${node_sha}  /opt/node.tar.xz" | sha256sum -c -; \
     mkdir -p /opt/node && tar -xJf /opt/node.tar.xz -C /opt/node --strip-components=1; \
     rm /opt/node.tar.xz; \
-    /opt/node/bin/node --version; /opt/node/bin/npm --version
+    /opt/node/bin/node --version; PATH="/opt/node/bin:$PATH" /opt/node/bin/npm --version
 ENV PATH="/opt/node/bin:$PATH" BODESIGN_NODE_BIN=/opt/node/bin/node
 
 # Lockfile-based production dependency layer: exactly elkjs@0.12.0 (integrity in
