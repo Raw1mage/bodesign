@@ -745,7 +745,46 @@ Rulings: (a) S10 pool = `c01_scene_gate.py` + `test_c01_scene_gate.py` + `__init
 (c) C01' r2 scope = the fix list above plus a composite "all views on one page" check; r2 is not
 required before S10. (d) Harness: `invoke_subagent` from a non-officer handler is blocked by the
 hook, so producer-side fresh-eyes is structurally unavailable — officer-run blind review is the
-standing mechanism (added to the open opencode BR on subagent image review).
+standing mechanism. The earlier opencode BR on subagent image review is already closed by its
+owner; the hook intercept is a distinct defect, filed as a new opencode BR (2026-10-08).
+
+**§4.11(b) discharged (2026-10-08, codex producer `ses_ee55cdf11`)**: `c02p_manifest-v4.json` is a
+manifest-only revision (schema `c02p_manifest/3` + `exported_enclosure_mesh_sha256{lower,upper}` +
+`exported_enclosure_step_sha256` + `revision_note`); v3 retained byte-identical in place as C01 v1's
+consumed input (ruling: no `.src/.history`, no archive move). Officer verification: manifest
+`9acab9cf…` 639 entries, `-c` 0 non-OK; v4 mesh shas equal the on-disk STL shas; chain/mesh gates
+still all-pass, unmeasured []; `c01_scene_gate` with v4 as C02 argument → **S-01 primary pass,
+secondary pass (measured)**, S-02..S-05 pass. The C01'↔C02' chain is now fully measurable on the
+real tree. Repo function @ HEAD `2f2bc4e`, not served-tool call.
+
+### 4.12 C01' r2 ruling (2026-10-08) — Review 29 fix list closed, Review 30 residuals
+
+Producer agy-relay `ses_ee5570934`. Officer verification: manifest `f5f2faa6…` 658 entries,
+`-c` 0 non-OK; v2 PNG/PDF sha16 match the report; 13 v1 files in `btdongle_ms/.history/`, 0 v1 at
+top level; container-written files chowned back to `pkcs12:pkcs12` (verified); scene manifest v2
+`029c517e…` consumes C02' v4 (`3aba2268…`), 6 declared views, 4 lights; `c01p_r2_scene-v1.json`
+S-01 primary+secondary pass, S-02..S-05 pass (repo function @ HEAD `2f2bc4e`).
+
+Review 30 (three `task(general)` blind reads, all READ_OK, captions quoted verbatim):
+- usb-end: all six r1 findings closed — recessed cavity with tongue, no stray tab, 61 % width,
+  shaded shell with edges. New: port reads ~18 % of shell width (oversized for 9.6 mm at a 33 mm
+  shell — check camera/scale, not geometry).
+- iso-front: lid ripple gone, J1 recessed, KEY caps visible as two dark discs, 5/5 tokens in the
+  strip. Residual: SILVER screws render as dark as KEY caps (no metallic separation); only 3 of
+  4 LEDs visible; unexplained slot-like recess at the left corner of the end face (SW1 pocket?
+  must be labelled); near-right corner still reads as a stepped notch; object ~40 % of canvas.
+- cmf: cards/table/LED row all readable, no clipping inside cards; the 3D mapping viewport is too
+  small to show SILVER or KEY surfaces (reviewer: "5/5 claim not visually backed for KEY and
+  SILVER"); PORT unsure at that scale.
+- All three: the footer's trailing free-text line ("Lid: 2x screws … 4x LEDs…") runs off the
+  right canvas edge — a caption-layout bug, same family as the r1 card clipping.
+
+Rulings: (a) r2 accepted as the C01' baseline for DD-18; residuals above are the r3 list, not
+blocking. (b) r3 adds: SILVER needs metallic/roughness separation measurable by a pixel probe
+against KEY; LED count 4 must be visible in iso-front or the view declared otherwise; end-face
+left recess labelled or removed; footer line wrapped (no text may leave the canvas — S-03
+should grow a canvas-bounds check for caption boxes in the next Track B round); cmf 3D
+viewport enlarged to show every bound surface. (c) S11 pool = freeze §4.11 addendum + §4.12.
 
 ## 5. Summary and Next Steps
 
