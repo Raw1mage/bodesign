@@ -816,6 +816,16 @@ def _h_c02_mesh_gate(a: dict) -> Any:
         return {"ok": False, "error": str(e)}
 
 
+def _h_c01_scene_gate(a: dict) -> Any:
+    from bodesign_eda_bridge.c01_scene_gate import C01SceneInputError, c01_scene_gate
+    try:
+        kw = {k: a[k] for k in ("c02_manifest_path", "human_dir", "expected_bbox_mm", "bbox_tol_mm",
+                               "required_views", "stage_prefix") if k in a}
+        return c01_scene_gate(a.get("scene_manifest_path"), **kw)
+    except C01SceneInputError as e:
+        return {"ok": False, "error": str(e)}
+
+
 def _h_c02_chain_check(a: dict) -> Any:
     from bodesign_eda_bridge.c02_chain import C02ChainInputError, c02_chain_check
     for req in ("board_path", "c02_manifest_path"):
@@ -1338,6 +1348,13 @@ TOOLS: list[dict] = [
     {"name": "bodesign_c02_mesh_gate", "handler": _h_c02_mesh_gate,
      "description": "C02 printable-enclosure mesh gates (DD-19), pure python, per STL part: M-01 nonempty valid mesh (triangle/degenerate/non-finite counts); M-02 half-edge topology after 1e-5 mm vertex weld: manifold (each edge shared by exactly 2 faces), watertight (no boundary edge), consistent orientation (no same-direction twin) and positive signed volume (inverted shell fails); M-03 bbox extents vs expected_bbox_mm within bbox_tol_mm (axis-ordered, no rotation; units assumed mm); M-04 wall thickness: ray from sampled face centroids along -normal, first-hit distance vs wall_min_mm (sampled normal-direction distance, NOT a true minimum thickness; limits are returned in measured.limits; unmeasured unless M-02 passes). Assembly: M-05 board clearance needs board_manifest_path + clearance_min_mm + explicit board_placement_mm [dx,dy,dz] (registration is never guessed) and tests that the extruded board outline vertices sit inside the cavity at >= clearance; translation only, component heights not modelled, necessary-not-sufficient; otherwise unmeasured with a reason, never pass. M-06 chain: c02_manifest_path consumed_board_outline_sha256 == board manifest exported_outline_sha256 (absent => unmeasured). trimesh, if importable, is a cross-check only and never changes a verdict. Returns {ok, parts:{name:{M-01..M-04}}, assembly:{M-05,M-06}, unmeasured_gates, inputs}. Watertight is not printable: no slicer/process/fit/strength claim. consider: bodesign_c04_board_manifest.",
      "schema": {"type": "object", "properties": {"stl_path": _STR, "stl_paths": {"type": "array", "items": _STR}, "wall_min_mm": {"type": "number"}, "clearance_min_mm": {"type": "number"}, "expected_bbox_mm": {"description": "[x,y,z] extents for every part, or {basename:[x,y,z]}"}, "bbox_tol_mm": {"type": "number", "description": "required when expected_bbox_mm is given"}, "board_manifest_path": _STR, "c02_manifest_path": _STR, "board_placement_mm": {"type": "array", "items": {"type": "number"}, "description": "[dx,dy,dz] mm translating board manifest coordinates into STL coordinates"}, "wall_samples": {"type": "integer"}}, "required": ["wall_min_mm"]}},
+    {"name": "bodesign_c01_scene_gate", "handler": _h_c01_scene_gate,
+     "description": "DD-18 pure-Python scene gate: S-01 consumed assets and mesh hash chain (absent C02 exported_enclosure_mesh_sha256 is unmeasured), S-02 token/material/surface binding, S-03 highest-version PNG per declared view with IHDR CRC, output_px and manifest-bound sidecar, S-04 renderer/version/seed binding. ok requires S-01..S-04 pass; S-05 optional axis-ordered STL bbox conformance needs both expected_bbox_mm and bbox_tol_mm, never default tolerance and is not in ok. stage_prefix defaults c01-; optional NN. page prefix ignored. Pixel colour/content is never judged; no CMF or human approval. consider: bodesign_c02_mesh_gate.",
+     "schema": {"type": "object", "properties": {"scene_manifest_path": _STR, "c02_manifest_path": _STR,
+                "human_dir": _STR, "stage_prefix": _STR, "required_views": {"type": "array", "items": _STR},
+                "expected_bbox_mm": {"oneOf": [{"type": "array", "items": {"type": "number"}},
+                                              {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "number"}}}]},
+                "bbox_tol_mm": {"type": "number"}}, "required": ["scene_manifest_path"]}},
     {"name": "bodesign_c02_chain_check", "handler": _h_c02_chain_check,
      "description": "C02' chain SSOT check (c04-entry-freeze section 2.3): recompute bodesign_c04_board_manifest's own exported_outline_sha256 / exported_mounting_holes_sha256 from a placed .kicad_pcb and compare with the C02' manifest's consumed_board_outline_sha256 / consumed_mounting_holes_sha256. A mismatch fails and names the stale side (c02_manifest = the producer consumed a different packet than this tool emits, e.g. a hand-written sibling schema). Optional board_manifest_path: a board manifest file whose exported hashes or schema differ from the recompute is flagged STALE_BOARD_MANIFEST. An absent consumed_* value is unmeasured, never pass; ok requires every link measured and equal. Returns {ok, links:{outline,mounting_holes}, board_manifest_file, unmeasured, inputs}. Never mutates anything. consider: bodesign_c04_board_manifest, bodesign_c02_mesh_gate.",
      "schema": {"type": "object", "properties": {"board_path": _STR, "c02_manifest_path": _STR, "board_manifest_path": _STR}, "required": ["board_path", "c02_manifest_path"]}},

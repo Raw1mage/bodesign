@@ -707,6 +707,46 @@ caption overlaps on iso/exploded/section-usb/plan; section-h3 caption says "edge
 shows a slanted face (caption contradicts image); no blind review of v3. Not measured: J1
 height (no library STEP), slicer/print, stake/thread/cap-force, independent fit.
 
+### 4.11 C01' r1 ruling (2026-10-08) — scene gate landed, product views rendered, blind review
+
+Dual track per DD-18. Track A (agy-relay gemini-3.8-flash-high, `ses_ee5813994`) rendered on
+the pyrender 0.1.45/EGL baseline inside the `bodesign-me` image (host has no trimesh); Track B
+(codex gpt-6.1-sol, `ses_ee580aa22`) delivered `c01_scene_gate` S-01..S-05 (31 tests, 0 live
+tuning — specimen did not exist at its finish).
+
+Officer verification: manifest `5ab07e35…` 635 entries (464 machine + 110 human + 61 external),
+`-c` 0 non-OK; `c01_scene_manifest-v1.json` sha16 `285ea805` matches the in-canvas captions
+quoted verbatim by three independent reviewers. Gate run by Track A as repo function @ HEAD
+`a2cbc7f` (not served-tool call): S-01 primary pass (both STL sha recomputed), **secondary
+unmeasured** (`c02p_manifest/3` carries no `exported_enclosure_mesh_sha256`); S-02 5 tokens /
+6 surfaces, 0 unbound / 0 double-bound; S-03 5/5 declared views, 1600×1200, sidecars bound;
+S-04 renderer bound; S-05 lower 33.0×98.0×30.7 / lid 33.0×98.0×8.5 vs M-03, Δ 0.0.
+
+**Fresh-eyes inside Track A did not happen**: 6/6 `invoke_subagent` calls were refused by a
+pre-tool hook (A2A invariant intercept); producer reported it honestly as "not reviewed". Officer
+ran Review 29 as three `task(general)` blind reads (iso-front, usb-end, cmf); **all three
+READ_OK** and quoted the caption text — survival and review coincide this round.
+
+Review 29 findings (r2 fix list, not re-gated):
+- iso-front: wavy shading artifact across the lid around the controls (bad normals or
+  overlapping mesh); lid appears to float/step off the lower tray at the near corner; J1 block
+  and an unlabelled stub protrude from the end face instead of sitting in cutouts; four disc
+  features on the lid but footer lists only H1/H3.
+- usb-end: port opening has no depth (reads as a decal); stray tab outside the silhouette on
+  the left; shell blown out with no edge definition; object fills ~1/3 of the canvas.
+- cmf: KEY token has no visible anthracite surface in the render and is missing from the bottom
+  strip (4/5 listed vs "5/5 bound" claim); PORT/KEY "Design Intent" text clipped at card edge;
+  "Design Intent:" label runs into its text; LED dots too small to read.
+Common: lighting flat/overexposed on MIST_WHITE; LENS indistinguishable from shell.
+
+Rulings: (a) S10 pool = `c01_scene_gate.py` + `test_c01_scene_gate.py` + `__init__` /
+`server.py` / `test_mcp_server.py` registration + this section. (b) C02' next version MUST emit
+`exported_enclosure_mesh_sha256` per part so S-01 secondary becomes measurable on the real tree.
+(c) C01' r2 scope = the fix list above plus a composite "all views on one page" check; r2 is not
+required before S10. (d) Harness: `invoke_subagent` from a non-officer handler is blocked by the
+hook, so producer-side fresh-eyes is structurally unavailable — officer-run blind review is the
+standing mechanism (added to the open opencode BR on subagent image review).
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).

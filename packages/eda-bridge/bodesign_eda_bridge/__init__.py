@@ -93,8 +93,11 @@ from .c04_gerber import c04_gerber_gate
 from .c04_routing import c04_routing_gate
 from .c02_mesh_gate import C02MeshInputError, c02_mesh_gate
 from .c02_chain import C02ChainInputError, c02_chain_check, c02_view_coverage
+from .c01_scene_gate import C01SceneInputError, c01_scene_gate
 
 __all__ = [
+    "C01SceneInputError",
+    "c01_scene_gate",
     "DEFAULT_AUTOROUTE_PASSES",
     "analyzer_engine_status",
     "resolve_skill",
