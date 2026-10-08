@@ -579,6 +579,134 @@ the first time; GATE-05 no longer literal unmeasured). Specimen residue → r4: 
 clearance 0.20, H1/H2 in Pico RF rule area, Power_High 0.26 mm, BAT_EXT 1 via, acid-trap
 approaches, B.Cu islands. Chain: C02' r3 re-consumes holes sha `788c668d…`.
 
+### 4.9.2 r4 routing gate — first calibration on v3 (officer rulings, 2026-10-07)
+
+`bodesign_c04_routing_gate` R-01..R-06 built (33 tests, full suite 2775/f16/e40/s56, +33 = new
+module only). Live v3 run: ok=False, unmeasured [R-05].
+
+Calibration against the r3 residue list, verified by the officer:
+- **R-01 confirmed**: Power_High (BATT/SYS/VBUS/Net-(D1-K1)/Net-(J2-Pin_1)/Net-(L1-Pad1)) at
+  0.26 mm, 128 offenders. NEW finding not in the r3 residue list: Ground class min 0.3, GND at
+  0.2 mm on F.Cu (10 segments) → forwarded to Track A r4.
+- **R-02 confirmed, name mapping verified**: `BAT_EXT` (design.py:216 = Q1.2, J2.1, C6.1) and
+  `Net-(J2-Pin_1)` (book_modules-v2.net code 12 = C6.1, J2.1, Q1.2) are the same node set; the
+  book netlist carries the page-local name. BATT (3 vias) is a different net and passes.
+- **R-04 NOT red on v3 — and the ruling is that the gate is right, the expectation was wrong.**
+  Measured: stored B.Cu fill = one positive-area outer loop (2156.9 mm²) + 40 hole loops;
+  B.Cu gerber = one GND component (58 items) + 39 single-item non-GND annuli. There is no
+  stranded positive-area polygon. The r3 "B.Cu islands" residue came from Review 27 (thumbnail
+  scale) and the producer's self-report, neither of which measured the fill. The calibration
+  requirement "MUST fail on B.Cu islands" was an officer assumption from an unmeasured claim;
+  a gate is never tuned to red to satisfy it. What a reviewer calls an "island" on a flood is
+  usually a region joined by a pinched neck — a different rule: **R-07 min pour neck width**
+  (narrowest connection between any two regions of one filled polygon, threshold = the net
+  class min track width; synthetic negative control = pinched neck). R-07 measures v3 and
+  reports; its verdict follows the bytes.
+- **R-03 threshold ruling**: 45° pad entries are standard practice and not acid traps. Default
+  flag threshold → **< 45°** (entries at ≥ 45° pass); class-level override stays. Re-run v3;
+  what remains is the candidate set for the "two acid-trap approaches" Review 27 saw.
+- R-06: via Net-(U2-GPIO17) at 0.882 mm (< 1.0 margin) matches the producer's own r3 number
+  (0.118 mm inside margin) → forwarded to Track A r4.
+- Fixture `tests/fixtures/c04_routing_gate/routed.kicad_pcb` is hand-written, not a native
+  export (the gate reads only the s-expr; no CLI re-save exists core-side). Accepted with the
+  limit declared in the module docstring; the live-board shape-only test is the native guard.
+
+**Rulings applied, officer rerun** (`c04_routing.py` sha `20e6804c…`, tests Ran 40 / OK after
+`__pycache__` clear). v3 verbatim: ok=False, unmeasured [R-05]; R-01 fail 128 | R-02 fail 1 |
+R-03 fail 3 | R-04 pass | R-06 fail 4 | R-07 fail 19.
+- R-03 at < 45°: 44 → 3 — U1.5 GND 22.5°, J1.A1 GND 33.7°, J1.S1 GND 43.1° (borderline).
+  This is the measured candidate set behind Review 27's "two acid-trap approaches".
+- R-07 on v3: GND_BCU / GND_IN1 one spot 0.2995 vs 0.3 (0.5 µm, rounding-class, not
+  adjudicated); SYS_IN2 15 clusters 0.25–0.48 mm under the 0.5 Power_High min. The rule
+  cannot tell a through-neck from a dead-end spike; the producer judges each against the fill.
+- All of the above + GND 0.2 mm F.Cu (R-01) + GPIO17 via 0.882 (R-06) forwarded to Track A r4
+  while v4 is still in flight, so v4 is judged against the full R-01..R-07 set, not r3's list.
+
+### 4.9.3 r4 outcome (officer, 2026-10-07)
+
+v4 landed (board sha `eb5ed99c…`, manifest root `bf0ad860…`, 583 entries). Placement+gerber gate
+ok=True (GATE-01..07, G-01..04). Routing gate: R-02/R-04/R-06/R-07 pass, R-05 pass with declared
+CC pair (30 mm / 10 mm skew), R-03 unmeasured (U2 custom pads), **R-01 fail 53 Power_High
+segments** outside the declared QFN/D1 escape necks (16 segs ≤ 1.0 mm, 0.25–0.26 mm).
+
+Ruling (R-J sandbox): escape necks ≤ 1.0 mm at U1/D1 are accepted with a declared current
+ceiling 0.9 A ext / 0.45 A int (IPC-2221, 1 oz, 10 °C); SANDBOX-ASSUMPTION charge current
+programmed ≤ 0.8 A. The 53 non-neck segments are a real miss → r4b: widen to ≥ 0.5 mm,
+re-export gerbers-v4b, re-run all three gates. H1/H2 relocation makes the C02' chain stale
+(holes sha `7aab0dc5…`) → C02' r3 after r4b.
+
+### 4.9.4 r4b outcome — Power_High 0.5 mm is infeasible at this placement (officer, 2026-10-08)
+
+Producer sweep (~80 router/placement points across r4 and r4b, incl. Option 1 U1-neighbour
+moves, hand-drawn U1 necks, stub-first and resume passes) never reached {0 unconnected, 0
+clearance, R-01 pass} simultaneously. Best cells: R-01/R-07 pass with 1–3 unconnected + 2–4
+clearance (k6_00_115_left, k6_11_145_up, k6_13_145_left, k7_11_145_up). Producer session
+died mid-sweep (finish=error, no v4b landed).
+
+**Ruling (R-J sandbox, supersedes the 0.5 mm part of §4.9.3):** §1.6 Power_High 0.5 mm was
+a sandbox assumption, not a datasheet or current-derived number. For this specimen the
+Power_High class min width is **declared 0.26 mm** with IPC-2221 (1 oz, 10 °C) 0.90 A ext /
+0.45 A int, under SANDBOX-ASSUMPTION charge current ≤ 0.8 A and no internal-layer Power_High
+runs carrying > 0.45 A. **v4 (board `eb5ed99c…`) stays the routed baseline**; r4b is closed
+without a v4b. Three rounds on one constraint is the stop line; another sweep buys nothing
+for bodesign.
+
+**What bodesign learns (the actual deliverable of r4/r4b):** the harness let a class width
+be frozen that no router could honour at the given footprint pitch, and discovered it only
+after ~80 routing runs. Track B item → **R-08 escape feasibility** (pre-route): for every
+pad whose net class min width W and clearance C cannot pass between that pad and its
+neighbours (pitch − pad width < W + 2C), report {ref, pad, class, pitch, max_feasible_width};
+calibrate: v4 U1 at Power_High 0.5 → infeasible, at 0.26 → feasible; synthetic negative =
+0.5 mm pitch QFN with 0.5 mm class. Also: R-03 must model U2's custom (castellated) pads
+(17 endpoints unmeasured on v4).
+
+**R-08 / R-03-custom landed (officer rerun: `c04_routing.py` sha `2948aadb…`, test_c04_routing_gate
+Ran 49 / OK after `__pycache__` clear).** v4 verbatim at Power_High 0.5: R-01 fail/69, R-08
+fail/3 (U1.2 VBUS, U1.14 BATT, U1.15 SYS — max_feasible_width 0.35 mm at 0.5 pitch / 0.25 pad /
+0.2 clearance); at 0.26: R-08 pass/0, R-01 fail/9 (GND 0.2 < 0.3 on F.Cu only). R-03 on v4 now
+143/143 endpoints examined, 0 offenders (custom castellated pads modelled from primitive union).
+
+Calibration correction: officer expected U1 pads 1/14/15/16 + L1 infeasible; measured 2/14/15 —
+corner pads 1/16 have a free outward side and L1 (1.5×3.6 mm) has no close other-net neighbour.
+The tool was not tuned to the expectation; the expectation was a guess. Rulings: (i) same-net
+pads are not obstacles (J1 Type-C paired pads, U1.17 GND) — accepted, disclosed as
+`same_net_neighbour_pairs_ignored`; (ii) R-08 counts toward ok only pre-route, informational on
+a routed board — accepted. The 0.5-mm infeasibility that cost ~80 router runs is now a
+pre-route verdict in one call.
+
+Residual on v4 under the 0.26 ruling: GND Ground-class 0.2 mm on F.Cu (9 segs) — carry to the
+next C04 touch; not worth a round on its own.
+
+## 4.10 C02' round 3 — re-consume v4 holes (officer, 2026-10-08)
+
+New producer `ses_ee67d5b3b` (previous one dead at 330k ctx). Baseline ruling: manifest root =
+`sha256sum hashes.sha256`; `e48e2e63…` accepted (r4b ASK had rebound two script lines).
+Tool access ruling: served image `76fa7cff` predates S7/S8, so the four C02'/C04 tools were
+called as repo functions (`PYTHONPATH=packages/eda-bridge`), every result labelled "repo
+function @ HEAD 92cbe8c, not served-tool call". **This is the EE build-host gap made concrete:
+the specimen chain is running on stand-ins for tools that exist only in the repo.**
+
+Officer verification: manifest `98f14b6e…` 617 entries, `-c` 617 OK / 0 non-OK; STL/packet/
+manifest sha16 match the report; seven v3 PNGs present. Gates (producer-run, officer-read):
+`c02_chain_check` ok (outline `6e66f4e9…` + holes `7aab0dc5…` recomputed = consumed; board
+manifest file fresh); `c02_mesh_gate` M-01..06 all pass, unmeasured [] (M-03 now measured with
+declared bbox+tol; M-05 0.5 ≥ 0.25); `c02_view_coverage` 6/6. Board packet is the tool output;
+producer-written one archived.
+
+Sandbox design calls (producer): SW2/SW3 button-cap stand-ins as STEP children; retention =
+M1.6 lid screws at H1/H3 + heat-stake pin at H2 (post cannot reach floor across the cell bay,
+carried by a 47.7° self-supporting wedge from H3). Section through H3 added.
+
+**137 observation (user asked):** 21 fresh-eyes subagents (3 rounds × 7 images), 21/21 exited
+success, 0 killed-137, elapsed 20–71 s. One (R1 plan) exited clean WITHOUT reading its image
+(`MEDIA_INLINE_DIMENSION_EXCEEDED` at 1000×2170) — survival ≠ review; producer shrank the
+canvas. Before the fix the previous round lost 3/3 subagents to 137.
+
+Residuals (round-3 findings on delivered images, not fixed; §9 of the producer report): leader/
+caption overlaps on iso/exploded/section-usb/plan; section-h3 caption says "edge-on" but image
+shows a slanted face (caption contradicts image); no blind review of v3. Not measured: J1
+height (no library STEP), slicer/print, stake/thread/cap-force, independent fit.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
