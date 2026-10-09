@@ -960,6 +960,35 @@ samples budget fixed, (c) ME-image delta measured against D5 ≤1.5 GiB. 7.6 clo
 `lights.*.position` are ignored by the renderer (view-dependent eye/target offsets in code) and
 S-04 does not catch it; `product-sheet` is declared as a camera but is a composite.
 
+### 4.19 R-K: S1 frozen at partial; §3 mainline moves to S3 formalisation (2026-10-09, user)
+
+User ruling (verbatim): 「先求有，才能求好，內容優純，格式其次」 — have it first, then make it
+good; content first, format second. Context: the officer reported that S1 calibration (3.3a) had
+reached diminishing returns — a–d calibrated, e has two adjudicated rejecting cells
+(`E_LABEL_FLAG_CORRIDOR`, S34) and no accepting candidate because the ELK path routinely runs
+wires along label flags; the accepting cell will appear only once the engine learns to avoid
+flags. User agreed to freeze S1 and move to S3.
+
+Rulings:
+1. **S1 FROZEN at `partial`** (instrument `53acfd4b…`, policy `63bee5d02a5ec147`, record
+   `8680263…`). 3.3a stays unchecked; AC16 stays partial and is reported as such, never
+   softened. CP3 e-extras (26) stay unadjudicated. No further S1 rounds without a new user
+   ruling.
+2. **Mainline = 3.3c S3 formalisation, content-first.** "Content" = the six leaves are
+   produced through the formal `bodesign_emit_multisheet` path with `layout_engine="elk-layered"`
+   reachable from MCP, native-exported, electrically faithful (pins declared/native, ERC
+   non-library findings adjudicated), and S1-measured with the frozen instrument. "Format"
+   (typography, flag placement, page use, R-C composition) is deferred: S1 class f and the e
+   flag-corridor findings are RECORDED on each leaf, not gates for this phase.
+3. Acceptance for this phase (officer, not AC18/AC19 which keep their text): (a) served
+   `tools/list` exposes the engine parameter; (b) one `emit_multisheet` call from the officer
+   session produces the six-leaf set in `outputs/btdongle_ms/` with engine receipts and
+   hashes; (c) per-leaf S1 report attached (verdicts may be `fail`/`indeterminate`); (d) ERC
+   non-library findings either fixed in the spec or named as accepted with reason; (e) tests
+   green (`test_elk_layout` 21, `test_readability_render` 114, multisheet suite).
+4. Fresh-eyes visual review of the six leaves is deferred to the "求好" phase; this phase
+   delivers bytes + measurements, not human acceptance.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
