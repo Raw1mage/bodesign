@@ -897,6 +897,21 @@ repo HEAD `bcf15b2` — per file recorded/HEAD/disk sha, 15 identical, `server.p
 `.history/`) carrying `bodesign_head=bcf15b2` and the pre-rebuild baseline root (same convention as
 v1: the bundle is itself a manifest row, so it cannot carry its own final root). Officer-verified.
 
+### 4.16 C01' r3 ruling (2026-10-09)
+
+r3 (agy-relay `ses_ee5813994`) accepted. Specimen 697 OK / 0 non-OK, root `63f58c9f…`; v3 views
+top-level, v2 in `.history/`. `c01_scene_gate` ok=true S-01..05 on BOTH repo function and served
+UDS (first served-verified C01' round). Review 32 blind (one image per subagent, READ_OK):
+SILVER screws vs KEY caps unambiguous (crop: specular silver vs matte charcoal; probe L 174 vs
+75.5); LEDs 4/4 visible; footer/header no glyph cut; no z-fighting. Residual, not blocking:
+silver heads are low-contrast against MIST_WHITE lid; the two end-face pockets carry no on-canvas
+callout (footer says "Left Wall"). cmf v3 blind (READ_OK): legend swatch SILVER `#F5F7FC` is
+visually the same colour as MIST_WHITE `#EEEEEB` (separation in renders comes from specular, not
+hue); `[PORT]` callout points at a wall with no graphite element rendered; footer chip
+`[INTERNAL H2] Heat-Stake Wedge` has no legend card and no S-02 matrix row while the matrix claims
+5/5 tokens — a self-inconsistency of the sheet, not of the gate (manifest declares 5 tokens). These
+three go to the r4 list; §4.12 r3 list is closed.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
