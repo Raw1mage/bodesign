@@ -889,6 +889,14 @@ decision itself.
 S15 pool = `Dockerfile.core`, `services/mcp/server.py` (2 lines), `docker-compose.dev.yml`,
 `services/mcp/requirements.txt` + this §4.15.
 
+Chain finding closed (2026-10-09, agy-relay `ses_ee531212e`, machine tree only): the 16 repo rows
+were dropped from `hashes.sha256` and rebound through `.src/repo_binding-v1.json` (`0564d9b2…`) at
+repo HEAD `bcf15b2` — per file recorded/HEAD/disk sha, 15 identical, `server.py` differs_from_record
+(the S15 routing edit), `dirty_in_scope=[]`. `sha256sum -c` now 671 OK / 0 non-OK, root
+`42840732…`; bundle manifest bumped to `c00c04_bundle_manifest-v2.json` (`c1990d46…`, v1 in
+`.history/`) carrying `bodesign_head=bcf15b2` and the pre-rebuild baseline root (same convention as
+v1: the bundle is itself a manifest row, so it cannot carry its own final root). Officer-verified.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
