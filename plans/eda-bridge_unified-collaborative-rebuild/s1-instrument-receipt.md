@@ -437,3 +437,51 @@ Verdict recorded: r9 ACCEPTED at bounded diagnostic-coverage-extension scope; D1
 - `s1-sheet-graphics-spec.md`: before `00baa4c47bd3d016fd9aacfed41a5a0846a104654ffcd492b45de6ea3eeda676`, 27968 bytes, 172 lines. Sections touched: 4, 5.1, 6, 7 (AC5), new 11.
 
 **Closing.** This seal confers no authority to commit, deploy, promote calibration, or reopen R6 visual acceptance. AC16 stays partial / unauthenticated (`calibration=partial`, `evidence_authenticated=False`, `authenticated_by=None`). Packaging remains BLOCKED.
+
+## 14. Calibration record binding (3.3a), 2026-10-09
+
+Documentary binding only: new `s1-calibration-record-v2.json`, version `2026-10-09-3.3a-existing-evidence`. No instrument, router, fixture, test or `tasks.md` edits; nothing staged or committed. The live module's decision-policy digest was computed with its own expression (`sha256(repr(sorted(POLICY.items())).encode()).hexdigest()[:16]`): **443bbb0185d5a914**, matching the dispatch and record. Rotation support remains `[0]` only.
+
+### 14.1 Per-class binding
+
+Counts below refer to record entries, not full sensitivity/FP/FN measurements. “Calibrated (structural)” means both existing decision cells are bound; evidence authentication remains false.
+
+| class | rejecting entry | accepting entry | status |
+|---|---|---|---|
+| a | CP3 usbc SVG `1e670c1a…`, §3 `A_DOT_ON_PIN_TIP F1.1` | Review 5 / R5b SVG `54fca7ad…`: a none; all dots correct, none missing/spurious | calibrated (structural), 1 rejecting / 1 accepting |
+| b | Review 2 SVG `28bd7d5e…`, officer classification: b2 REJECTING, adjudicated, matched location | Review 5 / R5b SVG `54fca7ad…`: b1 none, b2 none | calibrated (structural), 1 / 1 |
+| c | CP3 usbc SVG `1e670c1a…`, §3 `C_PIN_LABEL_ONLY R1.1/R2.1/J1.B5/D1.4` | Review 5 / R5b SVG `54fca7ad…`: c none, own pull-downs | calibrated (structural), 1 / 1 |
+| d | CP3 usbc SVG `1e670c1a…`, §3 `D_DOT_ON_PIN_CONTINUES F1` | Review 5 / R5b SVG `54fca7ad…`: d none, F1 SERIES, no bypass | calibrated (structural), 1 / 1 |
+| e | CP3 power_rail SVG `bf19a2bd…`, §3 `E_PIN_ROW_CORRIDOR U1.2/6/13/8/7/11` | **none** | **partial**, 1 / 0 |
+| f | no pass/fail entry | no pass/fail entry | single applicability ruling: §13.8 D1–D3; partial, outside a–e calibration scope |
+
+Review 5's per-class a/b/c/d decisions and officer “accepting-candidate cells (unbound)” classification are bound here to that exact R5b subject; its overall NO on e/f is not converted to overall YES. Review 2 reviewer session: `ses_ef0334aadffeqEnaIpz6SI1Kz8`; Review 5 reviewer session: `ses_eef8cff90ffe1jrnCZvSkoVMW6`. CP3 independent reviewer ids are not recorded in the fixture notes or this receipt; the record explicitly leaves them null and identifies `ses_ef0e7e310ffeYHnGBQ4FrFzZIr` as receipt transcriber only, not reviewer.
+
+The S3 reviewed surface was the PDF-path PNG, not the SVG. Review 2 PNG `ddd66e937d04892d277d2651f05e4eb6a061a07cc1b8992b83b54180300fcdbc` binds to the review's initial artifact table. Review 5 PNG `db0ba9ec09fb0ee829a49646c005c0d77e12ddba65dce3350f240f3d9d76b30b` is bound with the review's manifest root **1001bc33b0c6f359a9c3ff92d41a8c22e982f159a43ea1e6866c1b153cc97638**. R5b fixture correspondence is already recorded in §13.2. The record retains all three native artifact hashes per subject, from PINS and confirmed by `sha256sum` of the 12 bound native files on disk; no unreviewed hash is substituted. The reviewed PNG/manifest roots are documentary bindings from the officer record, not independently rehashed this round. Historical instrument identities and the intentional later R5b subject-manifest change (§13.4) remain distinct from that review manifest root.
+
+### 14.2 Resolver and specified tests (raw output)
+
+After `find . -name __pycache__ -prune -exec rm -rf {} +`, `_resolve_calibration` was invoked on the JSON record with the computed live policy digest, five explicit applicable `ClassReport` descriptors a–e, and `subject_scope={"rotations":[0]}`. Descriptors request structural resolution only; this is not a new detector measurement or native subject report.
+
+```text
+{'status': 'partial', 'partial_classes': ['e'], 'reason': 'classes lacking rejecting and/or accepting adjudicated evidence', 'record_version': '2026-10-09-3.3a-existing-evidence', 'policy_digest': '443bbb0185d5a914', 'supported_scope': {'rotations': [0], 'classes': ['a', 'b', 'c', 'd', 'e']}, 'subject_scope': {'rotations': [0], 'classes': ['a', 'b', 'c', 'd', 'e']}, 'classes': {'a': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'b': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'c': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'd': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'e': {'rejecting': 1, 'accepting': 0, 'missing': ['no independently reviewed accepting case']}}, 'evidence_authenticated': False, 'authenticated_by': None}
+```
+
+```text
+$ ./scripts/run_tests.sh test_readability_render
+............................................................................................................
+----------------------------------------------------------------------
+Ran 108 tests in 16.066s
+
+OK
+```
+
+Command exit 0. Expected 108 / OK observed; no count delta. No full-suite run.
+
+### 14.3 Missing cells and non-claims
+
+- **e missing cell:** explicit independently reviewed accepting class-e decision covering the applicable corridor/pin-row population with the symbol-coherence gap disclosed. Reviews 4/5 reject e; Review 6 closes a bounded D1 defect for its candidate only and explicitly forbids a blanket accepting entry for every class. Neither its general ACCEPT nor Reviews 7–11's ACCEPT/marginal verdicts supply the missing per-class decision. No e accepting entry manufactured; no re-review requested or performed.
+- **f applicability:** §13.8 D1 says measurement configuration affects observations only, never calibration population; D2 distinguishes subject identity from instrument execution/coverage; D3 attaches observations after `_class_f` verdict. These are the single ruling entry's quotations, not pass/fail evidence. Dash/fill/z-order, ownership, symbol-graphic clearance, legible scale and page-use limitations are not resolved by binding.
+- **Structure, not evidence authentication (§9):** the resolver authenticates only record shape/counts/scope. It cannot establish that a hash was reviewed, a ref resolves, or a review adjudicates that class. Documentary refs and subject hashes are now explicit, but no executable evidence-authentication boundary was built. `evidence_authenticated=False`, `authenticated_by=None` remain authoritative; structural completeness is not validated sensitivity or final calibrated evidence.
+- CP3 archived netlist mismatch and diagnostic-only status remain; CP1/CP2 six cells stay permanently blocked. Clean/b1 remain hand-verified, unadjudicated and contribute no accepting entries. No new FP/FN, population, threshold, transform, detector-coverage or provenance measurements were made. Existing §4 counts remain historical; §7's “unadjudicated extras” correction remains in force.
+- Overall AC16 remains **partial**, and 3.3a is not ticked. No scoped PASS, class-f/six-class PASS, human approval, electrical/fab/license clearance or packaging authorization follows. Fresh-eyes remains the delivery gate.
