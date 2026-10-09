@@ -168,8 +168,8 @@ Rationale: provisional bounded payload/resource/cost limits for small static C01
 | --- | ---: | ---: | ---: |
 | A (A1–A6), after Phase 1 | 5 | 1 | 0 (A6 binary-only; source/signatures remain unverified) |
 | B (B1–B12), after Phase 1 | 11 | 1 | 0 (B12 full closure still unverified; explicit per-item gaps below) |
-| C (C1–C9), after Phase 1 | 6 | 3 | 0 (C5 host-linked closure only; C9 product/runtime scope still unmeasured) |
-| D (D1–D6) | 2 | 0 | 4 (all benchmark results remain unmeasured) |
+| C (C1–C9), after Phase 2 | 7 | 2 | 0 (C9 host CPU product rendering measured only; container/GPU scope unmeasured) |
+| D (D1–D6), after Phase 2 | 2 | 0 | 4 (D5/D6 partially measured below; blind acceptance and deployment undecided) |
 | E | 0 | 0 | 7 questions, not empirical claims |
 
 Measured: retrieved official text, exact published binary checksum/size, and current working-tree constraints. Not measured: Blender artifact/source contents or integrity, exact runtime library/asset closure, deployed image bytes/size, installation/build/start/render/memory/parity or legal compliance of an implementation. No tests are specified for this Markdown inventory; no benchmark/tests claimed.
@@ -485,3 +485,106 @@ Output file checksum (not visual QA or product acceptance):
 ```
 
 Measured: binary checksum, allocated extracted size, complete root licence-file metadata, requested resource/addon listing, host linked libraries and single headless/version/default-cube CPU smoke. Not measured: source digest/signature, every nested code/resource licence mapping, GPU/EGL, container/image cost, product scene quality/time/RSS, reproducibility or blind parity. Phase 1 delivered; **Phase 2 is not executed**. Architecture Sync: Verified (No doc changes); no boundary implementation. KB Distill: Verified (no cross-repo lesson this round; artifact-specific inventory and measurements only).
+
+## Phase 2 — frozen-scene CPU Cycles benchmark (2026-10-09)
+
+### Known scene deviations
+
+1. **SW2/SW3 STEP caps omitted in every view: UNMEASURED.** Blender has no native STEP tessellator in this adapter. The authentic recipe is `build123d.import_step`, `solids()[2:]`, STL export `tolerance=0.005`, `angular_tolerance=0.1`, then rotate pi about X (`.src/c01p_scene.py:127–140`). No build123d installation or primitive-cap substitution was attempted. SW1 remains present. Missing-button findings are attributable to this authorized omission, not an undisclosed parity failure.
+2. **Upper-lid normals are not identical.** Blender EDGE_SPLIT at 35 degrees replaces baseline per-corner averaging of compatible face normals (`c01p_scene.py:64–88,100–101`). Geometry projection is retained; shading findings must be attributed to this disclosed transformation rather than treated as an unexplained regression.
+3. **Lighting/material shaders are cross-engine conversions, not radiometrically equivalent.** Unit-gain SUN irradiance and Principled BSDF are explicit conventions below. No tuning or second quality pass occurred.
+
+Authority: Phase 2 dispatch plus Option A reply and subsequent NumPy/timing ruling. Specimen checksum verification was completed before rendering; manifest root `63f58c9f…` and both consumed STL digests matched. Inputs remain read-only. Freeze authority is manifest + `.src/c01p_scene.py` + `.src/c01p_render.py` + STEP, not manifest alone. Only this report changed in the repo; scripts, freeze, logs, renders and parity artifacts are cache-only. No optional assets/addons, EEVEE, container, package install, git staging or commit.
+
+### P2-A. Freeze and transformations
+
+Cache root: `/home/pkcs12/.cache/blender-dd9/phase2/`. Exact artifacts: `scene_freeze-v1.json`, GPL-2.0-or-later `render.py`, GPL-2.0-or-later `parity.py`, `parity-results.json`. Freeze copies all manifest fields including camera params, materials/RGB, token bindings, surfaces, seed 42, output 1600×1200 and consumed digests; adds resolved camera/light matrices and exact conversion recipe with source line citations. Cycles CPU, 32 samples (fixed for all runs; modest static-view budget candidate), denoiser off, Standard/sRGB, exposure 0, gamma 1, opaque RGBA PNG, units mm (`scale_length=0.001`, coordinates retained as mm). Five camera views rendered; `product-sheet` excluded as composite (`c01p_render.py:324–359`), **UNMEASURED**.
+
+Transformations:
+- STLs rotated pi about X (`c01p_scene.py:97–109`); upper normals differ as disclosed above.
+- Screws: 32-sided cylinders radius 1.5, height 0.8, centers `(1.5,-58.5,8)`, `(26.5,-60.2,8)` (`:119–125`). SW1 box dimensions `(1.2,3,1.8)`, center `(-1.8,-86.45,0.5)` (`:152–156`). LEDs: four 32-sided cylinders radius 0.9, height 0.6, center z=8.4 and exact declared XY (`:158–165`). USB six boxes: dimensions and translations copied verbatim into freeze `geometry_recipe.usb_boxes` (`:167–182`). Surface names bind exactly to manifest tokens.
+- Camera frame: forward=normalize(target-eye), right=normalize(cross(forward,up)), corrected up=cross(right,forward), local back=-forward (`:40–49,210–216`). Blender VERTICAL sensor height 32 mm; lens=`32/(2*tan(radians(yfov)/2))`; aspect 1600/1200, no orthographic substitution. Clip .05–10000 scene units is explicit adapter choice.
+- Lights key/fill/rim → SUN, angle 0; `energy[W/m²] = pyrender intensity × 1`. Unit gain is declared, not asserted physical equivalence. RGB copied directly. Light matrices use actual baseline eye/target-relative offsets (`:224–237`), not absolute manifest positions.
+- Ambient → world Background with manifest linear RGBA `[0.10,0.10,0.12,1]`, strength 1. Camera-ray world background separately uses inverse-sRGB `[0.92,0.93,0.95,1]` at strength 1; Light Path/Is Camera Ray mixes these shaders; film_transparent off (`:201–203`). Inverse transfer is `c/12.92` for c≤.04045, otherwise `((c+.055)/1.055)^2.4`. Baseline and Cycles quantization differed by 1 byte in two background channels; mask method uses each image's own background.
+- Principled base color takes manifest RGB directly; metallic/roughness exact. All opaque with no transmission, matching baseline `alphaMode="OPAQUE"` despite the LENS description (`:52–61`). Principled implementation is not the same BRDF as pyrender.
+
+**C01 scene-manifest defect; product files untouched.** Verbatim manifest key values → actual code behaviour:
+
+| Manifest declaration | Renderer behaviour (`c01p_scene.py:224–237`) |
+| --- | --- |
+| `lights.key.position: [-120.0,-200.0,220.0]`, `target: [14.0,-46.5,-8.6]` | `look_at(eye + key_offset, tgt, up)`; offset `[-60.0,-80.0,100.0]`, top `[-80.0,-60.0,60.0]` |
+| `lights.fill.position: [160.0,120.0,150.0]`, same declared target | `look_at(eye + fill_offset, tgt, up)`; offset `[100.0,80.0,50.0]`, top `[80.0,60.0,40.0]` |
+| `lights.rim.position: [14.0,80.0,200.0]`, same declared target | `look_at(tgt + rim_offset, tgt, up)`; offset `[0.0,120.0,150.0]`, top `[0.0,150.0,150.0]` |
+
+Manifest declares positions/targets that the accepted renderer ignores. S-04 did not catch this mismatch, per officer ruling; no gate rerun or defect repair claimed. Officer owns freeze §4.18/r4 intake.
+
+### P2-B. D5 measurements
+
+Command: `TMPDIR=/home/pkcs12/.cache/blender-dd9/runtime /usr/bin/time -v /home/pkcs12/.cache/blender-dd9/blender-4.5.14-linux-x64/blender -b --python /home/pkcs12/.cache/blender-dd9/phase2/render.py`. Raw stdout/stderr preserved unabridged at `logs/render.log`; exit 0. One process, shared scene, three view cycles. Per-view numbers include render through PNG save, **not separate process startup/geometry load**. This timing limitation was explicitly accepted by officer; 42.05 s whole-process wall is a conservative upper bound including all setup and all 15 renders, not a per-view measured startup value.
+
+| View | Raw runs s (1 / 2 / 3) | Median s | Worst s | RSS kB upper bound | Warm ≤60 s |
+| --- | --- | ---: | ---: | ---: | --- |
+| product-iso-front | 2.036039732 / 2.226000228 / 2.064857713 | 2.064858 | 2.226000 | 485248 | PASS |
+| product-iso-rear | 2.054043633 / 2.219411091 / 2.092506113 | 2.092506 | 2.219411 | 485248 | PASS |
+| product-top | 2.262806930 / 2.304408316 / 2.223309179 | 2.262807 | 2.304408 | 485248 | PASS |
+| product-usb-end | 3.689301878 / 3.720388012 / 3.710653146 | 3.710653 | 3.720388 | 485248 | PASS |
+| product-battery-end | 3.520483187 / 3.494428769 / 3.505251508 | 3.505252 | 3.520483 | 485248 | PASS |
+
+| D5 bound | Measurement | Result / scope |
+| --- | --- | --- |
+| Warm render ≤60 s; cold ≤120 s | Worst warm 3.720388 s; all-15 process 42.05 s upper bound | PASS host-only bound as ruled; no 3-isolated-cold-run statistic |
+| Peak RSS ≤4 GiB | Whole job 485248 kB (0.462769 GiB); individual peaks not separately sampled | PASS host-process bound; not container peak |
+| Cold start ≤15 s | Isolated iso-front process wall 2.83 s including load/render/save/exit | Upper bound is below 15 s; exact start-to-ready **UNMEASURED**, not separated from render |
+| Cold render ≤120 s | Isolated iso-front render/save 2.124463964 s, process 2.83 s | PASS for the one authorized isolated view |
+| Image delta ≤1.5 GiB uncompressed / ≤600 MiB compressed | N/A host-only | UNMEASURED |
+| Incremental build ≤10 min | No build authorized | UNMEASURED |
+
+Additional isolated invocation (one pass): same command plus `-- --isolated`, loads scene and renders only iso-front. Raw log `logs/isolated.log`, exit 0. Output iso-front PNG retained from this invocation; other four PNGs from run 3. Representative raw timing lines (complete logs preserved):
+
+```text
+SETUP_SECONDS 0.17365396399691235
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:42.05
+Maximum resident set size (kbytes): 485248
+Exit status: 0
+BENCH_RESULT {"run": 1, "view": "product-iso-front", "wall_s": 2.1244639640062815}
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.83
+Maximum resident set size (kbytes): 443844
+Exit status: 0
+```
+
+### P2-C. Mechanical parity preparation; no image judgement
+
+Baseline left, Blender right, no rescaling. Every body crop is `[0,69,1600,1128]` (Pillow exclusive right/bottom), removing header through inclusive y=68 (`c01p_render.py:56–58`) and footer beginning H−72=1128 (`:74–80`). Pair image 3200×1083 includes an extra 24 px DRAFT label band outside the 1:1 body images. Lid crop `[720,470,1020,630]` uses baseline recipe (`:597–599`); two 300×160 crops at 1:1 plus DRAFT band.
+
+Mask method: RGB background derived separately from pixel `(0,69)` in each image; object mask is any-channel absolute difference **>2/255** from that background within the body crop. Baseline background `[235,237,242]`; candidate `[235,238,243]`. Neither file supplies a usable object alpha mask (opaque output); these are **background-derived masks, not geometric depth silhouettes**. Interior highlights/background-like pixels and missing caps can create boundaries, so offset is not proof of an outer-outline error.
+
+Initial parity attempt stopped with `ModuleNotFoundError: No module named 'scipy'` (exit 1). Officer explicitly authorized replacement, no installation. NumPy-only algorithm: pad mask with false; 4-neighbour eroded mask = mask AND up AND down AND left AND right via explicit shifts; boundary = mask XOR eroded mask. For every boundary pixel, compute exact squared Euclidean distances to every opposite-boundary pixel, take minimum, then maximum across both directed sets and square root. This is symmetric exact nearest-boundary distance, O(nb×mb), not an approximate distance transform. XOR count is number of differing body-mask pixels. Successful parity script exit 0.
+
+| View | Crop box | XOR pixels | Max boundary offset px |
+| --- | --- | ---: | ---: |
+| product-iso-front | [0,69,1600,1128] | 1106 | 207.183493551 |
+| product-iso-rear | [0,69,1600,1128] | 1130 | 1.414213562 |
+| product-top | [0,69,1600,1128] | 10 | 150.000000000 |
+| product-usb-end | [0,69,1600,1128] | 634 | 1.000000000 |
+| product-battery-end | [0,69,1600,1128] | 710 | 1.000000000 |
+
+No visual pass/fail assigned. The above background-mask numbers are measured, but are not a substitute for officer blind review or an outer-silhouette ground truth. Missing caps/shading deviations are disclosed, not counted as blind parity failures.
+
+Artifacts below all exist under `/home/pkcs12/.cache/blender-dd9/phase2/out/`; full paths equal that prefix plus the listed filename. Full SHA256 values and raw numbers are in `parity-results.json`.
+
+| Pair/crop filename | SHA16 |
+| --- | --- |
+| product-iso-front-pair.png | 4b9af443d0393770 |
+| product-iso-rear-pair.png | 45ee820dd7b240560 |
+| product-top-pair.png | bd8b08e265fe7d43 |
+| product-usb-end-pair.png | 3c711ac35a337305 |
+| product-battery-end-pair.png | 4ffc84e81a018494 |
+| lid-top-crop-pair.png | 9a46656e48a453c2 |
+
+Per-view raw `<view>.png` and `<view>-xor.png` exist in the same directory with digests recorded in the receipt. No image loaded for self-judgement; no blind review performed by this handler.
+
+### P2-D. Evidence and unmeasured scope
+
+Evidence-count convention: A/B unchanged from Phase 1; C9 now measured within host CPU scope (C7/C8 remain open), not blanket runtime clearance. D1/D2 remain sourced constraints; D3–D6 are policy/ruling items with this partial empirical append. Phase 2 primary measured groups: five three-run timings, one whole-process RSS/wall, one isolated RSS/wall, five XOR/offset receipts, six pair/crop artifacts. Unmeasured items: image deltas, incremental build, container dependency/performance/RSS, GPU/EGL/EEVEE, exact startup-only duration, three independent cold starts, SW2/SW3 authentic cap surfaces in all five views, product-sheet composite, physical colour/radiometric equivalence, geometric depth-mask parity, per-view RSS peaks, repeat-output byte reproducibility, independent blind review and adoption decision. Source integrity/full nested licence closure remain Phase 1 residuals.
+
+Architecture Sync: Verified (No doc changes); no deployed boundary change. KB Distill: Verified (no cross-repo lesson this round; bounded specimen conversions and measurement caveats only). This append supersedes historical Phase 1 “Phase 2 not executed” statements only within the measured host-only scope above. Product tree remains read-only; report remains uncommitted.

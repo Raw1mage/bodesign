@@ -926,6 +926,37 @@ optional assets/addons. 7.7 proceeds in phases: acquire+verify → licence inven
 → headless smoke → frozen-scene benchmark against C01 r3; each phase reports before the next.
 CT105 rolled to monolith `eaf16cc` (S19) — unrelated to Blender; Blender never enters core.
 
+### 4.18 Blender 7.7 phases 1–2 ruling (2026-10-09)
+
+Phase 1 (S21): tarball sha `9ba871ff…` verified, 1.2 G extracted, licence inventory from the
+artifact (fonts OFL/Bitstream, assets/HDRI/matcap CC0, 14 bundled addons 3 Apache / 11 GPL2+),
+`ldd` 0 missing on the WSL host, CPU Cycles smoke 0.93 s / 374 MB. Source digest stays UNVERIFIED
+(blender.org publishes md5 only for source).
+
+Phase 2 (host-only, CPU Cycles 32 samples, denoiser off, Option A freeze from manifest +
+`c01p_scene.py`/`c01p_render.py` + STEP): five single-camera views rendered 3×; warm median
+2.06–3.71 s/view, whole 15-render job 42.05 s / RSS 485 MB, isolated load+render 2.83 s. **D5:
+render time, memory and cold start all inside budget; image delta UNMEASURED (no container
+build).** Silhouette XOR on body crop: rear/usb/battery max offset ≤1.4 px; front 207 px and top
+150 px are attributable to the declared deviation (SW2/SW3 caps omitted — STEP cap tessellation
+not reproduced, no fallback executed) and to the mask method (RGB-diff, not depth). Review 33
+blind (one image per subagent, READ_OK ×3): silhouette, orientation, LED 4/4, screw 2/2, end-face
+opening/cavity/tongue and parting line coincide; Blender side shows Monte-Carlo grain, contact
+shadow and parting-line AO; button caps absent on Blender side (known deviation). No clipping,
+facets, banding or z-fighting on either side. The usb-end job returned two reports under one
+job id (harness defect, second time today); the second, more detailed one adds: Blender port
+interior reads as a black void with a lit tongue bar (baseline: lit cavity with walls/lower lip),
+lid-band tone inverted (baseline darker than body, Blender lighter). Both reports agree on
+silhouette/opening position/size. These are lighting-conversion differences (pyrender ambient
+→ Cycles world strength), not geometry.
+
+**Ruling: RETAIN pyrender as the C01 baseline; Blender is CLEARED for internal use and
+feasible, not adopted.** Adoption would require (a) STEP cap tessellation parity, (b) denoised
+samples budget fixed, (c) ME-image delta measured against D5 ≤1.5 GiB. 7.6 closed; 7.7 closed as
+"feasible, retain". Chain defect found on the way (r4 list): `c01_scene_manifest-v3`
+`lights.*.position` are ignored by the renderer (view-dependent eye/target offsets in code) and
+S-04 does not catch it; `product-sheet` is declared as a camera but is a composite.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
