@@ -166,9 +166,9 @@ Rationale: provisional bounded payload/resource/cost limits for small static C01
 
 | Section | SOURCED items | UNVERIFIED / UNMEASURED items | PROPOSED-only items |
 | --- | ---: | ---: | ---: |
-| A (A1–A6) | 4 | 2 | 0 (selection proposal is inside sourced A1) |
-| B (B1–B12) | 8 | 4 | 0 (bounded interpretations/checklists embedded) |
-| C (C1–C9) | 4 | 5 | 0 |
+| A (A1–A6), after Phase 1 | 5 | 1 | 0 (A6 binary-only; source/signatures remain unverified) |
+| B (B1–B12), after Phase 1 | 11 | 1 | 0 (B12 full closure still unverified; explicit per-item gaps below) |
+| C (C1–C9), after Phase 1 | 6 | 3 | 0 (C5 host-linked closure only; C9 product/runtime scope still unmeasured) |
 | D (D1–D6) | 2 | 0 | 4 (all benchmark results remain unmeasured) |
 | E | 0 | 0 | 7 questions, not empirical claims |
 
@@ -177,3 +177,311 @@ Measured: retrieved official text, exact published binary checksum/size, and cur
 Tool friction (not repaired): runbook lookup returned `RUNNER_NO_JSON`; pinned release licence URL returned HTTP 403; Debian metadata returned a JavaScript challenge; three manual `_sources/*.rst.txt` requests returned HTTP 404. The rendered Cycles/EEVEE manuals did succeed; their relevant exact sentences were extracted from stored webfetch output. Mechanical extraction delegation failed before session creation with `TaskDispatchPreflightError: task_dispatch_preflight:account_missing: account <none> is not present for provider codex; no session was created`; no worker result is relied on.
 
 Boundary exception requiring officer awareness: the mandatory operational event tool recorded task start and closeout at `/home/pkcs12/projects/bodesign/.specbase/events.sqlite` despite the dispatch's no-`.specbase` boundary. No direct `.specbase` editing was performed; both events are disclosed, not concealed or undone. Apart from those event-ledger side effects, the only intended repository content change is this file. Architecture unchanged: this document proposes ownership but implements no boundary/data-flow change. No new cross-repository lesson is claimed or KB mutation undertaken in this bounded inventory.
+
+## Phase 1 — acquisition, inventory, smoke (2026-10-09)
+
+This append supersedes the initial inventory's historical not-downloaded/not-rendered statements only within this authorized phase. Authority: `Blender-7.7-phase1-acquire-verify-inventory`, freeze §4.17 (S20 `b157e30`): internal-only use; pin 4.5.14; no optional assets/addons; ME ownership; CPU Cycles first; D5/D6 budgets adopted, not measured by this smoke. Baseline inventory S18 `f86bd80`. No container, package installation, product-scene render, image edit, staging or commit. Cache root `/home/pkcs12/.cache/blender-dd9/`; temporary Blender work redirected with `TMPDIR` to its `runtime/` child.
+
+### P1-A. Acquisition, source listing and extracted size
+
+Downloaded official archive and checksum with `curl --fail --location --output`, both successful. Binary verified BEFORE extraction using the manifest's exact Linux line:
+
+```text
+grep '  blender-4.5.14-linux-x64.tar.xz$' blender-4.5.14.sha256 | sha256sum -c -
+blender-4.5.14-linux-x64.tar.xz: OK
+sha256sum /home/pkcs12/.cache/blender-dd9/blender-4.5.14-linux-x64.tar.xz
+9ba871ff2ecd36526b77432745980b7e6664ecd0c7ca11c48849073dcfe06da3  /home/pkcs12/.cache/blender-dd9/blender-4.5.14-linux-x64.tar.xz
+```
+
+Exit 0. **A6 binary integrity MEASURED/SOURCED** against A3; independent signature authentication and binary/source correspondence not verified. Extracted with `tar -xf ... -C /home/pkcs12/.cache/blender-dd9/`, exit 0. **C6 MEASURED**, raw disk-usage output:
+
+```text
+1.2G	/home/pkcs12/.cache/blender-dd9/blender-4.5.14-linux-x64
+```
+
+`du -sh` is rounded allocated disk usage, not logical bytes or image delta. Source listing checked ONCE via https://download.blender.org/source/ . Relevant raw entries:
+
+```text
+blender-4.5.14.tar.xz                              15-Sep-2026 09:11            85105652
+blender-4.5.14.tar.xz.md5sum                       15-Sep-2026 09:11                  56
+```
+
+No matching source `.sha256` entry appeared in that listing. **A5 source SHA256 remains UNVERIFIED**; source archive and MD5 not acquired, no invented source digest.
+
+### P1-B. Artifact licence/asset inventory
+
+All paths below are relative to the verified extracted root unless an absolute path is given. Native glob found the licence directory at **`license/`**, not `release/license/`. Immediate listing: `license.md`, `licenses.json`, `others/`, `spdx/`; recursive file listing and exact byte size/hash follow in P1-B metadata. Root `license.md` contains the dependency/copyright tables and full licence texts (22 second-level headings including Fonts, Apache-2.0, BSL-1.0, BSD-2/3-Clause, bzip2, Freetype, GPL-2/3, LGPL-2.1, libpng, libtiff, MIT variants, MPL-2.0, Public Domain, Python, SGI, TOST, NCSA, WC Width, Zlib). **B12 documentation inventory sourced, not a completed independent file-to-component SBOM or legal clearance.** Bundled code and private cache files were not modified.
+
+**B9 fonts: 25 files enumerated.** No licence file sits directly in `4.5/datafiles/fonts/`; adjacent-file evidence is **UNVERIFIED for EACH listed item**. Root `license/license.md:702–712` nevertheless gives sourced family mappings: Inter, Noto Fonts and Last Resort → OFL-1.1; DejaVu Sans Mono → Arev + Bitstream Vera (DejaVu changes public domain). Exact font versions and individual metadata were not inspected. Enumeration (all `.woff2`):
+
+```text
+DejaVuSansMono.woff2
+Inter.woff2
+lastresort.woff2
+Noto Sans CJK Regular.woff2
+NotoEmoji-VariableFont_wght.woff2
+NotoSansArabic-VariableFont_wdth,wght.woff2
+NotoSansArmenian-VariableFont_wdth,wght.woff2
+NotoSansBengali-VariableFont_wdth,wght.woff2
+NotoSansDevanagari-Regular.woff2
+NotoSansEthiopic-Regular.woff2
+NotoSansGeorgian-VariableFont_wdth,wght.woff2
+NotoSansGujarati-Regular.woff2
+NotoSansGurmukhi-VariableFont_wdth,wght.woff2
+NotoSansHebrew-Regular.woff2
+NotoSansJavanese-Regular.woff2
+NotoSansKannada-VariableFont_wdth,wght.woff2
+NotoSansKhmer-VariableFont_wdth,wght.woff2
+NotoSansMalayalam-VariableFont_wdth,wght.woff2
+NotoSansMath-Regular.woff2
+NotoSansMyanmar-Regular.woff2
+NotoSansSymbols-VariableFont_wght.woff2
+NotoSansSymbols2-Regular.woff2
+NotoSansTamil-VariableFont_wdth,wght.woff2
+NotoSansTelugu-VariableFont_wdth,wght.woff2
+NotoSansThai-VariableFont_wdth,wght.woff2
+```
+
+Root font licence header, verbatim (`license/spdx/OFL-1.1.txt:1`):
+
+> SIL Open Font License 1.1
+
+Preserve supplied notices; OFL text requires copyright/licence inclusion for bundled redistribution, reserved-name rules for modifications, no font-alone sale; it does not require documents to use OFL (`license.md:826–852`). Internal-only ruling does not authorize removing notices.
+
+**B10 assets: SOURCED.** `4.5/datafiles/assets/LICENSE:1–3` header, verbatim:
+
+> Creative Commons Legal Code
+>
+> CC0 1.0 Universal
+
+Observed `.blend` files under `assets/`: `geometry_nodes/{smooth_by_angle,procedural_hair_node_assets}.blend`; `brushes/essentials_brushes-{curve_sculpt,gp_draw,gp_sculpt,gp_vertex,gp_weight,mesh_sculpt,mesh_texture,mesh_vertex,mesh_weight}.blend`. Also `blender_assets.cats.txt`. This is a directory-level licence, not a claim about every other resource in Blender. No optional asset used in the default cube smoke.
+
+**B11 HDRIs: SOURCED.** `4.5/datafiles/studiolights/world/`: `city.exr`, `courtyard.exr`, `forest.exr`, `interior.exr`, `night.exr`, `studio.exr`, `sunrise.exr`, `sunset.exr`, `license.txt`. Adjacent licence header, verbatim:
+
+> All HDRIs are licensed as CC0.
+>
+> These were created by Greg Zaal (Poly Haven https://polyhaven.com).
+
+The supplied text says “Probably” for Night/Studio originals; exact original identity remains uncertain, not rewritten as verified. No HDRI used.
+
+**B12 matcaps: SOURCED at class level.** `4.5/datafiles/studiolights/matcap/`: `basic_1`, `basic_2`, `basic_dark`, `basic_side`, `ceramic_dark`, `ceramic_lightbulb`, `check_normal+y`, `check_rim_dark`, `check_rim_light`, `clay_brown`, `clay_muddy`, `clay_studio`, `jade`, `metal_anisotropic`, `metal_carpaint`, `metal_lead`, `metal_shiny`, `pearl`, `reflection_check_horizontal`, `reflection_check_vertical`, `resin`, `skin`, `toon` (all `.exr`), plus `license.txt`. Header, verbatim:
+
+> These matcap images are licensed as CC0 or public domain.
+
+Per-file CC0-versus-public-domain attribution is **UNVERIFIED for each of these 23 files**; the supplied class-level statement does not distinguish them. No matcap used. `studiolights/studio/{basic,outdoor,paint,rim,studio}.sl` have no adjacent licence: **UNVERIFIED for each of those five files**.
+
+**Bundled addons top-level inventory** (`4.5/scripts/addons_core/`): `__pycache__`, `bl_pkg`, `copy_global_transform.py`, `cycles`, `hydra_storm`, `io_anim_bvh`, `io_curve_svg`, `io_mesh_uv_layout`, `io_scene_fbx`, `io_scene_gltf2`, `node_wrangler`, `pose_library`, `rigify`, `ui_translate`, `viewport_vr_preview`. No separate `addons/` directory was found by the requested pattern. `__pycache__` is not a licence-cleared addon. Top-level source headers at line 3, verbatim: Cycles, Hydra Storm and glTF use `# SPDX-License-Identifier: Apache-2.0`; the other eleven source entrypoints use `# SPDX-License-Identifier: GPL-2.0-or-later`. These headers do not prove every nested dependency has that licence. Cycles is the authorized built-in engine, not an optional addon installation; no optional addon enabled for this task.
+
+### P1-B metadata. Complete root licence file listing
+
+Native recursive glob found these 26 regular files under `license/`; `stat -c '%n %s'` and `sha256sum` supplied the following exact byte sizes and digests. Directories excluded from hashing; the first immediate-directory hash attempt reported `Is a directory` for `others`/`spdx`, then the regular-file inventory below succeeded. Directory sizes are not file sizes.
+
+| Path | Bytes | SHA256 |
+| --- | ---: | --- |
+| license/license.md | 215394 | bbbae8a955a571bbd30e91c579f6f1633ec921f6317cfac9074338dfba33a7b8 |
+| license/licenses.json | 3353 | 3d31ab709273e56dbb700620bdc761977011925c255c0e69dcc7ea1a4fb1f840 |
+| license/others/Arev-Fonts.txt | 2252 | 1c68eacc08c5c60fddb587b528913f3859c4f0e96a5b1b01048bd51de2fefd21 |
+| license/others/ICS.txt | 178 | 8e8f56b5e62935fe7fb284bdde151d11f84dac9d126c030b4fd00eadc83ccd64 |
+| license/others/LLVM-exception.txt | 872 | f282823a60a9cd3e8329398f243bf3bc3cc5e80daccace5a30ee1ad7b7dbdc17 |
+| license/others/TOST-1.0.txt | 10184 | c0ff03452fe9c05bff88eea4a40e6a01d80b2cc543fc92ea7220716418341211 |
+| license/spdx/Apache-2.0.txt | 11357 | c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4 |
+| license/spdx/BSD-2-Clause.txt | 1291 | c0f0a10042900ea04a6c30998342081baf7de45330cb9ca348e59a4d8c58488d |
+| license/spdx/BSD-3-Clause.txt | 1485 | 7c0bceba5d7abaa63ead2e9af971468b5b26f4cb753aeb2a5e706625555885a6 |
+| license/spdx/BSL-1.0.txt | 1338 | c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566 |
+| license/spdx/Bitstream-Vera.txt | 2371 | 3f5b96a6506a1c4381091688dfc35cf4c1ecae9a2b2443d3b14ce92f0bc90171 |
+| license/spdx/FTL.txt | 6678 | 8c2467540e01b1ee3ae14751213ac5988c48ceabe51143aeb2e13316e0ed958a |
+| license/spdx/GPL-2.0-or-later.txt | 17996 | a3ade2b6d18c7c30d89faec2ba913283fb2d56370137ea90cfa20891414492f8 |
+| license/spdx/GPL-3.0-or-later.txt | 35147 | 8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903 |
+| license/spdx/LGPL-2.1-or-later.txt | 26530 | dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551 |
+| license/spdx/MIT-Khronos-old.txt | 1257 | 19b92e3f10b6003614dbf70ee5a9b3ead460e84913bf9f8c89bbba49d05f2376 |
+| license/spdx/MIT.txt | 1056 | 123c983ef5ff60697594e3010cb2022341450f7839d9f77d0a3943a9a5d9992c |
+| license/spdx/MPL-2.0.txt | 16725 | 1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5 |
+| license/spdx/NCSA.txt | 1479 | 5dbb7a7dc7513d63c7e1b5a77ade261032e52e90d4774c773babcfb00fb560e1 |
+| license/spdx/OFL-1.1.txt | 4215 | c1a781a6a032bf00b1bbffc388fd6936bf28a0ded472c263bcff88b181dea456 |
+| license/spdx/Python-2.0.txt | 2396 | f59c9e092485634cac6e1ce41ba8387fb93267e3a601093501a1e684486304e6 |
+| license/spdx/SGI-B-2.0.txt | 1414 | c45c70943f3223662f8647079962efb8bca616f8941812cbfe55ea669a488202 |
+| license/spdx/Zlib.txt | 957 | e97d76c9516ecd9bd360267ea341c57bf93d5d162f72eb2bf29c49eae4a6a6dc |
+| license/spdx/bzip2-1.0.6.txt | 1649 | beae1a4eb6ee2d815c3aa2a1ce2ec7939420574e724c2fa9570da13ca0dcca17 |
+| license/spdx/libpng-2.0.txt | 1280 | d2005336d6716935d77644bf188d474dec4d3a3e0f85b556a30087d00a9e46ba |
+| license/spdx/libtiff.txt | 1054 | a46d5aeb164d5f705a30ee79c356820805fdca01de0ab4c5dbe54b3c1e4d3143 |
+
+Additional licence-directory/adjacent regular files observed:
+
+| Path | Bytes | SHA256 |
+| --- | ---: | --- |
+| 4.5/scripts/addons_core/cycles/license/Apache2-license.txt | 11358 | cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30 |
+| 4.5/scripts/addons_core/cycles/license/BSD-3-Clause-license.txt | 1465 | 78176499683c1e601241d901486dfdebcd0d511826e67905dd54881f5dc1d7e3 |
+| 4.5/scripts/addons_core/cycles/license/MIT-license.txt | 1036 | 7a91b4754c06385f87b319313871b064d4d9e0dc1570ca94928b09fe74ed03ee |
+| 4.5/scripts/addons_core/cycles/license/SPDX-license-identifiers.txt | 379 | b5f81f33f3424add5ed61be93c19e9a4caecc5ca12e50b9b0be4ceacc2832d92 |
+| 4.5/scripts/addons_core/cycles/license/Zlib-license.txt | 833 | 52a1da7db7828498bb11719974c41f875e310ea241c97c8e27af7cda21887c19 |
+| 4.5/scripts/addons_core/cycles/license/readme.txt | 316 | 5c2f5f1974b56d433fab60f9bf29de4d43b0b4c9eda40cfdcd0e3918993db49f |
+| 4.5/datafiles/assets/LICENSE | 7048 | a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499 |
+| 4.5/datafiles/studiolights/world/license.txt | 707 | adb4229abf8701b512dc75bab8e08610ecefb08e2b07e9ff5cdaf1e558195ee5 |
+| 4.5/datafiles/studiolights/matcap/license.txt | 123 | b611907587d18b7d2a2f7b81e6c0fe5048a5592f2086ec8678f25d682e4cc877 |
+
+### P1-C. Host dependency measurement
+
+**C5 measured for this executable's `ldd`-visible linked closure only.** `ldd /home/pkcs12/.cache/blender-dd9/blender-4.5.14-linux-x64/blender` succeeded and resolved all linked dependencies; subsequent requested `ldd ... | grep 'not found'` emitted **no stdout**, grep exit **1** (no matches), **missing count 0**. This conclusion is based on the full successful `ldd` output, not the pipeline exit alone. Distinct host-system sonames (sorted unique; paths resolved under `/lib/x86_64-linux-gnu/`):
+
+```text
+libGL.so.1
+libGLX.so.0
+libGLdispatch.so.0
+libICE.so.6
+libSM.so.6
+libX11.so.6
+libXau.so.6
+libXdmcp.so.6
+libXext.so.6
+libXfixes.so.3
+libXi.so.6
+libXrender.so.1
+libbsd.so.0
+libc.so.6
+libdl.so.2
+libgcc_s.so.1
+libm.so.6
+libmd.so.0
+libpthread.so.0
+librt.so.1
+libstdc++.so.6
+libutil.so.1
+libuuid.so.1
+libxcb.so.1
+libxkbcommon.so.0
+```
+
+Also `/lib64/ld-linux-x86-64.so.2` and the virtual `linux-vdso.so.1`. Other `ldd` entries resolve into the extracted archive's `lib/` (including TBB, Vulkan, OpenSubdiv, OpenEXR/Imath, MaterialX, Embree, oneAPI/SYCL, OpenColorIO, OpenImageIO, OIDN, OSL, USD and OpenVDB). No host library absent; no packages installed. Dynamically loaded plugins, EGL/GPU devices, unused runtime paths, shared-library licence mapping and ME container closure remain **UNVERIFIED/UNMEASURED**. Host CPU smoke success is not proof of EEVEE/EGL feasibility.
+
+### P1-D. Host-only headless smoke
+
+Working directory: `/home/pkcs12/.cache/blender-dd9/blender-4.5.14-linux-x64`. Both commands used `/usr/bin/time -v`, `TMPDIR=/home/pkcs12/.cache/blender-dd9/runtime` and exited 0. No scene file loaded, saved preferences or product input. Single runs, not a warm/cold series or D5 acceptance measurement.
+
+Version smoke raw stdout followed by raw timing stderr:
+
+```text
+4.5.14 LTS
+Blender 4.5.14 LTS (hash 62c1db4208e8 built 2026-09-15 01:31:19)
+
+Blender quit
+	Command being timed: "./blender -b --python-expr import bpy; print(bpy.app.version_string)"
+	User time (seconds): 0.34
+	System time (seconds): 0.15
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.49
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 233164
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 25591
+	Voluntary context switches: 106
+	Involuntary context switches: 3
+	Swaps: 0
+	File system inputs: 8
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+```
+
+CPU render command (explicit 320×240/100%, 8 samples, CPU; `--factory-startup` resets the scene):
+
+```sh
+TMPDIR=/home/pkcs12/.cache/blender-dd9/runtime /usr/bin/time -v ./blender --factory-startup -b -E CYCLES --python-expr "import bpy; s=bpy.context.scene; s.render.resolution_x=320; s.render.resolution_y=240; s.render.resolution_percentage=100; s.cycles.samples=8; s.cycles.device='CPU'; s.render.image_settings.file_format='PNG'; print('SMOKE_SETTINGS', s.render.engine, s.cycles.device, s.render.resolution_x, s.render.resolution_y, s.render.resolution_percentage, s.cycles.samples); print('SMOKE_OBJECTS', sorted(o.name for o in s.objects))" -o /home/pkcs12/.cache/blender-dd9/smoke/ -f 1
+```
+
+Render raw stdout (unabridged):
+
+```text
+Blender 4.5.14 LTS (hash 62c1db4208e8 built 2026-09-15 01:31:19)
+Fra:1 Mem:8.45M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Synchronizing object | Cube
+Fra:1 Mem:8.45M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Synchronizing object | Light
+Fra:1 Mem:8.45M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Initializing
+Fra:1 Mem:8.27M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Waiting for render to start
+Fra:1 Mem:8.27M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Scene
+Fra:1 Mem:8.27M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Shaders
+Fra:1 Mem:8.27M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Loading render kernels (may take a few minutes the first time)
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Procedurals
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Background
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Camera
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Meshes Flags
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Objects
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Objects | Copying Transformations to device
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Particle Systems
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Particle Systems | Copying Particles to device
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Meshes
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Objects | Applying Static Transformations
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Mesh | Computing attributes
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Mesh | Copying Attributes to device
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Scene BVH | Building
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Scene BVH | Building BVH
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Scene BVH | Building BVH 0%
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Scene BVH | Copying BVH to device
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Mesh | Computing normals
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Mesh | Copying Mesh to device
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Objects Flags
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Primitive Offsets
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Images
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Camera Volume
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Lookup Tables
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.08M, Peak:0.08M | Scene, ViewLayer | Updating Lights
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Updating Lights | Computing tree
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Updating Integrator
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Updating Film
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.00M, Peak:0.09M | Scene, ViewLayer | Updating Lookup Tables
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Updating Baking
+Fra:1 Mem:8.35M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Updating Device | Writing constant memory
+Fra:1 Mem:8.36M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Loading denoising kernels (may take a few minutes the first time)
+Fra:1 Mem:8.36M (Peak 8.45M) | Time:00:00.00 | Mem:0.09M, Peak:0.09M | Scene, ViewLayer | Sample 0/8
+Fra:1 Mem:14.24M (Peak 14.24M) | Time:00:00.01 | Remaining:00:00.06 | Mem:5.66M, Peak:5.66M | Scene, ViewLayer | Sample 1/8
+Fra:1 Mem:16.59M (Peak 20.10M) | Time:00:00.34 | Mem:5.66M, Peak:5.66M | Scene, ViewLayer | Sample 8/8
+Fra:1 Mem:16.59M (Peak 20.10M) | Time:00:00.34 | Mem:5.66M, Peak:5.66M | Scene, ViewLayer | Finished
+Saved: '/home/pkcs12/.cache/blender-dd9/smoke/0001.png'
+Time: 00:00.44 (Saving: 00:00.09)
+
+SMOKE_SETTINGS CYCLES CPU 320 240 100 8
+SMOKE_OBJECTS ['Camera', 'Cube', 'Light']
+
+Blender quit
+```
+
+Render raw timing stderr:
+
+```text
+	Command being timed: "./blender --factory-startup -b -E CYCLES --python-expr import bpy; s=bpy.context.scene; s.render.resolution_x=320; s.render.resolution_y=240; s.render.resolution_percentage=100; s.cycles.samples=8; s.cycles.device='CPU'; s.render.image_settings.file_format='PNG'; print('SMOKE_SETTINGS', s.render.engine, s.cycles.device, s.render.resolution_x, s.render.resolution_y, s.render.resolution_percentage, s.cycles.samples); print('SMOKE_OBJECTS', sorted(o.name for o in s.objects)) -o /home/pkcs12/.cache/blender-dd9/smoke/ -f 1"
+	User time (seconds): 5.33
+	System time (seconds): 1.45
+	Percent of CPU this job got: 725%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.93
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 374016
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 44
+	Minor (reclaiming a frame) page faults: 58194
+	Voluntary context switches: 884
+	Involuntary context switches: 11141
+	Swaps: 0
+	File system inputs: 72
+	File system outputs: 128
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+```
+
+Output file checksum (not visual QA or product acceptance):
+
+```text
+3af6e56164d620698fb32b45f9177b4f029415454b386fe536a73844b88741ba  /home/pkcs12/.cache/blender-dd9/smoke/0001.png
+```
+
+Measured: binary checksum, allocated extracted size, complete root licence-file metadata, requested resource/addon listing, host linked libraries and single headless/version/default-cube CPU smoke. Not measured: source digest/signature, every nested code/resource licence mapping, GPU/EGL, container/image cost, product scene quality/time/RSS, reproducibility or blind parity. Phase 1 delivered; **Phase 2 is not executed**. Architecture Sync: Verified (No doc changes); no boundary implementation. KB Distill: Verified (no cross-repo lesson this round; artifact-specific inventory and measurements only).
