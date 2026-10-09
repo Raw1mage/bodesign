@@ -2,7 +2,17 @@
 
 This directory is the local-first bug/issue ledger (global AGENTS.md §8).
 Top-level = open/active; `closed/` = resolved-and-effective; `observing/` =
-watched-for-recurrence.
+watched-for-recurrence; `expired/` = filed against code superseded by a
+rebuild, never verified fixed.
+
+## expired/ (user ruling 2026-10-09)
+
+Every BR filed before the unified-collaborative-rebuild baseline (`a8e33f5`,
+2026-10-05) is EXPIRED, not CLOSED: the subsystem it described was rebuilt under
+`plans/eda-bridge_unified-collaborative-rebuild/`, so the report no longer
+addresses live code, but no fix was verified against it. Files in `expired/`
+are read-only history. If a rebuilt module reproduces one, file a NEW BR at top
+level with `recurrence-of` edge to the expired file; do not reopen it.
 
 ## Status line schema (BR_20260804l)
 
