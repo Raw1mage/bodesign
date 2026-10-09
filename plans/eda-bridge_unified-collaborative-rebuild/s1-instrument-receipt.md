@@ -485,3 +485,35 @@ Command exit 0. Expected 108 / OK observed; no count delta. No full-suite run.
 - **Structure, not evidence authentication (§9):** the resolver authenticates only record shape/counts/scope. It cannot establish that a hash was reviewed, a ref resolves, or a review adjudicates that class. Documentary refs and subject hashes are now explicit, but no executable evidence-authentication boundary was built. `evidence_authenticated=False`, `authenticated_by=None` remain authoritative; structural completeness is not validated sensitivity or final calibrated evidence.
 - CP3 archived netlist mismatch and diagnostic-only status remain; CP1/CP2 six cells stay permanently blocked. Clean/b1 remain hand-verified, unadjudicated and contribute no accepting entries. No new FP/FN, population, threshold, transform, detector-coverage or provenance measurements were made. Existing §4 counts remain historical; §7's “unadjudicated extras” correction remains in force.
 - Overall AC16 remains **partial**, and 3.3a is not ticked. No scoped PASS, class-f/six-class PASS, human approval, electrical/fab/license clearance or packaging authorization follows. Fresh-eyes remains the delivery gate.
+
+### 14.4 Class-e targeted review of the Review 6 candidate (officer dispatch, 2026-10-09)
+
+Purpose: the only missing AC16 cell was an independently reviewed ACCEPTING class-e case. The
+Review 6 ACCEPT candidate (PNG `b25d7d50…`, `run-r6-173849/native/pdfpath/usbc-1.png`, 1754×1241)
+was the natural candidate but its reviewer had not scored per class. One blind `task(general)`
+review was dispatched asking ONLY the class-e question (foreign-net corridor / pin-row proximity /
+wire along or through a body), 1:1 crops mandatory, no project context.
+
+Dispatch record: first reviewer `ses_edfe4a827` read 12 crops and was `silent_kill`ed before
+writing (harness, no report; not counted). Second reviewer `ses_edfe35a76` READ_OK, 8 crops under
+`~/.cache/scratch/s1-calib/review-e2/`, one report.
+
+Result (reviewer wording): **class-e NOT CLEAN** — worst location VBUS_CON vertical wire
+x=397 passing ~4 px ≈ 4 line-widths from the VBUS power-port symbol tip at (397–401, 286),
+**NEAR-TOUCH** ("reader hesitates whether VBUS port lands on the passing wire"). All other
+candidates CLEAR (CC2 vs J1 NC row 19 lw; CC2 drop vs D1 pin-4 19 lw; J1 exits straight; D1
+inputs terminate on stubs; C1/R1/R2/SHIELD two-terminal). No OVERLAP anywhere.
+
+Consequences:
+- No accepting class-e entry is created; `s1-calibration-record-v2.json` is unchanged
+  (sha `c18f760a…`). Class e stays `partial`, AC16 stays `partial`, 3.3a stays unchecked.
+- This is a second adjudicated REJECTING class-e reading, on a candidate the instrument scored
+  a–f zero findings (Review 6, `9c18bc51`; unchanged under `f98dc237`). Recorded as a **class-e
+  false-negative candidate**: the implemented e sensors (wire-through-body, over-unconnected-pin,
+  `E_PIN_ROW_CORRIDOR`) do not model a foreign-net wire passing a power-port pin tip. Not fixed
+  here; detector work is a separate dispatch with its own fixture and FP check.
+- Relation to Review 6 residual (b): same x=397 column, different location (residual (b) is the
+  VBUS_CON/CC2 shared column below the junction; this is the VBUS port tip above F1). Both are
+  carried; neither was called OVERLAP.
+- Not measured: whether moving the VBUS port 2+ grid units clears it (no router edit authorized);
+  rotated placements; any other candidate.
