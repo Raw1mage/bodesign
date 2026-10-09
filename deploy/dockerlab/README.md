@@ -19,6 +19,9 @@
 /opt/bodesign/
 ├── docker-compose.yml
 ├── nginx.conf
+├── vault/
+│   ├── vault.db
+│   └── blobs/
 └── kb/
     └── ragbase.sqlite
 ```
@@ -39,7 +42,24 @@
    ```bash
    chmod 0644 /opt/bodesign/kb/ragbase.sqlite
    ```
-4. Start containers:
+4. Seed the writable server-owned component vault cache once from a dev snapshot;
+   it is not a mirrored read-only artifact. Never checkpoint or change journal
+   mode on the live `.run/vault/vault.db`; it has a live WAL/SHM pair. Copy the
+   complete vault directory (including WAL/SHM and `blobs/`) to
+   `~/.cache/scratch/vault-snapshot/` first, then run on the COPY:
+   ```bash
+   sqlite3 "$HOME/.cache/scratch/vault-snapshot/vault.db" \
+     'PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE; PRAGMA integrity_check;'
+   ```
+   Require checkpoint success, `delete` journal mode and `ok` integrity before
+   transferring only `vault.db` and `blobs/` to `/opt/bodesign/vault/` on CT105.
+   Ensure the dropped service UID 1000 owns the cache and can traverse, read and
+   write it. Mount the cache read-write at `/run/bodesign/vault` and configure
+   `BODESIGN_VAULT_DIR` to that path; the storage contract requires writability.
+   Keep the checkpoint-on-copy rule for cross-host snapshot consistency
+   (AGENTS.md §3.1 rule 3). Do not overwrite the running server-owned cache
+   with subsequent dev snapshots without a separate migration decision.
+5. Start containers:
    ```bash
    docker compose up -d
    ```

@@ -15,12 +15,15 @@ services:
       HOST_GID: "1000"
       BODESIGN_SESSIONS_ROOT: "/var/cache/bodesign/sessions"
       BODESIGN_KB_DB: "/var/lib/bodesign/kb/ragbase.sqlite"
+      BODESIGN_VAULT_DIR: "/run/bodesign/vault"
       BODESIGN_AUTH_PROVIDER: "builtin"
     volumes:
       # Ephemeral token store on local NVMe (managed by token_store TTL/GC)
       - bodesign-sessions:/var/cache/bodesign/sessions
       # Read-only Component KB snapshot
       - /opt/bodesign/kb/ragbase.sqlite:/var/lib/bodesign/kb/ragbase.sqlite:ro
+      # Writable server-owned component cache, seeded once from a dev snapshot
+      - /opt/bodesign/vault:/run/bodesign/vault
     networks:
       - bodesign-net
     deploy:
