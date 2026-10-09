@@ -3,6 +3,7 @@ id: BR_20261009_s1_class_e_sensors_miss_a_foreign_net_wire_passing_a_power_port_
 title: S1 class-e sensors miss a foreign-net wire passing a power-port pin tip at 4 line-widths (false negative on a reviewer-rejected location)
 date: 2026-10-09
 status: open
+instances: 2 — Review 6 usbc b25d7d50 (VBUS_CON wire 4 lw from VBUS port tip, officer-dispatched class-e reviewer ses_edfe35a76); Review 7 power_rail 1acb3d76 (IN wire along VBUS flag top edge 4–5 lw, reviewer ses_edfc83d67). Same net in the second case: corridor ambiguity, not a short. Pattern across two leaves, two reviewers; instrument class e zero on both. See s1-instrument-receipt.md §14.4–14.5.
 severity: medium
 priority: P2
 component: packages/eda-bridge/bodesign_eda_bridge/readability_render.py (class e sensors)

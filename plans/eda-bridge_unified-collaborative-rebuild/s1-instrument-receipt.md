@@ -517,3 +517,29 @@ Consequences:
   carried; neither was called OVERLAP.
 - Not measured: whether moving the VBUS port 2+ grid units clears it (no router edit authorized);
   rotated placements; any other candidate.
+
+### 14.5 Second class-e targeted review: Review 7 power_rail candidate (2026-10-09)
+
+User ruling (2026-10-09): try a new accepting candidate first, then fix the detector blind spot.
+Candidate: Review 7 ACCEPT-marginal power_rail (PNG `1acb3d76…`,
+`run-r7-20261006-193512/native/power_rail/pdfpath/power_rail-1.png`, 1241×1754). Same blind
+class-e-only brief; reviewer `ses_edfc83d67`, READ_OK, 7 crops under
+`~/.cache/scratch/s1-calib/review-e3/`, one report.
+
+Result: **class-e NOT CLEAN** — worst location G, bbox ≈ (755,1172,812,1196): the grey IN/VBUS-node
+horizontal wire (y≈1178) runs along the full top edge of the VBUS power-flag hexagon at ~4–5
+line-widths; the flag actually attaches via the vertical at the corner (810,1193). Reviewer: "a
+reader must look twice to see that the flag connects via the vertical, not the horizontal run".
+Same net, so no OVERLAP. Six other corridors (U1 left flag row, SW/BATT merge, bottom GND flags,
+L1/C5, R4/R3, R6/IN parallels at ~7 lw) all CLEAR.
+
+Consequences:
+- Still no accepting class-e entry; record unchanged (`c18f760a…`); e `partial`; AC16 `partial`;
+  3.3a unchecked.
+- **Pattern, not incident.** Two sheets (usbc, power_rail), two independent reviewers, same
+  failure shape: a wire running parallel to / along a POWER-FLAG body or pin tip at 4–5 lw. The
+  instrument scored both a–f zero in class e. The ELK path places power flags adjacent to
+  through-wires routinely, so the blind spot will recur on every leaf. Logged as the second
+  instance on `issues/BR_20261009_s1_class_e_sensors_miss_a_foreign_net_wire_passing_a_power_port_pin_tip.md`.
+- Per ruling order, the detector dispatch now proceeds (power-flag/power-port body-and-tip
+  corridor sensor; rejecting fixtures = these two candidates; FP check on clean/b1/CP3).
