@@ -948,7 +948,10 @@ job id (harness defect, second time today); the second, more detailed one adds: 
 interior reads as a black void with a lit tongue bar (baseline: lit cavity with walls/lower lip),
 lid-band tone inverted (baseline darker than body, Blender lighter). Both reports agree on
 silhouette/opening position/size. These are lighting-conversion differences (pyrender ambient
-→ Cycles world strength), not geometry.
+→ Cycles world strength), not geometry. The iso-front job likewise double-returned: report 1
+reads the Blender SW2/SW3 positions as "caps absent, recesses exposed", report 2 as "dark caps
+with a lighter inner ring, reading as recessed holes" — same pixels, consistent with the declared
+cap omission; both count screws 2 / LEDs 4 / pockets 2 on both sides. Ruling unchanged.
 
 **Ruling: RETAIN pyrender as the C01 baseline; Blender is CLEARED for internal use and
 feasible, not adopted.** Adoption would require (a) STEP cap tessellation parity, (b) denoised
