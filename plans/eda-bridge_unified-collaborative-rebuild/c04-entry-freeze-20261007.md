@@ -912,6 +912,20 @@ hue); `[PORT]` callout points at a wall with no graphite element rendered; foote
 5/5 tokens — a self-inconsistency of the sheet, not of the gate (manifest declares 5 tokens). These
 three go to the r4 list; §4.12 r3 list is closed.
 
+### 4.17 Blender DD-9 rulings (2026-10-09, user + officer)
+
+Inventory `blender-dd9-clearance-20261009.md` (S18) accepted. User rulings: **E2 = internal use
+only** (EE/ME images and `bpy` scripts are not conveyed to customers; GPL distribution
+obligations do not trigger, notices still preserved); **E7 = download + sha verification
+authorized now, licence inventory (B9–B12) closes in parallel from the actual tarball's
+`release/license/`**. Officer rulings (bodesign capability scope, R-I): E1 pin 4.5.14 LTS; E4 ME
+worker owns any Blender path (D3), pyrender baseline retained (D4); E5 D5/D6 budgets adopted as
+the 7.7 acceptance bounds; E6 first candidate is CPU Cycles on the WSL dev host (ME container
+lineage), EEVEE only if an EGL GPU device is demonstrated; E3 the first comparison excludes all
+optional assets/addons. 7.7 proceeds in phases: acquire+verify → licence inventory from artifact
+→ headless smoke → frozen-scene benchmark against C01 r3; each phase reports before the next.
+CT105 rolled to monolith `eaf16cc` (S19) — unrelated to Blender; Blender never enters core.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
