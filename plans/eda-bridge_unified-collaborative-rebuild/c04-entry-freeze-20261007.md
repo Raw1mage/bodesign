@@ -1024,6 +1024,24 @@ caller error, not a defect — container paths are the contract.
 (ruling 1). This record is the "求有" milestone; "求好" (visual review, format classes,
 AC18/AC19) is a later phase.
 
+### 4.20 R-L: single mainline = reviewable six-leaf delivery (2026-10-09, user)
+
+User observation: work had become task-by-task without a product thread ("好像開始漫無目的了").
+Officer concurs: after §7 closed, 3.3a→3.3c→3.5→3.4 each landed bytes but no deliverable an
+engineer could accept. Rulings:
+
+1. **Mainline = btdongle six leaves (S36 set) reviewable by an independent engineer.** Done means:
+   (a) served `bodesign_check_c03` returns a real PC-001 verdict on U1/U2 (not `not_run`) —
+   BR `check_c03_pc001_identifies_no_power_rail…` fixed first (P1); (b) S1 class e/f findings on
+   each leaf either repaired in the engine/spec or named accepted; (c) one-leaf-per-reviewer blind
+   review reaches READ_OK + "would sign" on all six (AC19 text governs); (d) same-revision bundle
+   (3.5 shape) regenerated on the final bytes.
+2. **Everything else pauses** unless it is a necessary enabler for 1. §2, §4, §5, §6 tasks,
+   S2 ingestion (3.3b), 3.6/3.7 codec/physics, vault page-anchor BR: parked, not cancelled.
+3. Plan hygiene (promote master plan to `implementing`, adjudicate the 7 stale `implementing`
+   sub-plans) is deferred until mainline item 1(a) lands; it is bookkeeping, not product.
+4. Officer reports progress against 1(a)–(d) only; a task checkbox is not progress.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
