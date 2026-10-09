@@ -227,6 +227,33 @@ class PC001WaiverScopeTests(unittest.TestCase):
         self.assertIn("NOT ported",
                       res.passive_completeness["waivers"]["reason"])
 
+    def test_leaf_waiver_sidecar_not_honoured_when_check_c03_called_on_root(self):
+        """A waiver sidecar next to a leaf .kicad_sch is NOT honoured by check_c03.
+
+        check_c03 delivery path reports waivers.status='not_run' (DD-3 waiver sidecar
+        is not ported to delivery path). Thus a leaf-level passive_waivers.json
+        has no effect on check_c03, and the undecoupled IC remains a blocking PC-001 error.
+        """
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            leaf_dir = os.path.join(tmp, "leaf")
+            os.makedirs(leaf_dir, exist_ok=True)
+            _write(tmp, "root.kicad_sch", "(kicad_sch)\n")
+            _write(leaf_dir, "leaf.kicad_sch", "(kicad_sch)\n")
+            _write(leaf_dir, "passive_waivers.json", json.dumps([{
+                "ref": "U1", "obligation": "decoupling",
+                "source": "leaf_waiver", "reason": "leaf scope", "scope": "leaf"
+            }]))
+            bom = _write(tmp, "bom.csv", _HDR + "".join(
+                r + "\n" for r in _bom_rows(decoupling=False)))
+            net = _write(tmp, "root.net", _netlist(decoupling=False))
+            res = check_c03.check_c03(bom, netlist_path=net)
+
+        self.assertEqual(res.gate, "FAIL")
+        self.assertIn("PC-001", _codes(res))
+        self.assertEqual(res.passive_completeness["waivers"]["status"], "not_run")
+        self.assertIn("NOT ported", res.passive_completeness["waivers"]["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

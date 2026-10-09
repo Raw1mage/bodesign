@@ -197,6 +197,66 @@ class PassiveCompletenessTests(unittest.TestCase):
         b = validate_passive_completeness(_pinout_only_ctx())
         self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True))
 
+    # ── Task 3.4 bounds: empty sheet ─────────────────────────────────────────
+    def test_empty_sheet_zero_symbols_no_finding_named_scope(self):
+        """(1) EMPTY sheet: zero symbols → no PC-001 finding.
+        Assert that the absence of findings is bounded by zero active ICs in scope,
+        not by silent pass-by-absence."""
+        from validation_detectors import _ACTIVE_IC_TYPES
+        ctx = _ctx([], {})
+        findings = validate_passive_completeness(ctx)
+        self.assertEqual([f for f in findings if f["rule_id"] == "PC-001"], [])
+        active_ics = [c["reference"] for c in ctx.components if c.get("type") in _ACTIVE_IC_TYPES]
+        self.assertEqual(active_ics, [], "Report scope: zero active ICs in scope")
+
+    # ── Task 3.4 bounds: isolated active IC ──────────────────────────────────
+    def test_isolated_active_ic_unconnected_power_pins_bounds(self):
+        """(2) ISOLATED active IC: power_in pins with NO nets attached.
+
+        Current detector behaviour: silently passes (findings=[]) because
+        _ic_power_rails requires a connected net to identify a power rail, and
+        validate_passive_completeness explicitly skips ICs with zero identifiable
+        rails (line 1290: 'Skip rather than false-positive'). No finding and no
+        named unconnected_power_pin outcome is emitted by this detector.
+        Asserts current behaviour and records this as a bounded gap.
+        """
+        from validation_detectors import _ACTIVE_IC_TYPES, _ic_power_rails
+        comps = [
+            {"reference": "U1", "value": "STM32N657", "lib_id": "MCU:STM32N657",
+             "type": "ic", "pins": _mcu_pins()},
+        ]
+        # power_in pins with NO nets attached (empty pin_net)
+        ctx = _ctx(comps, {})
+        findings = validate_passive_completeness(ctx)
+        # Bounded gap: currently silently passes (empty findings)
+        self.assertEqual([f for f in findings if f["rule_id"] == "PC-001"], [])
+        active_ics = [c["reference"] for c in ctx.components if c.get("type") in _ACTIVE_IC_TYPES]
+        self.assertEqual(active_ics, ["U1"])
+        self.assertEqual(_ic_power_rails(ctx, "U1"), set(), "Zero detectable power rails on isolated IC")
+
+    # ── Task 3.4 bounds: NC-marked power pin ─────────────────────────────────
+    def test_nc_marked_power_pin_silently_passes_bounds(self):
+        """(3) NC-marked power pin: IC whose power pin carries a no-connect flag.
+
+        Current detector behaviour: silently passes (findings=[]) because
+        no_connect flags are not checked by validate_passive_completeness, and
+        pins without a connected power rail net are skipped by _ic_power_rails.
+        Asserts current behaviour and records this as a bounded gap.
+        """
+        comps = [
+            {"reference": "U1", "value": "STM32N657", "lib_id": "MCU:STM32N657",
+             "type": "ic", "pins": _mcu_pins()},
+        ]
+        pin_net = {
+            ("U1", "2"): ("GND", None),
+            ("U1", "3"): ("PA0", None),
+        }
+        ctx = _ctx(comps, pin_net)
+        ctx.no_connects = [{"component": "U1", "pin": "1", "x": 10.0, "y": 10.0}]
+        findings = validate_passive_completeness(ctx)
+        # Bounded gap: currently silently passes (no PC-001 finding)
+        self.assertEqual([f for f in findings if f["rule_id"] == "PC-001"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
