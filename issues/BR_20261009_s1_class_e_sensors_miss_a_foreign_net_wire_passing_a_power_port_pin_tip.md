@@ -1,8 +1,10 @@
 ---
 id: BR_20261009_s1_class_e_sensors_miss_a_foreign_net_wire_passing_a_power_port_pin_tip
-title: S1 class-e sensors miss a foreign-net wire passing a power-port pin tip at 4 line-widths (false negative on a reviewer-rejected location)
+title: S1 class-e sensors have no sensor over label-flag polygons, so a wire passing a global-label flag at 4 line-widths is silent (false negative on two reviewer-rejected locations)
 date: 2026-10-09
-status: open
+status: fixed
+correction: 2026-10-09 Step 0 (receipt §15.0) — the "power-port / power-flag" in the id and in reviewer wording were GLOBAL LABELS (no power symbol, no pin). Reviewer text is preserved as perception; the measured object class is the fact. Id kept for edge stability.
+fix: readability_render.py 53acfd4b… adds E_LABEL_FLAG_CORRIDOR over all global/hierarchical label polygons, band 1.6 mm, terminating-anchor + collinear-through-anchor exemption, net_relation foreign|same|unbound; policy digest 443bbb01… → 63bee5d0…; fixtures e_label_flag/{usbc_r6,power_rail_r7}; 6 new tests; Ran 114 OK; clean_divider unchanged 0; CP3/b1 e deltas recorded unadjudicated (§15). Not yet CLOSED: new findings on CP3 unadjudicated; no accepting class-e cell exists.
 instances: 2 — Review 6 usbc b25d7d50 (VBUS_CON wire 4 lw from VBUS port tip, officer-dispatched class-e reviewer ses_edfe35a76); Review 7 power_rail 1acb3d76 (IN wire along VBUS flag top edge 4–5 lw, reviewer ses_edfc83d67). Same net in the second case: corridor ambiguity, not a short. Pattern across two leaves, two reviewers; instrument class e zero on both. See s1-instrument-receipt.md §14.4–14.5.
 severity: medium
 priority: P2

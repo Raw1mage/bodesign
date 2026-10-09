@@ -543,3 +543,117 @@ Consequences:
   instance on `issues/BR_20261009_s1_class_e_sensors_miss_a_foreign_net_wire_passing_a_power_port_pin_tip.md`.
 - Per ruling order, the detector dispatch now proceeds (power-flag/power-port body-and-tip
   corridor sensor; rejecting fixtures = these two candidates; FP check on clean/b1/CP3).
+
+## 15. Class-e label-flag corridor sensor `E_LABEL_FLAG_CORRIDOR` (BR_20261009), 2026-10-09
+
+### 15.0 Step 0 measurements and correction
+
+**CORRECTION:** Sections 14.4/14.5 and the BR title call these objects “power-port / power-flag”. On the measured native bytes they are **global labels**, not `power:` symbols, and have no `Pin`. The reviewer wording is preserved as perception; this correction records the object identity. The officer withdrew the initial power-symbol/pin-row RCA. The actual uncovered population is drawable global/hierarchical label outlines. No power-net list is introduced. This section retains the dispatched heading for traceability; the implemented code is `E_LABEL_FLAG_CORRIDOR`.
+
+PNG hashes were checked before examining native triples: R6 `b25d7d50b3530627ec8f12a2330e568a0321d57f717d23fe5e1a3f909b261004`, R7 `1acb3d761b32d67d29745796e03e80ba9459458383a24cc8705eb04a2a96981d`. Both match the review record. Original export receipts verified all three native hashes in each live `measure()` call; no native re-export was performed.
+
+| Step 0 value (before sensor) | R6 usbc | R7 power_rail |
+|---|---|---|
+| Native label | `global_label VBUS`, uuid `5da45a9f-269b-4f2f-b76f-f95fc0eb8d85`, anchor `(76.2,48.26)` | `global_label VBUS`, uuid `4554b19c-1dea-431a-80e4-4d5e2e2a8dac`, anchor `(137.16,201.93)` |
+| (a) In `g.visible_pins`? | No: not a symbol/pin at all | No: not a symbol/pin at all |
+| Filter explanation | `parse_sheet` (pre-change :495) puts it in `sheet.labels`; `build_drawn_graph` (:886–890) enumerates `sheet.symbols[].pins`, omitting hidden pins only | Same; :1193/:1283/:1939 do not cause this omission |
+| Reviewed passing wire | index 2, `a0ef10fe-4c98-47a9-9ad6-b9fbf6e0424e`, `(67.31,38.1)`→`(67.31,90.17)` | index 5, `cd03567b-651e-4a1e-8ab4-5be11774d395`, `(128.27,199.39)`→`(137.16,199.39)` |
+| (b) `_wire_nets` | `{'/VBUS_CON'}` | `{'VBUS'}` |
+| `_pin_nets` | Not defined: no pin id. Attached-anchor wire index 5 has `{'VBUS'}` | Not defined: no pin id. Attached-anchor wire index 7 has `{'VBUS'}` |
+| Relation from attached wire | foreign | same |
+| (c) Outline feature / distance mm | left vertex `(67.7447,48.26)`; `0.4346999999999923` | top edge y=`200.6596`, x=`129.816..136.0487`; `1.2696000000000254` |
+| Anchor distance / legacy `pin_tip_band_mm` | anchor is not reviewed feature; closest wire to anchor is its terminating segment, distance 0 / band 1.27 | passing-wire anchor distance `2.5400000000000205` / band 1.27 |
+| Flag stroke / report maximum stroke mm | `0.1524` / `0.4` | `0.1524` / `0.4` |
+| Outline gap in native flag strokes | `2.85236` (raster review said ~4 lw) | `8.33071` (raster review said ~4–5 lw) |
+| Old `measure()` counts a/b/c/d/e/f | `[0,0,0,0,0,0]` | `[0,0,0,0,0,5]` (f text/flag findings already present) |
+
+Pixel conversion is independently per axis from the SVG viewBox (unit scale 1 mm): R6 `(px,py)=(x*1754/297.0022,y*1241/210.0072)`, PNG 1754×1241; R7 `(x*1241/210.0072,y*1754/297.0022)`, PNG 1241×1754. R6 wire location `(67.31,48.26)` is approximately `(397.5,285.2)` px, outline vertex approximately `(400.1,285.2)`; R7 location `(129.816,199.39)` approximately `(767.1,1177.5)` px. Both fall in the dispatched reviewer regions; native geometry, not the raster line-width estimate, governs the tests.
+
+### 15.1 Instrument, policy and sensor contract
+
+New `readability_render.py` sha256 **53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af** replaces `f98dc2371afc3202485bd1a7cc808b9b118a9578b8dbfed131a6cc68fdad269f`. Test module sha256 `5ab397da6a105eb888f1ac16ebbbd713fe3a029ed1b9db9eb86009a2b1dc46c7`. Old/new decision-policy digests: **443bbb0185d5a914 → 63bee5d02a5ec147**. Historical reports remain labelled with historical identities; no historical record is rewritten as a new execution.
+
+`pol["e"]["label_flag_corridor_band_mm"] = 1.6` is frozen this round: 4 × the measured maximum rendered stroke 0.4 mm on both rejecting sheets. It is a fixed mm policy, NOT a dynamically recomputed multiplier on another sheet. Four actual flag strokes would be only 0.6096 mm and would miss R7; this distinction was measured and explicitly ruled on before implementation. No tuning after evaluation.
+
+The new sensor binds drawable `svg.polys` to `global_label` / `hierarchical_label` anchors (first vertex within 0.02 mm). It computes the positive wire-length union inside edge-distance capsules of radius 1.6 mm, one finding per wire/polygon pair. Degenerate zero-length wires cannot fire; length ≤ coordinate tolerance is omitted. Exemption: segment terminating on the anchor, and any collinear segment continuing through that anchor from it. An interior-anchor segment with no terminating segment is NOT exempt (b1). Other e sensors retain their logic.
+
+Findings are `kind="perceptual"`, region = wire segment + flag bbox, localized `at` on the wire. Measurements: `distance_mm`, `corridor_length_mm`, `band_mm`, `contact=through|corridor` (through iff distance is zero), `net_relation=foreign|same|unbound`, `label_net_authority=attached_wire|none`. Empty attached-wire net authority produces `unbound`, never fabricated `same`. Netlist rebinding is not performed. Both same-net and foreign-net geometry fire: electrical equality cannot establish perceptual clarity (DD-14(d)). A new default-empty `Finding.measurements` field carries this evidence; existing findings gain an empty serialization field, not changed sensor semantics.
+
+Pinned native triples (byte-preserving copies; no original run file changed):
+
+| `tests/fixtures/readability_render/e_label_flag/` file | sha256 |
+|---|---|
+| usbc_r6.kicad_sch | `8cd238d2f87a36056d6e035c8b29cb92057c253de03af766fa6d86c18f3da24c` |
+| usbc_r6.svg | `7e7a1d2d3aea05498f9236097152b8de605d2bf580db1ea35f6614a015536d45` |
+| usbc_r6.net | `4b83aae76d9f186de431f3f4a67e431b23f6ed68b631bdcb4f7a4dd3a57583b3` |
+| power_rail_r7.kicad_sch | `8d5e3e7d5d5731e645b3de796833d12ccaada7c39d8c971ad140efbe0fb8c6fd` |
+| power_rail_r7.svg | `c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907` |
+| power_rail_r7.net | `cecc3c0f9a5e4af7a6b2b2a2655d22384f54c6f1b899b40b671e6cd538a344cc` |
+
+### 15.2 Population comparison and distance histograms
+
+Before = saved exact f98dc237 module; after = 53acfd4b module, same native bytes and helper authorities. The required clean/b1/CP3 controls were also run directly without receipts (class diagnostics only). Full reporting helper population below is 11 invocations / 10 unique sheets (b1 twice), plus R6/R7 native fixtures separately. Graph identity is unchanged (existing graph tests pass); policy-bound manifests necessarily change on EVERY report. Parser-only sweep sheets have no new full-report claim.
+
+Histogram columns count ONLY new `E_LABEL_FLAG_CORRIDOR` findings, not all e findings. Counts are ordered a/b/c/d/e/f.
+
+| subject | before counts | after counts | new e | =0 | (0,0.6] | (0.6,1.2] | (1.2,1.6] |
+|---|---|---|---|---|---|---|---|
+| CP3 usbc | 3/1/6/1/0/8 | 3/1/6/1/2/8 | +2 | 2 | 0 | 0 | 0 |
+| CP3 power_rail | 7/6/5/1/3/16 | 7/6/5/1/25/16 | +22 | 6 | 0 | 0 | 16 |
+| CP3 battery | 0/0/3/0/1/5 | 0/0/3/0/3/5 | +2 | 0 | 0 | 0 | 2 |
+| clean | 0/0/0/0/0/0 | 0/0/0/0/0/0 | 0 | 0 | 0 | 0 | 0 |
+| b1 | 0/0/0/0/0/4 | 0/0/0/0/1/4 | +1 | 1 | 0 | 0 | 0 |
+| b1 + declared | 0/1/0/0/0/4 | 0/1/0/0/1/4 | +1 | 1 | 0 | 0 | 0 |
+| S3 run-133234 | 0/1/0/0/0/9 | 0/1/0/0/0/9 | 0 | 0 | 0 | 0 | 0 |
+| xform xr180 | 0/1/0/0/1/0 | 0/1/0/0/1/0 | 0 | 0 | 0 | 0 | 0 |
+| xform xm | 0/1/0/0/1/0 | 0/1/0/0/1/0 | 0 | 0 | 0 | 0 | 0 |
+| run-150709 | 0/1/0/0/0/0 | 0/1/0/0/0/0 | 0 | 0 | 0 | 0 | 0 |
+| R5b | 0/0/0/0/0/0 | 0/0/0/0/1/0 | +1 | 0 | 1 | 0 | 0 |
+| R6 native | 0/0/0/0/0/0 | 0/0/0/0/1/0 | +1 | 0 | 1 | 0 | 0 |
+| R7 power_rail native | 0/0/0/0/0/5 | 0/0/0/0/8/5 | +8 | 0 | 0 | 0 | 8 |
+
+The FP gate passed by officer ruling: clean is the only accepting exemplar, still six-class zero. CP3 extras are **unadjudicated extras**, not confirmed FP or TP (§7). Top-bucket concentration (16/22 on CP3 power_rail; 2/2 battery) is evidence about the 1.6 mm band, not authorization to tune it. Initially the distance reporter used only endpoint-to-segment minima and overestimated true crossing distances; exact segment-intersection checks now correctly report zero on crossing outline edges (counts unchanged). No band changed.
+
+b1 SHUNT at `(100,50)` has distance 0, corridor length `4.8429835808640656` mm, `contact=through`, `net_relation=unbound` because its label anchor is interior, not terminating. Officer ruled the geometry legitimate. b1 is no longer a zero-e hand-verified example; it was never a calibration accepting entry. R5b's new foreign corridor at `(67.31,48.26)` is the same geometry as R6; no new review of R5b is inferred. R6's one finding matches the targeted adjudication. R7 has the adjudicated VBUS location plus **seven unadjudicated extras**: `(57.1841,53.34)`, `(57.1841,58.42)`, `(54.7651,58.42)`, `(57.4865,66.04)`, `(102.7113,55.88)`, `(102.7113,63.5)`, `(102.7113,66.04)`, all distance ~1.2696 mm, authority `none`. Reviewer “other corridors CLEAR” is not silently converted into confirmation of these new sensor readings; this disagreement is carried for future adjudication.
+
+Old/new verified-lineage overall verdicts move only where new e failures require it: b1 (native-only), R5b and R6 indeterminate→fail; CP3 provenance-mismatch remains indeterminate. Other measured helper verdicts unchanged. The unchanged historical-manifest assertions were amended to explicit new-policy hashes (`BASE_FLAG`) while retaining `BASE_9C18`. Old graph checks remain. The rectangle-removed R5b twin is still non-native/provenance-indeterminate; its class findings equal the original, but overall verdicts now differ because the original has verified lineage and a new e failure. This is not an observation-induced verdict change.
+
+### 15.3 Six tests and module run (verbatim)
+
+```text
+test_a_r6_outline_vertex (tests.test_readability_render.LabelFlagCorridor.test_a_r6_outline_vertex) ... ok
+test_b_r7_top_edge (tests.test_readability_render.LabelFlagCorridor.test_b_r7_top_edge) ... ok
+test_c_clean (tests.test_readability_render.LabelFlagCorridor.test_c_clean) ... ok
+test_d_terminating_anchor_exemption (tests.test_readability_render.LabelFlagCorridor.test_d_terminating_anchor_exemption) ... ok
+test_e_offset (tests.test_readability_render.LabelFlagCorridor.test_e_offset) ... ok
+test_f_hierarchical (tests.test_readability_render.LabelFlagCorridor.test_f_hierarchical) ... ok
+
+Ran 6 tests in 0.642s
+
+OK
+```
+
+Tests a/b bind exact wire/label uuids and native distances; a asserts foreign, b same with attached-wire authority. c asserts clean zero; d exempts the terminating-anchor wire; e an offset wire fires exactly one with unbound/none and corridor; f proves hierarchical-label scope. Unit cells are hand-built geometry, not native exports or new calibration examples.
+
+First full run: `Ran 114 tests in 16.552s` / `FAILED (failures=10)` / exit 1. Nine were intentional old-policy manifest/old-finding/verdict equality assertions; one new unit test incorrectly expected unbound while retaining an attached wire whose graph has generated net authority. Assertions now pin the explicitly measured new baseline; detached control truly removes the attached wire. No detector adjustment to hide those failures.
+
+After clearing bytecode again:
+```text
+$ ./scripts/run_tests.sh test_readability_render
+..................................................................................................................
+----------------------------------------------------------------------
+Ran 114 tests in 17.011s
+
+OK
+```
+Exit 0; expected 108+6=114 observed. No full repository-suite run.
+
+### 15.4 Record binding and remaining limits
+
+Record digest updated to `63bee5d02a5ec147`, old digest retained as transition metadata. Class e has exactly TWO rejecting entries: existing CP3 power_rail plus R7 targeted review §14.5 (`ses_edfc83d67`), binding the reviewed PNG and native triple. R6's targeted rejection is measured and pinned but deliberately not added as a third record entry, following dispatch's specified two-entry count. No accepting entry created. Existing a–d documentary decisions remain bound to their reviewed bytes; all old-policy execution evidence is historical, not automatically authenticated under the new policy. The resolver performs shape/count/scope checks only:
+
+```text
+{'status': 'partial', 'partial_classes': ['e'], 'reason': 'classes lacking rejecting and/or accepting adjudicated evidence', 'record_version': '2026-10-09-3.3a-existing-evidence', 'policy_digest': '63bee5d02a5ec147', 'supported_scope': {'rotations': [0], 'classes': ['a', 'b', 'c', 'd', 'e']}, 'subject_scope': {'rotations': [0], 'classes': ['a', 'b', 'c', 'd', 'e']}, 'classes': {'a': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'b': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'c': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'd': {'rejecting': 1, 'accepting': 1, 'missing': []}, 'e': {'rejecting': 2, 'accepting': 0, 'missing': ['no independently reviewed accepting case']}}, 'evidence_authenticated': False, 'authenticated_by': None}
+```
+
+Not covered: rotated power symbols (not the object population here), rotated/native hierarchical flag cases, non-hex flag shapes beyond the one hand-built hierarchical polygon cell, unparsed/unmatched flag polygons, text-vs-flag (existing f sensor unchanged), glyph ink/dash/fill/z-order semantics, symbol coherence, netlist-based label rebinding, arbitrary-band validation/sensitivity, confirmed FP/TP adjudication of extras. Collinear-continuation exemption is implemented but no separate new test was added for it this round. New fixture copies omit export receipts; fixture class diagnostics do not assert verified pairing, while Step 0 used the original receipts. Class-e independent accepting evidence is still absent; no class-f/six-class PASS, approval, fab clearance, packaging authority or task checkbox follows. No router edits, BR amendments, stage/commit, or deployment.

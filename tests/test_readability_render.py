@@ -54,6 +54,12 @@ B1 = FIX / "b1"
 # sha256 of the exact bytes measured. CP3 = archive copy of
 # /home/pkcs12/.cache/scratch/p2-leaf-delivery/first/ (2026-10-06 06:43 render).
 PINS = {
+    "e_label_flag/usbc_r6.kicad_sch": "8cd238d2f87a36056d6e035c8b29cb92057c253de03af766fa6d86c18f3da24c",
+    "e_label_flag/usbc_r6.svg": "7e7a1d2d3aea05498f9236097152b8de605d2bf580db1ea35f6614a015536d45",
+    "e_label_flag/usbc_r6.net": "4b83aae76d9f186de431f3f4a67e431b23f6ed68b631bdcb4f7a4dd3a57583b3",
+    "e_label_flag/power_rail_r7.kicad_sch": "8d5e3e7d5d5731e645b3de796833d12ccaada7c39d8c971ad140efbe0fb8c6fd",
+    "e_label_flag/power_rail_r7.svg": "c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907",
+    "e_label_flag/power_rail_r7.net": "cecc3c0f9a5e4af7a6b2b2a2655d22384f54c6f1b899b40b671e6cd538a344cc",
     "cp3/usbc.kicad_sch": "63432d2fe61134d3f78cbfd542b6add59eff25a1f401104593aef1e8796f2760",
     "cp3/usbc.svg": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
     "cp3/usbc.archived.net": "2fb48c0911fa6dbe720cae2df9c76560d07634f4587dc1a9c26f0b1150e0205e",
@@ -631,7 +637,7 @@ class S3UsbcCoverage(unittest.TestCase):
         self.assertEqual(v["f"][0], "fail")
         self.assertEqual(v["f"][1], 9)
         self.assertEqual(rep.subject_manifest_sha256,
-                         "63ee49dbfbde24d6faeecd7da27d111cfe8887e3bb2694779159f43183b992ce")
+                         "8134d3770c063e184dd70cfda9260c06005f91013c4c96daf487d49cd95008e5")
 
     def test_own_label_wire_is_not_a_strike(self):
         """Control: a label sitting at the END of its own wire is not struck. The
@@ -839,7 +845,9 @@ class TransformCoverage(unittest.TestCase):
         changes nothing on that candidate."""
         stored = json.loads((XF / "r150709" / "s1_report.json").read_text())
         rep = _r150709()
-        self.assertEqual(rep.subject_manifest_sha256, stored["subject_manifest_sha256"])
+        self.assertNotEqual(rep.subject_manifest_sha256, stored["subject_manifest_sha256"])
+        self.assertEqual(rep.subject_manifest_sha256,
+                         "e98a0fab23d7631cfe46c4685d35cb3e9ae4d505d4660000d4cee9bacc4e11b1")
         got = _sig(rep)
         for c in stored["classes"]:
             want = (c["verdict"], sorted((f["code"], tuple(f["objects"]),
@@ -1027,6 +1035,22 @@ BASE_9C18 = {
 }
 BASE_GRAPH_ONLY = {"xform/sweep_r90_mx": "754f71347014897a", "xform/sweep_r270_my": "754f71347014897a"}
 
+# Historical BASE_9C18 is retained above. New decision policy intentionally changes
+# every manifest and adds adjudicated/unadjudicated flag findings, not graph identity.
+BASE_FLAG = {
+    "cp3/usbc": ("65de5e4253bf198f", "indeterminate", "indeterminate", "33ae1088a4f4547f"),
+    "cp3/power_rail": ("8eb33e4bf21dc496", "indeterminate", "indeterminate", "cd899edbcaa85e69"),
+    "cp3/battery": ("90cc5cf2ee86ddc9", "indeterminate", "indeterminate", "5bb4bfc42ebd8ae2"),
+    "clean": ("612e9bdd9a159c8f", "indeterminate", "indeterminate", "29d40aff8b7dc82a"),
+    "b1": ("85819c994ce86359", "fail", "fail", "12c2531993dc0b30"),
+    "b1+declared": ("5d113bddaa77d170", "fail", "fail", "63c2a16fe2110262"),
+    "s3_usbc_20261006": ("8134d3770c063e18", "fail", "fail", "f65568a821a67d42"),
+    "xform/xr180": ("3a4060d763e8b222", "fail", "fail", "317f6c6007a38d3e"),
+    "xform/xm": ("5ef2827e9e7d3438", "fail", "fail", "8e34f1b05fe8d587"),
+    "xform/r150709": ("e98a0fab23d7631c", "fail", "fail", "a2128ab674597c90"),
+    "r5b": ("2e207a26d22a22f7", "fail", "fail", "e8861de4912079d3"),
+}
+
 
 def _subject(key):
     return {
@@ -1112,13 +1136,13 @@ class InkAC2AC6Unchanged(unittest.TestCase):
             self.assertEqual(_graph_sha(sheet)[:16], gh, key)
 
     def test_ac6_verdicts_classes_and_manifests_unchanged(self):
-        for key, (man, verdict, scoped, ch, _gh) in BASE_9C18.items():
+        for key, (man, verdict, scoped, ch) in BASE_FLAG.items():
             rep = _subject(key)
             self.assertEqual((rep.verdict, rep.scoped_verdict), (verdict, scoped), key)
             self.assertEqual(_classes_hash(rep), ch, key)
-            if key != "r5b":  # ink-free: manifest byte-identical to the 9c18bc51 value
-                self.assertEqual(rep.subject_manifest_sha256[:16], man, key)
-            self.assertEqual(rep.policy_ref["digest"], "443bbb0185d5a914", key)
+            self.assertEqual(rep.subject_manifest_sha256[:16], man, key)
+            self.assertNotEqual(man, BASE_9C18[key][0], key)
+            self.assertEqual(rep.policy_ref["digest"], "63bee5d02a5ec147", key)
             self.assertIs(rep.calibration_ref.get("evidence_authenticated", False), False, key)
 
     def test_ac6_r5b_manifest_changes_only_by_the_ink_authority(self):
@@ -1127,7 +1151,7 @@ class InkAC2AC6Unchanged(unittest.TestCase):
         self.assertEqual(set(rep.authority_digests) - {"declared_pin_nets", "required_local_pairs",
                                                       "local_exceptions", "policy_digest"},
                          {"ink_owner", "measurement_scope_version", "ink_chord_tol_mm"})
-        self.assertEqual(_classes_hash(rep), BASE_9C18["r5b"][3])
+        self.assertEqual(_classes_hash(rep), BASE_FLAG["r5b"][3])
 
     def test_ac6_sweep_subjects_support_parser_and_geometry_only(self):
         """sweep_r90_mx / sweep_r270_my have sheet + svg only (no net, no export
@@ -1150,8 +1174,8 @@ class InkAC2AC6Unchanged(unittest.TestCase):
                       required_local_pairs=[tuple(p) for p in inv["required_local_pairs"]],
                       local_exceptions=inv["local_exceptions"])
         self.assertEqual((rep.verdict, rep.scoped_verdict, _classes_hash(rep)),
-                         ("indeterminate", "indeterminate", "29d40aff8b7dc82a"))
-        self.assertEqual(rep.subject_manifest_sha256[:16], "c812c0019dedc7e8")
+                         ("fail", "fail", "57afa35dc7983559"))
+        self.assertNotEqual(rep.subject_manifest_sha256[:16], "c812c0019dedc7e8")
         self.assertEqual(rep.ink_report["count"], 0)
 
 
@@ -1279,8 +1303,9 @@ class InkAC3dIsolation(unittest.TestCase):
         twin = measure(d / "usbc.kicad_sch", d / "usbc.svg", d / "usbc.net")
         rep = _r5b()
         self.assertEqual(_classes_hash(rep), _classes_hash(twin))
-        self.assertEqual(rep.scoped_verdict, twin.scoped_verdict)
-        self.assertEqual(rep.verdict, twin.verdict)
+        # Native subject fails e; the non-native twin remains provenance-indeterminate.
+        self.assertEqual((rep.scoped_verdict, twin.scoped_verdict), ("fail", "indeterminate"))
+        self.assertEqual((rep.verdict, twin.verdict), ("fail", "indeterminate"))
         self.assertEqual(_f_of(twin).observations, [])
         self.assertTrue(_obs(rep), "R5b with its rectangle must carry observations (D1 pin stubs)")
         shutil.rmtree(d, ignore_errors=True)
@@ -1508,7 +1533,7 @@ here, so the claim cannot be made from this repo."""
         self.assertEqual(rep.ink_report["owner_mode"], "rule")
         self.assertEqual(rep.ink_report["owner_declaration_mismatch"], [])   # recorded, see receipt s13
         self.assertEqual(rep.sheet_graphic_ink[0]["owner"], "D1")
-        self.assertEqual(_classes_hash(rep), BASE_9C18["r5b"][3])           # owner never moves a finding
+        self.assertEqual(_classes_hash(rep), BASE_FLAG["r5b"][3])           # owner never moves a finding
 
 
 class InkAC7AC8AC9Contract(unittest.TestCase):
@@ -1538,7 +1563,7 @@ class InkAC7AC8AC9Contract(unittest.TestCase):
 
     def test_ac7_ink_free_subjects_ignore_the_none_declaration(self):
         """An ink-free sheet with no declaration keeps its 9c18bc51 manifest (AC6)."""
-        self.assertEqual(_clean().subject_manifest_sha256[:16], BASE_9C18["clean"][0])
+        self.assertEqual(_clean().subject_manifest_sha256[:16], BASE_FLAG["clean"][0])
 
     def test_ac8_unparsed_kinds_are_counted_not_dropped(self):
         text = (CLEAN / "clean_divider.kicad_sch").read_text().rstrip()
@@ -1581,8 +1606,66 @@ class InkAC7AC8AC9Contract(unittest.TestCase):
         rep = _r5b()
         self.assertEqual(rep.measurement_scope["version"], rr.MEASUREMENT_SCOPE_VERSION)
         self.assertEqual(rep.measurement_scope["policy_digest"], rep.policy_ref["digest"])
-        self.assertEqual(rep.policy_ref["digest"], "443bbb0185d5a914")   # policy unchanged by round 9
+        self.assertEqual(rep.policy_ref["digest"], "63bee5d02a5ec147")   # flag sensor changes decision policy
         self.assertEqual(rep.measurement_scope["ink_chord_tol_mm"], 0.05)
+
+
+class LabelFlagCorridor(unittest.TestCase):
+    def native(self, name):
+        root = FIX / "e_label_flag"
+        return measure(root / (name + ".kicad_sch"), root / (name + ".svg"), root / (name + ".net"))
+
+    def findings(self, rep):
+        return [f for c in rep.classes for f in c.findings if f.code == "E_LABEL_FLAG_CORRIDOR"]
+
+    def cell(self, offset=False, kind="global_label", detached=False):
+        sh = rr.parse_sheet((CLEAN / "clean_divider.kicad_sch").read_text())
+        sh.symbols = []
+        sh.labels = [rr.Label(kind, "TEST", (10., 10.), "flag")]
+        sh.wires = [rr.Wire((10., 10.), (14., 10.), "attached")]
+        if offset:
+            sh.wires.append(rr.Wire((6., 5.), (6., 15.), "passing"))
+        if detached:
+            sh.wires = [sh.wires[-1]]
+        svg = rr.parse_svg((CLEAN / "clean_divider.svg").read_text())
+        svg.polys = [([(10., 10.), (9., 9.), (7., 9.), (7., 11.), (9., 11.)], .1524)]
+        g = rr.build_drawn_graph(sh, {}, .01)
+        return rr._class_e(sh, g, svg, POLICY)
+
+    def test_a_r6_outline_vertex(self):
+        fs = self.findings(self.native("usbc_r6"))
+        f = next(f for f in fs if "wire:a0ef10fe-4c98-47a9-9ad6-b9fbf6e0424e" in f.objects
+                 and "label:5da45a9f-269b-4f2f-b76f-f95fc0eb8d85" in f.objects)
+        self.assertAlmostEqual(f.measurements["distance_mm"], .4347, places=4)
+        self.assertAlmostEqual(f.at[0], 67.31, places=4)
+        self.assertAlmostEqual(f.at[1], 48.26, places=4)
+        self.assertEqual(f.measurements["net_relation"], "foreign")
+
+    def test_b_r7_top_edge(self):
+        fs = self.findings(self.native("power_rail_r7"))
+        f = next(f for f in fs if "wire:cd03567b-651e-4a1e-8ab4-5be11774d395" in f.objects
+                 and "label:4554b19c-1dea-431a-80e4-4d5e2e2a8dac" in f.objects)
+        self.assertAlmostEqual(f.measurements["distance_mm"], 1.2696, places=4)
+        self.assertEqual(f.measurements["net_relation"], "same")
+        self.assertEqual(f.measurements["label_net_authority"], "attached_wire")
+
+    def test_c_clean(self):
+        self.assertEqual(self.findings(_clean()), [])
+
+    def test_d_terminating_anchor_exemption(self):
+        self.assertEqual(self.cell().findings, [])
+
+    def test_e_offset(self):
+        fs = self.cell(offset=True, detached=True).findings
+        self.assertEqual(len(fs), 1)
+        self.assertEqual(fs[0].measurements["net_relation"], "unbound")
+        self.assertEqual(fs[0].measurements["label_net_authority"], "none")
+        self.assertEqual(fs[0].measurements["contact"], "corridor")
+
+    def test_f_hierarchical(self):
+        fs = self.cell(offset=True, kind="hierarchical_label").findings
+        self.assertEqual(len(fs), 1)
+        self.assertEqual(fs[0].code, "E_LABEL_FLAG_CORRIDOR")
 
 
 if __name__ == "__main__":

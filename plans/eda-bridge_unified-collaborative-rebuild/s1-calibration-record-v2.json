@@ -1,7 +1,9 @@
 {
   "schema": "s1-calibration-record-v2",
   "version": "2026-10-09-3.3a-existing-evidence",
-  "policy_digest": "443bbb0185d5a914",
+  "policy_digest": "63bee5d02a5ec147",
+  "previous_policy_digest": "443bbb0185d5a914",
+  "policy_transition_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#15-class-e-power-symbol-corridor-sensor-br_20261009-2026-10-09",
   "supported_scope": {"rotations": [0], "classes": ["a", "b", "c", "d", "e"]},
   "evidence_authenticated": false,
   "authenticated_by": null,
@@ -79,7 +81,10 @@
       "accepting": [{"artifact_sha256": "54fca7ad2508d686f15d0cdb7a455181c65fc3096a8b031dceea29510009f10b", "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#corpus-classification-officer--r5b", "reviewer_session_id": "ses_eef8cff90ffe1jrnCZvSkoVMW6", "kind": "accepting", "adjudication": "independent", "subject_ref": "s3_review5", "decision": "d none; F1 SERIES (no bypass)"}]
     },
     "e": {
-      "rejecting": [{"artifact_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289", "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#3-per-artifact-calibration-table", "kind": "rejecting", "adjudication": "independent", "subject_ref": "cp3_power_rail", "decision": "E_PIN_ROW_CORRIDOR U1.2/6/13/8/7/11"}],
+      "rejecting": [
+        {"artifact_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289", "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#3-per-artifact-calibration-table", "kind": "rejecting", "adjudication": "independent", "subject_ref": "cp3_power_rail", "decision": "E_PIN_ROW_CORRIDOR U1.2/6/13/8/7/11"},
+        {"artifact_sha256": "c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907", "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#145-second-class-e-targeted-review-review-7-power_rail-candidate-2026-10-09", "reviewer_session_id": "ses_edfc83d67", "kind": "rejecting", "adjudication": "independent", "decision": "class-e NOT CLEAN; location G: IN/VBUS-node horizontal wire along the VBUS global-label outline", "reviewed_surface": "PDF-path PNG", "reviewed_png_sha256": "1acb3d761b32d67d29745796e03e80ba9459458383a24cc8705eb04a2a96981d", "artifact_hashes": {"sheet": "8d5e3e7d5d5731e645b3de796833d12ccaada7c39d8c971ad140efbe0fb8c6fd", "svg": "c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907", "netlist": "cecc3c0f9a5e4af7a6b2b2a2655d22384f54c6f1b899b40b671e6cd538a344cc"}}
+      ],
       "accepting": [],
       "missing_cell": "Explicit independently reviewed accepting class-e decision covering the implemented corridor/pin-row population and disclosed symbol-coherence gap; Review 6 general ACCEPT does not adjudicate full class e."
     },

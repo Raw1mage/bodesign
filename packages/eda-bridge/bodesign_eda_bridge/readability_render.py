@@ -53,6 +53,8 @@ POLICY: dict = {
     # least `corridor_min_pins` tips, reads as a bus into those pins
     "corridor_band_mm": 2.54,
     "corridor_min_pins": 2,
+    # Frozen label-outline clearance: four times the measured max 0.4 mm stroke.
+    "e": {"label_flag_corridor_band_mm": 1.6},
     # class (c): local (intra-sheet) nets with <= K visible nodes must be drawn
     "local_net_max_nodes_k": 4,
     # class (f): text box vs wire / symbol body clearance
@@ -635,6 +637,7 @@ class Finding:
     at: Point | None = None
     objects: list[str] = field(default_factory=list)
     region: tuple[float, float, float, float] | None = None
+    measurements: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -1470,12 +1473,115 @@ def _class_e(sheet: Sheet, g: DrawnGraph, svg: SvgDoc, pol: dict) -> ClassReport
                     objects=[f"wire:{w.uuid}", f"pin:{p.id}"],
                     message=f"wire of {sorted(wn)} passes {d:.2f} mm from pin tip {p.id} "
                             f"({sorted(_pin_nets(g, p.id))}); reads as attached"))
+    _label_flag_corridors(sheet, g, svg, pol, rep)
+    rep.measurements["label_flag_corridors"] = sum(1 for f in rep.findings if f.code == "E_LABEL_FLAG_CORRIDOR")
     rep.measurements["pin_row_corridors"] = sum(1 for f in rep.findings if f.code == "E_PIN_ROW_CORRIDOR")
     rep.measurements["collinear_foreign"] = sum(1 for f in rep.findings if f.code == "E_COLLINEAR_FOREIGN")
     rep.measurements["wire_through_body"] = sum(1 for f in rep.findings if f.code == "E_WIRE_THROUGH_BODY")
     rep.measurements["foreign_wire_near_pin_tip"] = sum(1 for f in rep.findings if f.code == "E_FOREIGN_WIRE_NEAR_PIN_TIP")
     rep.verdict = "fail" if rep.findings else "pass"
     return rep
+
+
+def _edge_band_interval(a: Point, b: Point, c: Point, d: Point,
+                        band: float) -> list[tuple[float, float]]:
+    """Parameter intervals of ab inside the closed capsule around edge cd."""
+    u = _unit(c, d)
+    length = _seg_len(a, b)
+    if u is None or length == 0:
+        return []
+    v = (-u[1], u[0])
+    local = lambda p: ((p[0]-c[0])*u[0]+(p[1]-c[1])*u[1],
+                       (p[0]-c[0])*v[0]+(p[1]-c[1])*v[1])
+    aa, bb = local(a), local(b)
+    lo, hi = 0.0, 1.0
+    for start, delta, lower, upper in zip(aa, (bb[0]-aa[0], bb[1]-aa[1]),
+                                         (0.0, -band), (_seg_len(c, d), band)):
+        if abs(delta) < 1e-12:
+            if not lower <= start <= upper:
+                hi = -1.0
+                break
+        else:
+            t0, t1 = sorted(((lower-start)/delta, (upper-start)/delta))
+            lo, hi = max(lo, t0), min(hi, t1)
+    intervals = [(lo, hi)] if hi > lo else []
+    dx, dy = b[0]-a[0], b[1]-a[1]
+    for p in (c, d):
+        ax, ay = a[0]-p[0], a[1]-p[1]
+        qb = 2*(ax*dx+ay*dy)
+        discriminant = qb*qb-4*length*length*(ax*ax+ay*ay-band*band)
+        if discriminant > 0:
+            root = math.sqrt(discriminant)
+            lo, hi = max(0.0, (-qb-root)/(2*length*length)), min(1.0, (-qb+root)/(2*length*length))
+            if hi > lo:
+                intervals.append((lo, hi))
+    return intervals
+
+
+def _label_flag_corridors(sheet: Sheet, g: DrawnGraph, svg: SvgDoc,
+                          pol: dict, rep: ClassReport) -> None:
+    """Any-net wire proximity to drawable global/hierarchical label outlines."""
+    eps = pol["coord_eps_mm"]
+    band = pol["e"]["label_flag_corridor_band_mm"]
+    sc = svg.unit_scale
+    for lab in sheet.labels:
+        if lab.kind not in ("global_label", "hierarchical_label"):
+            continue
+        polygons = [[(x*sc, y*sc) for x, y in pts] for pts, _sw in svg.polys
+                    if pts and math.dist((pts[0][0]*sc, pts[0][1]*sc), lab.at) <= 0.02]
+        attached = [(i, w) for i, w in enumerate(sheet.wires)
+                    if _near(w.a, lab.at, eps) or _near(w.b, lab.at, eps)]
+        label_nets = set().union(*(_wire_nets(g, i) for i, _w in attached))
+        for poly in polygons:
+            edges = list(zip(poly, poly[1:]+poly[:1]))
+            for i, w in enumerate(sheet.wires):
+                if any(i == j or (abs((w.b[0]-w.a[0])*(v.b[1]-v.a[1])-
+                                     (w.b[1]-w.a[1])*(v.b[0]-v.a[0])) <= eps and
+                                  _dist_point_seg(lab.at, w.a, w.b) <= eps)
+                       for j, v in attached):
+                    continue
+                intervals = sorted(t for c, d in edges
+                                   for t in _edge_band_interval(w.a, w.b, c, d, band))
+                merged = []
+                for lo, hi in intervals:
+                    if merged and lo <= merged[-1][1]:
+                        merged[-1] = (merged[-1][0], max(hi, merged[-1][1]))
+                    else:
+                        merged.append((lo, hi))
+                length = sum(hi-lo for lo, hi in merged)*_seg_len(w.a, w.b)
+                if length <= eps:
+                    continue
+                # Localize on the wire at its closest outline vertex/endpoint pair.
+                candidates = []
+                for p in poly:
+                    dx, dy = w.b[0]-w.a[0], w.b[1]-w.a[1]
+                    denom = dx*dx+dy*dy
+                    t = max(0.0, min(1.0, ((p[0]-w.a[0])*dx+(p[1]-w.a[1])*dy)/denom))
+                    q = (w.a[0]+t*dx, w.a[1]+t*dy)
+                    candidates.append((math.dist(p, q), q))
+                for p in (w.a, w.b):
+                    candidates.append((min(_dist_point_seg(p, c, d) for c, d in edges), p))
+                for c, d in edges:
+                    hit = _seg_hit(w.a, w.b, c, d, 1e-9)
+                    if hit is not None:
+                        candidates.append((0.0, hit[1]))
+                distance, at = min(candidates)
+                wn = _wire_nets(g, i)
+                relation = ("unbound" if not label_nets else
+                            "foreign" if _foreign(wn, label_nets) else "same")
+                xs = [p[0] for p in poly]+[w.a[0], w.b[0]]
+                ys = [p[1] for p in poly]+[w.a[1], w.b[1]]
+                rep.findings.append(Finding(
+                    cls="e", code="E_LABEL_FLAG_CORRIDOR", kind="perceptual", at=at,
+                    objects=[f"wire:{w.uuid}", f"label:{lab.uuid}"],
+                    region=(min(xs), min(ys), max(xs), max(ys)),
+                    measurements={"net_relation": relation, "distance_mm": distance,
+                                  "label_net_authority": "attached_wire" if label_nets else "none",
+                                  "contact": "through" if distance == 0 else "corridor",
+                                  "corridor_length_mm": length, "band_mm": band},
+                    message=f"wire of {sorted(wn)} passes {lab.kind} {lab.text!r} outline "
+                            f"within {band} mm over {length:.2f} mm; electrical equality "
+                            "does not establish perceptual clarity"))
 
 
 def _seg_along_box_edge(a: Point, b: Point, box, band: float) -> float:
