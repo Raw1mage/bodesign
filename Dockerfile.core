@@ -1,9 +1,9 @@
 # bodesign-core — lean front + light-skill brain. Batch E Phase 3.
 #
-# The single externally-facing MCP. Carries ONLY light deps (mcp/starlette/uvicorn,
-# pygerber for gerber rasters) + the bodesign packages + pm-skills/plan-builder/self-
-# built skills (markdown). NO KiCad, NO LibreOffice, NO OpenSCAD, NO build123d — those
-# live in the me/ee/docs workers; the core forwards their tool groups. A core tool
+# The single externally-facing MCP. Carries light deps (mcp/starlette/uvicorn,
+# pygerber for gerber rasters) + LibreOffice as a static document dependency.
+# Own code and skills use live bind mounts in dev. NO KiCad, NO OpenSCAD, NO build123d:
+# CAD/EDA toolchains live in the me/ee workers; the core forwards their groups. A core tool
 # whose worker is absent reports worker_unavailable (never fabricates).
 #
 # Build: docker build -f Dockerfile.core -t bodesign-core:latest .
@@ -17,6 +17,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         python3 python3-venv python3-pip ca-certificates \
+        libreoffice-core libreoffice-writer libreoffice-calc \
+ && soffice --version \
  && rm -rf /var/lib/apt/lists/*
 
 # LibreDWG: build dxf2dwg/dwg2dxf/dwgread statically from source so the core's

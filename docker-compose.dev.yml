@@ -25,10 +25,9 @@ services:
       # old single-file doctrine.md mount, and still satisfies _load_doctrine().
       - "./mcp.json:/app/mcp.json:ro"
       - "./skills:/app/skills:ro"
-      # Dev: a host work dir the container can read/write, so you can drive real
-      # project folders through the MCP tools (pass paths under /work). Set
-      # BODESIGN_WORK_DIR to your projects dir (default: ./.work in the repo).
+      # Read-only dynamic product evidence for gates; host defaults are overridable.
       - "${BODESIGN_WORK_DIR:-./.work}:/work"
+      - "${BODESIGN_PRODUCTS_ROOT:-/home/pkcs12/products}:/work/products:ro"
       # T2: E2E experiment artifacts visible on the host (no docker cp round-trips).
       - "./experiments:/work/experiments"
       # R16 domain KB (plan mcp_r16-domain-kb): same repo ragbase store as the
@@ -43,6 +42,8 @@ services:
       # Workers run run_http too, so the same R9 parity gate applies (see above).
       - "./mcp.json:/app/mcp.json:ro"
       - "./skills:/app/skills:ro"
+      - "${BODESIGN_WORK_DIR:-./.work}:/work"
+      - "${BODESIGN_PRODUCTS_ROOT:-/home/pkcs12/products}:/work/products:ro"
       - "./experiments:/work/experiments"
   bodesign-me:
     volumes:

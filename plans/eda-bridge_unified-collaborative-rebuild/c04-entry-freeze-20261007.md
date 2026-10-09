@@ -858,6 +858,37 @@ S14 pool = contract + `c03_presentation_gate.py` + `test_c03_presentation_gate.p
 `__init__`/`server.py`/`test_mcp_server.py`/`data-schema.json` + `Dockerfile.ee` (1 line) +
 `tasks.md` 7.1 + this §4.14.
 
+### 4.15 Served parity closed — static deps in image, dynamic trees on bind mounts (2026-10-08)
+
+User ruling (2026-10-08): static dependency packages (e.g. soffice) may enter the image; our own
+scripts/code change often and stay on bind mounts. Applied (codex `ses_ee44bd358`, four files):
+`Dockerfile.core` + LibreOffice (`soffice --version` fail-loud; runtime 24.2.7.2); `server.py`
+`bodesign_c04_placement_geometry_gate` → `_EE_GROUP_TOOLS` (whole gate on EE, kicad-cli there);
+`docker-compose.dev.yml` child mount `${BODESIGN_PRODUCTS_ROOT:-/home/pkcs12/products}:/work/products:ro`
+on core AND ee (the products ROOT, so manifests' `../../../thesmart_products` relative references
+resolve byte-identically; no manifest rewrite); `services/mcp/requirements.txt` `mcp>=1.27,<2`.
+
+Two defects surfaced only because this was the first real rebuild since S5: (1) `mcp>=1.27` had no
+upper bound → fresh build resolved mcp 2.3.0, whose SDK dropped `Server.list_tools` → core crash
+loop at `server.py:2624`; pinned `<2` (now 1.30.0). (2) Officer mis-ruling, withdrawn: mounting the
+products root AT `/work:ro` made the parent read-only so Docker could not create the nested
+`/work/experiments` mountpoint; corrected to the child mount above. `mcpctl.sh rebuild` refused
+(core "busy" = UNKNOWN probe on a restarting container); `BODESIGN_FORCE=1` authorised once on the
+grounds that a crash loop holds no in-flight work.
+
+Result: core/me/ee healthy, tools=72; served PRD gate vs `c00p_r1_gate-v1.json` FULL-JSON MATCH;
+served placement gate (EE-routed) vs `c04_r4_placement_gate-v4.json` FULL-JSON MATCH, GATE-02 pass
+(`kicad_cli:/usr/bin/kicad-cli`). With §4.14 all nine S5–S12 gates are now served-verified against
+the specimen (`~/.cache/scratch/ee-static-mounts/report.md`). Chain finding, not fixed here:
+`hashes.sha256:350` binds the mutable repo file `services/mcp/server.py` by absolute path, so every
+legitimate repo change turns the specimen check red (684 OK + 1 expected FAILED after the routing
+edit) — the next specimen rebuild must bind repo HEAD sha instead, or drop the row from the `-c`
+population. Blender 7.6/7.7 are no longer blocked on the EE host; they await the DD-9 clearance
+decision itself.
+
+S15 pool = `Dockerfile.core`, `services/mcp/server.py` (2 lines), `docker-compose.dev.yml`,
+`services/mcp/requirements.txt` + this §4.15.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).

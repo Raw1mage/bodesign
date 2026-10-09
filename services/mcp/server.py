@@ -1731,6 +1731,8 @@ _EE_GROUP_TOOLS = {
     # (BR_20260729 §A). The gate and the gated action MUST evaluate in one env.
     "bodesign_autoroute_preflight",
     "bodesign_placement_preflight",
+    # Placement GATE-02 requires kicad-cli in the EE worker.
+    "bodesign_c04_placement_geometry_gate",
     "bodesign_bga_escape_capacity",
     # Authentic component data (LCSC/EasyEDA vendor lib; the 100%-fidelity source gate)
     "bodesign_component_search",
