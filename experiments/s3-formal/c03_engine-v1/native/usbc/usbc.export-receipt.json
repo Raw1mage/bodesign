@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v1/native/usbc/usbc.net /work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch",
+    "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v1/native/usbc/svg --no-background-color /work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "65625ea8b908aa7f89aa0c8e32050312912b7ae30ef9f65475a5a2e83ea552ad",
+  "render_sha256": "652a88d35bb3c8d9c3e4a12787e9a3f9856a51ff98ea13c5cdba54952c4f4b8b",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "usbc.kicad_sch": "c4bf003f88ffc50d23b0cedc8da594a2742110208e0b802346133476d45c2f6d"
+  }
+}

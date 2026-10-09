@@ -215,16 +215,28 @@ def _h_emit_multisheet(a: dict) -> Any:
     for key in ("paper", "connection_style", "power_ports", "subsystem_views", "view_local_max_nodes", "trim_small_replicas"):
         if a.get(key) is not None:
             kwargs[key] = a[key]
+    # MCP precedence is explicit; leave the engine's direct-call conflict guard intact.
+    spec = dict(a["spec"])
+    engine_arg_source = {}
+    for key in ("layout_engine", "engine_placement_models", "engine_spacing_overrides",
+                "engine_orientation_sets", "engine_outline_refs"):
+        if a.get(key) is not None:
+            kwargs[key] = a[key]
+            spec.pop(key, None)
+            engine_arg_source[key] = "top-level"
+        elif spec.get(key) is not None:
+            engine_arg_source[key] = "spec"
     try:
-        result = emit_multisheet(a["out_dir"], a["project_name"], a["spec"], **kwargs)
+        result = emit_multisheet(a["out_dir"], a["project_name"], spec, **kwargs)
     except (PartitionError, HierarchicalEmitError) as error:
         # A contract violation is returned as DATA, not raised: the caller needs the
         # machine code to branch on, and `ok:false` keeps it distinguishable from a
         # transport failure. `files: []` states that nothing was written.
         return {"ok": False, "error": {"code": error.code, "message": error.message,
                                        "details": error.details},
-                "files": [], "emit_mode": None}
+                "files": [], "emit_mode": None, "engine_arg_source": engine_arg_source}
     out = result.to_dict()
+    out["engine_arg_source"] = engine_arg_source
     out["ok"] = True
     out["sheet_count"] = len(result.leaf_paths)
     out["leaf_component_counts"] = {
@@ -1458,8 +1470,14 @@ TOOLS: list[dict] = [
                 "paper": {"type": "string", "description": "page size for every sheet, default A4."},
                 "connection_style": {"type": "string", "enum": ["label", "wire", "auto"],
                                      "description": "within-leaf connectivity. Cross-sheet nets are ALWAYS forced to label regardless, because a drawn wire cannot cross a file boundary."},
-                "power_ports": {"type": "boolean"},
-                "subsystem_views": {"type": "object", "description": "sheet name -> list of net names to expand as local replica views on that sheet (presentation-only; home sheet keeps BOM/netlist identity)"},
+                 "power_ports": {"type": "boolean"},
+                 "layout_engine": {"type": "string", "enum": ["elk-layered"],
+                                   "description": "Optional presentation engine; top-level engine arguments override spec-embedded values, with engine_arg_source recorded in the result."},
+                 "engine_placement_models": {"type": "array", "items": _STR},
+                 "engine_spacing_overrides": {"type": "object", "additionalProperties": _STR},
+                 "engine_orientation_sets": {"type": "object", "additionalProperties": {"type": "array", "items": _STR}},
+                 "engine_outline_refs": {"type": "array", "items": _STR},
+                 "subsystem_views": {"type": "object", "description": "sheet name -> list of net names to expand as local replica views on that sheet (presentation-only; home sheet keeps BOM/netlist identity)"},
                 "view_local_max_nodes": {"type": "integer"},
                 "presentation_baseline": {"type": "object", "description": "S2 human ingestion: {schema_version:'1.x', source:'human', source_dir, root, files:[{path,sha256}], libraries:[{name,version|digest}], kicad_version:'9.0'}. Inspect/derive only; proposal-only; apply NOT IMPLEMENTED."},
                 "declared_circuit": {"type": "object", "description": "{revision, nets:[{name,nodes:['R1.1',..]}], nc:[..], isolated:[..]} (required with presentation_baseline)."},
@@ -1705,6 +1723,8 @@ _ME_GROUP_TOOLS = {
 _EE_GROUP_TOOLS = {
     "bodesign_emit_symbol",
     "bodesign_compose_schematic",
+    # C03 hierarchical emit: layered engine resolves native symbol geometry + runs kicad-cli ERC in the ee image (BR-less; found during 3.3c served run)
+    "bodesign_emit_multisheet",
     "bodesign_emit_layout",
     "bodesign_emit_fab",
     "bodesign_simulate",

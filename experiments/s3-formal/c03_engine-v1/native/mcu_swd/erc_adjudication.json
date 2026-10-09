@@ -1,0 +1,112 @@
+[
+  {
+    "description": "Input Power pin not driven by any Output Power pins",
+    "items": [
+      {
+        "description": "Symbol U2 Pin 39 [VSYS, Power input, Line]",
+        "pos": {
+          "x": 0.6477,
+          "y": 0.508
+        },
+        "uuid": "6d7b61b3-69ff-4dff-9e0c-7c0367006ece"
+      }
+    ],
+    "severity": "error",
+    "type": "power_pin_not_driven",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: standalone sheet ERC excludes the cross-sheet supply/return. Root SYS has U1.1 driving U2.39, and root GND contains U1.5. These standalone findings disappear in root ERC; no declared endpoint is lost."
+  },
+  {
+    "description": "Pins of type Power output and Power output are connected",
+    "items": [
+      {
+        "description": "Symbol U2 Pin 3 [GND, Power output, Line]",
+        "pos": {
+          "x": 0.6985,
+          "y": 1.2446
+        },
+        "uuid": "ddbc219e-7b0f-4729-b0b7-8df1baf7d891"
+      },
+      {
+        "description": "Symbol U2 Pin 33 [AGND, Power output, Line]",
+        "pos": {
+          "x": 0.9271,
+          "y": 1.1176
+        },
+        "uuid": "d4b048b5-064e-437b-b938-6e0cd8a6b8b5"
+      }
+    ],
+    "severity": "error",
+    "type": "pin_to_pin",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: native symbol types mark U2.3 GND and U2.33 AGND as power_out. Declared circuit explicitly joins both to common GND. This is a pin-type conflict on declared ground, not fusion of two distinct supply nets; library/datasheet approval is not claimed."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'LED_BT'",
+        "pos": {
+          "x": 0.9271,
+          "y": 0.762
+        },
+        "uuid": "5014bacd-1c45-4a2d-8f8b-c5d3aa20e691"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'LED_WIFI'",
+        "pos": {
+          "x": 0.9271,
+          "y": 0.7874
+        },
+        "uuid": "22f89d45-0f1f-4907-bb5c-2c11067c787f"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'SW_USER'",
+        "pos": {
+          "x": 0.9271,
+          "y": 0.8128
+        },
+        "uuid": "810e82a9-2bbc-4d2b-9d66-09e86a7731b7"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'VBAT_SENSE'",
+        "pos": {
+          "x": 0.9271,
+          "y": 1.016
+        },
+        "uuid": "971dfa7c-8cec-4b76-97d3-ff2dc8ecd818"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  }
+]

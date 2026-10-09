@@ -989,6 +989,41 @@ Rulings:
 4. Fresh-eyes visual review of the six leaves is deferred to the "求好" phase; this phase
    delivers bytes + measurements, not human acceptance.
 
+#### 4.19.5 Content-phase acceptance (officer, 2026-10-09) — ACCEPTED (a)–(e)
+
+Receipt: `s3-formalisation-receipt-20261009.md`. Officer verification, not worker claims:
+
+- (a) served `tools/list` over the real UDS `/mcp/` exposes `layout_engine` (enum
+  `elk-layered`) + four `engine_*` args; `engine_arg_source` recorded in the result.
+- (b) Officer-session `tools/call bodesign_emit_multisheet` (same invocation as
+  `formal_invocation.json`, out_dir on the rw `/work/experiments` mount) returned HTTP 200,
+  `ok:true`, `emit_mode:hierarchical`, 6 sheets, `unresolved_pins:{}`. Officer run vs worker
+  run: `graph_sha256` and `solution_sha256` equal on all six leaves; `.kicad_sch` residual
+  diff = 0 lines after excluding uuid/date/instance-path. Engine output is deterministic.
+  Landed set `outputs/btdongle_ms/c03_engine-v1/` (63 files, manifest `435a63fe…`);
+  `sha256sum -c` rc=0 at both experiments and products locations.
+- (c) per-leaf S1 reports bound to frozen instrument `53acfd4b…`: usbc fail / power_rail
+  indeterminate / battery fail / charge_enable indeterminate / mcu_swd indeterminate / io
+  indeterminate. Class counts recorded (e 1/8/1/0/2/0; f power_rail 5, battery 1; b mcu 1).
+  Recorded, not gated (ruling 2).
+- (d) ERC: 49 root findings = 45 library + 4 non-library; all non-library findings named
+  ACCEPTED with reason (cross-sheet label continuation; passive external VBUS drive; native
+  GND/AGND power_out pair). Acceptance is presentation accounting, not electrical approval.
+- (e) tests (pycache cleared, officer rerun): `test_worker_group_routing` Ran 8 OK;
+  `test_mcp_emit_multisheet` Ran 22 OK; `test_mcp_server` Ran 51 — same six pre-existing
+  reds as before the change (names listed in receipt). Worker-reported `test_elk_layout`
+  21 OK / `test_readability_render` 114 OK / multisheet suite 117 OK.
+
+Two defects surfaced and fixed in-scope: (i) `bodesign_emit_multisheet` was absent from
+`_EE_GROUP_TOOLS`, so the facade ran it core-local without native symbol libraries
+(`E_ENGINE_REFUSED`); (ii) the handler did not accept engine args at top level (R7 had
+smuggled them inside `spec`). Host-absolute `out_dir`/`symbol_dirs` into a container is a
+caller error, not a defect — container paths are the contract.
+
+**3.3c stays unchecked**: its text requires AC18 and S1 calibration; S1 is frozen partial
+(ruling 1). This record is the "求有" milestone; "求好" (visual review, format classes,
+AC18/AC19) is a later phase.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).

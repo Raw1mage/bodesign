@@ -1,0 +1,110 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-09T12:09:05+0000",
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "9.0.9",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/d91e5e9d-7ae2-4df9-b022-e655f62b2b7c",
+            "violations": [
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'ENPPB'",
+                            "pos": {
+                                "x": 0.3556,
+                                "y": 0.3556
+                            },
+                            "uuid": "7c2a8f04-5b1b-4d4b-a60a-f55b62c6a2e0"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'STAT'",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.508
+                            },
+                            "uuid": "f15133dc-3cb8-4c09-9b12-1f186a2ead75"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R7 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.5461
+                            },
+                            "uuid": "bc017626-5948-42bd-a536-92b75323f7e6"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Switch'",
+                    "items": [
+                        {
+                            "description": "Symbol SW1 [SW_SPDT]",
+                            "pos": {
+                                "x": 0.5461,
+                                "y": 0.7874
+                            },
+                            "uuid": "88a98197-0e79-444b-8f46-8654220d4c50"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'BATT'",
+                            "pos": {
+                                "x": 0.5969,
+                                "y": 0.8128
+                            },
+                            "uuid": "e7be0971-c52e-42de-bda9-eb47c22d5b77"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D2 [LED]",
+                            "pos": {
+                                "x": 0.9525,
+                                "y": 0.5461
+                            },
+                            "uuid": "79903be6-9f87-4bf5-9125-5acb51230747"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        }
+    ],
+    "source": "charge_enable.kicad_sch"
+}

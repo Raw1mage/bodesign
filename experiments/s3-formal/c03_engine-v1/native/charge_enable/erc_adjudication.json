@@ -1,0 +1,53 @@
+[
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'ENPPB'",
+        "pos": {
+          "x": 0.3556,
+          "y": 0.3556
+        },
+        "uuid": "7c2a8f04-5b1b-4d4b-a60a-f55b62c6a2e0"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'STAT'",
+        "pos": {
+          "x": 0.5588,
+          "y": 0.508
+        },
+        "uuid": "f15133dc-3cb8-4c09-9b12-1f186a2ead75"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'BATT'",
+        "pos": {
+          "x": 0.5969,
+          "y": 0.8128
+        },
+        "uuid": "e7be0971-c52e-42de-bda9-eb47c22d5b77"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  }
+]

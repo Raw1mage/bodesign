@@ -1,0 +1,3112 @@
+{
+  "project_dir": "/work/experiments/s3-formal/c03_engine-v1",
+  "schematic_path": "/work/experiments/s3-formal/c03_engine-v1/btdongle_ms.kicad_sch",
+  "project_path": "/work/experiments/s3-formal/c03_engine-v1/btdongle_ms.kicad_pro",
+  "emit_mode": "hierarchical",
+  "files": [
+    "/work/experiments/s3-formal/c03_engine-v1/btdongle_ms.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/power_rail.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/battery.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/charge_enable.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/mcu_swd.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/io.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/btdongle_ms.kicad_pro"
+  ],
+  "leaf_paths": {
+    "usbc": "/work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch",
+    "power_rail": "/work/experiments/s3-formal/c03_engine-v1/power_rail.kicad_sch",
+    "battery": "/work/experiments/s3-formal/c03_engine-v1/battery.kicad_sch",
+    "charge_enable": "/work/experiments/s3-formal/c03_engine-v1/charge_enable.kicad_sch",
+    "mcu_swd": "/work/experiments/s3-formal/c03_engine-v1/mcu_swd.kicad_sch",
+    "io": "/work/experiments/s3-formal/c03_engine-v1/io.kicad_sch"
+  },
+  "created_paths": [
+    "/work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/power_rail.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/battery.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/charge_enable.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/mcu_swd.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/io.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/btdongle_ms.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v1/btdongle_ms.kicad_pro"
+  ],
+  "cross_sheet_nets": [
+    "+3V3",
+    "BATT",
+    "ENPPB",
+    "GND",
+    "LED_BT",
+    "LED_WIFI",
+    "NTC",
+    "STAT",
+    "SW_USER",
+    "SYS",
+    "VBAT_SENSE",
+    "VBUS"
+  ],
+  "warnings": [
+    "mcu_swd: drawn content did not fit A4; the sheet was escalated to A3 (extent [38.1, 50.8, 138.43, 288.29] mm).",
+    "io: drawn content did not fit A4; the sheet was escalated to A3 (extent [53.34, 50.16, 111.76, 331.47] mm)."
+  ],
+  "replica_marked": {
+    "usbc": 0,
+    "power_rail": 0,
+    "battery": 0,
+    "charge_enable": 0,
+    "mcu_swd": 0,
+    "io": 0
+  },
+  "replica_views_requested": 2,
+  "engine_reports": {
+    "usbc": {
+      "engine": "elk-layered",
+      "elkjs": "0.12.0",
+      "node": "v22.23.3",
+      "wall_s": 0.297,
+      "graph_sha256": "6a9a29e56a2ba2819dfb907991f159dd24b35cb890df8d7d2d2992ffc5a25f87",
+      "solution_sha256": "4174e7d6540ec1cf6c3aa8eb2b277f633796b893e2ff1d06edea593b2dc562ea",
+      "verification": {
+        "fused": [],
+        "missing": [],
+        "misrouted": [],
+        "problems": [],
+        "drawn_nets": [
+          "CC1",
+          "CC2",
+          "VBUS",
+          "VBUS_CON"
+        ],
+        "undrawn": {
+          "GND": "forced label continuation (DD-14 slice bound / policy)"
+        },
+        "segments": 20,
+        "junctions": 3,
+        "pins_examined": 14
+      },
+      "variant": "model-order",
+      "variant_log": [
+        {
+          "orientation": "R0",
+          "placement": "R0",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "R0",
+            "requested_partitions": {},
+            "relations": [],
+            "executed": true
+          },
+          "foreign_crossings": [
+            {
+              "nets": [
+                "CC1",
+                "CC2"
+              ],
+              "at": [
+                69.85,
+                77.47
+              ]
+            }
+          ],
+          "area_mm2": 6131.6,
+          "wire_length_mm": 201.93,
+          "ink": {
+            "props": {
+              "J1": {
+                "candidate": "above",
+                "ref_at": [
+                  38.1,
+                  62.865
+                ],
+                "val_at": [
+                  38.1,
+                  65.405
+                ]
+              },
+              "R1": {
+                "candidate": "right",
+                "ref_at": [
+                  88.646,
+                  92.71
+                ],
+                "val_at": [
+                  88.646,
+                  95.25
+                ]
+              },
+              "R2": {
+                "candidate": "right",
+                "ref_at": [
+                  88.646,
+                  116.84
+                ],
+                "val_at": [
+                  88.646,
+                  119.38
+                ]
+              },
+              "F1": {
+                "candidate": "right",
+                "ref_at": [
+                  89.154,
+                  43.18
+                ],
+                "val_at": [
+                  89.154,
+                  45.72
+                ]
+              },
+              "D1": {
+                "candidate": "above",
+                "ref_at": [
+                  73.66,
+                  60.325
+                ],
+                "val_at": [
+                  73.66,
+                  62.865
+                ]
+              },
+              "C1": {
+                "candidate": "right",
+                "ref_at": [
+                  112.522,
+                  55.88
+                ],
+                "val_at": [
+                  112.522,
+                  58.42
+                ]
+              }
+            },
+            "flags": {
+              "VBUS": {
+                "at": [
+                  86.36,
+                  48.26
+                ],
+                "edge": [
+                  -1.0,
+                  0.0
+                ],
+                "pin": "F1"
+              }
+            },
+            "local_labels": {
+              "VBUS_CON": {
+                "at": [
+                  86.36,
+                  38.1
+                ]
+              },
+              "CC1": {
+                "at": [
+                  86.36,
+                  87.63
+                ]
+              },
+              "CC2": {
+                "at": [
+                  86.36,
+                  111.76
+                ]
+              }
+            },
+            "fixed_flags": 6
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "a540f5e3cb5b21c09c2fc25b18a5e554f5b9b246a2fc743dfa91d84388440842",
+          "chosen": false
+        },
+        {
+          "orientation": "R0",
+          "placement": "M2-R1|D1|R2",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "M2-R1|D1|R2",
+            "requested_partitions": {
+              "J1": 0,
+              "R1": 1,
+              "D1": 2,
+              "R2": 3
+            },
+            "relations": [
+              {
+                "requested": "J1 layer before R1",
+                "realized": true,
+                "hull_x1_a": 63.5,
+                "hull_x0_b": 76.454
+              },
+              {
+                "requested": "J1 layer before D1",
+                "realized": true,
+                "hull_x1_a": 63.5,
+                "hull_x0_b": 97.79
+              },
+              {
+                "requested": "J1 layer before R2",
+                "realized": true,
+                "hull_x1_a": 63.5,
+                "hull_x0_b": 131.064
+              },
+              {
+                "requested": "R1 layer before D1",
+                "realized": true,
+                "hull_x1_a": 78.486,
+                "hull_x0_b": 97.79
+              },
+              {
+                "requested": "R1 layer before R2",
+                "realized": true,
+                "hull_x1_a": 78.486,
+                "hull_x0_b": 131.064
+              },
+              {
+                "requested": "D1 layer before R2",
+                "realized": true,
+                "hull_x1_a": 113.03,
+                "hull_x0_b": 131.064
+              }
+            ],
+            "executed": true
+          },
+          "foreign_crossings": [],
+          "area_mm2": 9048.37,
+          "wire_length_mm": 304.8,
+          "ink": {
+            "props": {
+              "J1": {
+                "candidate": "above",
+                "ref_at": [
+                  38.1,
+                  83.185
+                ],
+                "val_at": [
+                  38.1,
+                  85.725
+                ]
+              },
+              "R1": {
+                "candidate": "right",
+                "ref_at": [
+                  79.756,
+                  104.14
+                ],
+                "val_at": [
+                  79.756,
+                  106.68
+                ]
+              },
+              "R2": {
+                "candidate": "right",
+                "ref_at": [
+                  134.366,
+                  128.27
+                ],
+                "val_at": [
+                  134.366,
+                  130.81
+                ]
+              },
+              "F1": {
+                "candidate": "right",
+                "ref_at": [
+                  78.994,
+                  43.18
+                ],
+                "val_at": [
+                  78.994,
+                  45.72
+                ]
+              },
+              "D1": {
+                "candidate": "above",
+                "ref_at": [
+                  97.79,
+                  83.185
+                ],
+                "val_at": [
+                  97.79,
+                  85.725
+                ]
+              },
+              "C1": {
+                "candidate": "right",
+                "ref_at": [
+                  109.982,
+                  55.88
+                ],
+                "val_at": [
+                  109.982,
+                  58.42
+                ]
+              }
+            },
+            "flags": {
+              "VBUS": {
+                "at": [
+                  76.2,
+                  48.26
+                ],
+                "edge": [
+                  -1.0,
+                  0.0
+                ],
+                "pin": "F1"
+              }
+            },
+            "local_labels": {
+              "VBUS_CON": {
+                "at": [
+                  76.2,
+                  38.1
+                ]
+              },
+              "CC1": {
+                "at": [
+                  77.47,
+                  99.06
+                ]
+              },
+              "CC2": {
+                "at": [
+                  132.08,
+                  123.19
+                ]
+              }
+            },
+            "fixed_flags": 6
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "6a9a29e56a2ba2819dfb907991f159dd24b35cb890df8d7d2d2992ffc5a25f87",
+          "chosen": true
+        }
+      ],
+      "orientations": {},
+      "orientation_sweep": {},
+      "placement_model": "M2-R1|D1|R2",
+      "outlines": {},
+      "spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81"
+      },
+      "foreign_crossings": [],
+      "ink": {
+        "props": {
+          "J1": {
+            "candidate": "above",
+            "ref_at": [
+              38.1,
+              83.185
+            ],
+            "val_at": [
+              38.1,
+              85.725
+            ]
+          },
+          "R1": {
+            "candidate": "right",
+            "ref_at": [
+              79.756,
+              104.14
+            ],
+            "val_at": [
+              79.756,
+              106.68
+            ]
+          },
+          "R2": {
+            "candidate": "right",
+            "ref_at": [
+              134.366,
+              128.27
+            ],
+            "val_at": [
+              134.366,
+              130.81
+            ]
+          },
+          "F1": {
+            "candidate": "right",
+            "ref_at": [
+              78.994,
+              43.18
+            ],
+            "val_at": [
+              78.994,
+              45.72
+            ]
+          },
+          "D1": {
+            "candidate": "above",
+            "ref_at": [
+              97.79,
+              83.185
+            ],
+            "val_at": [
+              97.79,
+              85.725
+            ]
+          },
+          "C1": {
+            "candidate": "right",
+            "ref_at": [
+              109.982,
+              55.88
+            ],
+            "val_at": [
+              109.982,
+              58.42
+            ]
+          }
+        },
+        "flags": {
+          "VBUS": {
+            "at": [
+              76.2,
+              48.26
+            ],
+            "edge": [
+              -1.0,
+              0.0
+            ],
+            "pin": "F1",
+            "box": [
+              69.60000000000001,
+              47.475,
+              76.2,
+              49.044999999999995
+            ]
+          }
+        },
+        "local_labels": {
+          "VBUS_CON": {
+            "at": [
+              76.2,
+              38.1
+            ],
+            "box": [
+              76.2,
+              37.315000000000005,
+              85.0,
+              38.885
+            ]
+          },
+          "CC1": {
+            "at": [
+              77.47,
+              99.06
+            ],
+            "box": [
+              77.47,
+              98.275,
+              81.02,
+              99.845
+            ]
+          },
+          "CC2": {
+            "at": [
+              132.08,
+              123.19
+            ],
+            "box": [
+              132.08,
+              122.405,
+              135.63000000000002,
+              123.975
+            ]
+          }
+        },
+        "fixed_flag_boxes": [
+          {
+            "ref": "J1",
+            "pin": "A1",
+            "net": "GND",
+            "box": [
+              47.475,
+              128.27,
+              49.045,
+              133.82
+            ]
+          },
+          {
+            "ref": "J1",
+            "pin": "S1",
+            "net": "GND",
+            "box": [
+              39.855,
+              128.27,
+              41.425,
+              133.82
+            ]
+          },
+          {
+            "ref": "R1",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              76.685,
+              109.22,
+              78.255,
+              114.77
+            ]
+          },
+          {
+            "ref": "R2",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              131.295,
+              133.35,
+              132.865,
+              138.9
+            ]
+          },
+          {
+            "ref": "D1",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              113.03,
+              97.005,
+              118.58,
+              98.575
+            ]
+          },
+          {
+            "ref": "C1",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              105.895,
+              60.96,
+              107.465,
+              66.51
+            ]
+          }
+        ]
+      }
+    },
+    "power_rail": {
+      "engine": "elk-layered",
+      "elkjs": "0.12.0",
+      "node": "v22.23.3",
+      "wall_s": 0.287,
+      "graph_sha256": "993bc0f91777df3ad8cf281f83feff07c2bbba923e6f1e17b1390c4a5983fba0",
+      "solution_sha256": "63ca4c49214741d5e5eb3dab7c1f7126ecc4459d83cee398d3ba845d8ce07c45",
+      "verification": {
+        "fused": [],
+        "missing": [],
+        "misrouted": [],
+        "problems": [],
+        "drawn_nets": [
+          "BATT",
+          "ISET1",
+          "ISET2",
+          "SW_NODE",
+          "USB_DET",
+          "VBUS"
+        ],
+        "undrawn": {
+          "SYS": "forced label continuation (DD-14 slice bound / policy)",
+          "NTC": "single resolvable endpoint on this sheet",
+          "ENPPB": "single resolvable endpoint on this sheet",
+          "STAT": "single resolvable endpoint on this sheet",
+          "GND": "forced label continuation (DD-14 slice bound / policy)"
+        },
+        "segments": 32,
+        "junctions": 3,
+        "pins_examined": 15
+      },
+      "variant": "model-order",
+      "variant_log": [
+        {
+          "orientation": "R0",
+          "placement": "R0",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "R0",
+            "requested_partitions": {},
+            "relations": [],
+            "executed": true
+          },
+          "foreign_crossings": [],
+          "area_mm2": 17030.29,
+          "wire_length_mm": 1003.3,
+          "ink": {
+            "props": {
+              "U1": {
+                "candidate": "above",
+                "ref_at": [
+                  63.5,
+                  45.085
+                ],
+                "val_at": [
+                  63.5,
+                  47.625
+                ]
+              },
+              "C2": {
+                "candidate": "right",
+                "ref_at": [
+                  140.462,
+                  204.47
+                ],
+                "val_at": [
+                  140.462,
+                  207.01
+                ]
+              },
+              "C3": {
+                "candidate": "right",
+                "ref_at": [
+                  140.462,
+                  180.34
+                ],
+                "val_at": [
+                  140.462,
+                  182.88
+                ]
+              },
+              "L1": {
+                "candidate": "right",
+                "ref_at": [
+                  140.3323,
+                  58.42
+                ],
+                "val_at": [
+                  140.3323,
+                  60.96
+                ]
+              },
+              "C4": {
+                "candidate": "right",
+                "ref_at": [
+                  89.662,
+                  191.77
+                ],
+                "val_at": [
+                  89.662,
+                  194.31
+                ]
+              },
+              "C5": {
+                "candidate": "right",
+                "ref_at": [
+                  141.732,
+                  82.55
+                ],
+                "val_at": [
+                  141.732,
+                  85.09
+                ]
+              },
+              "R3": {
+                "candidate": "right",
+                "ref_at": [
+                  145.796,
+                  130.81
+                ],
+                "val_at": [
+                  145.796,
+                  133.35
+                ]
+              },
+              "R4": {
+                "candidate": "right",
+                "ref_at": [
+                  145.796,
+                  106.68
+                ],
+                "val_at": [
+                  145.796,
+                  109.22
+                ]
+              },
+              "R6": {
+                "candidate": "right",
+                "ref_at": [
+                  144.526,
+                  165.1
+                ],
+                "val_at": [
+                  144.526,
+                  167.64
+                ]
+              }
+            },
+            "flags": {
+              "VBUS": {
+                "at": [
+                  137.16,
+                  201.93
+                ],
+                "edge": [
+                  -1.0,
+                  0.0
+                ],
+                "pin": "C2"
+              },
+              "BATT": {
+                "at": [
+                  101.6,
+                  63.5
+                ],
+                "edge": [
+                  -1.0,
+                  0.0
+                ],
+                "pin": "U1"
+              }
+            },
+            "local_labels": {
+              "SW_NODE": {
+                "at": [
+                  124.46,
+                  55.88
+                ]
+              },
+              "ISET1": {
+                "at": [
+                  143.51,
+                  125.73
+                ]
+              },
+              "ISET2": {
+                "at": [
+                  143.51,
+                  101.6
+                ]
+              },
+              "USB_DET": {
+                "at": [
+                  142.24,
+                  172.72
+                ]
+              }
+            },
+            "fixed_flags": 18
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "993bc0f91777df3ad8cf281f83feff07c2bbba923e6f1e17b1390c4a5983fba0",
+          "chosen": true
+        },
+        {
+          "orientation": "R0",
+          "placement": "M2-R1|D1|R2",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "status": "refused:E_ELK_PARTITION_UNRESOLVED",
+          "detail": {},
+          "chosen": false
+        }
+      ],
+      "orientations": {},
+      "orientation_sweep": {},
+      "placement_model": "R0",
+      "outlines": {},
+      "spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81"
+      },
+      "foreign_crossings": [],
+      "ink": {
+        "props": {
+          "U1": {
+            "candidate": "above",
+            "ref_at": [
+              63.5,
+              45.085
+            ],
+            "val_at": [
+              63.5,
+              47.625
+            ]
+          },
+          "C2": {
+            "candidate": "right",
+            "ref_at": [
+              140.462,
+              204.47
+            ],
+            "val_at": [
+              140.462,
+              207.01
+            ]
+          },
+          "C3": {
+            "candidate": "right",
+            "ref_at": [
+              140.462,
+              180.34
+            ],
+            "val_at": [
+              140.462,
+              182.88
+            ]
+          },
+          "L1": {
+            "candidate": "right",
+            "ref_at": [
+              140.3323,
+              58.42
+            ],
+            "val_at": [
+              140.3323,
+              60.96
+            ]
+          },
+          "C4": {
+            "candidate": "right",
+            "ref_at": [
+              89.662,
+              191.77
+            ],
+            "val_at": [
+              89.662,
+              194.31
+            ]
+          },
+          "C5": {
+            "candidate": "right",
+            "ref_at": [
+              141.732,
+              82.55
+            ],
+            "val_at": [
+              141.732,
+              85.09
+            ]
+          },
+          "R3": {
+            "candidate": "right",
+            "ref_at": [
+              145.796,
+              130.81
+            ],
+            "val_at": [
+              145.796,
+              133.35
+            ]
+          },
+          "R4": {
+            "candidate": "right",
+            "ref_at": [
+              145.796,
+              106.68
+            ],
+            "val_at": [
+              145.796,
+              109.22
+            ]
+          },
+          "R6": {
+            "candidate": "right",
+            "ref_at": [
+              144.526,
+              165.1
+            ],
+            "val_at": [
+              144.526,
+              167.64
+            ]
+          }
+        },
+        "flags": {
+          "VBUS": {
+            "at": [
+              137.16,
+              201.93
+            ],
+            "edge": [
+              -1.0,
+              0.0
+            ],
+            "pin": "C2",
+            "box": [
+              130.56,
+              201.145,
+              137.16,
+              202.715
+            ]
+          },
+          "BATT": {
+            "at": [
+              101.6,
+              63.5
+            ],
+            "edge": [
+              -1.0,
+              0.0
+            ],
+            "pin": "U1",
+            "box": [
+              95.0,
+              62.715,
+              101.6,
+              64.285
+            ]
+          }
+        },
+        "local_labels": {
+          "SW_NODE": {
+            "at": [
+              124.46,
+              55.88
+            ],
+            "box": [
+              124.46,
+              55.095000000000006,
+              132.21,
+              56.665
+            ]
+          },
+          "ISET1": {
+            "at": [
+              143.51,
+              125.73
+            ],
+            "box": [
+              143.51,
+              124.94500000000001,
+              149.16,
+              126.515
+            ]
+          },
+          "ISET2": {
+            "at": [
+              143.51,
+              101.6
+            ],
+            "box": [
+              143.51,
+              100.815,
+              149.16,
+              102.38499999999999
+            ]
+          },
+          "USB_DET": {
+            "at": [
+              142.24,
+              172.72
+            ],
+            "box": [
+              142.24,
+              171.935,
+              149.99,
+              173.505
+            ]
+          }
+        },
+        "fixed_flag_boxes": [
+          {
+            "ref": "U1",
+            "pin": "1",
+            "net": "SYS",
+            "box": [
+              101.6,
+              57.635,
+              107.15,
+              59.205
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "10",
+            "net": "GND",
+            "box": [
+              81.765,
+              77.47,
+              83.335,
+              83.02
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "15",
+            "net": "SYS",
+            "box": [
+              101.6,
+              60.175,
+              107.15,
+              61.745
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "17",
+            "net": "GND",
+            "box": [
+              86.845,
+              77.47,
+              88.415,
+              83.02
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "5",
+            "net": "GND",
+            "box": [
+              76.685,
+              77.47,
+              78.255,
+              83.02
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "6",
+            "net": "GND",
+            "box": [
+              57.95,
+              55.095,
+              63.5,
+              56.665
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "7",
+            "net": "NTC",
+            "box": [
+              57.95,
+              62.715,
+              63.5,
+              64.285
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "8",
+            "net": "ENPPB",
+            "box": [
+              55.85,
+              60.175,
+              63.5,
+              61.745
+            ]
+          },
+          {
+            "ref": "U1",
+            "pin": "9",
+            "net": "STAT",
+            "box": [
+              101.6,
+              67.795,
+              108.2,
+              69.365
+            ]
+          },
+          {
+            "ref": "C2",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              136.375,
+              209.55,
+              137.945,
+              215.1
+            ]
+          },
+          {
+            "ref": "C3",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              136.375,
+              185.42,
+              137.945,
+              190.97
+            ]
+          },
+          {
+            "ref": "L1",
+            "pin": "2",
+            "net": "SYS",
+            "box": [
+              137.645,
+              63.5,
+              139.215,
+              69.05
+            ]
+          },
+          {
+            "ref": "C4",
+            "pin": "1",
+            "net": "SYS",
+            "box": [
+              85.575,
+              183.68,
+              87.145,
+              189.23
+            ]
+          },
+          {
+            "ref": "C4",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              85.575,
+              196.85,
+              87.145,
+              202.4
+            ]
+          },
+          {
+            "ref": "C5",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              137.645,
+              87.63,
+              139.215,
+              93.18
+            ]
+          },
+          {
+            "ref": "R3",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              142.725,
+              135.89,
+              144.295,
+              141.44
+            ]
+          },
+          {
+            "ref": "R4",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              142.725,
+              111.76,
+              144.295,
+              117.31
+            ]
+          },
+          {
+            "ref": "R6",
+            "pin": "1",
+            "net": "SYS",
+            "box": [
+              141.455,
+              157.01,
+              143.025,
+              162.56
+            ]
+          }
+        ]
+      }
+    },
+    "battery": {
+      "engine": "elk-layered",
+      "elkjs": "0.12.0",
+      "node": "v22.23.3",
+      "wall_s": 0.263,
+      "graph_sha256": "578c69928d9a7cec54fd52a073bdd1d1ef8ad0ecfe9d15fa66174eacee28e95f",
+      "solution_sha256": "1e94e687e51a79eaab131384cf26d34b67007f134b206c80189e3a982f2a2d14",
+      "verification": {
+        "fused": [],
+        "missing": [],
+        "misrouted": [],
+        "problems": [],
+        "drawn_nets": [
+          "BATT",
+          "BAT_EXT",
+          "NTC"
+        ],
+        "undrawn": {
+          "GND": "forced label continuation (DD-14 slice bound / policy)"
+        },
+        "segments": 11,
+        "junctions": 1,
+        "pins_examined": 7
+      },
+      "variant": "model-order",
+      "variant_log": [
+        {
+          "orientation": "R0",
+          "placement": "R0",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "R0",
+            "requested_partitions": {},
+            "relations": [],
+            "executed": true
+          },
+          "foreign_crossings": [],
+          "area_mm2": 3359.61,
+          "wire_length_mm": 179.07,
+          "ink": {
+            "props": {
+              "R5": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  100.33
+                ],
+                "val_at": [
+                  58.166,
+                  102.87
+                ]
+              },
+              "Q1": {
+                "candidate": "right",
+                "ref_at": [
+                  59.69,
+                  57.15
+                ],
+                "val_at": [
+                  59.69,
+                  59.69
+                ]
+              },
+              "J2": {
+                "candidate": "right",
+                "ref_at": [
+                  100.33,
+                  93.98
+                ],
+                "val_at": [
+                  100.33,
+                  96.52
+                ]
+              },
+              "C6": {
+                "candidate": "right",
+                "ref_at": [
+                  101.092,
+                  71.12
+                ],
+                "val_at": [
+                  101.092,
+                  73.66
+                ]
+              },
+              "TP2": {
+                "candidate": "right",
+                "ref_at": [
+                  99.06,
+                  38.989
+                ],
+                "val_at": [
+                  99.06,
+                  41.529
+                ]
+              }
+            },
+            "flags": {
+              "BATT": {
+                "at": [
+                  57.15,
+                  53.34
+                ],
+                "edge": [
+                  -1.0,
+                  0.0
+                ],
+                "pin": "Q1"
+              },
+              "NTC": {
+                "at": [
+                  55.88,
+                  97.79
+                ],
+                "edge": [
+                  -1.0,
+                  0.0
+                ],
+                "pin": "R5"
+              }
+            },
+            "local_labels": {
+              "BAT_EXT": {
+                "at": [
+                  97.79,
+                  66.04
+                ]
+              }
+            },
+            "fixed_flags": 4
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "578c69928d9a7cec54fd52a073bdd1d1ef8ad0ecfe9d15fa66174eacee28e95f",
+          "chosen": true
+        },
+        {
+          "orientation": "R0",
+          "placement": "M2-R1|D1|R2",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "status": "refused:E_ELK_PARTITION_UNRESOLVED",
+          "detail": {},
+          "chosen": false
+        }
+      ],
+      "orientations": {},
+      "orientation_sweep": {},
+      "placement_model": "R0",
+      "outlines": {},
+      "spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81"
+      },
+      "foreign_crossings": [],
+      "ink": {
+        "props": {
+          "R5": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              100.33
+            ],
+            "val_at": [
+              58.166,
+              102.87
+            ]
+          },
+          "Q1": {
+            "candidate": "right",
+            "ref_at": [
+              59.69,
+              57.15
+            ],
+            "val_at": [
+              59.69,
+              59.69
+            ]
+          },
+          "J2": {
+            "candidate": "right",
+            "ref_at": [
+              100.33,
+              93.98
+            ],
+            "val_at": [
+              100.33,
+              96.52
+            ]
+          },
+          "C6": {
+            "candidate": "right",
+            "ref_at": [
+              101.092,
+              71.12
+            ],
+            "val_at": [
+              101.092,
+              73.66
+            ]
+          },
+          "TP2": {
+            "candidate": "right",
+            "ref_at": [
+              99.06,
+              38.989
+            ],
+            "val_at": [
+              99.06,
+              41.529
+            ]
+          }
+        },
+        "flags": {
+          "BATT": {
+            "at": [
+              57.15,
+              53.34
+            ],
+            "edge": [
+              -1.0,
+              0.0
+            ],
+            "pin": "Q1",
+            "box": [
+              50.55,
+              52.55500000000001,
+              57.15,
+              54.125
+            ]
+          },
+          "NTC": {
+            "at": [
+              55.88,
+              97.79
+            ],
+            "edge": [
+              -1.0,
+              0.0
+            ],
+            "pin": "R5",
+            "box": [
+              50.33,
+              97.00500000000001,
+              55.88,
+              98.575
+            ]
+          }
+        },
+        "local_labels": {
+          "BAT_EXT": {
+            "at": [
+              97.79,
+              66.04
+            ],
+            "box": [
+              97.79,
+              65.25500000000001,
+              105.54,
+              66.825
+            ]
+          }
+        },
+        "fixed_flag_boxes": [
+          {
+            "ref": "R5",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              55.095,
+              105.41,
+              56.665,
+              110.96
+            ]
+          },
+          {
+            "ref": "Q1",
+            "pin": "1",
+            "net": "GND",
+            "box": [
+              43.98,
+              57.635,
+              49.53,
+              59.205
+            ]
+          },
+          {
+            "ref": "J2",
+            "pin": "3",
+            "net": "GND",
+            "box": [
+              87.16,
+              97.005,
+              92.71,
+              98.575
+            ]
+          },
+          {
+            "ref": "C6",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              97.005,
+              76.2,
+              98.575,
+              81.75
+            ]
+          }
+        ]
+      }
+    },
+    "charge_enable": {
+      "engine": "elk-layered",
+      "elkjs": "0.12.0",
+      "node": "v22.23.3",
+      "wall_s": 0.256,
+      "graph_sha256": "94a6ec2a86d99e68c36bcb3c843357260ac1faadea79ea538bf26bf4797d3915",
+      "solution_sha256": "278ceaa984514437bbdf9b639b0ae49bb53512e3c2b8af65f4bedfc008766f94",
+      "verification": {
+        "fused": [],
+        "missing": [],
+        "misrouted": [],
+        "problems": [],
+        "drawn_nets": [
+          "CHG_LED_A"
+        ],
+        "undrawn": {
+          "BATT": "single resolvable endpoint on this sheet",
+          "ENPPB": "single resolvable endpoint on this sheet",
+          "STAT": "single resolvable endpoint on this sheet",
+          "GND": "ground: power/label continuation, never a page-wide chain"
+        },
+        "segments": 4,
+        "junctions": 0,
+        "pins_examined": 2
+      },
+      "variant": "model-order",
+      "variant_log": [
+        {
+          "orientation": "R0",
+          "placement": "R0",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "R0",
+            "requested_partitions": {},
+            "relations": [],
+            "executed": true
+          },
+          "foreign_crossings": [],
+          "area_mm2": 1895.16,
+          "wire_length_mm": 72.39,
+          "ink": {
+            "props": {
+              "R7": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  53.34
+                ],
+                "val_at": [
+                  58.166,
+                  55.88
+                ]
+              },
+              "D2": {
+                "candidate": "above",
+                "ref_at": [
+                  90.678,
+                  48.895
+                ],
+                "val_at": [
+                  90.678,
+                  51.435
+                ]
+              },
+              "SW1": {
+                "candidate": "above",
+                "ref_at": [
+                  49.53,
+                  70.485
+                ],
+                "val_at": [
+                  49.53,
+                  73.025
+                ]
+              }
+            },
+            "flags": {},
+            "local_labels": {
+              "CHG_LED_A": {
+                "at": [
+                  109.22,
+                  60.96
+                ]
+              }
+            },
+            "fixed_flags": 5
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "94a6ec2a86d99e68c36bcb3c843357260ac1faadea79ea538bf26bf4797d3915",
+          "chosen": true
+        },
+        {
+          "orientation": "R0",
+          "placement": "M2-R1|D1|R2",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "status": "refused:E_ELK_PARTITION_UNRESOLVED",
+          "detail": {},
+          "chosen": false
+        }
+      ],
+      "orientations": {},
+      "orientation_sweep": {},
+      "placement_model": "R0",
+      "outlines": {},
+      "spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81"
+      },
+      "foreign_crossings": [],
+      "ink": {
+        "props": {
+          "R7": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              53.34
+            ],
+            "val_at": [
+              58.166,
+              55.88
+            ]
+          },
+          "D2": {
+            "candidate": "above",
+            "ref_at": [
+              90.678,
+              48.895
+            ],
+            "val_at": [
+              90.678,
+              51.435
+            ]
+          },
+          "SW1": {
+            "candidate": "above",
+            "ref_at": [
+              49.53,
+              70.485
+            ],
+            "val_at": [
+              49.53,
+              73.025
+            ]
+          }
+        },
+        "flags": {},
+        "local_labels": {
+          "CHG_LED_A": {
+            "at": [
+              109.22,
+              60.96
+            ],
+            "box": [
+              109.22,
+              60.175000000000004,
+              119.07,
+              61.745
+            ]
+          }
+        },
+        "fixed_flag_boxes": [
+          {
+            "ref": "R7",
+            "pin": "1",
+            "net": "STAT",
+            "box": [
+              55.095,
+              44.2,
+              56.665,
+              50.8
+            ]
+          },
+          {
+            "ref": "D2",
+            "pin": "1",
+            "net": "GND",
+            "box": [
+              85.89,
+              53.825,
+              91.44,
+              55.395
+            ]
+          },
+          {
+            "ref": "SW1",
+            "pin": "1",
+            "net": "ENPPB",
+            "box": [
+              59.69,
+              75.415,
+              67.34,
+              76.985
+            ]
+          },
+          {
+            "ref": "SW1",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              43.98,
+              77.955,
+              49.53,
+              79.525
+            ]
+          },
+          {
+            "ref": "SW1",
+            "pin": "3",
+            "net": "BATT",
+            "box": [
+              59.69,
+              80.495,
+              66.29,
+              82.065
+            ]
+          }
+        ]
+      }
+    },
+    "mcu_swd": {
+      "engine": "elk-layered",
+      "elkjs": "0.12.0",
+      "node": "v22.23.3",
+      "wall_s": 0.311,
+      "graph_sha256": "67003a243519ee92d47b915f6795f0e8aa85ee350a9fa929ffe9d056d440e7d1",
+      "solution_sha256": "0f690404f972e268732578d0b4134dc2db9206517f1e2a93b3d5bb4433ad8e31",
+      "verification": {
+        "fused": [],
+        "missing": [],
+        "misrouted": [],
+        "problems": [],
+        "drawn_nets": [
+          "RUN",
+          "SWCLK",
+          "SWDIO"
+        ],
+        "undrawn": {
+          "SYS": "forced label continuation (DD-14 slice bound / policy)",
+          "+3V3": "forced label continuation (DD-14 slice bound / policy)",
+          "LED_BT": "single resolvable endpoint on this sheet",
+          "LED_WIFI": "single resolvable endpoint on this sheet",
+          "SW_USER": "single resolvable endpoint on this sheet",
+          "VBAT_SENSE": "single resolvable endpoint on this sheet",
+          "GND": "forced label continuation (DD-14 slice bound / policy)"
+        },
+        "segments": 18,
+        "junctions": 2,
+        "pins_examined": 8
+      },
+      "variant": "model-order",
+      "variant_log": [
+        {
+          "orientation": "R0",
+          "placement": "R0",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "R0",
+            "requested_partitions": {},
+            "relations": [],
+            "executed": true
+          },
+          "foreign_crossings": [
+            {
+              "nets": [
+                "SWCLK",
+                "SWDIO"
+              ],
+              "at": [
+                115.57,
+                143.51
+              ]
+            }
+          ],
+          "area_mm2": 23525.76,
+          "wire_length_mm": 627.38,
+          "ink": {
+            "props": {
+              "U2": {
+                "candidate": "below",
+                "ref_at": [
+                  46.99,
+                  126.365
+                ],
+                "val_at": [
+                  46.99,
+                  128.905
+                ]
+              },
+              "J3": {
+                "candidate": "right",
+                "ref_at": [
+                  138.43,
+                  144.78
+                ],
+                "val_at": [
+                  138.43,
+                  147.32
+                ]
+              },
+              "SW2": {
+                "candidate": "above",
+                "ref_at": [
+                  125.73,
+                  73.787
+                ],
+                "val_at": [
+                  125.73,
+                  76.327
+                ]
+              },
+              "R8": {
+                "candidate": "right",
+                "ref_at": [
+                  135.636,
+                  130.81
+                ],
+                "val_at": [
+                  135.636,
+                  133.35
+                ]
+              },
+              "C7": {
+                "candidate": "right",
+                "ref_at": [
+                  136.652,
+                  95.25
+                ],
+                "val_at": [
+                  136.652,
+                  97.79
+                ]
+              },
+              "C8": {
+                "candidate": "right",
+                "ref_at": [
+                  82.042,
+                  160.02
+                ],
+                "val_at": [
+                  82.042,
+                  162.56
+                ]
+              },
+              "C9": {
+                "candidate": "right",
+                "ref_at": [
+                  82.042,
+                  194.31
+                ],
+                "val_at": [
+                  82.042,
+                  196.85
+                ]
+              },
+              "C10": {
+                "candidate": "right",
+                "ref_at": [
+                  82.042,
+                  229.87
+                ],
+                "val_at": [
+                  82.042,
+                  232.41
+                ]
+              },
+              "C11": {
+                "candidate": "right",
+                "ref_at": [
+                  82.042,
+                  264.16
+                ],
+                "val_at": [
+                  82.042,
+                  266.7
+                ]
+              },
+              "TP1": {
+                "candidate": "right",
+                "ref_at": [
+                  80.01,
+                  285.369
+                ],
+                "val_at": [
+                  80.01,
+                  287.909
+                ]
+              }
+            },
+            "flags": {},
+            "local_labels": {
+              "RUN": {
+                "at": [
+                  133.35,
+                  90.17
+                ]
+              },
+              "SWCLK": {
+                "at": [
+                  38.1,
+                  59.69
+                ]
+              },
+              "SWDIO": {
+                "at": [
+                  115.57,
+                  140.97
+                ]
+              }
+            },
+            "fixed_flags": 22
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "67003a243519ee92d47b915f6795f0e8aa85ee350a9fa929ffe9d056d440e7d1",
+          "chosen": true
+        },
+        {
+          "orientation": "R0",
+          "placement": "M2-R1|D1|R2",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "status": "refused:E_ELK_PARTITION_UNRESOLVED",
+          "detail": {},
+          "chosen": false
+        }
+      ],
+      "orientations": {},
+      "orientation_sweep": {},
+      "placement_model": "R0",
+      "outlines": {},
+      "spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81"
+      },
+      "foreign_crossings": [
+        {
+          "nets": [
+            "SWCLK",
+            "SWDIO"
+          ],
+          "at": [
+            115.57,
+            143.51
+          ]
+        }
+      ],
+      "ink": {
+        "props": {
+          "U2": {
+            "candidate": "below",
+            "ref_at": [
+              46.99,
+              126.365
+            ],
+            "val_at": [
+              46.99,
+              128.905
+            ]
+          },
+          "J3": {
+            "candidate": "right",
+            "ref_at": [
+              138.43,
+              144.78
+            ],
+            "val_at": [
+              138.43,
+              147.32
+            ]
+          },
+          "SW2": {
+            "candidate": "above",
+            "ref_at": [
+              125.73,
+              73.787
+            ],
+            "val_at": [
+              125.73,
+              76.327
+            ]
+          },
+          "R8": {
+            "candidate": "right",
+            "ref_at": [
+              135.636,
+              130.81
+            ],
+            "val_at": [
+              135.636,
+              133.35
+            ]
+          },
+          "C7": {
+            "candidate": "right",
+            "ref_at": [
+              136.652,
+              95.25
+            ],
+            "val_at": [
+              136.652,
+              97.79
+            ]
+          },
+          "C8": {
+            "candidate": "right",
+            "ref_at": [
+              82.042,
+              160.02
+            ],
+            "val_at": [
+              82.042,
+              162.56
+            ]
+          },
+          "C9": {
+            "candidate": "right",
+            "ref_at": [
+              82.042,
+              194.31
+            ],
+            "val_at": [
+              82.042,
+              196.85
+            ]
+          },
+          "C10": {
+            "candidate": "right",
+            "ref_at": [
+              82.042,
+              229.87
+            ],
+            "val_at": [
+              82.042,
+              232.41
+            ]
+          },
+          "C11": {
+            "candidate": "right",
+            "ref_at": [
+              82.042,
+              264.16
+            ],
+            "val_at": [
+              82.042,
+              266.7
+            ]
+          },
+          "TP1": {
+            "candidate": "right",
+            "ref_at": [
+              80.01,
+              285.369
+            ],
+            "val_at": [
+              80.01,
+              287.909
+            ]
+          }
+        },
+        "flags": {},
+        "local_labels": {
+          "RUN": {
+            "at": [
+              133.35,
+              90.17
+            ],
+            "box": [
+              133.35,
+              89.385,
+              136.9,
+              90.955
+            ]
+          },
+          "SWCLK": {
+            "at": [
+              38.1,
+              59.69
+            ],
+            "box": [
+              38.1,
+              58.905,
+              43.75,
+              60.474999999999994
+            ]
+          },
+          "SWDIO": {
+            "at": [
+              115.57,
+              140.97
+            ],
+            "box": [
+              115.57,
+              140.185,
+              121.22,
+              141.755
+            ]
+          }
+        },
+        "fixed_flag_boxes": [
+          {
+            "ref": "U2",
+            "pin": "13",
+            "net": "GND",
+            "box": [
+              69.065,
+              124.46,
+              70.635,
+              130.01
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "21",
+            "net": "LED_BT",
+            "box": [
+              92.71,
+              75.415,
+              101.41,
+              76.985
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "22",
+            "net": "LED_WIFI",
+            "box": [
+              92.71,
+              77.955,
+              103.51,
+              79.525
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "24",
+            "net": "SW_USER",
+            "box": [
+              92.71,
+              80.495,
+              102.46,
+              82.065
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "31",
+            "net": "VBAT_SENSE",
+            "box": [
+              92.71,
+              100.815,
+              105.61,
+              102.385
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "33",
+            "net": "GND",
+            "box": [
+              92.71,
+              110.975,
+              98.26,
+              112.545
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "35",
+            "net": "+3V3",
+            "box": [
+              92.71,
+              95.735,
+              99.31,
+              97.305
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "36",
+            "net": "+3V3",
+            "box": [
+              74.145,
+              44.2,
+              75.715,
+              50.8
+            ]
+          },
+          {
+            "ref": "U2",
+            "pin": "39",
+            "net": "SYS",
+            "box": [
+              63.985,
+              45.25,
+              65.555,
+              50.8
+            ]
+          },
+          {
+            "ref": "J3",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              125.26,
+              145.265,
+              130.81,
+              146.835
+            ]
+          },
+          {
+            "ref": "SW2",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              135.89,
+              80.495,
+              141.44,
+              82.065
+            ]
+          },
+          {
+            "ref": "R8",
+            "pin": "1",
+            "net": "+3V3",
+            "box": [
+              132.565,
+              121.67,
+              134.135,
+              128.27
+            ]
+          },
+          {
+            "ref": "C7",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              132.565,
+              100.33,
+              134.135,
+              105.88
+            ]
+          },
+          {
+            "ref": "C8",
+            "pin": "1",
+            "net": "SYS",
+            "box": [
+              77.955,
+              151.93,
+              79.525,
+              157.48
+            ]
+          },
+          {
+            "ref": "C8",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              77.955,
+              165.1,
+              79.525,
+              170.65
+            ]
+          },
+          {
+            "ref": "C9",
+            "pin": "1",
+            "net": "SYS",
+            "box": [
+              77.955,
+              186.22,
+              79.525,
+              191.77
+            ]
+          },
+          {
+            "ref": "C9",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              77.955,
+              199.39,
+              79.525,
+              204.94
+            ]
+          },
+          {
+            "ref": "C10",
+            "pin": "1",
+            "net": "+3V3",
+            "box": [
+              77.955,
+              220.73,
+              79.525,
+              227.33
+            ]
+          },
+          {
+            "ref": "C10",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              77.955,
+              234.95,
+              79.525,
+              240.5
+            ]
+          },
+          {
+            "ref": "C11",
+            "pin": "1",
+            "net": "+3V3",
+            "box": [
+              77.955,
+              255.02,
+              79.525,
+              261.62
+            ]
+          },
+          {
+            "ref": "C11",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              77.955,
+              269.24,
+              79.525,
+              274.79
+            ]
+          },
+          {
+            "ref": "TP1",
+            "pin": "1",
+            "net": "SYS",
+            "box": [
+              77.955,
+              288.29,
+              79.525,
+              293.84
+            ]
+          }
+        ]
+      }
+    },
+    "io": {
+      "engine": "elk-layered",
+      "elkjs": "0.12.0",
+      "node": "v22.23.3",
+      "wall_s": 0.277,
+      "graph_sha256": "6f67ecf05af775617a9042a492fe9edbfa22f4871ab513bdee89336310d645cd",
+      "solution_sha256": "1b43ebce8f300c9ebe93d2a75ac9d184187d5049c97b27131a30933397a6ef98",
+      "verification": {
+        "fused": [],
+        "missing": [],
+        "misrouted": [],
+        "problems": [],
+        "drawn_nets": [
+          "BT_LED_A",
+          "PWR_LED_K",
+          "WIFI_LED_A"
+        ],
+        "undrawn": {
+          "BATT": "forced label continuation (DD-14 slice bound / policy)",
+          "+3V3": "forced label continuation (DD-14 slice bound / policy)",
+          "LED_BT": "forced label continuation (DD-14 slice bound / policy)",
+          "LED_WIFI": "forced label continuation (DD-14 slice bound / policy)",
+          "SW_USER": "forced label continuation (DD-14 slice bound / policy)",
+          "VBAT_SENSE": "forced label continuation (DD-14 slice bound / policy)",
+          "GND": "forced label continuation (DD-14 slice bound / policy)"
+        },
+        "segments": 12,
+        "junctions": 0,
+        "pins_examined": 6
+      },
+      "variant": "model-order",
+      "variant_log": [
+        {
+          "orientation": "R0",
+          "placement": "R0",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "realized_placement": {
+            "model": "R0",
+            "requested_partitions": {},
+            "relations": [],
+            "executed": true
+          },
+          "foreign_crossings": [],
+          "area_mm2": 16396.74,
+          "wire_length_mm": 224.79,
+          "ink": {
+            "props": {
+              "D3": {
+                "candidate": "above",
+                "ref_at": [
+                  91.948,
+                  50.165
+                ],
+                "val_at": [
+                  91.948,
+                  52.705
+                ]
+              },
+              "R9": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  53.34
+                ],
+                "val_at": [
+                  58.166,
+                  55.88
+                ]
+              },
+              "D4": {
+                "candidate": "above",
+                "ref_at": [
+                  91.948,
+                  76.835
+                ],
+                "val_at": [
+                  91.948,
+                  79.375
+                ]
+              },
+              "R10": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  80.01
+                ],
+                "val_at": [
+                  58.166,
+                  82.55
+                ]
+              },
+              "D5": {
+                "candidate": "above",
+                "ref_at": [
+                  91.948,
+                  106.045
+                ],
+                "val_at": [
+                  91.948,
+                  108.585
+                ]
+              },
+              "R11": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  109.22
+                ],
+                "val_at": [
+                  58.166,
+                  111.76
+                ]
+              },
+              "SW3": {
+                "candidate": "above",
+                "ref_at": [
+                  53.34,
+                  125.857
+                ],
+                "val_at": [
+                  53.34,
+                  128.397
+                ]
+              },
+              "R12": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  158.75
+                ],
+                "val_at": [
+                  58.166,
+                  161.29
+                ]
+              },
+              "C12": {
+                "candidate": "right",
+                "ref_at": [
+                  59.182,
+                  199.39
+                ],
+                "val_at": [
+                  59.182,
+                  201.93
+                ]
+              },
+              "R13": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  234.95
+                ],
+                "val_at": [
+                  58.166,
+                  237.49
+                ]
+              },
+              "R14": {
+                "candidate": "right",
+                "ref_at": [
+                  58.166,
+                  284.48
+                ],
+                "val_at": [
+                  58.166,
+                  287.02
+                ]
+              },
+              "C13": {
+                "candidate": "right",
+                "ref_at": [
+                  59.182,
+                  326.39
+                ],
+                "val_at": [
+                  59.182,
+                  328.93
+                ]
+              }
+            },
+            "flags": {},
+            "local_labels": {
+              "PWR_LED_K": {
+                "at": [
+                  111.76,
+                  60.96
+                ]
+              },
+              "BT_LED_A": {
+                "at": [
+                  111.76,
+                  87.63
+                ]
+              },
+              "WIFI_LED_A": {
+                "at": [
+                  111.76,
+                  116.84
+                ]
+              }
+            },
+            "fixed_flags": 18
+          },
+          "orientation_pins": {},
+          "status": "ok",
+          "graph_sha256": "6f67ecf05af775617a9042a492fe9edbfa22f4871ab513bdee89336310d645cd",
+          "chosen": true
+        },
+        {
+          "orientation": "R0",
+          "placement": "M2-R1|D1|R2",
+          "variant": "model-order",
+          "options": {
+            "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES"
+          },
+          "root": "first",
+          "status": "refused:E_ELK_PARTITION_UNRESOLVED",
+          "detail": {},
+          "chosen": false
+        }
+      ],
+      "orientations": {},
+      "orientation_sweep": {},
+      "placement_model": "R0",
+      "outlines": {},
+      "spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81"
+      },
+      "foreign_crossings": [],
+      "ink": {
+        "props": {
+          "D3": {
+            "candidate": "above",
+            "ref_at": [
+              91.948,
+              50.165
+            ],
+            "val_at": [
+              91.948,
+              52.705
+            ]
+          },
+          "R9": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              53.34
+            ],
+            "val_at": [
+              58.166,
+              55.88
+            ]
+          },
+          "D4": {
+            "candidate": "above",
+            "ref_at": [
+              91.948,
+              76.835
+            ],
+            "val_at": [
+              91.948,
+              79.375
+            ]
+          },
+          "R10": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              80.01
+            ],
+            "val_at": [
+              58.166,
+              82.55
+            ]
+          },
+          "D5": {
+            "candidate": "above",
+            "ref_at": [
+              91.948,
+              106.045
+            ],
+            "val_at": [
+              91.948,
+              108.585
+            ]
+          },
+          "R11": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              109.22
+            ],
+            "val_at": [
+              58.166,
+              111.76
+            ]
+          },
+          "SW3": {
+            "candidate": "above",
+            "ref_at": [
+              53.34,
+              125.857
+            ],
+            "val_at": [
+              53.34,
+              128.397
+            ]
+          },
+          "R12": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              158.75
+            ],
+            "val_at": [
+              58.166,
+              161.29
+            ]
+          },
+          "C12": {
+            "candidate": "right",
+            "ref_at": [
+              59.182,
+              199.39
+            ],
+            "val_at": [
+              59.182,
+              201.93
+            ]
+          },
+          "R13": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              234.95
+            ],
+            "val_at": [
+              58.166,
+              237.49
+            ]
+          },
+          "R14": {
+            "candidate": "right",
+            "ref_at": [
+              58.166,
+              284.48
+            ],
+            "val_at": [
+              58.166,
+              287.02
+            ]
+          },
+          "C13": {
+            "candidate": "right",
+            "ref_at": [
+              59.182,
+              326.39
+            ],
+            "val_at": [
+              59.182,
+              328.93
+            ]
+          }
+        },
+        "flags": {},
+        "local_labels": {
+          "PWR_LED_K": {
+            "at": [
+              111.76,
+              60.96
+            ],
+            "box": [
+              111.76,
+              60.175000000000004,
+              121.61000000000001,
+              61.745
+            ]
+          },
+          "BT_LED_A": {
+            "at": [
+              111.76,
+              87.63
+            ],
+            "box": [
+              111.76,
+              86.845,
+              120.56,
+              88.41499999999999
+            ]
+          },
+          "WIFI_LED_A": {
+            "at": [
+              111.76,
+              116.84
+            ],
+            "box": [
+              111.76,
+              116.055,
+              122.66000000000001,
+              117.625
+            ]
+          }
+        },
+        "fixed_flag_boxes": [
+          {
+            "ref": "D3",
+            "pin": "1",
+            "net": "GND",
+            "box": [
+              87.16,
+              55.095,
+              92.71,
+              56.665
+            ]
+          },
+          {
+            "ref": "R9",
+            "pin": "1",
+            "net": "+3V3",
+            "box": [
+              55.095,
+              44.2,
+              56.665,
+              50.8
+            ]
+          },
+          {
+            "ref": "D4",
+            "pin": "1",
+            "net": "GND",
+            "box": [
+              87.16,
+              81.765,
+              92.71,
+              83.335
+            ]
+          },
+          {
+            "ref": "R10",
+            "pin": "1",
+            "net": "LED_BT",
+            "box": [
+              55.095,
+              68.77,
+              56.665,
+              77.47
+            ]
+          },
+          {
+            "ref": "D5",
+            "pin": "1",
+            "net": "GND",
+            "box": [
+              87.16,
+              110.975,
+              92.71,
+              112.545
+            ]
+          },
+          {
+            "ref": "R11",
+            "pin": "1",
+            "net": "LED_WIFI",
+            "box": [
+              55.095,
+              95.88,
+              56.665,
+              106.68
+            ]
+          },
+          {
+            "ref": "SW3",
+            "pin": "1",
+            "net": "SW_USER",
+            "box": [
+              43.59,
+              132.565,
+              53.34,
+              134.135
+            ]
+          },
+          {
+            "ref": "SW3",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              63.5,
+              132.565,
+              69.05,
+              134.135
+            ]
+          },
+          {
+            "ref": "R12",
+            "pin": "1",
+            "net": "+3V3",
+            "box": [
+              55.095,
+              149.61,
+              56.665,
+              156.21
+            ]
+          },
+          {
+            "ref": "R12",
+            "pin": "2",
+            "net": "SW_USER",
+            "box": [
+              55.095,
+              163.83,
+              56.665,
+              173.58
+            ]
+          },
+          {
+            "ref": "C12",
+            "pin": "1",
+            "net": "SW_USER",
+            "box": [
+              55.095,
+              187.1,
+              56.665,
+              196.85
+            ]
+          },
+          {
+            "ref": "C12",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              55.095,
+              204.47,
+              56.665,
+              210.02
+            ]
+          },
+          {
+            "ref": "R13",
+            "pin": "1",
+            "net": "BATT",
+            "box": [
+              55.095,
+              225.81,
+              56.665,
+              232.41
+            ]
+          },
+          {
+            "ref": "R13",
+            "pin": "2",
+            "net": "VBAT_SENSE",
+            "box": [
+              55.095,
+              240.03,
+              56.665,
+              252.93
+            ]
+          },
+          {
+            "ref": "R14",
+            "pin": "1",
+            "net": "VBAT_SENSE",
+            "box": [
+              55.095,
+              269.04,
+              56.665,
+              281.94
+            ]
+          },
+          {
+            "ref": "R14",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              55.095,
+              289.56,
+              56.665,
+              295.11
+            ]
+          },
+          {
+            "ref": "C13",
+            "pin": "1",
+            "net": "VBAT_SENSE",
+            "box": [
+              55.095,
+              310.95,
+              56.665,
+              323.85
+            ]
+          },
+          {
+            "ref": "C13",
+            "pin": "2",
+            "net": "GND",
+            "box": [
+              55.095,
+              331.47,
+              56.665,
+              337.02
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "page_fit": {
+    "usbc": {
+      "status": "already_fits",
+      "extent_mm": [
+        38.1,
+        38.1,
+        134.37,
+        133.35
+      ],
+      "dx_mm": 0.0,
+      "dy_mm": 0.0,
+      "paper_in": "A4",
+      "paper_out": "A4",
+      "orientation_out": "landscape"
+    },
+    "power_rail": {
+      "status": "measured",
+      "extent_mm": [
+        38.1,
+        44.45,
+        145.8,
+        209.55
+      ],
+      "dx_mm": 0.0,
+      "dy_mm": 0.0,
+      "paper_in": "A4",
+      "paper_out": "A4",
+      "orientation_out": "portrait"
+    },
+    "battery": {
+      "status": "already_fits",
+      "extent_mm": [
+        35.56,
+        33.02,
+        102.87,
+        105.41
+      ],
+      "dx_mm": 0.0,
+      "dy_mm": 0.0,
+      "paper_in": "A4",
+      "paper_out": "A4",
+      "orientation_out": "landscape"
+    },
+    "charge_enable": {
+      "status": "already_fits",
+      "extent_mm": [
+        35.56,
+        33.02,
+        109.22,
+        86.36
+      ],
+      "dx_mm": 0.0,
+      "dy_mm": 0.0,
+      "paper_in": "A4",
+      "paper_out": "A4",
+      "orientation_out": "landscape"
+    },
+    "mcu_swd": {
+      "status": "measured",
+      "extent_mm": [
+        38.1,
+        50.8,
+        138.43,
+        288.29
+      ],
+      "dx_mm": 0.0,
+      "dy_mm": 0.0,
+      "paper_in": "A4",
+      "paper_out": "A3",
+      "orientation_out": "portrait"
+    },
+    "io": {
+      "status": "measured",
+      "extent_mm": [
+        53.34,
+        50.16,
+        111.76,
+        331.47
+      ],
+      "dx_mm": 0.0,
+      "dy_mm": 0.0,
+      "paper_in": "A4",
+      "paper_out": "A3",
+      "orientation_out": "portrait"
+    }
+  },
+  "engine_arg_source": {
+    "layout_engine": "top-level",
+    "engine_placement_models": "top-level",
+    "engine_spacing_overrides": "top-level"
+  },
+  "ok": true,
+  "sheet_count": 6,
+  "leaf_component_counts": {
+    "usbc": 6,
+    "power_rail": 9,
+    "battery": 5,
+    "charge_enable": 3,
+    "mcu_swd": 10,
+    "io": 12
+  },
+  "unresolved_pins": {}
+}

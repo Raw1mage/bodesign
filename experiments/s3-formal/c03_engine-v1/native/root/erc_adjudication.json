@@ -1,0 +1,78 @@
+[
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'NTC'",
+        "pos": {
+          "x": 0.3556,
+          "y": 0.3556
+        },
+        "uuid": "488d6881-0fc2-4824-b15e-0f186c45a14f"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "Declared cross-sheet continuation / replica-view global labels. Standalone ERC has no peer sheet; root ENPPB and NTC have complete native peers despite the lone-label warning. Native connected pin identities match spec; not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'ENPPB'",
+        "pos": {
+          "x": 0.3556,
+          "y": 0.3556
+        },
+        "uuid": "7c2a8f04-5b1b-4d4b-a60a-f55b62c6a2e0"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "Declared cross-sheet continuation / replica-view global labels. Standalone ERC has no peer sheet; root ENPPB and NTC have complete native peers despite the lone-label warning. Native connected pin identities match spec; not electrical design approval."
+  },
+  {
+    "description": "Input Power pin not driven by any Output Power pins",
+    "items": [
+      {
+        "description": "Symbol U1 Pin 2 [IN, Power input, Line]",
+        "pos": {
+          "x": 0.635,
+          "y": 0.5334
+        },
+        "uuid": "e4805acf-cf4a-4a31-b9e0-52a86233cd3c"
+      }
+    ],
+    "severity": "error",
+    "type": "power_pin_not_driven",
+    "decision": "ACCEPTED",
+    "reason": "VBUS external connector feed through passive fuse/capacitors; native root VBUS contains F1.2, C1.1, C2.1, C3.1, U1.2. No power-output/PWR_FLAG assertion in declared topology. Accepted ERC drive-annotation gap for this presentation phase, not source adequacy approval."
+  },
+  {
+    "description": "Pins of type Power output and Power output are connected",
+    "items": [
+      {
+        "description": "Symbol U2 Pin 3 [GND, Power output, Line]",
+        "pos": {
+          "x": 0.6985,
+          "y": 1.2446
+        },
+        "uuid": "9007f162-b078-46d8-a04b-9b7fbbeab31f"
+      },
+      {
+        "description": "Symbol U2 Pin 33 [AGND, Power output, Line]",
+        "pos": {
+          "x": 0.9271,
+          "y": 1.1176
+        },
+        "uuid": "ea97e55e-2dba-4fa3-a3ca-b8360adf00ce"
+      }
+    ],
+    "severity": "error",
+    "type": "pin_to_pin",
+    "decision": "ACCEPTED",
+    "reason": "Native symbol types mark U2.3 GND and U2.33 AGND as power_out; declared circuit explicitly joins both to GND. Accepted library pin-type conflict on a declared common ground, not two distinct supply rails fused and not library/datasheet approval."
+  }
+]

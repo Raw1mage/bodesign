@@ -1,0 +1,53 @@
+[
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'LED_BT'",
+        "pos": {
+          "x": 0.5588,
+          "y": 0.7747
+        },
+        "uuid": "e52e05b5-d59c-47e8-ac59-1f273d5c1c1c"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'LED_WIFI'",
+        "pos": {
+          "x": 0.5588,
+          "y": 1.0668
+        },
+        "uuid": "da23e1a0-6495-4be2-9326-808be6614ac8"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'BATT'",
+        "pos": {
+          "x": 0.5588,
+          "y": 2.3241
+        },
+        "uuid": "cb09234c-1cff-4686-944f-550fe5b7a794"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  }
+]

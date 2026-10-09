@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v1/native/battery/battery.net /work/experiments/s3-formal/c03_engine-v1/battery.kicad_sch",
+    "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v1/native/battery/svg --no-background-color /work/experiments/s3-formal/c03_engine-v1/battery.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "f36fd3ea596d2a49a1cb6674a1ef9afd97cabd79f740d64822db371b457d611e",
+  "render_sha256": "4a087de3f278e4450f4dff3fb263c322287fb02ba13d2205be67d9b95bc6b5fa",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "battery.kicad_sch": "2e40bb8e3d90243c042435eee897cf12adb3094be31f199e04456750023a71b5"
+  }
+}

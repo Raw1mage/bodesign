@@ -163,6 +163,10 @@ class EeMembershipIsDerived(unittest.TestCase):
             self.assertEqual(gate in self.ee, gated in self.ee,
                              f"{gate} and {gated} would evaluate in different workers")
 
+    def test_multisheet_native_geometry_is_routed_to_ee(self):
+        from services.mcp import server
+        self.assertEqual(server._group_of("bodesign_emit_multisheet"), "ee")
+
     def test_a_new_pcbnew_tool_left_off_the_list_is_reported(self):
         # Proves the derivation actually discriminates: drop a real member and it
         # must be named. Without this, an over-broad membership set (or a broken

@@ -1,0 +1,110 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-09T12:09:04+0000",
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "9.0.9",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/76a55fc3-57d7-411e-b574-44194c4d552a",
+            "violations": [
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'NTC'",
+                            "pos": {
+                                "x": 0.3556,
+                                "y": 0.3556
+                            },
+                            "uuid": "488d6881-0fc2-4824-b15e-0f186c45a14f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Transistor_FET'",
+                    "items": [
+                        {
+                            "description": "Symbol Q1 [DMG2301L]",
+                            "pos": {
+                                "x": 0.5461,
+                                "y": 0.5842
+                            },
+                            "uuid": "a8b1b833-9084-4d6e-b670-d1707eaa8e78"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector'",
+                    "items": [
+                        {
+                            "description": "Symbol TP2 [TestPoint]",
+                            "pos": {
+                                "x": 0.9779,
+                                "y": 0.4191
+                            },
+                            "uuid": "99885aab-c98f-47e7-b7c4-8eb36e97cec1"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R5 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 1.016
+                            },
+                            "uuid": "b3808527-edba-4330-9fc6-e8bf86591d95"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C6 [C]",
+                            "pos": {
+                                "x": 0.9779,
+                                "y": 0.7239
+                            },
+                            "uuid": "ee543005-601e-4d43-a144-8c0446b070e5"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector_Generic'",
+                    "items": [
+                        {
+                            "description": "Symbol J2 [Conn_01x03]",
+                            "pos": {
+                                "x": 0.9779,
+                                "y": 0.9525
+                            },
+                            "uuid": "5ae64803-0739-4b16-9017-830ae18e1e95"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        }
+    ],
+    "source": "battery.kicad_sch"
+}

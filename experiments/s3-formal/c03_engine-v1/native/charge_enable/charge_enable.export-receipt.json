@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v1/native/charge_enable/charge_enable.net /work/experiments/s3-formal/c03_engine-v1/charge_enable.kicad_sch",
+    "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v1/native/charge_enable/svg --no-background-color /work/experiments/s3-formal/c03_engine-v1/charge_enable.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "7d8a92878737b1cab2b75a314cb3fc484cac5c4d6d1123a4f639088e3cfad204",
+  "render_sha256": "a5e68350cad582e683cd1df757ad0439003e7f43d9c4fc79508864afd1908315",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "charge_enable.kicad_sch": "f4a51f81a58f6466c34780f245258888b0084d660b20fff1def0ec458bac1fac"
+  }
+}

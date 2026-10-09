@@ -1,0 +1,121 @@
+[
+  {
+    "description": "Input Power pin not driven by any Output Power pins",
+    "items": [
+      {
+        "description": "Symbol U1 Pin 2 [IN, Power input, Line]",
+        "pos": {
+          "x": 0.635,
+          "y": 0.5334
+        },
+        "uuid": "e4805acf-cf4a-4a31-b9e0-52a86233cd3c"
+      }
+    ],
+    "severity": "error",
+    "type": "power_pin_not_driven",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: U1.2 VBUS input is externally fed via USB connector and passive fuse/capacitors. Root VBUS export contains F1.2, C1.1, C2.1, C3.1, U1.2. No power-output/PWR_FLAG assertion exists in the declared topology. ERC drive-annotation gap accepted only for presentation formalisation, not electrical source adequacy."
+  },
+  {
+    "description": "Input pin not driven by any Output pins",
+    "items": [
+      {
+        "description": "Symbol U1 Pin 8 [ENPPB, Input, Line]",
+        "pos": {
+          "x": 0.635,
+          "y": 0.6096
+        },
+        "uuid": "b8fc18e7-e887-4f16-9e46-ba598d2cdd9e"
+      }
+    ],
+    "severity": "error",
+    "type": "pin_not_driven",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: standalone U1 ENPPB and NTC inputs connect to the declared passive switch/connector network on another sheet. Root ERC retains neither input-drive finding; connected pin identities match the spec. No digital output-driver assertion is invented."
+  },
+  {
+    "description": "Input pin not driven by any Output pins",
+    "items": [
+      {
+        "description": "Symbol U1 Pin 7 [NTC, Input, Line]",
+        "pos": {
+          "x": 0.635,
+          "y": 0.635
+        },
+        "uuid": "beedfdb5-bca2-4eea-a1a2-bd50aeabf25c"
+      }
+    ],
+    "severity": "error",
+    "type": "pin_not_driven",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: standalone U1 ENPPB and NTC inputs connect to the declared passive switch/connector network on another sheet. Root ERC retains neither input-drive finding; connected pin identities match the spec. No digital output-driver assertion is invented."
+  },
+  {
+    "description": "Input Power pin not driven by any Output Power pins",
+    "items": [
+      {
+        "description": "Symbol U1 Pin 5 [PGND, Power input, Line]",
+        "pos": {
+          "x": 0.7747,
+          "y": 0.7747
+        },
+        "uuid": "04bba211-ad1d-4361-b9e5-e0aa0b5f9f74"
+      }
+    ],
+    "severity": "error",
+    "type": "power_pin_not_driven",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: standalone sheet ERC excludes the cross-sheet supply/return. Root SYS has U1.1 driving U2.39, and root GND contains U1.5. These standalone findings disappear in root ERC; no declared endpoint is lost."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'ENPPB'",
+        "pos": {
+          "x": 0.635,
+          "y": 0.6096
+        },
+        "uuid": "c63c2018-8fff-482a-8b71-4b19691deb3c"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'NTC'",
+        "pos": {
+          "x": 0.635,
+          "y": 0.635
+        },
+        "uuid": "067fab7f-b1a0-4929-9712-e25a0b15c535"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  },
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'STAT'",
+        "pos": {
+          "x": 1.016,
+          "y": 0.6858
+        },
+        "uuid": "0142e062-d2fb-41c1-9840-1598622448d1"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  }
+]

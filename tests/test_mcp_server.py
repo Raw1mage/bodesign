@@ -47,6 +47,58 @@ class McpServerTests(unittest.TestCase):
     def setUp(self):
         self.server = importlib.import_module("services.mcp.server")
 
+    def test_multisheet_engine_schema(self):
+        schema = self.server.TOOLS_BY_NAME["bodesign_emit_multisheet"]["schema"]
+        properties = schema["properties"]
+        self.assertEqual(properties["layout_engine"]["enum"], ["elk-layered"])
+        for key, kind in (("layout_engine", "string"),
+                          ("engine_placement_models", "array"),
+                          ("engine_spacing_overrides", "object"),
+                          ("engine_orientation_sets", "object"),
+                          ("engine_outline_refs", "array")):
+            self.assertEqual(properties[key]["type"], kind)
+            self.assertNotIn(key, schema["required"])
+
+    def test_multisheet_engine_argument_precedence(self):
+        from unittest.mock import Mock
+        engine = {"layout_engine": "elk-layered", "engine_placement_models": ["R0"],
+                  "engine_spacing_overrides": {"spacing.nodeNode": "12"},
+                  "engine_orientation_sets": {"R1": ["identity"]},
+                  "engine_outline_refs": []}
+        for mode in ("spec", "top-level", "both", "mixed", "legacy"):
+            with self.subTest(mode=mode):
+                spec = {"components": [], "nets": []}
+                args = {"out_dir": "unused", "project_name": "test", "spec": spec}
+                if mode in ("spec", "both", "mixed"):
+                    spec.update(engine)
+                if mode in ("top-level", "both"):
+                    args.update(engine)
+                if mode == "both":
+                    spec["layout_engine"] = "conflicting-engine"
+                    spec["engine_placement_models"] = ["conflicting-model"]
+                if mode == "mixed":
+                    args["engine_outline_refs"] = []
+                    spec["engine_outline_refs"] = ["R1"]
+                original = dict(spec)
+                result = Mock(leaf_paths={}, leaf_results={})
+                result.to_dict.return_value = {"engine_reports": {}}
+                with patch("bodesign_eda_bridge.hierarchical.emit_multisheet", return_value=result) as emit:
+                    out = self.server._h_emit_multisheet(args)
+                forwarded_spec = emit.call_args.args[2]
+                sources = {}
+                for key, value in engine.items():
+                    if key in args:
+                        self.assertEqual(emit.call_args.kwargs[key], value)
+                        self.assertNotIn(key, forwarded_spec)
+                        sources[key] = "top-level"
+                    elif key in original:
+                        self.assertEqual(forwarded_spec[key], original[key])
+                        self.assertNotIn(key, emit.call_args.kwargs)
+                        sources[key] = "spec"
+                self.assertEqual(out["engine_arg_source"], sources)
+                self.assertEqual(spec, original, "caller spec must not be mutated")
+                self.assertTrue(out["ok"])
+
     def test_tool_detail_status_is_404_for_an_unknown_tool(self):
         # BR_20260730 round 4 (D6). Round 3 fixed this status but left the
         # decision inside the run_http closure, unreachable by any test:

@@ -1,0 +1,619 @@
+{
+  "subject_manifest_sha256": "e0e30bd226be2fc7bd493f375ddf76a9aafe0ee9620b8095da930585e49ef956",
+  "presentation_baseline_ref": "c4bf003f88ffc50d23b0cedc8da594a2742110208e0b802346133476d45c2f6d",
+  "render_context": {
+    "renderer": "kicad-cli sch export svg (version not embedded in SVG; pin externally)",
+    "artifact_hashes": {
+      "sheet": "c4bf003f88ffc50d23b0cedc8da594a2742110208e0b802346133476d45c2f6d",
+      "svg": "652a88d35bb3c8d9c3e4a12787e9a3f9856a51ff98ea13c5cdba54952c4f4b8b",
+      "netlist": "65625ea8b908aa7f89aa0c8e32050312912b7ae30ef9f65475a5a2e83ea552ad"
+    },
+    "viewbox": [
+      0.0,
+      0.0,
+      297.0022,
+      210.0072
+    ],
+    "viewbox_unit_to_mm": 1.0,
+    "page_mm": [
+      297.0022,
+      210.0072
+    ],
+    "stroke_width_mm": 0.4,
+    "text_count": 73,
+    "sheet_paper": "A4",
+    "provenance": {
+      "status": "verified",
+      "kicad_version": "9.0.9",
+      "commands": [
+        "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v1/native/usbc/usbc.net /work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch",
+        "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v1/native/usbc/svg --no-background-color /work/experiments/s3-formal/c03_engine-v1/usbc.kicad_sch"
+      ],
+      "sheet_set": {
+        "usbc.kicad_sch": "c4bf003f88ffc50d23b0cedc8da594a2742110208e0b802346133476d45c2f6d"
+      }
+    }
+  },
+  "policy_ref": {
+    "version": "s1-readability-policy-v1",
+    "frozen_on": "2026-10-06",
+    "digest": "63bee5d02a5ec147",
+    "values": {
+      "version": "s1-readability-policy-v1",
+      "frozen_on": "2026-10-06",
+      "coord_eps_mm": 0.01,
+      "pin_tip_band_mm": 1.27,
+      "corridor_band_mm": 2.54,
+      "corridor_min_pins": 2,
+      "e": {
+        "label_flag_corridor_band_mm": 1.6
+      },
+      "local_net_max_nodes_k": 4,
+      "text_graphics_clearance_mm": 0.25,
+      "text_overlap_ratio": 0.15,
+      "page_use_gate": null,
+      "page_grid_cell_mm": 10.0,
+      "frame_margin_mm": 12.0,
+      "rotation_support": "0/90/180/270 + mirror implemented; calibrated at 0 only"
+    }
+  },
+  "classes": [
+    {
+      "id": "a",
+      "title": "junction ambiguity",
+      "applicability": "all wire/pin meets",
+      "measured": true,
+      "expected_ids": [
+        "junction:0ae889de-198d-4287-b3cc-4c7218324c0f",
+        "junction:184eacbc-79f9-4ce5-98ea-7f640dc83fa8",
+        "junction:31cd3939-4b38-4c97-a751-0248c55015d1"
+      ],
+      "examined_ids": [
+        "meet@(63.5, 90.17)",
+        "meet@(67.31, 90.17)",
+        "meet@(97.79, 90.17)",
+        "meet@(67.31, 38.1)",
+        "meet@(76.2, 38.1)",
+        "meet@(76.2, 40.64)",
+        "meet@(76.2, 48.26)",
+        "meet@(76.2, 50.8)",
+        "meet@(106.68, 50.8)",
+        "meet@(106.68, 53.34)",
+        "meet@(63.5, 95.25)",
+        "meet@(69.85, 95.25)",
+        "meet@(97.79, 95.25)",
+        "meet@(69.85, 99.06)",
+        "meet@(77.47, 99.06)",
+        "meet@(77.47, 101.6)",
+        "meet@(63.5, 97.79)",
+        "meet@(67.31, 97.79)",
+        "meet@(67.31, 123.19)",
+        "meet@(93.98, 123.19)",
+        "meet@(132.08, 123.19)",
+        "meet@(132.08, 125.73)",
+        "meet@(93.98, 100.33)",
+        "meet@(97.79, 100.33)",
+        "meet@(40.64, 128.27)",
+        "meet@(48.26, 128.27)",
+        "meet@(63.5, 102.87)",
+        "meet@(63.5, 105.41)",
+        "meet@(63.5, 107.95)",
+        "meet@(63.5, 110.49)",
+        "meet@(63.5, 118.11)",
+        "meet@(63.5, 120.65)",
+        "meet@(77.47, 109.22)",
+        "meet@(132.08, 133.35)",
+        "meet@(113.03, 97.79)",
+        "meet@(97.79, 105.41)",
+        "meet@(106.68, 60.96)"
+      ],
+      "omitted": [],
+      "measurements": {
+        "meet_points": 37,
+        "dots": 3
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "b",
+      "title": "cross-net contact / crossing ambiguity",
+      "applicability": "all wire contacts and crossings; identity from declared circuit",
+      "measured": true,
+      "expected_ids": [
+        "contact@(67.31, 90.17)",
+        "contact@(67.31, 38.1)",
+        "contact@(76.2, 38.1)",
+        "contact@(76.2, 50.8)",
+        "contact@(106.68, 50.8)",
+        "contact@(69.85, 95.25)",
+        "contact@(69.85, 99.06)",
+        "contact@(77.47, 99.06)",
+        "contact@(67.31, 97.79)",
+        "contact@(67.31, 123.19)",
+        "contact@(93.98, 123.19)",
+        "contact@(132.08, 123.19)",
+        "contact@(93.98, 100.33)"
+      ],
+      "examined_ids": [
+        "contact@(67.31, 90.17)",
+        "contact@(67.31, 38.1)",
+        "contact@(76.2, 38.1)",
+        "contact@(76.2, 50.8)",
+        "contact@(106.68, 50.8)",
+        "contact@(69.85, 95.25)",
+        "contact@(69.85, 99.06)",
+        "contact@(77.47, 99.06)",
+        "contact@(67.31, 97.79)",
+        "contact@(67.31, 123.19)",
+        "contact@(93.98, 123.19)",
+        "contact@(132.08, 123.19)",
+        "contact@(93.98, 100.33)",
+        "wire:8c20b8ab-31ce-42ec-bd52-1339e733b0a7",
+        "wire:2b9226bb-abf8-486f-b559-0dfce3d4bd30",
+        "wire:4e0d563c-cca9-4035-af11-4a5024aa68fd",
+        "wire:b21c5a9e-e690-4f6e-98fe-0cc6e5283927",
+        "wire:8e8a9863-acba-4083-afc8-22ca12145f82",
+        "wire:5646db65-aad9-4be1-82e7-e00c7964b64c",
+        "wire:d38a66e9-b710-4bbc-b080-ca6021c58355",
+        "wire:65112920-1fd8-4f3a-95d8-c51a1e11ed10",
+        "wire:a1743810-a0e3-447c-bee2-c48dbcc348bc",
+        "wire:9c5418ac-8cd5-4a64-9a91-263c06e3fb9f",
+        "wire:0f63d785-5c9f-4ae8-80e3-0822bcd9b330",
+        "wire:f9d7f8c4-f190-4c39-976f-ab888f74d7a4",
+        "wire:7471382c-9957-4170-8c6c-77b631beecc7",
+        "wire:e33dab31-4b16-418e-bc0c-3a14de4add04",
+        "wire:66891ed5-50ab-4c7d-9bb1-7e8e58f4d72d",
+        "wire:2b2bcdc3-eec5-48b3-85a9-dfcea38e8063",
+        "wire:36c279f9-4c31-4f02-bbea-adc153ecc174",
+        "wire:c8cd4024-bed8-4322-84b9-446bb68adf35",
+        "wire:e24e01bb-b2f2-43b0-ad99-07006a04089a",
+        "wire:d573bf94-8d2c-4a2f-9955-384307f8e56d"
+      ],
+      "omitted": [],
+      "measurements": {
+        "b1_electrical": 0,
+        "b2_perceptual": 0,
+        "contacts_examined": 13
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "c",
+      "title": "local wired-path completeness",
+      "applicability": "caller-declared required pin pairs",
+      "measured": true,
+      "expected_ids": [
+        "J1.A4~J1.A9",
+        "J1.A4~J1.B4",
+        "J1.A4~J1.B9",
+        "J1.A4~F1.1",
+        "J1.A4~D1.1",
+        "F1.2~C1.1",
+        "J1.A5~R1.1",
+        "J1.A5~D1.3",
+        "J1.B5~R2.1",
+        "J1.B5~D1.4"
+      ],
+      "examined_ids": [
+        "J1.A4~F1.1",
+        "J1.A4~D1.1",
+        "F1.2~C1.1",
+        "J1.A5~R1.1",
+        "J1.A5~D1.3",
+        "J1.B5~R2.1",
+        "J1.B5~D1.4"
+      ],
+      "omitted": [
+        {
+          "pin": "C1.2",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "D1.2",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "D1.5",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "J1.A1",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "J1.A12",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "J1.B1",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "J1.B12",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "J1.S1",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "R1.2",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "R2.2",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pair": "J1.A4~J1.A9",
+          "reason": "pin not visible on this sheet"
+        },
+        {
+          "pair": "J1.A4~J1.B4",
+          "reason": "pin not visible on this sheet"
+        },
+        {
+          "pair": "J1.A4~J1.B9",
+          "reason": "pin not visible on this sheet"
+        }
+      ],
+      "measurements": {
+        "required_pairs": 10,
+        "examined_pairs": 7,
+        "label_only_pins": 0
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "d",
+      "title": "series-path legibility",
+      "applicability": "two-terminal non-power elements; pin identity from declared circuit",
+      "measured": true,
+      "expected_ids": [
+        "R1",
+        "R2",
+        "F1",
+        "C1"
+      ],
+      "examined_ids": [
+        "R1",
+        "R2",
+        "F1",
+        "C1"
+      ],
+      "omitted": [],
+      "measurements": {
+        "series_elements": 4,
+        "expected": 4,
+        "not_assessed": 0
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "e",
+      "title": "foreign-net corridors / pin-row proximity / wire through body",
+      "applicability": "all wires vs foreign pins/wires/bodies",
+      "measured": true,
+      "expected_ids": [],
+      "examined_ids": [
+        "wire:8c20b8ab-31ce-42ec-bd52-1339e733b0a7",
+        "wire:2b9226bb-abf8-486f-b559-0dfce3d4bd30",
+        "wire:4e0d563c-cca9-4035-af11-4a5024aa68fd",
+        "wire:b21c5a9e-e690-4f6e-98fe-0cc6e5283927",
+        "wire:8e8a9863-acba-4083-afc8-22ca12145f82",
+        "wire:5646db65-aad9-4be1-82e7-e00c7964b64c",
+        "wire:d38a66e9-b710-4bbc-b080-ca6021c58355",
+        "wire:65112920-1fd8-4f3a-95d8-c51a1e11ed10",
+        "wire:a1743810-a0e3-447c-bee2-c48dbcc348bc",
+        "wire:9c5418ac-8cd5-4a64-9a91-263c06e3fb9f",
+        "wire:0f63d785-5c9f-4ae8-80e3-0822bcd9b330",
+        "wire:f9d7f8c4-f190-4c39-976f-ab888f74d7a4",
+        "wire:7471382c-9957-4170-8c6c-77b631beecc7",
+        "wire:e33dab31-4b16-418e-bc0c-3a14de4add04",
+        "wire:66891ed5-50ab-4c7d-9bb1-7e8e58f4d72d",
+        "wire:2b2bcdc3-eec5-48b3-85a9-dfcea38e8063",
+        "wire:36c279f9-4c31-4f02-bbea-adc153ecc174",
+        "wire:c8cd4024-bed8-4322-84b9-446bb68adf35",
+        "wire:e24e01bb-b2f2-43b0-ad99-07006a04089a",
+        "wire:d573bf94-8d2c-4a2f-9955-384307f8e56d"
+      ],
+      "omitted": [],
+      "measurements": {
+        "render_stroke_width_mm": 0.4,
+        "label_flag_corridors": 1,
+        "pin_row_corridors": 0,
+        "collinear_foreign": 0,
+        "wire_through_body": 0,
+        "foreign_wire_near_pin_tip": 0
+      },
+      "findings": [
+        {
+          "cls": "e",
+          "code": "E_LABEL_FLAG_CORRIDOR",
+          "kind": "perceptual",
+          "message": "wire of ['/VBUS_CON'] passes global_label 'VBUS' outline within 1.6 mm over 3.87 mm; electrical equality does not establish perceptual clarity",
+          "at": [
+            67.31,
+            48.26
+          ],
+          "objects": [
+            "wire:4e0d563c-cca9-4035-af11-4a5024aa68fd",
+            "label:8ca034ea-9b35-419f-8a0a-9a047affbee1"
+          ],
+          "region": [
+            67.31,
+            38.1,
+            76.2,
+            90.17
+          ],
+          "measurements": {
+            "net_relation": "foreign",
+            "distance_mm": 0.4346999999999923,
+            "label_net_authority": "attached_wire",
+            "contact": "corridor",
+            "corridor_length_mm": 3.8669545592705306,
+            "band_mm": 1.6
+          }
+        }
+      ],
+      "verdict": "fail",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "f",
+      "title": "text clearance, clipping, scale, page occupancy",
+      "applicability": "partial: text-vs-text, wire-through-text and label-flag-outline-through-text only; text-vs-symbol-body/pin-graphics clearance NOT measured; page area excluding frame reported, not gated",
+      "measured": true,
+      "expected_ids": [],
+      "examined_ids": [
+        "text:1@(35.0, 11.65)",
+        "text:2@(85.0, 11.65)",
+        "text:3@(135.0, 11.65)",
+        "text:4@(185.0, 11.65)",
+        "text:5@(235.0, 11.65)",
+        "text:6@(285.0, 11.65)",
+        "text:1@(35.0, 199.6572)",
+        "text:2@(85.0, 199.6572)",
+        "text:3@(135.0, 199.6572)",
+        "text:4@(185.0, 199.6572)",
+        "text:5@(235.0, 199.6572)",
+        "text:6@(285.0, 199.6572)",
+        "text:A@(11.0, 35.65)",
+        "text:B@(11.0, 85.65)",
+        "text:C@(11.0, 135.65)",
+        "text:D@(11.0, 185.65)",
+        "text:A@(286.0022, 35.65)",
+        "text:B@(286.0022, 85.65)",
+        "text:C@(286.0022, 135.65)",
+        "text:D@(286.0022, 185.65)",
+        "text:Date: 2026-10-09@(200.0022, 193.8572)",
+        "text:KiCad E.D.A. 9.0.9@(178.0022, 196.6572)",
+        "text:Rev: v1.0@(263.0022, 193.8572)",
+        "text:Size: A4@(178.0022, 193.8572)",
+        "text:Id: 1/1@(263.0022, 196.6572)",
+        "text:Title: btdongle_ms - usbc@(178.0022, 190.3072)",
+        "text:File: usbc.kicad_sch@(178.0022, 186.4572)",
+        "text:Sheet: /@(178.0022, 183.7572)",
+        "text:bodesign@(178.0022, 180.7572)",
+        "text:C1@(111.3329, 56.515)",
+        "text:10uF/16V@(114.8405, 59.055)",
+        "text:SHIELD@(40.64, 122.809)",
+        "text:S1@(40.386, 125.73)",
+        "text:GND@(48.26, 122.809)",
+        "text:A1@(48.006, 125.73)",
+        "text:VBUS@(57.404, 90.805)",
+        "text:A4@(60.96, 89.916)",
+        "text:CC1@(57.404, 95.885)",
+        "text:A5@(60.96, 94.996)",
+        "text:CC2@(57.404, 98.425)",
+        "text:B5@(60.96, 97.536)",
+        "text:D-@(57.404, 103.505)",
+        "text:A7@(60.96, 102.616)",
+        "text:D-@(57.404, 106.045)",
+        "text:B7@(60.96, 105.156)",
+        "text:D+@(57.404, 108.585)",
+        "text:A6@(60.96, 107.696)",
+        "text:D+@(57.404, 111.125)",
+        "text:B6@(60.96, 110.236)",
+        "text:SBU1@(57.404, 118.745)",
+        "text:A8@(60.96, 117.856)",
+        "text:SBU2@(57.404, 121.285)",
+        "text:B8@(60.96, 120.396)",
+        "text:J1@(39.2997, 83.82)",
+        "text:USB_C_16P@(43.5633, 86.36)",
+        "text:R2@(135.7169, 128.905)",
+        "text:5.1k@(136.5031, 131.445)",
+        "text:D1@(99.1409, 83.82)",
+        "text:PESD5V0L4UF@(104.4326, 86.36)",
+        "text:R1@(81.1069, 104.775)",
+        "text:5.1k@(81.8931, 107.315)",
+        "text:F1@(80.2542, 43.815)",
+        "text:500mA@(82.3104, 46.355)",
+        "text:GND@(132.1708, 135.4138)",
+        "text:VBUS@(74.7712, 48.9858)",
+        "text:GND@(106.7708, 63.0238)",
+        "text:GND@(114.4588, 98.5158)",
+        "text:GND@(77.5608, 111.2838)",
+        "text:GND@(48.3508, 130.3338)",
+        "text:GND@(40.7308, 130.3338)",
+        "text:CC1@(77.47, 99.3457)",
+        "text:VBUS_CON@(76.2, 38.3857)",
+        "text:CC2@(132.08, 123.4757)"
+      ],
+      "omitted": [],
+      "measurements": {
+        "texts": 73,
+        "text_text_overlaps": 0,
+        "wire_through_text": 0,
+        "flag_through_text": 0,
+        "clipped": 0,
+        "page_mm": [
+          297.0022,
+          210.0072
+        ],
+        "drawable_mm": [
+          273.0,
+          186.01
+        ],
+        "page_use_bbox_ratio": 0.1715,
+        "page_use_grid_ratio": 0.0638,
+        "page_use_gate": null,
+        "min_font_mm": 1.6933
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {
+        "F_WIRE_THROUGH_INK": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        },
+        "F_INK_THROUGH_TEXT": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        },
+        "F_FLAG_THROUGH_INK": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        },
+        "F_INK_THROUGH_PIN": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        }
+      }
+    }
+  ],
+  "calibration_ref": {
+    "status": "partial",
+    "partial_classes": [
+      "e"
+    ],
+    "reason": "classes lacking rejecting and/or accepting adjudicated evidence",
+    "record_version": "2026-10-09-3.3a-existing-evidence",
+    "policy_digest": "63bee5d02a5ec147",
+    "supported_scope": {
+      "rotations": [
+        0
+      ],
+      "classes": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e"
+      ]
+    },
+    "subject_scope": {
+      "rotations": [
+        0
+      ],
+      "classes": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e"
+      ]
+    },
+    "classes": {
+      "a": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "b": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "c": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "d": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "e": {
+        "rejecting": 2,
+        "accepting": 0,
+        "missing": [
+          "no independently reviewed accepting case"
+        ]
+      }
+    },
+    "evidence_authenticated": false,
+    "authenticated_by": null
+  },
+  "execution": "succeeded",
+  "verdict": "fail",
+  "human_review_ref": null,
+  "does_not_authorize": [
+    "electrical_correctness",
+    "fidelity",
+    "manufacturing_release",
+    "human_readability_acceptance"
+  ],
+  "anomalies": [],
+  "verdict_scope": "a-e",
+  "scoped_verdict": "fail",
+  "authority_digests": {
+    "declared_pin_nets": "1783453d027d51dfb28a99b004bf5773026761ff8aa35241efe0d5bbc5e9380e",
+    "required_local_pairs": "87461bba44f4b0d70a2dbc19b1495aa8fe43899f14a9be935b47a7d5819d8b40",
+    "local_exceptions": "1e9af23b0c5749909917282e65707228a47340b7420087e71d4afd8c8aae4254",
+    "policy_digest": "63bee5d02a5ec147"
+  },
+  "measurement_scope": {
+    "version": "s1-measurement-scope-v2-sheet-ink-observations",
+    "policy_digest": "63bee5d02a5ec147",
+    "ink_chord_tol_mm": 0.05,
+    "observations": "f: F_WIRE_THROUGH_INK, F_INK_THROUGH_TEXT, F_FLAG_THROUGH_INK, F_INK_THROUGH_PIN (kind=observation; never findings)",
+    "not_assessed": [
+      "dash gaps",
+      "stroke envelope",
+      "fill",
+      "z-order",
+      "ink meaning / grouping",
+      "symbol coherence",
+      "package-implies-internal-connection"
+    ]
+  },
+  "sheet_graphic_ink": [],
+  "ink_report": {
+    "count": 0,
+    "ink_missing_uuid": 0,
+    "ink_unparsed_by_kind": {},
+    "owner_mode": "none",
+    "ink_owner_unknown": [],
+    "owner_declaration_mismatch": []
+  }
+}
