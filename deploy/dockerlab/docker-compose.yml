@@ -1,6 +1,6 @@
 # bodesign MCP Server — DockerLab (CT105: 192.168.100.141)
 # Deployed under /opt/bodesign/
-# Port 8177 allocated via central port_registry for authenticated TLS MCP ingress.
+# Port 8177 allocated via central port_registry for LAN-plain HTTP MCP ingress (no TLS/auth; /invoke 403 at nginx).
 
 services:
   bodesign:
