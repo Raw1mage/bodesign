@@ -1,0 +1,2590 @@
+{
+  "tools": [
+    {
+      "name": "bodesign_init",
+      "description": "bodesign's full usage doctrine (R15 self-describing organism): the two-plane routing model (landing verbs via gate.py vs bodesign_ compute tools), the honesty/no-fallback contract, pre-call disciplines (refs_ingest step 0, DoD self-verify), organ coordination (skill + container + UDS/TCP transport + cache 3-tier + webdav), and counter-intuitive gotchas. Same content as the bodesign_init prompts/get entry. Call it before first use. No arguments.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "description": "optional hint; the doctrine is served whole regardless (no silent truncation of the contract)"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "bodesign_route_net2pcb",
+      "description": "C04 routing: build a netted .kicad_pcb from a KiCad netlist \u2014 load+place footprints, assign nets, set copper-layer count / reserved plane layers (LT_POWER, signals stay on outer layers) / default track width, draw the board outline. Board outline semantics: pass board_mm=[W,H] to draw the Edge.Cuts rectangle at exactly (0,0)-(W,H) on ANY strategy (this is the single source of truth and matches the deterministic preplace R_edge boundary); when board_mm is omitted the outline auto-frames from pad extents + 3mm margin. The result reports outline_source='board_mm'|'pad_extent'. Connector pin expansion (one symbol pin -> several pads, e.g. USB-C VBUS -> A4/A9/B4/B9) is caller-overridable via `connectors`={refdes:{net:[pads]}} and applies to any USB-C footprint on ANY refdes (not just J1). Returns placed/nets/pads_assigned/unmapped plus applied_pinmaps and unmapped_connectors (a USB-C/declared connector that matched no net name is reported, not silently skipped); unmapped>0 means a footprint's pad names don't match the symbol (floating part). Footprint search dirs MERGE fp_dirs (project .pretty parents) with stock \u2014 a component whose footprint resolves in NONE is reported in dropped_components + ok:false (never silently skipped); expected_components vs placed surfaces the gap (BR_20260729 \u00a7B). Placement strategy: 'grid' (default, naive 8mm baseline) or 'deterministic' \u2014 electrically-aware pure-python pre-placement (main-IC anchoring, decap/crystal pin-affinity clustering, largest-first greedy per R4, fixed-seed SA) plus R1/R8 post-place checks; returns source-anchored placement_violations, hpwl_mm, anchor and echoed effective params. deterministic REQUIRES board_mm and FAILS FAST on missing footprint geometry \u2014 it never falls back to grid.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "netlist_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "integer"
+          },
+          "plane_layers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "inner copper layers to reserve as power planes (LT_POWER). Accepts 'In1', 'In1.Cu' or 'In1.Cu:GND' (layer[.Cu][:NET]); layer must be In1..In6. An unrecognised spec FAILS LOUD with PLANE_LAYER_UNKNOWN instead of being silently skipped (BR_20260729 \u00a7D) \u2014 the result echoes plane_layers_applied[{spec,layer,net,type}] as proof each requested plane was really created"
+          },
+          "track_mm": {
+            "type": "number"
+          },
+          "placement": {
+            "type": "object"
+          },
+          "fpdir": {
+            "type": "string"
+          },
+          "fp_dirs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "project footprint .pretty parent dirs, MERGED with stock (not exclusive); a netlist component whose footprint resolves in none of them is reported in dropped_components with ok:false, never silently skipped (BR_20260729 \u00a7B)"
+          },
+          "clearance_mm": {
+            "type": "number"
+          },
+          "connectors": {
+            "type": "object",
+            "description": "{refdes: {net_name: [pad ids]}} explicit connector pin expansion; omit to use the built-in USB-C table for USB-C footprints"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "grid",
+              "deterministic"
+            ],
+            "description": "placement strategy; default grid (baseline). deterministic = electrically-aware anchoring/clustering/greedy/SA + R1/R8 anchored checks"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "SA seed for strategy=deterministic (default 42); echoed in result.effective"
+          },
+          "board_mm": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "[width, height] mm board outline \u2014 required for strategy=deterministic"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "netlist_path",
+          "out_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_via_in_pad",
+      "description": "Fine-pitch BGA via-in-pad fanout: drop a through-via through each netted ball pad of the given refs (except the outer keep_rings rings, which escape on the surface) so inner balls reach inner signal layers. via geometry is caller-overridable (drill_mm/pad_mm/keep_rings); defaults (0.2/0.3mm, 2 rings) are a JLCPCB-advanced filled+capped (POFV) process reference \u2014 tune for other pad pitches/processes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "drill_mm": {
+            "type": "number"
+          },
+          "pad_mm": {
+            "type": "number"
+          },
+          "keep_rings": {
+            "type": "integer"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_path",
+          "refs"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_pour_planes",
+      "description": "Pour filled copper plane zones + optional stitching vias, giving high-speed nets a solid impedance reference plane. Each plane spec is a \"LAYER:NET\" string (e.g. 'B.Cu:GND', 'In1.Cu:GND', 'In4.Cu:V3V3') \u2014 layer first, net second; a malformed spec (wrong colon count, swapped fields, non-pcbnew layer) fails fast with POUR_PLANES_BAD_SPEC rather than a misleading pcbnew AttributeError. Stitch net + grid/via geometry are caller-overridable (stitch_net/stitch_pitch_mm/stitch_drill_mm/stitch_pad_mm); defaults (GND, 14mm, 0.3/0.6mm) are a JLCPCB-class process reference, not a hidden assumption. pad_connection='thermal' (default) keeps thermal-relief spokes; 'solid' bonds zone-net pads FULLY (ZONE_CONNECTION_FULL) to avoid starved_thermal DRC errors on isolated PTH/plane-net pads.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "planes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "list of \"LAYER:NET\" specs, e.g. ['B.Cu:GND','In4.Cu:V3V3']"
+          },
+          "stitch": {
+            "type": "boolean"
+          },
+          "stitch_net": {
+            "type": "string"
+          },
+          "stitch_pitch_mm": {
+            "type": "number"
+          },
+          "stitch_drill_mm": {
+            "type": "number"
+          },
+          "stitch_pad_mm": {
+            "type": "number"
+          },
+          "pad_connection": {
+            "type": "string",
+            "enum": [
+              "thermal",
+              "solid"
+            ],
+            "description": "zone-net pad bonding; 'thermal' (default) keeps relief spokes, 'solid' = ZONE_CONNECTION_FULL to avoid starved_thermal on isolated pads"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_path",
+          "planes"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_widen_bus_tracks",
+      "description": "Clearance-safe C04 bus finishing: widen selected routed bus tracks to target_mm only where foreign copper/pads keep clearance_mm; writes a new .kicad_pcb and returns widened/kept counts. post_widen_drc (BR_20260708 Ask #3): after the geometric-clearance widen pass, run a real kicad-cli DRC and REVERT any widening that introduced a NEW copper violation the fast geometric pre-check missed (e.g. near a teardropped/tented via \u2014 the CHG_STAT vs USB_CC2 symptom). Reverted count + copper_after are reported so nothing silently stays over-wide or silently fails the gate.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "nets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "target_mm": {
+            "type": "number"
+          },
+          "clearance_mm": {
+            "type": "number"
+          },
+          "post_widen_drc": {
+            "type": "boolean",
+            "description": "run post-widen DRC and revert widths that introduce new copper violations the pre-check missed"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_path",
+          "nets",
+          "target_mm"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_apply_pad_intrinsic_overrides",
+      "description": "C04 finish (BR_20260708 Ask #1): auto-resolve package-intrinsic pad-gap DRC violations with pad-level SetLocalClearance overrides. A clearance violation whose two items are pads OF THE SAME footprint is the land pattern's own geometry (USB-C 0.10mm pad gaps, LGA 0.10mm) \u2014 not a routing error and unfixable by routing; the honest resolution is a pad-level override (default 0.09mm, below the 0.10mm gap) on exactly those pads, recorded to a sidecar for audit. Only same-footprint pad pairs are touched; TRUE copper violations are left untouched so they still fail the gate. Returns applied count + per-override audit (ref/pads/new clearance); nothing is silently changed.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "override_mm": {
+            "type": "number"
+          },
+          "sidecar_path": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_length_match_bus",
+      "description": "Clearance-aware C04 bus length matching: add safe serpentine detours to short routed nets when possible; writes a new .kicad_pcb and returns per-net lengths, skew, budget status, tuned count, and explicit untuned statuses.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "nets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "budget_ps": {
+            "type": "number"
+          },
+          "ps_per_mm": {
+            "type": "number"
+          },
+          "report_path": {
+            "type": "string"
+          },
+          "clearance_mm": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_path",
+          "nets",
+          "budget_ps",
+          "ps_per_mm"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_layout_drc_gate",
+      "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool. classify_intrinsic (BR_20260708): further split copper clearance violations into package_intrinsic (same-footprint adjacent pads at the land-pattern's own spacing \u2014 USB-C/LGA pad gaps that a pad-level clearance override resolves, NOT a routing error) vs true copper. When on, `copper` EXCLUDES intrinsic ones, and package_intrinsic + package_intrinsic_items (evidence: refs + description) are reported; clean still requires zero TRUE copper + unconnected, so intrinsic gaps neither silently pass nor masquerade as routing errors. Gate values are never relaxed to pass \u2014 reclassified with evidence, not waved through. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "classify_intrinsic": {
+            "type": "boolean",
+            "description": "split package-intrinsic pad-gap clearance from true copper errors"
+          },
+          "pad_adjacency": {
+            "type": "object",
+            "description": "optional {REF: true} for footprints known to have intrinsic sub-rule pad gaps"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_clean_micro_stubs",
+      "description": "C04 finish (BR_20260708): remove track segments shorter than min_len_mm (default 0.02mm) left by freerouting SES import \u2014 the <0.01mm fragments that read as false unconnected / false clearance (the MIC1 GND 0.0001mm-track symptom). Strips ONLY true micro-stubs below the threshold; vias/zones untouched. Returns removed count + each removed stub's net+length so the cleanup is auditable and never silently drops real routing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "min_len_mm": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_si_check",
+      "description": "ngspice signal-integrity gate: per net builds a series-terminated transmission-line testbench from the routed length; returns overshoot/undershoot and pass/warn/fail with a worst rollup. Driver/load/edge/thresholds (rdrv/cload/edge_ns/overshoot_pass_pct/overshoot_warn_pct) are caller-overridable \u2014 defaults are a documented STM32-class CMOS reference, not a hidden assumption; the result echoes the effective values under `effective`. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "nets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "z0": {
+            "type": "number"
+          },
+          "rs": {
+            "type": "number"
+          },
+          "vdd": {
+            "type": "number"
+          },
+          "rdrv": {
+            "type": "number"
+          },
+          "cload": {
+            "type": "number"
+          },
+          "edge_ns": {
+            "type": "number"
+          },
+          "overshoot_pass_pct": {
+            "type": "number"
+          },
+          "overshoot_warn_pct": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "nets"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_autoroute",
+      "description": "Autoroute a netted board with Freerouting when java+freerouting.jar are present in the worker; otherwise returns routed=false with the netted board for external routing. NET-CLASS RULES (BR_20260708): pass `netclasses`=[{name,width_mm,clearance_mm,nets?:[exact],match?:[substrings]}] (ORDERED; a net joins the FIRST class that claims it) to inject per-class width/clearance into the exported Specctra DSN \u2014 so a 0.5mm-pitch BGA escape region can route at 0.1/0.1mm while signal/power nets keep their own widths, instead of KiCad's single global 0.2mm rule that makes BGA escape impossible. Unclaimed nets fall into a synthesized default class (default_width_mm/default_clearance_mm). Run bodesign_via_in_pad (BGA fanout) BEFORE autoroute so escape stubs exist. Result adds `netclasses` (per-class net counts + DSN-unit widths + dropped-empty warnings) and structured completion (`unconnected`/`complete`) so a router that converged short is visible here, not only at downstream DRC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "passes": {
+            "type": "integer",
+            "description": "freerouting -mp: UPPER LIMIT of auto-router passes (default 40). Lowering it buys speed for a weaker search, and the returned `unconnected` then measures the board AND your budget \u2014 a throttled run is NOT evidence the geometry cannot be routed. The response echoes passes_limit/throttled and advises re-running at the default before concluding infeasibility."
+          },
+          "default_via": {
+            "type": "string",
+            "description": "padstack name (from the DSN's own `(padstack ...)` declarations, e.g. 'Via[0-7]_300:150_um') for the synthesized fall-through class. BR_20260729 \u00a7K: on a fine-pitch BGA the VIA size gates layer changes more than track width does \u2014 a router that may not open a small enough via cannot reach the inner layers at all, so widening tracks changes nothing. Without this, unclaimed nets were stranded on the board's original via while named classes could each override theirs. Result reports used_vias/declared_vias/undeclared_vias; freerouting silently IGNORES an unknown use_via, so an undeclared name is reported rather than assumed applied."
+          },
+          "netclasses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "width_mm": {
+                  "type": "number"
+                },
+                "clearance_mm": {
+                  "type": "number"
+                },
+                "nets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "match": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "width_mm",
+                "clearance_mm"
+              ]
+            },
+            "description": "ordered per-class DSN rules; a net joins the first class claiming it (exact `nets` or `match` substring)"
+          },
+          "default_width_mm": {
+            "type": "number"
+          },
+          "default_clearance_mm": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "out_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_autoroute_preflight",
+      "description": "C04 route-step diagnostic gate (BR_20260708): probe the ee worker for freerouting prerequisites and say EXACTLY what is missing instead of leaving the route step to die on a raw Java HeadlessException. Checks four things: freerouting.jar on disk, java on PATH, a HEADFUL JRE (freerouting v1.9.0 CLI still calls Toolkit.getScreenSize(), so a *-headless JRE lacking libawt_xawt.so throws HeadlessException even under xvfb), and xvfb-run/DISPLAY. Returns {ready, missing:[...], reason, remedy:[...], probe:{...}} \u2014 ready=true ONLY when jar+java+headful-JRE+xvfb/DISPLAY are all present. Call this before bodesign_autoroute on a fresh worker; on ready=false do NOT claim a routed board, fix the named gap (or route interactively in KiCad). No arguments. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "bodesign_placement_preflight",
+      "description": "C04 pre-route placement gate (BR_20260708): read a placed .kicad_pcb and fail fast on a doomed floorplan BEFORE routing, from REAL footprint courtyards (no guessing). Two conditions: (1) courtyard_overlap \u2014 any two footprint courtyards that intersect (optionally grown by courtyard_margin_mm) are listed in `overlaps` with the measured mm\u00b2 (route would inherit a wall of clearance DRC \u2014 the 65-violation symptom); (2) sheet_under_filled \u2014 total courtyard area / usable board area below min_utilization (default 0.40) means everything is crammed into a strip (the 20%% center-strip symptom). Returns passed=true ONLY when zero overlaps AND utilization meets the floor, plus utilization, overlap_pairs, parts/board areas, board_mm (read from Edge.Cuts unless overridden) and human-readable `reasons`. Never mutates the board and never routes: the caller checks passed and, on failure, re-places (strategy='deterministic') rather than routing into overlap. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "min_utilization": {
+            "type": "number",
+            "description": "floor for parts-courtyard-area / usable-board-area (default 0.40); below it = sheet_under_filled fail"
+          },
+          "board_mm": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "[width, height] mm override; omit to read board size from Edge.Cuts"
+          },
+          "courtyard_margin_mm": {
+            "type": "number",
+            "description": "grow each courtyard by this margin before the overlap test (default 0)"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c04_placement_geometry_gate",
+      "description": "C04 placement GEOMETRY gate (GATE-C04-01..07, c04-entry-freeze section 4.4; distinct from the landed gate.py verb c04_placement_gate): judge a PLACED .kicad_pcb against its .net. 01 parity: refs + per-ref pad/net assignment board vs netlist (missing/extra/mismatch lists; optional expected_ref_count). 02 courtyard: kicad-cli pcb drc courtyards_overlap count; kicad-cli absent or unusable => status unmeasured with a reason, NEVER pass. 03 keepout: any pad/courtyard/footprint bbox touching a keepout box {name,x,y,w,h[,layer]} (x,y = min corner, mm); keepouts=[] is unmeasured, not a vacuous pass. 04 edge margin: courtyard POLYGON vs Edge.Cuts, min distance >= edge_margin_mm (default 0.40), min measured + offenders reported (AABB only for refs listed in aabb_fallback_refs). 05 copper connectivity/Gerber parity: ALWAYS unmeasured here (placement-only). 06 silkscreen: visible reference-designator text box (KiCad 9.0.9 stroke-font model fitted to pcbnew; rotation handled) vs pad bboxes and courtyard polygons on the same side, clearance silk_clearance_mm (default 0.15); glyphs outside the measured table or bold/italic text are listed as unmeasured_items per ref, never skipped; offenders {ref, against_ref, kind pad|courtyard, clearance_mm}. 07 courtyard gap: pairwise courtyard POLYGON distance >= courtyard_gap_mm (default 0.25), smallest three pairs reported. Courtyard polygons are outset by stroke_width-0.005 mm exactly as pcbnew builds them. Returns {ok, gates:{id:{status pass|fail|unmeasured, measured, offenders}}, unmeasured_gates, inputs:{board_sha256, netlist_sha256}}; ok is true only when every measured gate (01-04, 06, 07) passes and never implies copper/Gerber parity. Missing board/netlist/keepouts fields, a footprint without courtyard geometry, or a board without an Edge.Cuts outline => {ok:false, error} fail-fast; geometry is never defaulted. Never mutates the board. consider: bodesign_placement_preflight, bodesign_layout_drc_gate.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "netlist_path": {
+            "type": "string"
+          },
+          "keepouts": {
+            "type": "array",
+            "description": "keepout boxes; x,y = min corner, w,h extents (mm); [] = none declared (gate unmeasured)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                },
+                "layer": {
+                  "type": "string",
+                  "enum": [
+                    "F.Cu",
+                    "B.Cu"
+                  ]
+                },
+                "owner_ref": {
+                  "type": "string",
+                  "description": "optional: footprint ref that owns this keepout region (e.g. a host module's own antenna zone); placement gate exempts that ref's courtyard/footprint kinds, copper pads still count; gerber G-03 ignores it"
+                }
+              },
+              "required": [
+                "name",
+                "x",
+                "y",
+                "w",
+                "h"
+              ]
+            }
+          },
+          "edge_margin_mm": {
+            "type": "number",
+            "description": "minimum courtyard-to-Edge.Cuts distance (default 0.40)"
+          },
+          "expected_ref_count": {
+            "type": "integer",
+            "description": "optional exact footprint count the board must have"
+          },
+          "silk_clearance_mm": {
+            "type": "number",
+            "description": "GATE-06 minimum clearance between visible reference text and pads/courtyards (default 0.15)"
+          },
+          "courtyard_gap_mm": {
+            "type": "number",
+            "description": "GATE-07 minimum pairwise courtyard polygon distance (default 0.25)"
+          },
+          "ref_text_layers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "F.SilkS",
+                "B.SilkS",
+                "F.Fab",
+                "B.Fab"
+              ]
+            },
+            "description": "layers whose reference text GATE-06 examines (default all four; the btdongle r1 board keeps references on F.Fab)"
+          },
+          "gerber_dir": {
+            "type": "string",
+            "description": "optional: gerber+drill directory; when given GATE-C04-05 delegates to bodesign_c04_gerber_gate (worst of G-01..G-03) instead of the literal unmeasured"
+          },
+          "human_dir": {
+            "type": "string",
+            "description": "optional with gerber_dir: dir of NN.c04-<layer>-vN.png renders for G-04 binding"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "netlist_path",
+          "keepouts"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c04_routing_gate",
+      "description": "C04 routing-class gate R-01..R-08, pure python on the routed .kicad_pcb. R-01 track width per net class (class min width; escape_exemptions [{ref,max_length_mm}] list declared QFN necks under measured.exempt_necks, undeclared necks fail). R-02 vias per layer transition for classes with min_vias_per_transition (class_rules). R-03 pad entry angle / acid trap (flag < min_entry_angle_deg, default 45: 45-degree entries pass; teardrop zones count as fixed only when a same-net teardrop fill covers the exit; unsupported pad shapes unmeasured per endpoint). R-04 pour islands: filled-polygon outer loops touching no same-net pad/via/track (max_island_area_mm2, default 0 = any). R-05 declared pairs only [{a,b,max_len_mm,max_skew_mm}], absent => unmeasured. R-06 copper-to-keepout margin on tracks/vias/fills/pads (keepouts + keepout_margin_mm; owner_ref pads exempt). R-07 min pour neck width: narrowest copper between boundary edges of a filled polygon vs the net's class min track width (offenders: net, layer, neck_width, location). R-08 escape feasibility (pre-route): class min width W + class clearance C (project-file clearance / classes[].clearance_mm / class_rules clearance_mm) must fit between a pad and other-net pads on at least one exit side; offenders {ref,pad,net,class,min_gap_mm,max_feasible_width_mm,exits_examined}; counts toward ok only on a board with no tracks/vias, informational on a routed board. R-03 models custom pads (anchor rect|circle + filled gr_poly/gr_rect/gr_circle union). Net classes: explicit classes argument, else the sibling .kicad_pro net_settings, else board net_class blocks; none naming the nets => explicit error. Anything not computable => unmeasured with reason, never pass. ok = R-01..R-04 + R-06 + R-07 pass (+ R-05 when declared). Does not judge DRC clearance or impedance.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "classes": {
+            "type": "object",
+            "description": "{class: {nets: [name|fnmatch...], min_track_width_mm, min_vias_per_transition, clearance_mm}}; overrides project/board class sources"
+          },
+          "class_rules": {
+            "type": "object",
+            "description": "{class: {min_track_width_mm?, min_vias_per_transition?, clearance_mm?}} merged onto the resolved classes"
+          },
+          "project_path": {
+            "type": "string"
+          },
+          "escape_exemptions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string"
+                },
+                "max_length_mm": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "ref",
+                "max_length_mm"
+              ]
+            }
+          },
+          "min_entry_angle_deg": {
+            "type": "number"
+          },
+          "max_island_area_mm2": {
+            "type": "number"
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": "string"
+                },
+                "b": {
+                  "type": "string"
+                },
+                "max_len_mm": {
+                  "type": "number"
+                },
+                "max_skew_mm": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "a",
+                "b",
+                "max_len_mm",
+                "max_skew_mm"
+              ]
+            }
+          },
+          "keepouts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                },
+                "layer": {
+                  "type": "string",
+                  "enum": [
+                    "F.Cu",
+                    "B.Cu"
+                  ]
+                },
+                "owner_ref": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "x",
+                "y",
+                "w",
+                "h"
+              ]
+            }
+          },
+          "keepout_margin_mm": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c04_gerber_gate",
+      "description": "GATE-C04-05 made measurable (DD-20(d)): Gerber-level copper connectivity + export parity, pure python. G-01 parity: every board pad / via has a flash or region on its outer copper gerber, every board drill appears in the Excellon file (position + diameter + plating), Edge.Cuts gerber loops match the board outline (symmetric vertex deviation); missing/extra per layer. G-02 connectivity from gerber bytes alone: exact analytic shape distance <= 1 um joins copper items per layer (no raster), plated drill hits join layers; nets mapped from the .kicad_pcb: net pads in >1 component = open, component with >1 net = short; single-terminal nets are reported, not failed. G-03 keepout on copper bytes (same keepouts schema as the placement gate; None/[] => unmeasured). G-04 render binding: NN.c04-<layer>-vN.png in human_dir needs a sidecar naming a sha256 that matches a file in gerber_dir (binding only, image content not judged). Anything not computable (clear polarity, step-repeat, G74, incremental coords, missing layer file) => unmeasured with reason, never pass. ok = G-01..G-03 pass. Does not judge clearance/DRC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "gerber_dir": {
+            "type": "string"
+          },
+          "keepouts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                },
+                "layer": {
+                  "type": "string",
+                  "enum": [
+                    "F.Cu",
+                    "B.Cu"
+                  ]
+                },
+                "owner_ref": {
+                  "type": "string",
+                  "description": "optional: footprint ref that owns this keepout region (e.g. a host module's own antenna zone); placement gate exempts that ref's courtyard/footprint kinds, copper pads still count; gerber G-03 ignores it"
+                }
+              },
+              "required": [
+                "name",
+                "x",
+                "y",
+                "w",
+                "h"
+              ]
+            }
+          },
+          "human_dir": {
+            "type": "string"
+          },
+          "pad_tol_mm": {
+            "type": "number",
+            "description": "pad centre vs flash tolerance (default 0.01)"
+          },
+          "edge_tol_mm": {
+            "type": "number",
+            "description": "Edge.Cuts vertex deviation tolerance (default 0.02)"
+          },
+          "drill_tol_mm": {
+            "type": "number",
+            "description": "drill position tolerance (default 0.01)"
+          },
+          "render_views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "G-04 scope: layer views bound to a gerber (default F.Cu, B.Cu, In<n>.Cu, copper-composite); other NN.c04-*.png go to measured.out_of_scope"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "gerber_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c04_board_manifest",
+      "description": "C04 board geometry packet (c04-entry-freeze section 2.2) from a placed .kicad_pcb: Edge.Cuts outline polygon (lines + arcs flattened; arc = 24 chords, circle = 48-gon, declared in outline.arc_flatten), thickness from (general (thickness ..)) (absent => fail-fast, never defaulted), mounting_holes (drilled pads of H*/MH* footprints that are through_hole or carry an NP pad; [] is a MEASURED empty, see measured.mounting_holes; other drilled NP pads such as connector pegs are listed in measured.other_drilled_np_pads, not dropped), connectors keyed by the required connector_refs list {origin, rotation_deg, side, courtyard_bbox, pad_bbox}, plus exported_outline_sha256 / exported_mounting_holes_sha256 = sha256 of canonical JSON (sorted keys, compact, floats rounded 1e-6) of the outline object / mounting_holes list as emitted (section 2.3 chain). Coordinates stay in the board file frame (y down). Missing connector ref, open Edge.Cuts chain, multiple disjoint outer loops or a connector without courtyard/pads => {ok:false, error}. Never mutates the board. Also emits connectors[*].mating_normal (declared via mating_normals, else null + mating_normal_status unmeasured) and component_height_envelope per board ref (declared via height_envelope_mm with evidence, else status unmeasured) so C02' need not hand-write a sibling schema. consider: bodesign_c04_placement_geometry_gate, bodesign_c02_mesh_gate, bodesign_c02_chain_check.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "connector_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "reference designators to export as connectors, e.g. [J1,J2,SW1,SW2,SW3,D2,D3,D4,D5]"
+          },
+          "mating_normals": {
+            "type": "object",
+            "description": "optional {ref:[x,y,z]} mating-plane normal per connector (normalised); absent => mating_normal null, status unmeasured"
+          },
+          "height_envelope_mm": {
+            "type": "object",
+            "description": "optional {ref:{z_max_above_board_top_mm, z_min_below_board_top_mm?, evidence}} per-ref height input slot; evidence string required; refs not given stay status unmeasured"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "connector_refs"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_mesh_gate",
+      "description": "C02 printable-enclosure mesh gates (DD-19), pure python, per STL part: M-01 nonempty valid mesh (triangle/degenerate/non-finite counts); M-02 half-edge topology after 1e-5 mm vertex weld: manifold (each edge shared by exactly 2 faces), watertight (no boundary edge), consistent orientation (no same-direction twin) and positive signed volume (inverted shell fails); M-03 bbox extents vs expected_bbox_mm within bbox_tol_mm (axis-ordered, no rotation; units assumed mm); M-04 wall thickness: ray from sampled face centroids along -normal, first-hit distance vs wall_min_mm (sampled normal-direction distance, NOT a true minimum thickness; limits are returned in measured.limits; unmeasured unless M-02 passes). Assembly: M-05 board clearance needs board_manifest_path + clearance_min_mm + explicit board_placement_mm [dx,dy,dz] (registration is never guessed) and tests that the extruded board outline vertices sit inside the cavity at >= clearance; translation only, component heights not modelled, necessary-not-sufficient; otherwise unmeasured with a reason, never pass. M-06 chain: c02_manifest_path consumed_board_outline_sha256 == board manifest exported_outline_sha256 (absent => unmeasured). trimesh, if importable, is a cross-check only and never changes a verdict. Returns {ok, parts:{name:{M-01..M-04}}, assembly:{M-05,M-06}, unmeasured_gates, inputs}. Watertight is not printable: no slicer/process/fit/strength claim. consider: bodesign_c04_board_manifest.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "stl_path": {
+            "type": "string"
+          },
+          "stl_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wall_min_mm": {
+            "type": "number"
+          },
+          "clearance_min_mm": {
+            "type": "number"
+          },
+          "expected_bbox_mm": {
+            "description": "[x,y,z] extents for every part, or {basename:[x,y,z]}"
+          },
+          "bbox_tol_mm": {
+            "type": "number",
+            "description": "required when expected_bbox_mm is given"
+          },
+          "board_manifest_path": {
+            "type": "string"
+          },
+          "c02_manifest_path": {
+            "type": "string"
+          },
+          "board_placement_mm": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "[dx,dy,dz] mm translating board manifest coordinates into STL coordinates"
+          },
+          "wall_samples": {
+            "type": "integer"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "wall_min_mm"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c03_presentation_gate",
+      "description": "DD-16 read-only PresentationPlan gate: PP-01 closed v1 schema/version; PP-02 physical ref/pin/unit/NC accounting against netlist library inventory and exact embedded native symbols (approved repeated views, real net wins over unconnected-*); PP-03 every declared off-page label binds a named local-support/destination or approved named exception; PP-04 declared home set equals exported book leaves and bound native/image files on disk; PP-05 locks/exceptions name target, justification and supplied approval. Missing symbol/unit facts fail fast, never default unit 1. Does not measure actual visible wires, image readability, comprehension, approval authenticity, electrical correctness or release. Never writes approval or any input. schema_path is data-schema.json with presentation_plan or its extracted standalone schema; all four paths required.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "plan_path": {
+            "type": "string"
+          },
+          "schema_path": {
+            "type": "string"
+          },
+          "netlist_path": {
+            "type": "string"
+          },
+          "human_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_path",
+          "schema_path",
+          "netlist_path",
+          "human_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c00_prd_gate",
+      "description": "AC26 pure-Python PRD evidence gate: P-01 disk SHA256 and declared approved pipeline; P-02 bridge/manifest/markdown/DOCX requirement-ID coverage; P-03 decision citations; P-04 optional BOM tokens and board outline consistency; P-05 PDF header/trailer and explicit page-object count. Missing optional stage inputs are unmeasured. Fonts, overflow, comprehension and approval are not measured; pipeline identity is declared, not execution attestation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "manifest_path": {
+            "type": "string"
+          },
+          "requirements_bridge_path": {
+            "type": "string"
+          },
+          "decision_log_path": {
+            "type": "string"
+          },
+          "bom_csv_path": {
+            "type": "string"
+          },
+          "board_manifest_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "manifest_path",
+          "requirements_bridge_path",
+          "decision_log_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c01_scene_gate",
+      "description": "DD-18 pure-Python scene gate: S-01 consumed assets and mesh hash chain (absent C02 exported_enclosure_mesh_sha256 is unmeasured), S-02 token/material/surface binding, S-03 highest-version PNG per declared view with IHDR CRC, output_px and manifest-bound sidecar, S-04 renderer/version/seed binding. ok requires S-01..S-04 pass; S-05 optional axis-ordered STL bbox conformance needs both expected_bbox_mm and bbox_tol_mm, never default tolerance and is not in ok. stage_prefix defaults c01-; optional NN. page prefix ignored. Pixel colour/content is never judged; no CMF or human approval. consider: bodesign_c02_mesh_gate.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scene_manifest_path": {
+            "type": "string"
+          },
+          "c02_manifest_path": {
+            "type": "string"
+          },
+          "human_dir": {
+            "type": "string"
+          },
+          "stage_prefix": {
+            "type": "string"
+          },
+          "required_views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expected_bbox_mm": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            ]
+          },
+          "bbox_tol_mm": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "scene_manifest_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_chain_check",
+      "description": "C02' chain SSOT check (c04-entry-freeze section 2.3): recompute bodesign_c04_board_manifest's own exported_outline_sha256 / exported_mounting_holes_sha256 from a placed .kicad_pcb and compare with the C02' manifest's consumed_board_outline_sha256 / consumed_mounting_holes_sha256. A mismatch fails and names the stale side (c02_manifest = the producer consumed a different packet than this tool emits, e.g. a hand-written sibling schema). Optional board_manifest_path: a board manifest file whose exported hashes or schema differ from the recompute is flagged STALE_BOARD_MANIFEST. An absent consumed_* value is unmeasured, never pass; ok requires every link measured and equal. Returns {ok, links:{outline,mounting_holes}, board_manifest_file, unmeasured, inputs}. Never mutates anything. consider: bodesign_c04_board_manifest, bodesign_c02_mesh_gate.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "c02_manifest_path": {
+            "type": "string"
+          },
+          "board_manifest_path": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "c02_manifest_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_view_coverage",
+      "description": "DD-19(a) C02' view-coverage check: for each required view (default iso, exploded, section-usb, exterior-usb-end, plan, section-lid-ui) find the highest-versioned file '<stage_prefix><view>-v<N>.png' (default prefix '02.c02p-', i.e. NN.c02p-<view>-vN.png) in human_dir (or the human_tree_dir carried by c02_manifest_path) and require a non-empty PNG (signature + IHDR CRC) of at least min_px [w,h] (default 800x600). Missing or invalid (zero-byte, not a PNG, undersized) views => status fail with the missing/invalid lists; never pass by default. Filename + pixel size only: what a view shows is NOT assessed (blind review still required). consider: bodesign_c02_chain_check.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "c02_manifest_path": {
+            "type": "string"
+          },
+          "human_dir": {
+            "type": "string"
+          },
+          "stage_prefix": {
+            "type": "string"
+          },
+          "required_views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "min_px": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "bodesign_bga_escape_capacity",
+      "description": "C04 pre-route STACKUP gate: answer at PLACEMENT time whether the fine-pitch grid parts on a board can physically escape their signals, instead of discovering it after a 16-minute autoroute that lands 27/111 nets (BR_20260729 \u00a7H, aiguard C04). Model: every escaping trace squeezes between two outer balls, so the ceiling is perimeter_channels \u00d7 traces_per_gap \u00d7 signal_layers, where perimeter_channels = 2*(rows+cols)-4 and signal_layers EXCLUDES LT_POWER planes. That ceiling only BINDS when the part has nowhere else to go: with via-in-pad fanout AND at least one inner SIGNAL layer, balls drop to an inner layer instead. So blocking=true is asserted ONLY when need > ceiling AND there is no inner-signal escape route \u2014 aiguard's board is the instructive case (it HAS 128 fanout vias, but In1/In2 are both LT_POWER, so the vias land on power planes and 167 signal balls still face a 144 ceiling). Returns per-part {rows, cols, pitch_mm, ball_gap_mm, signal_balls, perimeter_channels, capacity, fanout_vias, has_escape_route, blocking} plus suggested_signal_layers and a reason saying re-placing will NOT fix it. Power/signal split is a heuristic on net names and is therefore ALWAYS reported (power_nets/signal_nets/classification); override it with power_nets=[...] when the rails are non-standard. Deliberately NOT folded into placement_preflight's passed: an overlap is fixed by re-placing, an escape shortfall is fixed by adding layers \u2014 one boolean would hide which action to take. Never mutates the board. consider: bodesign_placement_preflight, bodesign_via_in_pad.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "track_mm": {
+            "type": "number",
+            "description": "trace width mm; omit to read the board's Default netclass"
+          },
+          "clearance_mm": {
+            "type": "number",
+            "description": "clearance mm; omit to read the board's Default netclass"
+          },
+          "traces_per_gap": {
+            "type": "integer",
+            "description": "traces that fit between two adjacent balls; omit for the OPTIMISTIC 1 (the width/clearance computation is razor-sensitive at 0.5mm pitch and is reported as traces_per_gap_computed rather than used to fail a gate)"
+          },
+          "power_nets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "explicit rail net names, overriding the name heuristic (e.g. ['GND','+1V8','+3V3','VDDA']); every ball on a net NOT listed counts as a signal that must escape"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_component_search",
+      "description": "Search the LCSC/EasyEDA vendor component library by MPN or keyword; returns real candidate parts [{mpn, lcsc_id, package, manufacturer, stock, rohs, price1}] for the 100%-fidelity source gate. No fabrication: an empty vendor result is reported found=0, never padded with guesses. Pair with bodesign_component_fetch to pull the chosen lcsc_id's authoritative symbol/footprint/3D.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "keyword"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_component_fetch",
+      "description": "Fetch a real component's AUTHORITATIVE KiCad symbol + footprint + 3D STEP model from the LCSC/EasyEDA vendor library by LCSC id (e.g. C2869036), via the pinned easyeda2kicad CLI. Returns on-disk paths {kicad_sym, footprint, step_model, wrl_model, has_3d, lib_nickname}. BATCH: pass lcsc_ids (array) INSTEAD of lcsc_id to pull many parts into one shared output_lib in a single call \u2014 fetched sequentially (they share the CLI + library; never parallelised), continue-on-error, returning {fetched, failed, results:[per-part ok/paths|reason]} so all source-data gaps surface at once. Provide EXACTLY ONE of lcsc_id / lcsc_ids. This is the 100%-fidelity source-data path: use it INSTEAD of scaling a generic package as a stand-in body. No-fallback/honest: has_3d=false when the vendor carries no STEP (a real source-data gap to surface, not a substituted model); ok=false with 'rebuild image' when the CLI is absent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lcsc_id": {
+            "type": "string"
+          },
+          "lcsc_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "output_lib": {
+            "type": "string"
+          },
+          "overwrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output_lib"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_render_gerber_preview",
+      "description": "C04 Gerber preview evidence: render a real Gerber layer through the gerber-core pygerber raster path. Unsupported composite modes return render-unavailable instead of drawing a decorative fallback.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "gerber_dir": {
+            "type": "string"
+          },
+          "out_path": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "drill_dir": {
+            "type": "string"
+          },
+          "layer_glob": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "gerber_dir",
+          "out_path",
+          "mode"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_dxf_to_dwg",
+      "description": "Local lossless DXF->DWG conversion via LibreDWG dxf2dwg, with optional ezdxf normalization (default on) that rewrites the input as a clean version DXF (LWPOLYLINE/TEXT/layers/colors preserved) for best DWG roundtrip fidelity. Output is AC1015 (AutoCAD 2000) DWG. No-fallback: if the LibreDWG binaries are missing it returns ok=false with 'rebuild image' rather than degrading. Returns dwg_path + dwgread-verified entity counts + warnings.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "normalize": {
+            "type": "boolean"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_dwg_to_dxf",
+      "description": "Local DWG->DXF conversion via LibreDWG dwg2dxf. No-fallback: missing LibreDWG binary returns ok=false with 'rebuild image' rather than degrading. Returns dxf_path + dwgread-verified entity counts + warnings.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "in_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "in_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_mcp_call",
+      "description": "MCP-to-MCP delegation: call a tool on an external MCP server registered by name (via BODESIGN_MCP_SERVERS or BODESIGN_MCP_<NAME>_URL) and return its result. Use to drive docxmcp/drawmiat/other MCP servers through bodesign. Degrades cleanly: an unconfigured server is worker_unavailable, a configured-but-unreachable one is worker_starting (retryable); never fabricates a result.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "server",
+          "tool"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_stage_dir",
+      "description": "Stage an inline file tree {relpath:{content,encoding}} into a token namespace; returns {token, doc_dir, files}. Pass the token to other tools to operate inside that tree (docxmcp-style).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "files"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_workspace_inspect",
+      "description": "R17.2.3 workspace inspection: enumerate a token namespace tree and PROVE expected assets exist BEFORE a transform (render/emit/assemble). Pure read \u2014 never mutates. Returns {token, doc_dir, files[], count}; optional subpath filters to a subtree (traversal-guarded). Run this before a render/emit call to confirm the inputs you staged are present, and to feed the R0.6 recon step so a first unbounded operation is not flagged as a skipped-contract wall.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "subpath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "bodesign_emit_symbol",
+      "description": "Generate a KiCad .kicad_sym symbol from a pin list [{number,name,type}].",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "symbol_name": {
+            "type": "string"
+          },
+          "pins": {
+            "type": "array"
+          },
+          "output_path": {
+            "type": "string"
+          },
+          "footprint_filter": {
+            "type": "string"
+          },
+          "datasheet": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "symbol_name",
+          "pins",
+          "output_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_declare_circuit",
+      "description": "C03 topology DECLARATION layer: say what the circuit IS (\"R13/R14 form a divider off BATT, tapped into U2.31\") and get back a compose_schematic spec plus a COMPLETENESS verdict. Six primitives: connect | bridge (decoupling/pull-up/current-limit all share this shape) | series (chain with auto-named intermediate nodes <decl_id>_nN) | divider | rail | no_connect. This is the entry that asks the question nothing downstream asked -- is this input complete? -- so an under-specified spec is rejected AT THE ENTRY instead of each later stage inventing its own tolerance for it. status is a CLOSED five-value codomain: ok | rejected | not_run (schema/ref error, expander never ran) | empty (zero declarations -- deliberately NOT ok) | indeterminate (a symbol could not be read, so pin completeness is unknowable). Every emitted node carries provenance back to the declaration id that produced it, making \"the engine invented a node\" a single assertion rather than a review task. IMPORTANT: ok means THIS DECLARATION IS INTERNALLY CONSISTENT AND COMPLETE, not that the circuit is correct -- a pull-up tied to GND and a 5V rail on a 3V3 pin both pass here; the result field is named `completeness`, not `valid`, for that reason. Pure python: needs no KiCad unless symbol_dirs is given for the pin-completeness gate.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "same shape as compose_schematic spec.components: [{ref, symbol, value?, footprint?, group?}]"
+          },
+          "declarations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "[{id, kind, ...per-kind fields}]. kind is one of connect|bridge|series|divider|rail|no_connect. Order does not affect the result. An EMPTY array yields status=empty, never ok."
+          },
+          "symbol_dirs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "custom KiCad symbol dir(s), as an ARRAY (single-type declaration deliberately, per BR_20260730b: an anyOf/untyped argument gets stringified in transit). Omit it and the pin-completeness gate cannot read pin lists, so the verdict degrades to indeterminate rather than pretending to pass."
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "default true. false downgrades E_PIN_UNASSIGNED to a warning for incremental migration; E_PIN_MULTI_NET is NEVER downgraded -- a pin on two nets is an electrical contradiction, not an incompleteness."
+          }
+        },
+        "required": [
+          "components",
+          "declarations"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "bodesign_ato_build",
+      "description": "C03 declarative verification front-end: compile an atopile .ato project (pinned toolchain, ee worker) \u2014 unit typing + tolerance intervals + assert constraint solving + parametric component picks checked at COMPILE TIME, before anything reaches KiCad. ok=true returns pcb_path (.kicad_pcb, feeds the C04 finishing chain directly \u2014 no netlist bridge) + constraint_solve evidence (5th trust layer). ok=false returns a structured deficiency list [{kind: compile_error|unsat_constraint|pick_failure|component_wrapper_missing|toolchain_missing, detail, source_anchor}] \u2014 fail-fast, no silent fallback, no constraint relaxation. component_source default 'vault' (Component Vault only; no cloud registry calls); 'registry'/'vault_then_registry' are explicit opt-ins. Raw build log lands at build_log_path in the workspace, not in this response.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_path": {
+            "type": "string"
+          },
+          "component_source": {
+            "type": "string",
+            "enum": [
+              "vault",
+              "registry",
+              "vault_then_registry"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "project_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_compose_schematic",
+      "description": "Compose a schematic from a design spec (components + REF.PIN nets); place + emit + kicad-cli validate. style='netlist' (default, unchanged) uses a naive index grid + global labels (back-compat). style='draftsman' (opt-in) does subsystem-clustered deterministic force-directed placement + drawn wires + sheet-fit for engineer-readable schematics. connection_style overrides the style-derived default when given ('label' global labels; 'wire' orthogonal wires). Components may carry group (subsystem cluster) and x/y (caller-supplied placement). measure_ink=true (draftsman only) renders + measures ink%/content-fill% (toolchain-gated).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "spec": {
+            "type": "object"
+          },
+          "symbol_dirs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "custom KiCad symbol .kicad_sym parent dir(s), as an ARRAY of paths. The KiCad standard library is ALWAYS merged in downstream (BR_20260723), so listing a custom dir never costs you stock passives. A single bare path STRING is still accepted at runtime (back-compat) \u2014 the schema is deliberately NARROWER than the runtime. BR_20260730b N1+\u00a7P: this argument first declared no type at all, then an anyOf union; BOTH shapes make an MCP client serialise the array to TEXT, so '[\"/work/symbols\"]' arrives as a 'directory' that can never exist and every custom symbol silently fails to resolve while stdlib parts still load. Only a SINGLE-type array declaration transports a real list (proven A/B: covers_boards, a plain array, survives the same request in which an anyOf argument is stringified). compose raises SymbolDirsEncodingError on a JSON-encoded string rather than treating it as a path."
+          },
+          "validate": {
+            "type": "boolean"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "netlist",
+              "draftsman"
+            ]
+          },
+          "connection_style": {
+            "type": "string",
+            "enum": [
+              "label",
+              "wire",
+              "auto"
+            ]
+          },
+          "measure_ink": {
+            "type": "boolean"
+          },
+          "fidelity": {
+            "type": "boolean",
+            "description": "post-emit partition-fidelity gate: compare the spec's expected net partition vs the kicad-cli-exported netlist partition by node-set (net names ignored). Catches collinear-wire net FUSION that ERC is blind to; raises FidelityError (fail-loud) on divergence. Recommended true for connector-dense boards."
+          },
+          "expect_sha": {
+            "type": "object",
+            "description": "BR_20260802, optional {path: sha256}: assert the bytes on disk BEFORE composing; a mismatch raises COMPOSE_INPUT_SHA_MISMATCH instead of returning a structurally perfect result that describes a version you already replaced. Every response carries `inputs` (symbol libraries actually read, with sha256/mtime/bytes, plus spec_sha256) whether or not you declare this \u2014 but reading that record is your discipline, while declaring the digest moves the check into the tool. Use it whenever the inputs live somewhere they can change underneath you (a container copy, a network mount, another session's worktree)."
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir",
+          "project_name",
+          "spec"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_emit_multisheet",
+      "description": "Emit a HIERARCHICAL schematic \u2014 one root `.kicad_sch` carrying a sheet block per subsystem, plus one leaf `.kicad_sch` per sheet \u2014 from a spec whose components carry an explicit `sheet` field. This is the multi-page counterpart of bodesign_compose_schematic, which always emits ONE flat page no matter how many subsystems the spec describes. ROUTE SELECTION IS BY DECLARATION, NOT BY COUNT: no `sheet` on any component takes the original flat path unchanged; ANY explicit declaration \u2014 INCLUDING exactly one distinct sheet name \u2014 takes the root+N-leaf path. The two are never equated, so asking for one sheet explicitly is distinguishable from asking for nothing. `sheet` is the ONLY assignment channel: it is never inferred from `group`, from net topology, or from a catch-all, and it is ALL-OR-NOTHING (a partially declared spec raises E_UNASSIGNED_REFS rather than inventing a bucket for the remainder). `group` keeps its cluster meaning and is scoped PER SHEET \u2014 the cluster key is the ordered pair (sheet, group), so equal group strings on different sheets are independent clusters. Each sheet name is used VERBATIM as the leaf filename stem and is validated against ^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$ with NO silent sanitization (E_SHEET_NAME_INVALID / E_SHEET_NAME_EMPTY), and a stem equal to project_name is refused (E_SHEET_NAME_COLLISION) because the leaf write would otherwise truncate the root while the file set still looked complete. CROSS-SHEET NETS: a net whose nodes span sheets is emitted on every leaf holding at least one of its nodes, under its own name, forced onto global_label connectivity \u2014 same-named global labels on two leaves join into one net (measured on real kicad-cli 9.0.9). No endpoint is ever dropped; node accounting is re-checked against the input and a node whose ref is on no sheet is reported as an orphan warning rather than silently discarded. FAILURE CLEANUP removes ONLY paths this call created: a path that already exists raises E_OUTPUT_PATH_OCCUPIED before anything is written, so a pre-existing user file can never be in the rollback set. `files` lists real files on disk only \u2014 a phantom entry raises E_FILES_MANIFEST_PHANTOM rather than shipping a manifest that names something absent. Contract violations return ok:false with a machine `error.code` and files:[] (nothing written), NOT a partial success. Needs KiCad symbol libraries to resolve pins; it does not run ERC \u2014 arbitrate the output with kicad-cli or bodesign_export_netlist.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "spec": {
+            "type": "object",
+            "description": "compose_schematic spec shape PLUS the `sheet` field: {components: [{ref, symbol, value?, footprint?, group?, sheet?, x?, y?}], nets: [{name, nodes: ['REF.PIN', ...]}], nc?: ['REF.PIN', ...]}. A component carrying BOTH x and y keeps them; otherwise it gets a deterministic per-sheet grid slot (partial coordinates are NOT completed \u2014 inventing the missing half would be a fabricated placement). A net node that is not REF.PIN raises E_NET_NODE_MALFORMED instead of being filtered out, because dropping it deletes a declared endpoint while the net still looks complete."
+          },
+          "symbol_dirs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "custom KiCad symbol .kicad_sym parent dir(s), as an ARRAY (single-type declaration per BR_20260730b: an anyOf/untyped argument gets stringified in transit)."
+          },
+          "paper": {
+            "type": "string",
+            "description": "page size for every sheet, default A4."
+          },
+          "connection_style": {
+            "type": "string",
+            "enum": [
+              "label",
+              "wire",
+              "auto"
+            ],
+            "description": "within-leaf connectivity. Cross-sheet nets are ALWAYS forced to label regardless, because a drawn wire cannot cross a file boundary."
+          },
+          "power_ports": {
+            "type": "boolean"
+          },
+          "layout_engine": {
+            "type": "string",
+            "enum": [
+              "elk-layered"
+            ],
+            "description": "Optional presentation engine; top-level engine arguments override spec-embedded values, with engine_arg_source recorded in the result."
+          },
+          "engine_placement_models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "engine_spacing_overrides": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "engine_orientation_sets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "engine_outline_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subsystem_views": {
+            "type": "object",
+            "description": "sheet name -> list of net names to expand as local replica views on that sheet (presentation-only; home sheet keeps BOM/netlist identity)"
+          },
+          "view_local_max_nodes": {
+            "type": "integer"
+          },
+          "presentation_baseline": {
+            "type": "object",
+            "description": "S2 human ingestion: {schema_version:'1.x', source:'human', source_dir, root, files:[{path,sha256}], libraries:[{name,version|digest}], kicad_version:'9.0'}. Inspect/derive only; proposal-only; apply NOT IMPLEMENTED."
+          },
+          "declared_circuit": {
+            "type": "object",
+            "description": "{revision, nets:[{name,nodes:['R1.1',..]}], nc:[..], isolated:[..]} (required with presentation_baseline)."
+          },
+          "requested_operations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "default []; each becomes a ChangeProposal operation, never applied."
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir",
+          "project_name",
+          "spec"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_emit_layout",
+      "description": "Place footprints on a board via pcbnew, run DRC, render an SVG companion. Placement grid + outline margin are caller-overridable (board_mm/columns/place_start_mm/place_pitch_mm/margin_mm); defaults suit a small ~60x40mm prototype board \u2014 pass larger values for bigger/denser layouts instead of the small-board grid. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "components": {
+            "type": "array"
+          },
+          "board_mm": {
+            "type": "array"
+          },
+          "columns": {
+            "type": "integer"
+          },
+          "place_start_mm": {
+            "type": "number"
+          },
+          "place_pitch_mm": {
+            "type": "number"
+          },
+          "margin_mm": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir",
+          "project_name",
+          "components"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_emit_fab",
+      "description": "Export fab outputs (gerbers/drill/pos/step/pdf) from a .kicad_pcb via kicad-cli. The PDF layer set is caller-overridable via pdf_layers; the default (F.Cu,B.Cu,F.SilkS,B.SilkS,Edge.Cuts) suits 2/4-layer boards \u2014 pass inner copper layers for 6+ layer stacks so they are not omitted.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "board_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pdf_layers": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "board_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_simulate",
+      "description": "Simulate a schematic's analog subcircuits (dividers/filters/opamp/crystal) via the kicad analyzer + spice skill (ngspice); returns per-subcircuit pass/warn/fail. The analog-behaviour trust layer. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schematic_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "simulator": {
+            "type": "string"
+          },
+          "types": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "schematic_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_spice_model_card",
+      "description": "Generate a datasheet-grounded SPICE model card (diode/ldo/passive) from vault L4 spice_model.* params \u2014 deterministic, byte-identical, provenance-stamped. Optional materialize writes the smoke-tested card into <project>/spice/models/ (cascade tier-1, source=vault-grounded). SPX_* errors (missing/ambiguous params, unsupported category) pass through structured; never fabricates parameters.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mpn": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "vault_dir": {
+            "type": "string"
+          },
+          "materialize": {
+            "type": "boolean"
+          },
+          "project_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mpn",
+          "category"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_analyze_emc",
+      "description": "EMC pre-compliance risk analysis on a schematic + .kicad_pcb (via kicad analyzers + emc skill): severity-bucketed findings (ground plane, decoupling, return paths, stitching, \u2026). Pre-silicon risk, not certification. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schematic_path": {
+            "type": "string"
+          },
+          "pcb_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "standard": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "schematic_path",
+          "pcb_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_analyze_thermal",
+      "description": "Thermal hotspot estimate on a schematic + .kicad_pcb (kicad analyze_thermal); per-component temps + thermal score. consider: bodesign_kb_query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schematic_path": {
+            "type": "string"
+          },
+          "pcb_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "ambient": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "schematic_path",
+          "pcb_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_export_bom",
+      "description": "Export a grouped Bill of Materials (CSV, qty + MPN) from a schematic; optional xlsx companion. TWO filters silently shrink this document unless you change them: DNP symbols are dropped (exclude_dnp, default true) and symbols marked 'Exclude from BOM' are dropped (include_excluded_from_bom, default false). line_count counts only what SURVIVED them, so the result also carries the rules in force plus excluded_dnp/excluded_from_bom naming every omitted refdes, and exclusion_audit ('run' vs 'failed:...') so an empty casualty list can never be mistaken for an unrun check. The downstream reader is purchasing: a part omitted here is a part never ordered while its footprint still sits on the board (BR_20260730c).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schematic_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "group_by": {
+            "type": "string"
+          },
+          "xlsx": {
+            "type": "boolean"
+          },
+          "exclude_dnp": {
+            "type": "boolean",
+            "description": "drop Do-Not-Populate symbols (default TRUE). Correct for a clean purchasing BOM, but the omission must stay visible \u2014 see excluded_dnp in the result."
+          },
+          "include_excluded_from_bom": {
+            "type": "boolean",
+            "description": "keep symbols marked 'Exclude from BOM' (default FALSE, i.e. they are dropped). This filter is opt-IN to disable, so the default quietly omits them; excluded_from_bom in the result names which."
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "schematic_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_export_netlist",
+      "description": "Export a netlist from a schematic via kicad-cli.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schematic_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "schematic_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_prd_bom_crosscheck",
+      "description": "C00\u2192C03 fulfilment gate (quality/prd-bom-crosscheck L1): deterministically crosscheck the human-audited main_components_structured.json role manifest against the C03 KiCad netlist (.net). Per-role verdicts present/substituted/missing with matched_refs audit trail; missing roles and out-of-envelope substitutions without a recorded user approval are BLOCKING (gate=FAIL \u2014 refuse C04 entry). Fail-fast on absent/invalid manifest or netlist (MANIFEST_MISSING/MANIFEST_INVALID/NETLIST_MISSING/NETLIST_PARSE_ERROR); never silently passes. Pure python, runs in core.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "manifest_path": {
+            "type": "string"
+          },
+          "netlist_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "manifest_path",
+          "netlist_path"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_verify_netlist_fidelity",
+      "description": "ELECTRICAL-axis gate: compare a design's spec net partition against the FROZEN KiCad `.net` export(s), by node-set (net NAMES are discarded \u2014 power ports rename endpoints, so name alignment is unreliable). Netlist-only: it needs no .kicad_sch, no kicad-cli and no emitter, so it adjudicates a frozen deliverable exported anywhere. Catches the defect class ERC is structurally blind to: net FUSION (two nets welded into one reads as FEWER nets and no dangling pins, so ERC looks CLEANER) and its inverse, a cut net. Reports FOUR INDEPENDENT difference axes, never merged: `fused` (nodes that gained peers \u2014 short), `split` (nodes that lost peers \u2014 open circuit), `node_diff.spec_only` / `node_diff.emitted_only` (a node in one side only), and `nc_wired` (a pin the design DECLARES not-connected that the export wires into a multi-node net \u2014 a defect even when the partition otherwise matches, which is why it is not folded into `fused`). READ `status` BEFORE any field: `ok` = parsed >0 nets, every input readable, all five axes empty; `failed` = >=1 axis non-empty; `not-run` = precondition unmet before any read (no spec, or an empty `emitted` list) so NO comparison was attempted; `indeterminate` = `nets_parsed == 0` or an input could not be parsed \u2014 set BEFORE comparison and NOT reachable from `ok`, because an empty export and a board with no nets are the same bytes. A spec of single-pin nets against an empty export previously returned a PASS through exactly that hole. A named `.net` that does not EXIST is a separate channel (`ok:false`, code `NETLIST_MISSING`), not `indeterminate`: one sends you to fix a path, the other to inspect the drawing. Same-named nets on different sheets merge only when they SHARE a node (union-find); disclosure fields (`regrouped`, `spec_overlapping_nodes`, `singleton_only_*`) are carried on `ok` as well as on `failed`, because an exemption a reader cannot see is indistinguishable from a check never made. Pure python, runs in core.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "object",
+            "description": "the electrical SSOT partition: {net_name: [[ref, pin], ...]}. A node may also be the string \"REF.PIN\". Net names are used only as labels for the classes \u2014 the comparison is by node-set, so a name mismatch between spec and export is NOT a finding. A node the spec declares in more than one net makes the spec not-a-partition; that is reported in `spec_overlapping_nodes` rather than raised, because whether those are aliases or a missing component is a design decision.",
+            "additionalProperties": {
+              "type": "array",
+              "items": {}
+            }
+          },
+          "emitted": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "paths to exported KiCad `.net` file(s). Several sheets may be passed; classes are merged across files by SHARED NODE. An empty list is `not-run` (nothing was read), a listed path that does not exist is `NETLIST_MISSING`, and a path that exists but yields no parseable nets is `indeterminate` \u2014 three distinct outcomes that must not be collapsed."
+          },
+          "nc_declared": {
+            "type": "array",
+            "items": {},
+            "description": "pins the design DECLARES not-connected, as [[ref, pin], ...]. Any of these found on a multi-node net in the export is reported in `nc_wired`. Omit it and `nc_wired` is always empty \u2014 which means absent, NOT verified-clean."
+          }
+        },
+        "required": [
+          "spec",
+          "emitted"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_readability_gate",
+      "description": "FORM-axis gate (plan c03_delivery_contract_and_engine_seams WP6): score how a schematic is DRAWN. `gate_axis` is literally 'form' and every report carries `does_not_authorize: [electrical_correctness, fidelity]` as a DATA FIELD in every status, pass and fail alike \u2014 because BR_20260905 \u00a78.5.2 measured a change that improved EVERY geometric criterion at once (junctions 5\u219243, stub share 73.0%\u219232.7%, subcircuits 3\u219211) while raising fidelity `moved` from 10 to 67, because it wired an OPEN CIRCUIT. Every threshold here would have gone green on that change. A PASS from this verb authorizes NOTHING about whether the circuit is correct; run `bodesign_verify_netlist_fidelity` for that axis and report both. \u26a0 WHAT IT SCORES, and this is the whole of BR_20260906: it scores the `route_stats` of a LIVE COMPOSE \u2014 NOT the `.kicad_sch` sitting on disk. There is no `.kicad_sch` reader in this module. Read `scored_subject` before quoting any verdict: `live-compose` (a spec was composed; `source` names it) or `frozen-stats` (frozen numbers replayed with an explicit denominator `n`; nothing was composed). The third enumerated value `on-disk` is RESERVED AND REFUSED (READABILITY_SUBJECT_INVALID) precisely so this verb cannot CLAIM a measurement it cannot make. `not_scored` states the same fact positively: the delivered schematic's readability is `not-run` here, NEVER `failed`. The defect this prevents: a `ratio 0.2222 FAIL` on btdongle read as a verdict on the DELIVERED drawing, while the two populations differ by an order of magnitude (delivered 426 wires / 56 junctions across 3 sheets vs the scored 116 / 6, single sheet). Do NOT confuse `scored_subject` with `measure_run`: the latter is the historical run the THRESHOLDS were calibrated from (identical in every report ever emitted) and carries a spec path that reads like a subject; it is labelled `what` for that reason. THRESHOLDS ARE SCALE-DEPENDENT (task 6.3): junction > 20, stub share < 40%, drawn_subcircuits/N >= 0.50, all pinned on a live-compose run of the real 45-component/27-net btdongle spec \u2014 BR_20260905 \u00a78.5.5 measured a synthetic 28/21 corpus reporting an apparent near-miss where the same code on the real board passed clearly, so a synthetic corpus may supplement the acceptance corpus and may never decide it. These numbers do NOT transfer to a hand-drawn sheet without recalibration. Status codomain: `ok` / `failed` (>=1 threshold unmet, `unmet` names which) / `not-run` (no route_stats, or route_stats missing the task-6.0 emissions \u2014 absence is NEVER a pass) / `empty` (ran, nothing to score: zero nets, or N==0 so the ratio has no denominator and was not evaluated) / `indeterminate` (the emitter predates task 6.0, so its stats cannot be reconciled against what was drawn). N is spec-derived per DD-09 and reported beside the ratio, so a low ratio is distinguishable from a small denominator. Pure python, runs in core.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "route_stats": {
+            "type": "object",
+            "description": "the `RouteStats.to_dict()` from a compose result. null/absent is `not-run`, never a pass. A dict lacking `stub_share` or `drawn_subcircuits` is also `not-run` with `missing_fields` naming them \u2014 a missing key is absent input, not a measured zero, and defaulting it to 0 would let 'no stubs were measured' pass the stub criterion."
+          },
+          "spec": {
+            "type": "object",
+            "description": "the design spec the stats came from. Supplying it derives N per DD-09 AND sets `scored_subject` to `live-compose` with the spec as its source. Supply either this or `n`; supplying neither is READABILITY_ARGS_INVALID, because N=0 would then mean both 'no eligible nets' and 'the caller forgot the denominator'."
+          },
+          "n": {
+            "type": "integer",
+            "description": "explicit denominator, to replay a frozen fixture. Sets `scored_subject` to `frozen-stats`: no spec was composed, so this is a DIFFERENT subject and not a weaker form of the same one."
+          },
+          "scored_subject": {
+            "type": "string",
+            "description": "override the derived subject. Closed enumeration: live-compose | frozen-stats | on-disk. Normally OMIT it \u2014 the derived value comes from the branch actually taken and so cannot disagree with what was scored. `on-disk` is refused (no .kicad_sch reader exists); an unenumerated value is refused rather than coerced."
+          },
+          "subject_source": {
+            "type": "object",
+            "description": "evidence for the subject claim. Derived from `spec` when omitted. Passing it EXPLICITLY EMPTY is refused, so 'no source was supplied' and 'the source is empty' never share an output."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "bodesign_design_suggest",
+      "description": "Evidence-backed DRAFT suggestion for one pin class \u2014 it SUGGESTS, it never DECIDES. Every returned value is computed from a KB rule and stamped with `evidence.kb_object`; `review_required` is true on EVERY path including the ones that suggest nothing, and `committed` is not a member of the status codomain, so no code path can mark a suggestion as adopted (plan c03_delivery_contract_and_engine_seams DD-02). READ `status` FIRST, and note that THREE of its outcomes return zero suggestions for three DIFFERENT reasons: `suggested` = a KB rule covers this class and produced >=1 value, each carrying its own evidence; `no-rule` WITH AN EMPTY `evidence` block = the class has NO KB anchor at all (nothing ran, so no value could exist \u2014 distil a rule into KB before expecting an answer here); `no-rule` WITH A POPULATED `evidence` block = a rule DID run and the supplied context named zero pins of that class (ran, nothing to do); `indeterminate` = a rule covers the class but cannot yield a value \u2014 either a required electrical input is unresolvable, or (analog-reference today) the anchor states an OBLIGATION without a value. Which classes are answerable is decided by MEASURED KB coverage, not by plausibility: `power` uses control.power.decoupling-pdn-strategy (0.1uF per 2 power pins, ~15uF bulk per 10, placement <=1.25cm, TI SPRABV2, confidence=verified); `analog-reference` maps to step.sch.mcu-adc-frontend-review, whose entire VREF content is the sentence 'VREF/analog-supply pins get required filtering and grounding' \u2014 an obligation with NO capacitance, formula or window, so that class returns `indeterminate` with the obligation named rather than the customary 100nF, because attaching a real KB id to a value the object does not contain is worse than no answer. `ground`, `reset-en`, `boot-strapping` and `nc-dnc` returned no class-specific anchor when queried on 2026-09-06 and therefore return `no-rule`; `clock`, `io-gpio` and `high-speed` are served today by the dedicated suggest_* entry points. A malformed call (unknown pin_class, missing pin list) is `ok:false` with code DESIGN_SUGGEST_INPUT_INVALID, NOT a status \u2014 a typo teaches you nothing about KB coverage. Deterministic, side-effect free: the input is never mutated and no file is written.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mpn": {
+            "type": "string",
+            "description": "the part this pin belongs to; echoed into the result for traceability. It does NOT select a rule \u2014 rules are chosen by pin_class \u2014 so an unknown MPN never degrades the answer."
+          },
+          "pin_class": {
+            "type": "string",
+            "enum": [
+              "power",
+              "ground",
+              "clock",
+              "reset-en",
+              "boot-strapping",
+              "analog-reference",
+              "io-gpio",
+              "high-speed",
+              "nc-dnc"
+            ],
+            "description": "one of the nine classes from skills/bodesign/stages/c03-ee/references/pinout-to-circuit-method.md:32-47. A class with no KB anchor returns `no-rule` and an empty suggestion list \u2014 NEVER a guessed value. An unsupported class is not an error: it is the honest answer that no rule exists."
+          },
+          "context": {
+            "type": "object",
+            "description": "per-class inputs. pin_class='power' requires context.power_pins (a list of pin ids \u2014 the cap count IS ceil(pins/2), so an absent list has no honest default) and accepts rail, ref, ground_net. pin_class='analog-reference' requires context.vref_pins and accepts ref. A missing required key is DESIGN_SUGGEST_INPUT_INVALID rather than a zero-count answer, because 'you gave me no pins' and 'this part has no such pins' must not share an output."
+          }
+        },
+        "required": [
+          "pin_class"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_check_c03",
+      "description": "C03\u2192C04 STAGE-ENTRY gate (BR_20260707): deterministic machine check that C03 (EE) delivery is complete BEFORE C04 layout may start \u2014 the entry counterpart to check_c04's output gate. Reads the BOM csv (+ optional Pin_Allocation.csv SSOT + frozen_pad_counts) and HARD-FAILS (gate=FAIL, refuse C04 entry) on: R1 BOM schema lint (column-count/quoting breakage, bad status enum, duplicate (board,ref)); R2 readiness (any draft/blocked row; a finalized row whose mpn carries TBC/TBD/UNDECIDED); R3 drawability (every row needs a symbol-source marker: official|vendor+LCSC|manual|N-A); R4 SSOT crosscheck (active parts U/J/Y/SW must appear in Pin_Allocation.csv \u2014 catches the U4 wireless-scheme conflict class; J_* pad counts must match frozen_pad_counts when provided); R5 BOM<->netlist (every BOM row must exist as a drawn symbol) and R6 pin-spec polarity, both requiring netlist_path; R7 datasheet-mandated passives (an adjustable buck missing its feedforward cap / FB divider \u2014 an ABSENT PART, which no connectivity rule and no ERC can express) and R8 switch-node shorts (a switching or feedback pin sitting on a power rail \u2014 electrically LEGAL, so ERC is silent while the converter is destroyed), both requiring netlist_path with pinfunction annotations; PC-001 passive completeness (an active IC whose power rails carry ZERO rail\u2192GND decoupling \u2014 a pinout-only placement that cannot physically work, and that passes ERC, DRC and every connectivity rule; relocated into this delivery path by plan c03_delivery_contract_and_engine_seams DD-01/DD-08, reported under passive_completeness, PRESENCE only and subject set selected by a U* refdes-prefix proxy, with ICs whose supply pins could not be identified named in ics_without_identifiable_rail rather than folded into the green). stock=0 is a non-blocking warn. READ not_checked FIRST: it is ALWAYS non-empty, in BOTH pass and fail, and lists the defect classes this gate structurally does NOT examine (decoupling adequacy BEYOND rail\u2192GND presence \u2014 PC-001 checks that at least one decoupling cap exists per identified rail, never its value/count/placement; loop compensation, component VALUES, sequencing, thermal, ESD, analog SI). A PASS means 'the wiring agrees with the paperwork', NOT 'this circuit is correct' \u2014 two board-killing defects once passed every rule AND ERC and were caught only because a human happened to read a datasheet (BR_20260802). Each of R4\u2013R8 also reports status='run'|'not_run' so a caller can never mistake 'never looked' for 'looked, clean'. Fail-fast on absent/empty inputs (BOM_MISSING/BOM_EMPTY/PIN_ALLOC_MISSING). Gate values NEVER relaxed to pass (check_c04 floating-PSRAM false-pass lesson). Pure python, runs in core.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bom_csv": {
+            "type": "string"
+          },
+          "pin_allocation_csv": {
+            "type": "string"
+          },
+          "netlist_path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "KiCad .net export(s) covering the schematic(s) this BOM is drawn in, as an ARRAY of paths. A single bare path STRING is still accepted at runtime (back-compat) \u2014 the schema is deliberately NARROWER than the runtime, because declaring the union is what BREAKS multi-value calls: an anyOf argument gets serialised to TEXT by MCP clients, so ['a.net','b.net'] arrives as one impossible path and R5/R6 die on NETLIST_MISSING (BR_20260730b \u00a7P; proven by A/B in ONE request \u2014 covers_boards, a plain array, survived while this argument did not). ENABLES R5 (every BOM row must exist as a schematic symbol) and R6 (BOM pin-spec vs wiring polarity). WITHOUT it both rules are skipped and the report carries netlist_crosscheck.status='not_run': a gate=PASS then does NOT mean every part is drawn, it means nobody looked (BR_20260730 F2 \u2014 a verdict must carry the scope that produced it)."
+          },
+          "covers_boards": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "which `board` column values the supplied netlists actually cover, e.g. ['PRODUCT','CORE']. A product BOM spans every board while one .net covers one schematic, so rows on a board with NO netlist have no baseline and are reported under rows_unassessable_board_not_captured rather than as findings. Omit and coverage is INFERRED from which refs resolved \u2014 an inference that cannot tell 'no netlist covers this board' from 'every row on it is undrawn', so the report always states which mechanism was used (board_coverage_basis). Declaring it NARROWS the exempt set but can never WIDEN it past what was observed: a board these netlists actually draw stays assessable even if you omit it here, and the contradiction is reported under board_coverage_conflicts (BR_20260730b \u00a7Q \u2014 otherwise this argument is a mute button that turns the gate green)."
+          },
+          "frozen_pad_counts": {
+            "type": "object",
+            "description": "{ref: expected_pad_count} for J_* freeze crosscheck"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "bom_csv"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_render_companion",
+      "description": "Render a readable companion (pdf/png) for a non-readable engineering file (.kicad_sch/.kicad_pcb/gerber).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_emit_doc",
+      "description": "Render a markdown deliverable to shareable docx + pdf.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "md_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "md_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c00_emit_prd_docx",
+      "description": "BORDERLINE keep (R13/DD-3): the render-only path of this verb is ALSO landed (gate.py c00_emit_prd_docx); this container tool remains chiefly for assemble=true, which needs the docxmcp MCP bridge. Renders the C00 PRD as a docxmcp-assemblable package matching the stored Rockbox Word architecture (cover + revision history + 12 sections with per-section table layouts; conditional RF document) \u2014 body.md + outline.md + manifest.json + template/template.dotx built from answer_state. DEFAULT is client-side orchestration: bodesign returns the package(s) + an assemble_hint and the CALLING CLIENT drives docxmcp document.assemble itself. Set assemble=true to opt into the internal MCP bridge (BODESIGN_MCP_SERVERS / BODESIGN_MCP_DOCXMCP_URL); when unconfigured it degrades honestly to worker_unavailable and never fabricates a .docx. Honest: missing/drafted/external-needed/blocked/accepted-risk field states stay visible; never marks human approval.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string",
+            "description": "Project folder. MUST be visible to the bodesign container: a path under a container mount (.run / sessions / vault), OR \u2014 for a tree that is NOT mounted (a host / Google-Drive / FUSE path) \u2014 set `token` (from bodesign_stage_dir or POST /files) and give this RELATIVE to that token's tree (\".\" = tree root). A raw unmounted host path is INVISIBLE here; readiness then returns root_visible:false. Do NOT pass a bare token as folder \u2014 pass it in the `token` arg."
+          },
+          "assemble": {
+            "type": "boolean"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "folder"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c01_generate_concept_image",
+      "description": "Optional C01 add-on: generate a reference-only concept image via Google AI Studio from a C01 concept prompt. Credential source is server-side only: BODESIGN_GOOGLE_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY env first, then active API account from opencode accounts.json (default family gemini-cli). Does not affect C01 readiness.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir",
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_export_stl",
+      "description": "Export C02-ME/Enclosure.stl from Enclosure.scad using local OpenSCAD CLI when available; returns export_unavailable instead of creating fake STL when missing. `out_dir` is the PRODUCT ROOT, never the C02-ME/ stage dir (the stage prefix is already carried internally). status is one of stl_exported | export_failed | export_unavailable | source_missing | folder_missing | folder_is_stage_dir \u2014 the last three used to be a single source_missing, and their fixes differ (generate the source / create the dir / drop the stage segment from out_dir). Every result carries probed_source_path, the absolute path actually stat'ed. openscad_bin_path is the OpenSCAD EXECUTABLE and is the literal string \"not_probed\" (not null) when the call returned before it ever looked for the binary. DEPRECATED: `openscad_path` is a misleadingly-named alias of `source_path` (the .scad SOURCE, not the binary) kept for existing consumers \u2014 read `source_path` / `openscad_bin_path` instead.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "openscad_bin": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_export_skp",
+      "description": "Report native SketchUp SKP export as unavailable unless an explicit SketchUp-capable toolchain is later configured; updates SketchUp_Import_Guide.md and never fabricates Enclosure.skp.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_export_step",
+      "description": "Export a real draft STEP via the build123d/OCP CAD kernel when present AND explicit wall/clearance/lid_clearance dimensions are given (it builds the enclosure solid from the same constraints as the OpenSCAD path); otherwise reports step_export_unavailable and updates STEP_Draft_Handoff.md. Never fabricates Enclosure.step; output is marked draft_unapproved, not ME approval.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "constraints": {
+            "type": "object"
+          },
+          "wall_thickness_mm": {
+            "type": "number"
+          },
+          "clearance_mm": {
+            "type": "number"
+          },
+          "lid_clearance_mm": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_render_board_model",
+      "description": "Render a published 3D board model (glTF/.glb, incl. KHR_draco_mesh_compression) to board-view PNGs (top/iso). For open-hardware whose REAL board is published as a 3D model (e.g. OpenMV's OPENMV_N6.glb), this renders the actual board \u2014 not an auto-generated layout. Decodes Draco in-process (DracoPy), applies node transforms, colours by material, rasterises offscreen via pyrender/EGL on the me worker. Degrades to no-deps/no-gl rather than crashing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "glb_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "glb_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_render_enclosure",
+      "description": "Render a generated C02 enclosure STL (Enclosure.stl from c02_export_stl) to top/iso design-sketch PNGs \u2014 closes the 'voice-to-design' loop so a generated draft is *viewable*. Loads the STL natively via trimesh and rasterises offscreen via pyrender/EGL on the me worker (same backend as render_board_model). STL is already in mm. SINGLE-COLOUR BY DESIGN \u2014 this is a stated limitation, not a bug: the STL container carries NO colour, so any color() declaration in Enclosure.scad is DISCARDED at the c02_export_stl step and editing those colours has NO effect on this render. Every face therefore takes ONE colour for the WHOLE model: a neutral enclosure grey, or the optional CMF `color` (hex #RRGGBB[AA] / named EN+\u4e2d\u6587 e.g. white/\u9ed1/silver/\u9280 / RGB(A) array). PER-PART COLOURING IS NOT SUPPORTED \u2014 `color` is a single value, never a per-part colour map, and there is no way to colour base/lid/head separately through this tool (BR_20260901 c02 render per-part colour: needs upstream per-part identity that C02 does not yet emit). Output is marked prototype draft, not ME approval. Degrades to no-deps/no-gl rather than crashing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "stl_path": {
+            "type": "string"
+          },
+          "out_dir": {
+            "type": "string"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "color": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "stl_path",
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_voice_to_design",
+      "description": "Orchestrate the full voice-to-design loop: spoken intent \u2192 clarify \u2192 approval gate \u2192 enclosure source \u2192 STL \u2192 top/iso render. Calls plan_c02_intent; if constraints are incomplete returns the clarifying plan (no CAD); if ready and approve!=true returns the constraint set for confirmation (no CAD). Only with approve=true AND complete constraints+wall/clearance does it run generate_openscad \u2192 export_stl \u2192 render_enclosure, returning {status:approved, pipeline, images}. The render leg is the SAME engine as c02_render_enclosure and inherits its limitation: SINGLE-COLOUR BY DESIGN \u2014 the STL container carries NO colour, so any color() declaration in the generated Enclosure.scad is DISCARDED at the c02_export_stl step and editing those colours has NO effect on the images returned here. Every face takes ONE colour for the WHOLE model: a neutral enclosure grey, or the CMF `color` (this tool's own `color` arg, else the plan's gen_params.cmf_color). PER-PART COLOURING IS NOT SUPPORTED \u2014 `color` is a single value, never a per-part colour map, and base/lid/head cannot be coloured separately through this loop (BR_20260901 c02 render per-part colour: needs upstream per-part identity C02 does not yet emit). Honours the C02 approval gate and the no-guess-dimensions rule; degrades honestly when OpenSCAD CLI or GL is absent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "spec_text": {
+            "type": "string"
+          },
+          "answers": {
+            "type": "object"
+          },
+          "approve": {
+            "type": "boolean"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "color": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir",
+          "spec_text"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_c02_project_svg",
+      "description": "Project the generated 3D enclosure (Enclosure.stl from c02_export_stl) to a clean 2D vector SVG via OpenSCAD projection() \u2014 the 2D drawing is DERIVED from the 3D model (same source, no drift), so it is exact geometric paths, not a messy raster trace. Writes a wrapper .scad doing projection(cut=<cut>) import(Enclosure.stl) then runs openscad -o Enclosure.svg on the me worker. cut=false gives the outline silhouette (design view); cut=true a planar z=0 cross-section. Fails fast (no fake SVG) when the STL or OpenSCAD CLI is absent. Returns {status (source_missing|export_unavailable|export_failed|svg_exported), svg_path, wrapper_path, vector_ready}.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string"
+          },
+          "openscad_bin": {
+            "type": "string"
+          },
+          "cut": {
+            "type": "boolean"
+          },
+          "token": {
+            "type": "string",
+            "description": "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg (folder, out_dir, \u2026) resolves INSIDE the token's uploaded tree (doc_dir), and produced files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a container mount \u2014 it is how you operate on host/Google-Drive trees the container can't see."
+          }
+        },
+        "required": [
+          "out_dir"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_vault_ingest",
+      "description": "Write into the server-side Component Vault (SQLite+FTS5, persistent across projects): upsert component identity, ingest a document (sha256 dedup + blob store), index chunks, and write evidence-backed spec values in one audited call. Every write needs `actor`; specs without evidence are stored unverified (never verified). Returns a write summary + the explicit knowledge-gap list per touched MPN. Contract identical to POST /vault/ingest.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "component": {
+            "type": "object"
+          },
+          "mpns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "document": {
+            "type": "object"
+          },
+          "document_id": {
+            "type": "integer"
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "specs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "vault_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_vault_query",
+      "description": "Query the server-side Component Vault: pass `mpn` for the canonical component view (record + alias hit + completeness/gaps + document revision chain) or `query` for FTS5 BM25 full-text search over datasheet chunks (hits carry MPN, document, page anchor). Unknown MPN returns explicit status 'absent' \u2014 never an empty success. Contract identical to GET /vault/components/{key} and /vault/search.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mpn": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "include_stale": {
+            "type": "boolean"
+          },
+          "vault_dir": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "bodesign_vault_spec_check",
+      "description": "Trust-gate a spec field against the server vault FIRST (origin='server-vault'), falling back to the project's client datasheet cache (origin='client-cache', pass vault_root). Four-state verdict: verified / unverified / no-field / absent; optionally compares a claimed_value. Contract identical to GET /vault/spec-check.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mpn": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "claimed_value": {},
+          "vault_root": {
+            "type": "string"
+          },
+          "vault_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mpn",
+          "field"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_vault_queue",
+      "description": "Server vault knowledge queue: components with open knowledge gaps ranked by DD-9 priority (usage frequency x gap severity). The 'what to research next' worklist. Contract identical to GET /vault/queue.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "vault_dir": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "bodesign_vault_diagnostics",
+      "description": "Diagnose the live server-side Component Vault through the supported storage boundary: reports configured vault dir, db presence/size, queue_count, queue preview, and the safe compose-run diagnostic command. It never falls back to a temporary vault or Docker host volume path. Contract identical to GET /vault/diagnostics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "vault_dir": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "bodesign_analyzer_selfcheck",
+      "description": "Deployment self-check for the C06 analyzer engines (kicad/spice/emc): per engine reports engine_resolvable (the analyzer SCRIPTS are bundled + resolvable via BODESIGN_*_SKILL) and binary_present (kicad-cli / ngspice on PATH), plus can_run, resolved_path, image_role (monolith/ee/core), and all_runnable. Answers 'can simulate/analyze_emc/analyze_thermal actually run in this process?' without a docker exec probe. Distinguishes a missing engine script (would cause skipped-no-skills) from a missing binary (skipped-no-simulator). EE-group: runs on the monolith locally, or forwards to the bodesign-ee worker; the lean core reports image_role=core (engines absent by design \u2014 it forwards EE).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "bodesign_kb_query",
+      "description": "READ-ONLY, no side effects: query bodesign's self-shipped PCB-design domain KB (the repo ragbase store \u2014 distilled, evidence-graded design rules, IPC tables, derating curves, EMC/SI failure modes, workflow controls). Query semantics: whitespace tokens \u22653 codepoints run over FTS; by default a multi-word query is OR-ranked (bm25) so an in-store object reachable by one word is not dropped when a co-occurring word is added (matchMode 'fts-or') \u2014 pass mode='all' for exact conjunction (matchMode 'fts-and'). Short CJK tokens (<3) \u2192 LIKE scan over title/body, score=0, recency-ordered ('like-scan'); mixed \u2192 'hybrid-or'/'hybrid-and'. Payload always carries matchMode (0 hits is self-describing), hits[] (id/type/title/score/confidence/source_weight) and total. Fail-fast: missing/unmounted KB \u2192 KB_UNAVAILABLE + remedy, never empty hits masquerading as no knowledge. Call before judgment-heavy design steps (layout, EMC, SI, derating); bodesign_kb_get(id) returns a hit's full body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "search query; whitespace-tokenized"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "any",
+              "all"
+            ],
+            "description": "multi-word FTS combination: 'any' (default, OR-ranked recall) or 'all' (exact AND conjunction)"
+          },
+          "type": {
+            "type": "string",
+            "description": "optional object-type filter: concept|control|workflow|failure-mode|source|extract|asset|issue|role|step"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "max hits; default 10, cap 50"
+          }
+        },
+        "required": [
+          "q"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "bodesign_kb_get",
+      "description": "READ-ONLY, no side effects: fetch ONE domain-KB object's full distilled body (body_md) plus evidence grading (confidence, source_weight) and provenance (its distilled_from/extracted_from lineage edges with per-edge source_weight). Unknown id \u2192 KB_OBJECT_NOT_FOUND (consider: bodesign_kb_query to find the right id).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "KB object id, e.g. control.pcb.emc-decoupling-placement"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "bodesign_cache_provision",
+      "description": "Provision (find-or-mint, idempotent per owner+subject) a per-deliverable WebDAV working cache. Returns the cache token, the /dav/{token}/ mount URL, and host_provision (explicit per-host provision state \u2014 decide webdav-mount vs stage-inline from this field). Set issue_webdav_credential=true to ALSO mint the owner's WebDAV Basic credential: the password is returned plaintext ONCE and ROTATED on every issuance (stored salted-hashed; rotation invalidates the previous password, so don't re-issue under a live mount). Default payload carries NO credential. soft_cap is a WARN-FIRST per-owner usage signal; it never blocks. Mount with rclone/davfs2 (class-2 DAV), let heavy tools read/write the same namespace, then bodesign_cache_export + bodesign_cache_close.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner_identity": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          },
+          "issue_webdav_credential": {
+            "type": "boolean",
+            "description": "opt-in: mint+rotate the owner's WebDAV Basic credential and include it in the payload (R14.6)"
+          }
+        },
+        "required": [
+          "owner_identity",
+          "subject_id"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_cache_export",
+      "description": "Export (land) a deliverable cache's whole tree to an absolute host-visible target directory and stamp last_export_at (the close dirty-gate reference). The target's PARENT must already exist \u2014 ancestors are never auto-created and no alternative target is guessed (typed EXPORT_TARGET_UNREACHABLE otherwise). Cross-owner access returns typed CACHE_FORBIDDEN. `cache_token` is the cache token from bodesign_cache_provision (do NOT pass it as the generic file-model `token` arg).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cache_token": {
+            "type": "string"
+          },
+          "owner_identity": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cache_token",
+          "owner_identity",
+          "target"
+        ]
+      }
+    },
+    {
+      "name": "bodesign_cache_close",
+      "description": "Close a deliverable cache and free its namespace. Dirty-gated: files modified since the last export return typed WORKSPACE_CLOSE_DIRTY plus the unexported list unless force=true (which discards them). Cross-owner access returns typed CACHE_FORBIDDEN.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cache_token": {
+            "type": "string"
+          },
+          "owner_identity": {
+            "type": "string"
+          },
+          "force": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cache_token",
+          "owner_identity"
+        ]
+      }
+    }
+  ]
+}

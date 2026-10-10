@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "files": [
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/battery.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/btdongle_ms.kicad_pro",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/btdongle_ms.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/charge_enable.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/io.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/mcu_swd.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/power_rail.kicad_sch",
+    "/work/experiments/s3-formal/c03_engine-v5//home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/usbc.kicad_sch"
+  ],
+  "warnings": [],
+  "project_name": "btdongle_ms",
+  "engine_arg_source": "top_level",
+  "pages_emitted": 6,
+  "root_schematic": "/work/experiments/s3-formal/c03_engine-v5/btdongle_ms.kicad_sch"
+}

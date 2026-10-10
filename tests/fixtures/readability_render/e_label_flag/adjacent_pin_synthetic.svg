@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="297.0022mm" height="210.0072mm" viewBox="0 0 297.0022 210.0072">
+  <g class="wire">
+    <path style="stroke:#008000;stroke-width:0.254;" d="M 46.9900,50.8000 44.4500,50.8000"/>
+    <path style="stroke:#008000;stroke-width:0.254;" d="M 46.9900,53.3400 55.8800,53.3400"/>
+  </g>
+  <g class="label">
+    <path style="stroke:#800000;stroke-width:0.1524;" d="M 46.9900,50.8000 48.2600,49.5300 54.6100,49.5300 54.6100,52.0700 48.2600,52.0700 Z"/>
+  </g>
+</svg>

@@ -60,6 +60,12 @@ PINS = {
     "e_label_flag/power_rail_r7.kicad_sch": "8d5e3e7d5d5731e645b3de796833d12ccaada7c39d8c971ad140efbe0fb8c6fd",
     "e_label_flag/power_rail_r7.svg": "c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907",
     "e_label_flag/power_rail_r7.net": "cecc3c0f9a5e4af7a6b2b2a2655d22384f54c6f1b899b40b671e6cd538a344cc",
+    "e_label_flag/adjacent_pin_synthetic.kicad_sch": "5e8dba4d25a1fd949efcb13b7cdf1b3a3882a0fd53dcfd1829a59b7bcd431e9a",
+    "e_label_flag/adjacent_pin_synthetic.net": "a656ebed5399e8e501162607b0ba1e7ed022cdcf64481d6f3b23a1ea2b4b2973",
+    "e_label_flag/adjacent_pin_synthetic.svg": "d91ef331dfcba817080bd028f0c74fe67db115b3469b0b7532a8c0590ee49639",
+    "e_label_flag/power_rail_v4_site1.kicad_sch": "48a63e6606a37066c329227d874e8b33b9ce051b7336b54aaeb35cec1f772816",
+    "e_label_flag/power_rail_v4_site1.net": "f8ee3ba8102f7b182777b7862086f894b9a604b44bd356fccaf1566450814d2e",
+    "e_label_flag/power_rail_v4_site1.svg": "7d1bfd8f860a2c2bdb28bca357282ccaabebea47806b1bd5adfc085a29953017",
     "cp3/usbc.kicad_sch": "63432d2fe61134d3f78cbfd542b6add59eff25a1f401104593aef1e8796f2760",
     "cp3/usbc.svg": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
     "cp3/usbc.archived.net": "2fb48c0911fa6dbe720cae2df9c76560d07634f4587dc1a9c26f0b1150e0205e",
@@ -637,7 +643,7 @@ class S3UsbcCoverage(unittest.TestCase):
         self.assertEqual(v["f"][0], "fail")
         self.assertEqual(v["f"][1], 9)
         self.assertEqual(rep.subject_manifest_sha256,
-                         "8134d3770c063e184dd70cfda9260c06005f91013c4c96daf487d49cd95008e5")
+                         "b47236dd11851977995578178045373f7cec013e500b3be093b6ebf21d713811")
 
     def test_own_label_wire_is_not_a_strike(self):
         """Control: a label sitting at the END of its own wire is not struck. The
@@ -847,7 +853,7 @@ class TransformCoverage(unittest.TestCase):
         rep = _r150709()
         self.assertNotEqual(rep.subject_manifest_sha256, stored["subject_manifest_sha256"])
         self.assertEqual(rep.subject_manifest_sha256,
-                         "e98a0fab23d7631cfe46c4685d35cb3e9ae4d505d4660000d4cee9bacc4e11b1")
+                         "84311bdc2da747d82cbc3a3cd44bd8e4e0c33c5e3e4b7bf168ae266b6c5a88bb")
         got = _sig(rep)
         for c in stored["classes"]:
             want = (c["verdict"], sorted((f["code"], tuple(f["objects"]),
@@ -1037,6 +1043,8 @@ BASE_GRAPH_ONLY = {"xform/sweep_r90_mx": "754f71347014897a", "xform/sweep_r270_m
 
 # Historical BASE_9C18 is retained above. New decision policy intentionally changes
 # every manifest and adds adjudicated/unadjudicated flag findings, not graph identity.
+# BASE_FLAG is the v2 record under policy 63bee5d02a5ec147, instrument 53acfd4b (see s1-calibration-record-v2.json).
+# Retained for reference; InkAC2AC6Unchanged now iterates BASE_RECAL_V3 under policy 210cdba1bd6f4e52.
 BASE_FLAG = {
     "cp3/usbc": ("65de5e4253bf198f", "indeterminate", "indeterminate", "33ae1088a4f4547f"),
     "cp3/power_rail": ("8eb33e4bf21dc496", "indeterminate", "indeterminate", "cd899edbcaa85e69"),
@@ -1049,6 +1057,20 @@ BASE_FLAG = {
     "xform/xm": ("5ef2827e9e7d3438", "fail", "fail", "8e34f1b05fe8d587"),
     "xform/r150709": ("e98a0fab23d7631c", "fail", "fail", "a2128ab674597c90"),
     "r5b": ("2e207a26d22a22f7", "fail", "fail", "e8861de4912079d3"),
+}
+
+BASE_RECAL_V3 = {
+    "cp3/usbc": ("8f87ca843dce3956", "indeterminate", "indeterminate", "33ae1088a4f4547f"),
+    "cp3/power_rail": ("3eb1513111158bc5", "indeterminate", "indeterminate", "7a3becc1a0afa89b"),
+    "cp3/battery": ("26712bb158f5cc73", "indeterminate", "indeterminate", "f5dcfde905d460f1"),
+    "clean": ("ec6cc22628021975", "indeterminate", "indeterminate", "29d40aff8b7dc82a"),
+    "b1": ("11f3b240b964f810", "fail", "fail", "12c2531993dc0b30"),
+    "b1+declared": ("ea351b1cc711d431", "fail", "fail", "63c2a16fe2110262"),
+    "s3_usbc_20261006": ("b47236dd11851977", "fail", "fail", "f65568a821a67d42"),
+    "xform/xr180": ("31d77497678b1a7c", "fail", "fail", "317f6c6007a38d3e"),
+    "xform/xm": ("be7ee759ee41545f", "fail", "fail", "8e34f1b05fe8d587"),
+    "xform/r150709": ("84311bdc2da747d8", "fail", "fail", "a2128ab674597c90"),
+    "r5b": ("7b287cff4f5f93ef", "fail", "fail", "e8861de4912079d3"),
 }
 
 
@@ -1136,13 +1158,13 @@ class InkAC2AC6Unchanged(unittest.TestCase):
             self.assertEqual(_graph_sha(sheet)[:16], gh, key)
 
     def test_ac6_verdicts_classes_and_manifests_unchanged(self):
-        for key, (man, verdict, scoped, ch) in BASE_FLAG.items():
+        for key, (man, verdict, scoped, ch) in BASE_RECAL_V3.items():
             rep = _subject(key)
             self.assertEqual((rep.verdict, rep.scoped_verdict), (verdict, scoped), key)
             self.assertEqual(_classes_hash(rep), ch, key)
             self.assertEqual(rep.subject_manifest_sha256[:16], man, key)
             self.assertNotEqual(man, BASE_9C18[key][0], key)
-            self.assertEqual(rep.policy_ref["digest"], "63bee5d02a5ec147", key)
+            self.assertEqual(rep.policy_ref["digest"], "210cdba1bd6f4e52", key)
             self.assertIs(rep.calibration_ref.get("evidence_authenticated", False), False, key)
 
     def test_ac6_r5b_manifest_changes_only_by_the_ink_authority(self):
@@ -1150,8 +1172,8 @@ class InkAC2AC6Unchanged(unittest.TestCase):
         self.assertNotEqual(rep.subject_manifest_sha256[:16], BASE_9C18["r5b"][0])
         self.assertEqual(set(rep.authority_digests) - {"declared_pin_nets", "required_local_pairs",
                                                       "local_exceptions", "policy_digest"},
-                         {"ink_owner", "measurement_scope_version", "ink_chord_tol_mm"})
-        self.assertEqual(_classes_hash(rep), BASE_FLAG["r5b"][3])
+                          {"ink_owner", "measurement_scope_version", "ink_chord_tol_mm"})
+        self.assertEqual(_classes_hash(rep), BASE_RECAL_V3["r5b"][3])
 
     def test_ac6_sweep_subjects_support_parser_and_geometry_only(self):
         """sweep_r90_mx / sweep_r270_my have sheet + svg only (no net, no export
@@ -1533,7 +1555,7 @@ here, so the claim cannot be made from this repo."""
         self.assertEqual(rep.ink_report["owner_mode"], "rule")
         self.assertEqual(rep.ink_report["owner_declaration_mismatch"], [])   # recorded, see receipt s13
         self.assertEqual(rep.sheet_graphic_ink[0]["owner"], "D1")
-        self.assertEqual(_classes_hash(rep), BASE_FLAG["r5b"][3])           # owner never moves a finding
+        self.assertEqual(_classes_hash(rep), BASE_RECAL_V3["r5b"][3])           # owner never moves a finding
 
 
 class InkAC7AC8AC9Contract(unittest.TestCase):
@@ -1563,7 +1585,7 @@ class InkAC7AC8AC9Contract(unittest.TestCase):
 
     def test_ac7_ink_free_subjects_ignore_the_none_declaration(self):
         """An ink-free sheet with no declaration keeps its 9c18bc51 manifest (AC6)."""
-        self.assertEqual(_clean().subject_manifest_sha256[:16], BASE_FLAG["clean"][0])
+        self.assertEqual(_clean().subject_manifest_sha256[:16], BASE_RECAL_V3["clean"][0])
 
     def test_ac8_unparsed_kinds_are_counted_not_dropped(self):
         text = (CLEAN / "clean_divider.kicad_sch").read_text().rstrip()
@@ -1606,7 +1628,7 @@ class InkAC7AC8AC9Contract(unittest.TestCase):
         rep = _r5b()
         self.assertEqual(rep.measurement_scope["version"], rr.MEASUREMENT_SCOPE_VERSION)
         self.assertEqual(rep.measurement_scope["policy_digest"], rep.policy_ref["digest"])
-        self.assertEqual(rep.policy_ref["digest"], "63bee5d02a5ec147")   # flag sensor changes decision policy
+        self.assertEqual(rep.policy_ref["digest"], "210cdba1bd6f4e52")   # recalibrated adjacent-pin stub
         self.assertEqual(rep.measurement_scope["ink_chord_tol_mm"], 0.05)
 
 
@@ -1666,6 +1688,14 @@ class LabelFlagCorridor(unittest.TestCase):
         fs = self.cell(offset=True, kind="hierarchical_label").findings
         self.assertEqual(len(fs), 1)
         self.assertEqual(fs[0].code, "E_LABEL_FLAG_CORRIDOR")
+
+    def test_g_adjacent_pin_synthetic_accepting(self):
+        fs = self.findings(self.native("adjacent_pin_synthetic"))
+        self.assertEqual(fs, [])
+
+    def test_h_power_rail_v4_accepting(self):
+        fs = self.findings(self.native("power_rail_v4_site1"))
+        self.assertEqual(fs, [])
 
 
 if __name__ == "__main__":

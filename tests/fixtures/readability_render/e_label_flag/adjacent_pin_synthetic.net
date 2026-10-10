@@ -1,0 +1,13 @@
+(export (version "D")
+  (components
+    (comp (ref "J1") (value "Conn_01x02") (footprint "") (libsource (lib "Connector") (part "Conn_01x02") (description "Connector")))
+  )
+  (nets
+    (net (code "1") (name "/NET_PIN1")
+      (node (ref "J1") (pin "1") (pinfunction "Pin_1") (pintype "passive"))
+    )
+    (net (code "2") (name "/NET_PIN2")
+      (node (ref "J1") (pin "2") (pinfunction "Pin_2") (pintype "passive"))
+    )
+  )
+)

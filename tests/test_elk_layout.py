@@ -623,6 +623,64 @@ class Round3EmitterAndRoutingTests(unittest.TestCase):
         box = sol.local_labels["NET"].box
         self.assertGreaterEqual(box[0], 40.0 + 1.27 - 1e-4)
 
+    def test_local_label_straight_run_clears_corner_from_east(self):
+        import unittest.mock
+        from bodesign_eda_bridge.elk_layout import (
+            PresentationSolution, ElkGraphBuild, NodeInk, PropChoice, place_ink
+        )
+        comp = EmitComponent(ref="U1", lib_id="Device:R", x=100.0, y=100.0)
+        pc = PropChoice(name="c1", ref_at=(0, 0), val_at=(0, 0), ref_box=(120.0, 120.0, 130.0, 125.0), val_box=None)
+        sol = PresentationSolution(
+            poses={"U1": (100.0, 100.0)},
+            segments={"NET": [((60.0, 30.0), (40.0, 30.0)), ((40.0, 30.0), (40.0, 50.0))]},
+            junctions={}, label_anchors={}, drawn_nets=["NET"], undrawn={},
+            pin_tips={("U1", "1"): (60.0, 30.0), ("U1", "2"): (40.0, 50.0)}
+        )
+        build = ElkGraphBuild(
+            graph={"id": "root"}, ports={}, edge_nets={}, origins={"U1": (0.0, 0.0)}, net_pins={"NET": []},
+            inks={"U1": NodeInk(ref="U1", hull=(90.0, 90.0, 110.0, 110.0), flags=[], exits=[], candidates=[pc], natural=0, margins=(0,0,0,0))},
+            variant="default", pin_rot={}, drawn_nets=["NET"], undrawn={}, declared_pin_nets={}
+        )
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_B": "1"}):
+            res = place_ink(sol, build, [comp], cross_sheet_nets=set())
+        lbl = res["local_labels"]["NET"]
+        self.assertNotEqual(tuple(lbl["at"]), (40.0, 30.0), "Local label anchor must not be at corner")
+        # Rule B-1: stub grows along straight run outward (-x) from corner (40.0, 30.0) to (38.73, 30.0)
+        self.assertEqual(tuple(lbl["at"]), (38.73, 30.0))
+        self.assertIn(((40.0, 30.0), (38.73, 30.0)), sol.segments["NET"])
+        # Text box clears vertical wire x=40.0 by >= 1.27 mm
+        box = sol.local_labels["NET"].box
+        self.assertGreaterEqual(40.0 - box[2], 1.27 - 1e-4)
+
+    def test_local_label_straight_run_clears_corner_vertical(self):
+        import unittest.mock
+        from bodesign_eda_bridge.elk_layout import (
+            PresentationSolution, ElkGraphBuild, NodeInk, PropChoice, place_ink
+        )
+        comp = EmitComponent(ref="U1", lib_id="Device:R", x=100.0, y=100.0)
+        pc = PropChoice(name="c1", ref_at=(0, 0), val_at=(0, 0), ref_box=(120.0, 120.0, 130.0, 125.0), val_box=None)
+        # Vertical run arriving from South (40.0, 50.0) to (40.0, 30.0), then turning East (40.0, 30.0) to (60.0, 30.0)
+        # West is blocked by foreign wire at x=38.0 (same geometry as mcu_swd: SWDIO blocked by SWCLK)
+        # Outward vertical stub continues North from (40.0, 30.0) to (40.0, 28.73)
+        sol = PresentationSolution(
+            poses={"U1": (100.0, 100.0)},
+            segments={"NET": [((40.0, 50.0), (40.0, 30.0)), ((40.0, 30.0), (60.0, 30.0))],
+                      "OTHER": [((38.0, 20.0), (38.0, 40.0))]},
+            junctions={}, label_anchors={}, drawn_nets=["NET", "OTHER"], undrawn={},
+            pin_tips={("U1", "1"): (40.0, 50.0), ("U1", "2"): (60.0, 30.0)}
+        )
+        build = ElkGraphBuild(
+            graph={"id": "root"}, ports={}, edge_nets={}, origins={"U1": (0.0, 0.0)}, net_pins={"NET": []},
+            inks={"U1": NodeInk(ref="U1", hull=(90.0, 90.0, 110.0, 110.0), flags=[], exits=[], candidates=[pc], natural=0, margins=(0,0,0,0))},
+            variant="default", pin_rot={}, drawn_nets=["NET"], undrawn={}, declared_pin_nets={}
+        )
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_B": "1"}):
+            res = place_ink(sol, build, [comp], cross_sheet_nets=set())
+        lbl = res["local_labels"]["NET"]
+        self.assertNotEqual(tuple(lbl["at"]), (40.0, 30.0), "Local label anchor must not be at corner")
+        self.assertIn(((40.0, 30.0), (40.0, 28.73)), sol.segments["NET"])
+        self.assertEqual(tuple(lbl["at"]), (40.0, 28.73))
+
     def test_pin_flag_stub_and_closed_interval(self):
         import unittest.mock
         from bodesign_eda_bridge.elk_layout import (
@@ -689,3 +747,44 @@ class Round3EmitterAndRoutingTests(unittest.TestCase):
                     _boxes_overlap(cand.val_box, ink.hull, INK_CLEAR_MM),
                     f"Candidate {cand.name} val_box overlaps hull: {cand.val_box} vs {ink.hull}"
                 )
+
+    def test_rule_c1_pin_flag_reservation_extent(self):
+        import unittest.mock
+        from bodesign_eda_bridge.elk_layout import (
+            _flagged_pin_outward_box, plan_node_ink, build_elk_graph, SymbolGeometry
+        )
+        # 1. Test _flagged_pin_outward_box formula
+        # VBUS (len=4), scale=1.0: len * 1.05 + 2.0 + 0.4 = 6.60 mm
+        # reach = ceil((1.27 + 6.60)/1.27) * 1.27 = 8.89 mm
+        box = _flagged_pin_outward_box("VBUS", 73.66, 53.34, 0.0, 1.0, 1.0)
+        self.assertAlmostEqual(box[3] - box[1], 8.89, places=2)
+        self.assertEqual(box[1], 53.34)
+        self.assertEqual(box[3], 62.23)
+
+        # 2. Test plan_node_ink margin under R3_ENABLE_C=1
+        f1 = EmitComponent(ref="F1", lib_id="Device:Fuse", x=73.66, y=49.53)
+        geo = SymbolGeometry(
+            ref="F1", lib_id="Device:Fuse", scale=1.0,
+            pins={"1": (0.0, 3.81, 270.0), "2": (0.0, -3.81, 90.0)},
+            bbox=(-1.27, -3.81, 1.27, 3.81), orientation="R0"
+        )
+        node_box = (2.54, 7.62, 1.27, 3.81)
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_C": "1"}):
+            ink_c1 = plan_node_ink(f1, geo, {"2": "VBUS"}, node_box, 1.0)
+        # bottom margin (index 2 of margins=(top, left, bottom, right))
+        self.assertGreaterEqual(ink_c1.margins[2], 8.89)
+
+        # 3. Test build_elk_graph flag_pins_of includes drawn cross-sheet net
+        nets = [EmitNet("VBUS", [("F1", "2"), ("C1", "1")])]
+        c1 = EmitComponent(ref="C1", lib_id="Device:C", x=104.14, y=72.39)
+        geo_c1 = SymbolGeometry(
+            ref="C1", lib_id="Device:C", scale=1.0,
+            pins={"1": (0.0, 3.81, 270.0), "2": (0.0, -3.81, 90.0)},
+            bbox=(-1.27, -3.81, 1.27, 3.81), orientation="R0"
+        )
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_C": "1"}):
+            build = build_elk_graph(
+                [f1, c1], nets, {"F1": geo, "C1": geo_c1},
+                cross_sheet_nets={"VBUS"}
+            )
+        self.assertIn("VBUS", [f[0] for f in build.inks["F1"].flags])

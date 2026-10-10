@@ -1990,7 +1990,8 @@ def emit_kicad_schematic(
                 # legacy longest-segment-midpoint heuristic on this path only.
                 _lp = _sol.local_labels.get(net.name)
                 if _lp is not None and net.name not in cross_sheet_set:
-                    label_blocks.append(_local_label_block(net.name, _lp.at[0], _lp.at[1]))
+                    justify = "right" if _lp.edge[0] < -0.5 else "left"
+                    label_blocks.append(_local_label_block(net.name, _lp.at[0], _lp.at[1], justify=justify, angle=0))
                     _local_label_boxes.append((_lp.box[0], _lp.box[2], _lp.box[1], _lp.box[3]))
                 _fp = _sol.flags.get(net.name)
                 if _fp is not None and net.name in cross_sheet_set:
@@ -3480,7 +3481,7 @@ def _avoid_label_overlap(name: str, x: float, y: float,
     return (round(lx, 4), round(ly, 4))
 
 
-def _local_label_block(name: str, x: float, y: float) -> str:
+def _local_label_block(name: str, x: float, y: float, justify: str = "left", angle: int = 0) -> str:
     """A plain (label ...) names a wire net locally without the global-label glyph.
 
     Used in drawn-wire mode so a 2-pin point-to-point net keeps its declared name
@@ -3488,8 +3489,8 @@ def _local_label_block(name: str, x: float, y: float) -> str:
     wire's mid-segment so it sits on copper, not on a pin.
     """
     return (
-        f'  (label "{name}" (at {x} {y} 0)\n'
-        f'    (effects (font (size 1.27 1.27)) (justify left)) (uuid "{_uid()}"))'
+        f'  (label "{name}" (at {x} {y} {angle})\n'
+        f'    (effects (font (size 1.27 1.27)) (justify {justify})) (uuid "{_uid()}"))'
     )
 
 

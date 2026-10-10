@@ -54,7 +54,10 @@ POLICY: dict = {
     "corridor_band_mm": 2.54,
     "corridor_min_pins": 2,
     # Frozen label-outline clearance: four times the measured max 0.4 mm stroke.
-    "e": {"label_flag_corridor_band_mm": 1.6},
+    "e": {
+        "label_flag_corridor_band_mm": 1.6,
+        "adjacent_pin_stub_exempt_pitch_mm": 2.54,
+    },
     # class (c): local (intra-sheet) nets with <= K visible nodes must be drawn
     "local_net_max_nodes_k": 4,
     # class (f): text box vs wire / symbol body clearance
@@ -1523,6 +1526,7 @@ def _label_flag_corridors(sheet: Sheet, g: DrawnGraph, svg: SvgDoc,
     """Any-net wire proximity to drawable global/hierarchical label outlines."""
     eps = pol["coord_eps_mm"]
     band = pol["e"]["label_flag_corridor_band_mm"]
+    exempt_pitch = pol.get("e", {}).get("adjacent_pin_stub_exempt_pitch_mm", 2.54)
     sc = svg.unit_scale
     for lab in sheet.labels:
         if lab.kind not in ("global_label", "hierarchical_label"):
@@ -1532,6 +1536,12 @@ def _label_flag_corridors(sheet: Sheet, g: DrawnGraph, svg: SvgDoc,
         attached = [(i, w) for i, w in enumerate(sheet.wires)
                     if _near(w.a, lab.at, eps) or _near(w.b, lab.at, eps)]
         label_nets = set().union(*(_wire_nets(g, i) for i, _w in attached))
+        adjacent_pin_tips = [
+            w_p.tip
+            for sym in sheet.symbols
+            for p in sym.pins if _near(p.tip, lab.at, eps)
+            for w_p in sym.pins if math.dist(p.tip, w_p.tip) <= exempt_pitch + eps
+        ]
         for poly in polygons:
             edges = list(zip(poly, poly[1:]+poly[:1]))
             for i, w in enumerate(sheet.wires):
@@ -1539,6 +1549,8 @@ def _label_flag_corridors(sheet: Sheet, g: DrawnGraph, svg: SvgDoc,
                                      (w.b[1]-w.a[1])*(v.b[0]-v.a[0])) <= eps and
                                   _dist_point_seg(lab.at, w.a, w.b) <= eps)
                        for j, v in attached):
+                    continue
+                if any(_near(w.a, tip, eps) or _near(w.b, tip, eps) for tip in adjacent_pin_tips):
                     continue
                 intervals = sorted(t for c, d in edges
                                    for t in _edge_band_interval(w.a, w.b, c, d, band))

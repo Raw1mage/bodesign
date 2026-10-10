@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v5/native/mcu_swd/mcu_swd.net /work/experiments/s3-formal/c03_engine-v5/mcu_swd.kicad_sch",
+    "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v5/native/mcu_swd/svg --no-background-color /work/experiments/s3-formal/c03_engine-v5/mcu_swd.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "ac66e65312304e020e45f7c20b752f4e993be2ec6a0486a3dc7b9c32454575e1",
+  "render_sha256": "4a946a82b797462b6666aff6a42192118a4779382f6b2e6f7956a9084d6cae76",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "mcu_swd.kicad_sch": "2e3da87f4ea33905d6bd83178c1005b326e67980d8757e43216d7772c40f5443"
+  }
+}

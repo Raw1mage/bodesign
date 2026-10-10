@@ -596,3 +596,206 @@ Every single Review 34 row, blocking finding, cosmetic note, accepted class-e si
 1. **No Visual Review Performed**: This dispatch performed deterministic rasterisation and staging only. No evaluation of visual aesthetics, component arrangements, wire routing legibility, or readability acceptance was conducted.
 2. **No Adjudication / Verdict**: No claim is made regarding pass/fail status or whether an engineer should sign off on any sheet or crop; review is reserved for the independent reviewer sessions under mainline R-L 1(c) (Review 35).
 3. **No Engine / Invocation Modifications**: No python files, EDA bridge code, or multisheet invocation parameters were modified.
+
+---
+
+## 15. Round 4 — Step 0 Measurements & S1 Recalibration Gate
+
+Status: Step 0 measurements accepted; S1 recalibration predicate verified; stop gate reported.
+Authority: Mainline R-M (freeze §4.22). Dispatches: `[BRNS-DISPATCH] br=R-M-step0-six-leaf-emitter-B-C-and-S1-recal reply-to=ses_04db7a1c5ffelvbxyLP1p6xlRH` and `[BRNS-REPLY] br=R-M-step0-six-leaf-emitter-B-C-and-S1-recal ruling=step-0`.
+
+### 15.1 Step 0 Measurements (Four Tables Verbatim)
+
+#### Table A: SWCLK Route Geometry & Corner Clearance Blockers (`mcu_swd`)
+- Route vertices: `U2.D1` tip `(46.99, 58.42)` → `Corner 1` `(38.10, 58.42)` → `Corner 2` `(38.10, 157.48)` → `J3.1` tip `(148.59, 157.48)`.
+- Terminals: Both wire endpoints are pin tips (`tipset`). Zero degree-1 dead-end wire endpoints exist on the net.
+- Corners: Degree-2 vertices at `(38.10, 58.42)` and `(38.10, 157.48)`.
+- Existing B-1 code precondition `h_other[0] < p[0] - EPS` evaluated `False` because horizontal runs arrive from the East ($46.99 > 38.10$ and $148.59 > 38.10$).
+
+| Candidate Site | Stub Vector | Stub Far End | Label Text Box $[x_0, y_0, x_1, y_1]$ mm | Blocker Description | Clearance to Blocker | Status |
+|---|:---:|:---:|:---:|---|:---:|:---:|
+| **Corner 1 West (Left-Justified)** | $(-1, 0)$ | `(36.83, 58.42)` | `[36.83, 57.64, 42.48, 59.20]` | Direct self-crossing: text box runs East across vertical wire $x=38.10$ and horizontal wire $y=58.42$ | $0.00\text{ mm}$ (Direct overlap) | **FAIL** |
+| **Corner 1 West (Right-Justified)** | $(-1, 0)$ | `(36.83, 58.42)` | `[31.18, 57.64, 36.83, 59.20]` | None! Text box extends West into open margin. Clears vertical wire $x=38.10$ by exactly $1.27\text{ mm}$. | $\mathbf{1.27\text{ mm}}$ | **PASS** |
+| **Corner 1 North** | $(0, -1)$ | `(38.10, 57.15)` | `[38.10, 56.37, 43.75, 57.93]` | Horizontal carrier wire $y = 58.42$ ($58.42 - 57.935 = 0.485\text{ mm} < 1.27\text{ mm}$) | $0.485\text{ mm}$ | **FAIL** |
+| **Corner 2 South** | $(0, +1)$ | `(38.10, 158.75)` | `[38.10, 157.97, 43.75, 159.53]` | Horizontal carrier wire $y = 157.48$ ($157.965 - 157.48 = 0.485\text{ mm} < 1.27\text{ mm}$) | $0.485\text{ mm}$ | **FAIL** |
+| **Corner 2 West (Right-Justified)** | $(-1, 0)$ | `(36.83, 157.48)` | `[31.18, 156.69, 36.83, 158.26]` | None! Clears vertical wire $x=38.10$ by exactly $1.27\text{ mm}$. | $\mathbf{1.27\text{ mm}}$ | **PASS** |
+
+#### Table B: VBUS@F1.2 Channel Depth & Stub+Flag Geometry (`usbc`)
+- F1.2 pin tip: `(73.66, 53.34)`. Outward pin vector $\vec{v}_{\text{out}} = (0.0, 1.0)$ (downward).
+- Dedicated stub: $1.27\text{ mm}$ downward to `stub_far = (73.66, 54.61)`.
+- Channel corner $y$: `(73.66, 60.96)`. Available channel depth: $60.96 - 53.34 = 7.62\text{ mm}$ (6 grid units).
+- Glyph width model (`kicad_emit.py:2929`): $w = 4 \times 1.05 + 2.0 + 0.4 = 6.60\text{ mm}$.
+- Needed depth: Stub $1.27\text{ mm}$ + flag $6.60\text{ mm} = 7.87\text{ mm}$.
+- Deficit: $7.87\text{ mm} > 7.62\text{ mm}$ by $0.25\text{ mm}$ (crosses horizontal wire at $y = 60.96$).
+- Approved resolution: ELK graph port clearance reservation $\ge 8.89\text{ mm}$ (7 grid units) before layout.
+
+#### Table C: The 10 Accepted Class-E Sites on `v4` Schematics
+
+| Site # | Leaf | Global Flag | Flag Anchor Pin | Neighbour Wire UUID | Wire Endpoints $(a \to b)$ mm | Neighbour Wire Net | Pin Terminated by Wire | Pin Pitch $\Delta$ | Machine-Decidable? |
+|:---:|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **1** | `power_rail` | `GND` | `U1.6` (ENB) `(63.5, 58.42)` | `57d97043` | `(38.10, 55.88) -> (63.50, 55.88)` | `VBUS` | `U1.2` (IN) `(63.50, 55.88)` | $2.54\text{ mm}$ | **YES** |
+| **2** | `power_rail` | `GND` | `U1.6` (ENB) `(63.5, 58.42)` | `81483562` | `(40.64, 60.96) -> (63.50, 60.96)` | `/USB_DET` | `U1.13` (USB_DET) `(63.50, 60.96)` | $2.54\text{ mm}$ | **YES** |
+| **3** | `power_rail` | `ENPPB` | `U1.8` (ENPPB) `(63.5, 63.50)` | `81483562` | `(40.64, 60.96) -> (63.50, 60.96)` | `/USB_DET` | `U1.13` (USB_DET) `(63.50, 60.96)` | $2.54\text{ mm}$ | **YES** |
+| **4** | `power_rail` | `NTC` | `U1.7` (NTC) `(63.5, 66.04)` | `e8a3c4f6` | `(43.18, 68.58) -> (63.50, 68.58)` | `/ISET1` | `U1.11` (ISET1) `(63.50, 68.58)` | $2.54\text{ mm}$ | **YES** |
+| **5** | `power_rail` | `SYS` | `U1.1` (SYS) `(101.6, 60.96)` | `e09b1d72` | `(101.60, 58.42) -> (124.46, 58.42)` | `/SW_NODE` | `U1.4` (SW) `(101.60, 58.42)` | $2.54\text{ mm}$ | **YES** |
+| **6** | `power_rail` | `SYS` | `U1.15` (SYS) `(101.6, 63.50)` | `2b9855d3` | `(101.60, 66.04) -> (124.46, 66.04)` | `BATT` | `U1.14` (BATT) `(101.60, 66.04)` | $2.54\text{ mm}$ | **YES** |
+| **7** | `power_rail` | `STAT` | `U1.9` (STAT) `(101.6, 71.12)` | `040707e7` | `(101.60, 68.58) -> (124.46, 68.58)` | `BATT` | `U1.16` (BATT) `(101.60, 68.58)` | $2.54\text{ mm}$ | **YES** |
+| **8** | `battery` | `GND` | `J2.3` (Pin_3) `(95.25, 118.11)` | `eedb6513` | `(57.15, 115.57) -> (95.25, 115.57)` | `NTC` | `J2.2` (Pin_2) `(95.25, 115.57)` | $2.54\text{ mm}$ | **YES** |
+| **9** | `mcu_swd` | `GND` | `J3.2` (Pin_2) `(148.59, 154.94)` | `459e0994` | `(38.10, 157.48) -> (148.59, 157.48)` | `/SWCLK` | `J3.1` (Pin_1) `(148.59, 157.48)` | $2.54\text{ mm}$ | **YES** |
+| **10** | `mcu_swd` | `GND` | `J3.2` (Pin_2) `(148.59, 154.94)` | `d0e6e342` | `(40.64, 152.40) -> (148.59, 152.40)` | `/SWDIO` | `J3.3` (Pin_3) `(148.59, 152.40)` | $2.54\text{ mm}$ | **YES** |
+
+#### Table D: Review 35 NOTE Residuals Mapping & Disposition
+
+| Review 35 Note / Topic | Leaf | Category | Disposition / Ruling |
+|---|:---:|:---:|---|
+| **Flush local labels** (SWDIO, SWCLK, CHG_LED_A, BAT_EXT, PWR/BT/WIFI_LED) | All 6 | Rule A (B-1) | **APPROVED**: Collinear dead-end corner stub with matched text justification. |
+| **Zero-stub / jammed flags** (VBUS@F1.2, STAT@R7.1, NTC@R5) | `usbc`, `charge_enable`, `battery` | Rule B (C-1) | **APPROVED**: ELK graph port clearance reservation $\ge 8.89\text{ mm}$. |
+| **Accepted Class-E Corridors** (7 on `power_rail`, 1 on `battery`, 2 on `mcu_swd`) | `power_rail`, `battery`, `mcu_swd` | Rule C (S1 recal) | **APPROVED**: Adjacent pin stub exemption at $\le 2.54\text{ mm}$ pitch. |
+| **`usbc` CC1–CC2 collinear gap** | `usbc` | Rule E | **APPROVED**: Raise foreign-collinear separation from $2.54\text{ mm}$ to $3.81\text{ mm}$ (3 grid). |
+| **`power_rail` abutting flag outlines** (SYS/SYS, ENPPB/NTC) | `power_rail` | Orthogonal | **ACCEPTED AS-IS**: `accept-abutting_flag_outlines_at_pitch`. |
+| **`power_rail` BATT flag above C5** | `power_rail` | Orthogonal | **ACCEPTED AS-IS**: Pin-anchored at C5.1 tip. |
+| **`power_rail` 4-wire corridor down left** (~170 mm) | `power_rail` | Orthogonal | **DEFERRED** to C03 graduation (bus aesthetic). |
+| **`charge_enable` R7→D2 U-route** | `charge_enable` | Orthogonal | **DEFERRED** to C03 graduation (routing topology). |
+| **`charge_enable` SW1 SPDT common-to-GND** | `charge_enable` | Design Content | **SANDBOX-ASSUMPTION** recorded for circuit design owner. |
+| **`mcu_swd` U2 internal AGND line** | `mcu_swd` | Symbol Library | **SYMBOL ASSET**: Library symbol definition outside emitter code scope. |
+| **`io` 80% blank page occupancy** | `io` | Orthogonal | **DEFERRED** to C03 graduation (sheet partition policy). |
+
+### 15.2 S1 Recalibration Predicate & Verification
+
+- **Code Implemented (`packages/eda-bridge/bodesign_eda_bridge/readability_render.py:1535-1543`)**:
+  ```python
+  adjacent_pin_tips = [
+      w_p.tip
+      for sym in sheet.symbols
+      for p in sym.pins if _near(p.tip, lab.at, eps)
+      for w_p in sym.pins if math.dist(p.tip, w_p.tip) <= 2.54 + eps
+  ]
+  ...
+  if any(_near(w.a, tip, eps) or _near(w.b, tip, eps) for tip in adjacent_pin_tips):
+      continue
+  ```
+- **Measurement on Immutable v4 Schematic Bytes**:
+  - `usbc`: v2=0 → v3=0
+  - `power_rail`: v2=7 → v3=0
+  - `battery`: v2=1 → v3=0
+  - `charge_enable`: v2=0 → v3=0
+  - `mcu_swd`: v2=2 → v3=0
+  - `io`: v2=0 → v3=0
+  - **Total**: v2=10 → v3=0 across all six leaves.
+- **Rejecting Fixtures Verification**:
+  - `tests/fixtures/readability_render/e_label_flag/power_rail_r7`: retains 1 rejecting finding (`cd03567b` feed wire along VBUS global label outline).
+  - `tests/fixtures/readability_render/e_label_flag/usbc_r6`: retains 1 rejecting finding (`a0ef10fe` trunk wire at $x=67.31$ along VBUS flag at F1.2).
+
+### 15.3 Stop-Gate Encountered: `tests/test_readability_render.py:1142`
+
+- **Failure**:
+  `FAIL: test_ac6_verdicts_classes_and_manifests_unchanged (tests.test_readability_render.InkAC2AC6Unchanged.test_ac6_verdicts_classes_and_manifests_unchanged)`
+  `AssertionError: '7a3becc1a0afa89b' != 'cd899edbcaa85e69' : cp3/power_rail`
+- **Cause**:
+  `cp3/power_rail` contains the exact adjacent-pin flag geometry on PMIC U1 (the historical predecessor of the 7 class-e findings on `v4`). Under the un-recalibrated v2 instrument (`53acfd4b`), those 7 findings were hashed into `cd899edbcaa85e69`. Under the recalibrated v3 predicate, those 7 findings are cleanly eliminated, shifting `_classes_hash(rep)` to `7a3becc1a0afa89b`.
+- **Directive Invariant**:
+  Per user dispatch directive ("Do not edit existing assertions; if one asserts a now-forbidden geometry, STOP and ASK quoting it"), stopping and asking before altering baseline constant `BASE_FLAG["cp3/power_rail"]`.
+
+### 15.4 S1 Recalibration Resolution (Duty Officer Ruling `base-flag-pin`)
+
+- **Duty Officer Adjudication**: Resolved under Option B following the S34 precedent (`[BRNS-REPLY] br=R-M-step0-six-leaf-emitter-B-C-and-S1-recal ruling=base-flag-pin`).
+- **Implementation**:
+  1. Forked `BASE_RECAL_V3` in `tests/test_readability_render.py:1062-1074` containing the measured tuples under the recalibrated instrument.
+  2. Retained `BASE_FLAG` as the historical v2 record under policy `63bee5d02a5ec147` / instrument `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af` (annotated with reference to `s1-calibration-record-v2.json`; no active tests iterate it).
+  3. `InkAC2AC6Unchanged.test_ac6_verdicts_classes_and_manifests_unchanged` iterates `BASE_RECAL_V3`.
+  4. Added `POLICY["e"]["adjacent_pin_stub_exempt_pitch_mm"] = 2.54` to `packages/eda-bridge/bodesign_eda_bridge/readability_render.py:59`, shifting the policy digest from `63bee5d02a5ec147` to `210cdba1bd6f4e52`.
+  5. Authorised `s1-calibration-record-v3.json` citing v2 instrument sha `53acfd4b` and policy `63bee5d02a5ec147`.
+- **Baseline Transition Table (`BASE_FLAG` v2 → `BASE_RECAL_V3` v3)**:
+
+| Subject Key | v2 Manifest (16 hex) | v3 Manifest (16 hex) | Verdict (v2 → v3) | Scoped (v2 → v3) | v2 Classes Hash | v3 Classes Hash | Classes Hash Delta & Reason |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|---|
+| `cp3/usbc` | `65de5e4253bf198f` | `8f87ca843dce3956` | indet → indet | indet → indet | `33ae1088a4f4547f` | `33ae1088a4f4547f` | **Identical** (Zero finding shift) |
+| `cp3/power_rail` | `8eb33e4bf21dc496` | `3eb1513111158bc5` | indet → indet | indet → indet | `cd899edbcaa85e69` | `7a3becc1a0afa89b` | **Moved** (7 adjacent-pin findings on U1 eliminated) |
+| `cp3/battery` | `90cc5cf2ee86ddc9` | `26712bb158f5cc73` | indet → indet | indet → indet | `5bb4bfc42ebd8ae2` | `f5dcfde905d460f1` | **Moved** (1 adjacent-pin finding on J2 eliminated) |
+| `clean` | `612e9bdd9a159c8f` | `ec6cc22628021975` | indet → indet | indet → indet | `29d40aff8b7dc82a` | `29d40aff8b7dc82a` | **Identical** (Zero finding shift) |
+| `b1` | `85819c994ce86359` | `11f3b240b964f810` | fail → fail | fail → fail | `12c2531993dc0b30` | `12c2531993dc0b30` | **Identical** (Zero finding shift) |
+| `b1+declared` | `5d113bddaa77d170` | `ea351b1cc711d431` | fail → fail | fail → fail | `63c2a16fe2110262` | `63c2a16fe2110262` | **Identical** (Zero finding shift) |
+| `s3_usbc_20261006` | `8134d3770c063e18` | `b47236dd11851977` | fail → fail | fail → fail | `f65568a821a67d42` | `f65568a821a67d42` | **Identical** (Zero finding shift) |
+| `xform/xr180` | `3a4060d763e8b222` | `317f6c6007a38d3e` | fail → fail | fail → fail | `317f6c6007a38d3e` | `317f6c6007a38d3e` | **Identical** (Zero finding shift) |
+| `xform/xm` | `5ef2827e9e7d3438` | `be7ee759ee41545f` | fail → fail | fail → fail | `8e34f1b05fe8d587` | `8e34f1b05fe8d587` | **Identical** (Zero finding shift) |
+| `xform/r150709` | `e98a0fab23d7631c` | `84311bdc2da747d8` | fail → fail | fail → fail | `a2128ab674597c90` | `a2128ab674597c90` | **Identical** (Zero finding shift) |
+| `r5b` | `2e207a26d22a22f7` | `7b287cff4f5f93ef` | fail → fail | fail → fail | `e8861de4912079d3` | `e8861de4912079d3` | **Identical** (Zero finding shift) |
+
+*Leak audit*: Exactly two subjects (`cp3/power_rail` and `cp3/battery`) moved `classes_hash`, each strictly corresponding to the target adjacent-pin flag geometry on U1 and J2 respectively. All other 9 subjects had zero finding movement (`0 leaks`). All manifest shifts reflect inclusion of the new policy digest `210cdba1bd6f4e52`.
+
+### 15.5 Isolation Bisection Matrix (Runs 2, 3, 4 & Combined v5)
+
+All runs evaluated under dual instruments: frozen v2 (`53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`, policy `63bee5d02a5ec147`) vs recalibrated v3 (`3efefede90910f3349d6bce07b8c90c9a06061108f23007c2e3f156eca0f6bf0`, policy `210cdba1bd6f4e52`):
+
+| Variant / Run | Active Flags | S1 Verdict (v2) | S1 Verdict (v3) | Crossings | Pin Fidelity | Isolation Gate Verdict | Disposition |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|---|
+| **Run 1 (Baseline v4)** | `A=1, D=1` | `[0, 0, 0, 0, 10, 0]` | `[0, 0, 0, 0, 0, 0]` | 0 | 100% (45/45) | **PASS** (Baseline) | Preserved as baseline |
+| **Run 2 (+A only: Rule B-1)** | `A=1, D=1, B=1` | `[0, 0, 0, 0, 10, 0]` | `[0, 0, 0, 0, 0, 0]` | 0 | 100% (45/45) | **PASS** | **LANDED IN v5**: Straight-run corner stubs with matched justification clear orthogonal wires by $\ge 1.27\text{ mm}$ on `mcu_swd` (SWCLK, SWDIO) |
+| **Run 3 (+B only: Rule C-1)** | `A=1, D=1, C=1` | `[0, 0, 0, 0, 10, 5]` | `[0, 0, 0, 0, 0, 5]` | 0 | 100% (45/45) | **FAIL** (5 new class f) | **DROPPED**: Carrier wire runs directly through collinear flag text box (`F_WIRE_THROUGH_TEXT` on `usbc`, `power_rail`, `battery`) |
+| **Run 4 (+E only: 3-grid CC)** | `A=1, D=1, E=1` | `[0, 0, 0, 0, 10, 0]` | `[0, 0, 0, 0, 0, 0]` | 0 | 100% (45/45) | **PASS** | **LANDED IN v5**: Separates CC1 and CC2 foreign collinear tracks from $2.54\text{ mm} \to 3.81\text{ mm}$ on `usbc` |
+| **Combined Candidate (v5)** | `A=1, B=1, C=0, D=1, E=1` | `[0, 0, 0, 0, 10, 0]` | `[0, 0, 0, 0, 0, 0]` | 0 | 100% (45/45) | **PASS** | **LANDED AS c03_engine-v5**: 100% clean across all 6 leaves under v3 instrument |
+
+### 15.6 Rule C-1 Isolation Gate Failure RCA & Drop Decision
+
+- **Failure Symptoms**: Running isolation candidate +B (`R3_ENABLE_C=1`) on the six leaves produced 5 new `F_WIRE_THROUGH_TEXT` defects:
+  - `usbc`: 1 defect (`F_WIRE_THROUGH_TEXT` at `F1.2` VBUS flag, wire `a0ef10fe` through flag text box).
+  - `power_rail`: 2 defects (`F_WIRE_THROUGH_TEXT` on `U1.1` SYS and `U1.15` SYS flags).
+  - `battery`: 2 defects (`F_WIRE_THROUGH_TEXT` on `Q1.3` BATT and `J2.2` NTC flags).
+- **Root Cause Analysis (RCA)**:
+  In `packages/eda-bridge/bodesign_eda_bridge/elk_layout.py:1608-1685`, when `_r3_enabled("C")` is true, the pin-anchored flag logic looks for an outgoing collinear wire segment and splits it into `stub_seg` + `tail_seg`. `tail_seg` leaves `stub_far` in the identical direction as the global label. Consequently, the carrier wire runs directly through the text bounding box of the flag, creating fatal `F_WIRE_THROUGH_TEXT` findings on any drawn cross-sheet net (`VBUS`, `BATT`, `NTC`). In v4 (`R3_ENABLE_C=0`), `_free(..., own_strict=True)` strictly forbade placing a flag overlapping its own carrier wire.
+- **Drop Decision**: Per user isolation drop directive ("If any rule fails its isolation gate, drop that rule, keep the passing ones, and document the drop with finding evidence"), **Rule C-1 is permanently dropped** (`R3_ENABLE_C=0`).
+
+### 15.7 Combined Deliverable `c03_engine-v5` Manifest & Dual Mirror Verification
+
+- **Configuration**: `experiments/s3-formal/bisect_flags.json` set to `{"A": true, "B": true, "C": false, "D": true, "E": true}`.
+- **Directories**:
+  - **Experiment Root**: `/home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5/` (63 files)
+  - **Product Mirror**: `/home/pkcs12/products/bodesign/outputs/btdongle_ms/c03_engine-v5/` (63 files)
+- **Manifest SHA256**: `b3db0c26a0d1a3ff884c13913a9f24f34415de9617a1d92be5eded0c2e420925` (`hashes.sha256`)
+- **Dual Verification Evidence**: `sha256sum -c hashes.sha256` executed cleanly on both experiment root and product mirror (`rc=0`).
+
+### 15.8 Findings Delta & Dual Instrument S1 Comparison Table (v2 vs v3)
+
+Evaluated across all six leaves under both instruments:
+- **Frozen Instrument v2**: `readability_render.py` (`53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`, policy `63bee5d02a5ec147`)
+- **Recalibrated Instrument v3**: `readability_render.py` (`3efefede90910f3349d6bce07b8c90c9a06061108f23007c2e3f156eca0f6bf0`, policy `210cdba1bd6f4e52`)
+
+| Leaf Sheet | v4 Baseline (v2 Inst) | v5 Under Frozen v2 Inst | v5 Under Recalibrated v3 Inst | S1 Delta (v4 → v5 under v3) | Gate Verdict |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `usbc` | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | **0, 0, 0, 0, 0, 0** | 0, 0, 0, 0, 0, 0 | **CLEAN** |
+| `power_rail` | 0, 0, 0, 0, 7, 0 | 0, 0, 0, 0, 7, 0 | **0, 0, 0, 0, 0, 0** | 0, 0, 0, 0, -7, 0 | **CLEAN** (All 7 accepted e exempt) |
+| `battery` | 0, 0, 0, 0, 1, 0 | 0, 0, 0, 0, 1, 0 | **0, 0, 0, 0, 0, 0** | 0, 0, 0, 0, -1, 0 | **CLEAN** (1 accepted e exempt) |
+| `charge_enable` | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | **0, 0, 0, 0, 0, 0** | 0, 0, 0, 0, 0, 0 | **CLEAN** |
+| `mcu_swd` | 0, 0, 0, 0, 2, 0 | 0, 0, 0, 0, 2, 0 | **0, 0, 0, 0, 0, 0** | 0, 0, 0, 0, -2, 0 | **CLEAN** (All 2 accepted e exempt) |
+| `io` | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | **0, 0, 0, 0, 0, 0** | 0, 0, 0, 0, 0, 0 | **CLEAN** |
+| **Total** | **0, 0, 0, 0, 10, 0** | **0, 0, 0, 0, 10, 0** | **0, 0, 0, 0, 0, 0** | **0, 0, 0, 0, -10, 0** | **100% CLEAN ACROSS ALL 6 LEAVES** |
+
+### 15.9 Native Export, ERC Adjudication & Netlist Fidelity
+
+- **Endpoint Off-Grid Violations**: 0 across all six leaves and root.
+- **Foreign Crossings**: 0 on all six leaves (`usbc`: 0, `power_rail`: 0, `battery`: 0, `charge_enable`: 0, `mcu_swd`: 0, `io`: 0).
+- **Pin Fidelity**: 100% match across all six sheets (declared vs native netlist):
+  - `usbc`: 24 pins (0 missing, 0 extra, 0 mismatch)
+  - `power_rail`: 33 pins (0 missing, 0 extra, 0 mismatch)
+  - `battery`: 11 pins (0 missing, 0 extra, 0 mismatch)
+  - `charge_enable`: 7 pins (0 missing, 0 extra, 0 mismatch)
+  - `mcu_swd`: 37 pins (0 missing, 0 extra, 0 mismatch)
+  - `io`: 24 pins (0 missing, 0 extra, 0 mismatch)
+- **ERC Adjudication Delta**: Exact match with v4 baseline across all leaves and root (`usbc`: 0, `power_rail`: 7, `battery`: 1, `charge_enable`: 3, `mcu_swd`: 6, `io`: 3, `root`: 4). All non-lib ERC items are fully accounted for by accepted standard engineering reasons (`global_label_dangling`, `pin_not_driven`, `power_pin_not_driven`, `pin_to_pin`).
+
+### 15.10 Source & Instrument SHA256 Hashes
+
+- `packages/eda-bridge/bodesign_eda_bridge/elk_layout.py`: `436722400794a7f71f809734869159112fc3da7502ef3dc6f77dad9d93aa4cc0`
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`: `d5ed85bcdc1aee3a509f39d89a26870f98c507658b0ad89441cce1f8d1698fa3`
+- `packages/eda-bridge/bodesign_eda_bridge/readability_render.py`: `3efefede90910f3349d6bce07b8c90c9a06061108f23007c2e3f156eca0f6bf0`
+- `tests/test_elk_layout.py`: `1260ac1400593c8beb06dad983085f873b16294903b29aab6c3534dbb2f8b1cb`
+- `tests/test_readability_render.py`: `d303c6183aeb4a589287069cb2ef9a9aa19727761100e77a3e7d0f4d9928a4ae`
+- `plans/eda-bridge_unified-collaborative-rebuild/s1-calibration-record-v3.json`: `56550a775fd55b08afbe0adfc43821ef51ab0f129bfeeeb7cd93f23923d4decc`
+- `experiments/s3-formal/bisect_flags.json`: `dcf85ee70da5ea91824a3da536d5af272fc38f36f88d9686d5731029cfac1d3f`
+
+### 15.11 NOT MEASURED & Boundaries
+
+1. **Rule C-1 Dropped**: Rule C-1 outward port clearance expansion is dropped per isolation gate failure; pin-anchored flag positions on `F1.2`, `R7.1`, and `R5.1` retain their v4 placements.
+2. **Review 36 Scope**: Final visual acceptance of the v5 deliverables is reserved for independent Review 36.
+3. **No Unsolicited Circuit Spec Edits**: No schematic netlist connections, components, or sheet partition boundaries were altered.
+

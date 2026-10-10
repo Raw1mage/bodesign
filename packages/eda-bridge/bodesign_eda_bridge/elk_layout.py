@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -50,6 +51,11 @@ from .kicad_emit import (
     load_symbol,
     orient_pins,
     orient_rect,
+    _LABEL_CW_MM,
+    _LABEL_GLYPH_MM,
+    _LABEL_HMARGIN_MM,
+    _LABEL_CH_MM,
+    _LABEL_VMARGIN_MM,
 )
 
 GRID_MM = 1.27
@@ -389,6 +395,20 @@ def _prop_candidates(c: EmitComponent, hull: Box, page_scale: float) -> list[Pro
 OUTLINE_MARGIN_MM = 0.254
 
 
+def _flagged_pin_outward_box(name: str, tx: float, ty: float,
+                             ux: float, uy: float, page_scale: float) -> Box:
+    flag_len = len(name) * (_LABEL_CW_MM * page_scale) + (_LABEL_GLYPH_MM * page_scale) + _LABEL_HMARGIN_MM
+    reach = math.ceil((GRID_MM + flag_len) / GRID_MM) * GRID_MM
+    h = _LABEL_CH_MM * page_scale + _LABEL_VMARGIN_MM
+    if abs(ux) >= abs(uy):
+        if ux >= 0:
+            return (round(tx, 4), round(ty - h / 2, 4), round(tx + reach, 4), round(ty + h / 2, 4))
+        return (round(tx - reach, 4), round(ty - h / 2, 4), round(tx, 4), round(ty + h / 2, 4))
+    if uy >= 0:
+        return (round(tx - h / 2, 4), round(ty, 4), round(tx + h / 2, 4), round(ty + reach, 4))
+    return (round(tx - h / 2, 4), round(ty - reach, 4), round(tx + h / 2, 4), round(ty, 4))
+
+
 def plan_node_ink(c: EmitComponent, g: SymbolGeometry, flag_pins: dict[str, str],
                   node_box: tuple[float, float, float, float], page_scale: float,
                   outline: bool = False) -> NodeInk:
@@ -416,7 +436,11 @@ def plan_node_ink(c: EmitComponent, g: SymbolGeometry, flag_pins: dict[str, str]
         ux, uy = _pin_out_vec(rot)
         if pin in flag_pins:
             name = flag_pins[pin]
-            flags.append((name, pin, _rect(_label_bbox(name, tx, ty, True, (ux, uy), page_scale))))
+            if _r3_enabled("C"):
+                box = _flagged_pin_outward_box(name, tx, ty, ux, uy, page_scale)
+            else:
+                box = _rect(_label_bbox(name, tx, ty, True, (ux, uy), page_scale))
+            flags.append((name, pin, box))
         elif abs(ux) > 0:
             ex = tx + ux * EXIT_LEN_MM
             exits.append((min(tx, ex), ty - EXIT_HALF_W_MM, max(tx, ex), ty + EXIT_HALF_W_MM))
@@ -524,7 +548,8 @@ def build_elk_graph(components: list[EmitComponent], nets: list[EmitNet],
                     root: str = "first", page_scale: float = 1.0,
                     variant: str = "default", order: str = "declared",
                     partitions: dict[str, int] | None = None,
-                    outline_refs: frozenset[str] | set[str] | None = None) -> ElkGraphBuild:
+                    outline_refs: frozenset[str] | set[str] | None = None,
+                    cross_sheet_nets: set[str] | frozenset | None = None) -> ElkGraphBuild:
     """One ELK node per component with FIXED_POS ports at the pin tips; one edge
     per (first node -> other node) of every drawn net. `drawn_filter(net) ->
     (bool, reason)` decides which nets the engine routes; the rest are reported
@@ -629,8 +654,14 @@ def build_elk_graph(components: list[EmitComponent], nets: list[EmitNet],
     # Reserve each node's ACTUAL ink (symbol hull, flags of label-continued pins,
     # Reference/Value text) as ELK node margins, replacing the old fixed margin.
     flag_pins_of: dict[str, dict[str, str]] = {}
+    comps_on_sheet = {c.ref for c in components}
     for net in nets:
         if net.name in drawn:
+            if _r3_enabled("C") and cross_sheet_nets and net.name in cross_sheet_nets:
+                for ref, pin in net.nodes:
+                    if ref in comps_on_sheet:
+                        flag_pins_of.setdefault(ref, {})[pin] = net.name
+                        break
             continue
         for ref, pin in net.nodes:
             flag_pins_of.setdefault(ref, {})[pin] = net.name
@@ -1100,6 +1131,8 @@ def _resolve_foreign_collinear_channels(sol: PresentationSolution, build: ElkGra
         pos = sol.poses.get(ref, (0.0, 0.0))
         hull_boxes.append(_shift(ink.hull, pos[0], pos[1]))
 
+    gap_threshold = 3.81 if _r3_enabled("E") else 2.54
+
     for _pass in range(20):
         all_segs = [(net, s) for net, ss in sol.segments.items() for s in ss]
         violation = None
@@ -1112,7 +1145,7 @@ def _resolve_foreign_collinear_channels(sol: PresentationSolution, build: ElkGra
                     s1_y = (min(a[1], b[1]), max(a[1], b[1]))
                     s2_y = (min(c[1], d[1]), max(c[1], d[1]))
                     gap = s2_y[0] - s1_y[1] if s1_y[1] <= s2_y[0] else (s1_y[0] - s2_y[1] if s2_y[1] <= s1_y[0] else 0.0)
-                    if gap < 2.54 - EPS:
+                    if gap < gap_threshold - EPS:
                         violation = ("V", a[0], (ni, (a, b)), (nj, (c, d)), gap)
                         break
                 # Horizontal collinear
@@ -1120,7 +1153,7 @@ def _resolve_foreign_collinear_channels(sol: PresentationSolution, build: ElkGra
                     s1_x = (min(a[0], b[0]), max(a[0], b[0]))
                     s2_x = (min(c[0], d[0]), max(c[0], d[0]))
                     gap = s2_x[0] - s1_x[1] if s1_x[1] <= s2_x[0] else (s1_x[0] - s2_x[1] if s2_x[1] <= s1_x[0] else 0.0)
-                    if gap < 2.54 - EPS:
+                    if gap < gap_threshold - EPS:
                         violation = ("H", a[1], (ni, (a, b)), (nj, (c, d)), gap)
                         break
             if violation:
@@ -1522,6 +1555,8 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
     for c in components:
         x, y = sol.poses[c.ref]
         for name, pin, rb in build.inks[c.ref].flags:
+            if name in build.drawn_nets:
+                continue
             box = _shift(rb, x, y)
             key = (name, tuple(round(v, 3) for v in box))
             if key in seen_flag:
@@ -1801,7 +1836,7 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                 break
 
         if pick is None:
-            corners: list[tuple[Point, Point]] = []
+            corners: list[tuple[Point, Point, tuple[float, float]]] = []
             for i, s1 in enumerate(segs):
                 h1 = abs(s1[0][1] - s1[1][1]) < EPS
                 for j, s2 in enumerate(segs):
@@ -1816,10 +1851,24 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                                 h_other = H[1] if H[0] == p else H[0]
                                 v_other = V[1] if V[0] == p else V[0]
                                 if h_other[0] < p[0] - EPS:
-                                    corners.append((p, (round(p[0] + GRID_MM, 4), p[1])))
-            for p, stub_far in corners:
+                                    corners.append((p, (round(p[0] + GRID_MM, 4), p[1]), (1.0, 0.0)))
+                                elif h_other[0] > p[0] + EPS:
+                                    corners.append((p, (round(p[0] - GRID_MM, 4), p[1]), (-1.0, 0.0)))
+                                if v_other[1] < p[1] - EPS:
+                                    stub_p = (p[0], round(p[1] + GRID_MM, 4))
+                                    if h_other[0] > p[0] + EPS:
+                                        corners.append((p, stub_p, (1.0, 0.0)))
+                                    elif h_other[0] < p[0] - EPS:
+                                        corners.append((p, stub_p, (-1.0, 0.0)))
+                                elif v_other[1] > p[1] + EPS:
+                                    stub_p = (p[0], round(p[1] - GRID_MM, 4))
+                                    if h_other[0] > p[0] + EPS:
+                                        corners.append((p, stub_p, (1.0, 0.0)))
+                                    elif h_other[0] < p[0] - EPS:
+                                        corners.append((p, stub_p, (-1.0, 0.0)))
+            for p, stub_far, edge in corners:
                 stub_seg = (p, stub_far)
-                box = _rect(_label_bbox(net, stub_far[0], stub_far[1], False, (1.0, 0.0), page_scale))
+                box = _rect(_label_bbox(net, stub_far[0], stub_far[1], False, edge, page_scale))
                 hits_wire = False
                 for wnet, wa, wb in wires:
                     if (wa == stub_seg[0] and wb == stub_seg[1]) or (wa == stub_seg[1] and wb == stub_seg[0]):
@@ -1829,7 +1878,7 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                     if not (sx1 < box[0] or box[2] < sx0 or sy1 < box[1] or box[3] < sy0):
                         hits_wire = True
                         break
-                    if wnet != net and _seg_hits_box(wa, wb, box, INK_CLEAR_MM):
+                    if _seg_hits_box(wa, wb, box, INK_CLEAR_MM - 1e-4):
                         hits_wire = True
                         break
                 if hits_wire:
@@ -1840,9 +1889,10 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                     continue
                 if any(_boxes_overlap(box, pb, 0.1) for who, pb in placed):
                     continue
-                pick = LabelPlacement(net, "local", stub_far, (1.0, 0.0), box)
+                pick = LabelPlacement(net, "local", stub_far, edge, box)
                 sol.segments.setdefault(net, []).append(stub_seg)
                 wires.append((net, stub_seg[0], stub_seg[1]))
+                sol.junctions.setdefault(net, []).append(p)
                 break
         if pick is None:
             raise ElkLayoutError(
@@ -2083,7 +2133,8 @@ def solve_sheet(components: list[EmitComponent], nets: list[EmitNet], *,
                                     page_scale=page_scale, variant=var["name"],
                                     order=var.get("order", "declared"),
                                     partitions=pm.get("partitions") or None,
-                                    outline_refs=frozenset(outline_refs or ()))
+                                    outline_refs=frozenset(outline_refs or ()),
+                                    cross_sheet_nets=cross)
             solution, receipt = run_elk(build.graph, timeout_s=timeout_s)
             sol = quantize_solution(solution, build, geometry)
             sol.receipt = receipt
