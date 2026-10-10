@@ -1090,6 +1090,30 @@ User ruling: next mainline = option (i). S48–S52 pushed to `gitlab/main` @ e1a
 6. Step 0 is measure-then-ASK (quote functions, measure the two isolation-failure sites on v4
    bytes, propose the general rule for each); no edits before ruling.
 
+### 4.23 R-M closed on v5: Review 36 acceptance met (officer, 2026-10-10)
+
+Evidence chain: S54 cf35774 (round 4: A + B-1 + D + E landed, C-1 dropped by isolation gate;
+S1 recalibrated to policy 210cdba1 / instrument 3efefede with `BASE_RECAL_V3`), S55 dfbe063
+(v2-instrument control column: v4 and v5 both [0,0,0,0,10,0] under frozen 53acfd4b; v5 raster
+packet ae64c52c), Review 36 receipt `six-leaf-review36-20261010.md` (36/36 READ_OK, 6/6
+yes-with-notes, 0 BLOCKING, 35 NOTE).
+
+1. §4.22 item 4 done condition is met: every Review 35 NOTE is RESOLVED on v5 or named accepted
+   in the Review 36 ruling (items 2–5). R-M is closed; v5 is the current reviewable six-leaf set.
+2. Not landed under R-M: C-1 (flag collinear with pin stub) — permanently dropped at the
+   round-4 isolation gate; the zero-stub flag class is accepted by name, not by waiver file.
+3. 求好 backlog carried forward (engine/emitter only, detector policy stays at 210cdba1):
+   B-1′ (horizontal arm preferred; vertical stub → 90° text), B-2 (straight-run label offset),
+   junction dot only at degree ≥ 3, raster crop-box containment rule.
+4. Options for the next mainline (user decision, none started):
+   (i) one more 求好 round on the three backlog rules above → v6 → Review 37;
+   (ii) C03 graduation of the six-leaf package (bundle on v5 bytes, `check_c03` re-run,
+   `specs/` promotion) — needs the deferred items (page occupancy, four-wire corridor,
+   net naming) ruled accepted or fixed at graduation;
+   (iii) return to parked §2/§4/§5/§6 scope (S2 import, 3.6/3.7).
+5. Commits ahead of `gitlab/main` (@ e1a6f42) after S56: S53, S54, S55, S56. Push on user
+   instruction only.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
