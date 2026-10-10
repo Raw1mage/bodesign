@@ -4,7 +4,7 @@
 
 services:
   bodesign:
-    image: registore.thesmart.cc/bodesign:eaf16cc
+    image: registore.thesmart.cc/bodesign:98dba5e
     container_name: bodesign-app
     restart: unless-stopped
     command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8077"]
@@ -17,6 +17,8 @@ services:
       BODESIGN_KB_DB: "/var/lib/bodesign/kb/ragbase.sqlite"
       BODESIGN_VAULT_DIR: "/run/bodesign/vault"
       BODESIGN_AUTH_PROVIDER: "builtin"
+      FLEET_DRAFTS_DB: "/var/lib/fleet/drafts/feedback_drafts.db"
+      FLEET_SIDECAR_SOCKET: "/run/fleet/sidecar.sock"
     volumes:
       # Ephemeral token store on local NVMe (managed by token_store TTL/GC)
       - bodesign-sessions:/var/cache/bodesign/sessions
@@ -24,6 +26,8 @@ services:
       - /opt/bodesign/kb/ragbase.sqlite:/var/lib/bodesign/kb/ragbase.sqlite:ro
       # Writable server-owned component cache, seeded once from a dev snapshot
       - /opt/bodesign/vault:/run/bodesign/vault
+      - fleet-runtime:/run/fleet
+      - fleet-drafts:/var/lib/fleet/drafts
     networks:
       - bodesign-net
     deploy:
@@ -37,6 +41,35 @@ services:
       timeout: 3s
       retries: 5
       start_period: 15s
+
+  fleet-sidecar:
+    image: registore.thesmart.cc/bodesign:98dba5e
+    container_name: bodesign-fleet-sidecar
+    restart: unless-stopped
+    env_file:
+      - /opt/bodesign/fleet.env
+    entrypoint: ["sh", "-ec"]
+    command:
+      - |
+        mkdir -p /run/fleet /var/lib/fleet/drafts /var/lib/fleet/outbox
+        chown 1000:1000 /run/fleet /var/lib/fleet/drafts /var/lib/fleet/outbox
+        chmod 0700 /run/fleet /var/lib/fleet/drafts /var/lib/fleet/outbox
+        setpriv --reuid 1000 --regid 1000 --init-groups python3 -c 'from feedback_drafts import connect; connect().close()'
+        exec setpriv --reuid 1000 --regid 1000 --init-groups python3 /opt/fleet/fleet-outbox-adapter.py
+    volumes:
+      # Deployment-owned code remains dynamic and read-only (R705).
+      - /opt/bodesign/fleet-outbox-adapter.py:/opt/fleet/fleet-outbox-adapter.py:ro
+      - /opt/bodesign/fleet-outbox-reconcile.py:/opt/fleet/fleet-outbox-reconcile.py:ro
+      - fleet-runtime:/run/fleet
+      - fleet-drafts:/var/lib/fleet/drafts
+      - fleet-outbox:/var/lib/fleet/outbox
+    networks:
+      - bodesign-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
 
   nginx-sidecar:
     image: nginx:alpine
@@ -63,4 +96,10 @@ networks:
 
 volumes:
   bodesign-sessions:
+    driver: local
+  fleet-runtime:
+    driver: local
+  fleet-drafts:
+    driver: local
+  fleet-outbox:
     driver: local
