@@ -1,0 +1,19 @@
+[
+  {
+    "description": "Global label not connected anywhere else in the schematic",
+    "items": [
+      {
+        "description": "Global Label 'NTC'",
+        "pos": {
+          "x": 0.3556,
+          "y": 0.3556
+        },
+        "uuid": "9509f61e-02f4-401d-bb51-1855ff70c910"
+      }
+    ],
+    "severity": "warning",
+    "type": "global_label_dangling",
+    "decision": "ACCEPTED",
+    "reason": "ACCEPTED: declared cross-sheet continuation / replica-view global labels. Standalone ERC excludes the peer sheet. Root ENPPB and NTC native nets contain all declared peers despite the lone-label warning. No declared connection is missing; this is not electrical design approval."
+  }
+]

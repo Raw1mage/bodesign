@@ -1,0 +1,300 @@
+{
+  "instrument_sha256": "53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af",
+  "calibration_record": {
+    "schema": "s1-calibration-record-v2",
+    "version": "2026-10-09-3.3a-existing-evidence",
+    "policy_digest": "63bee5d02a5ec147",
+    "previous_policy_digest": "443bbb0185d5a914",
+    "policy_transition_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#15-class-e-power-symbol-corridor-sensor-br_20261009-2026-10-09",
+    "supported_scope": {
+      "rotations": [
+        0
+      ],
+      "classes": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e"
+      ]
+    },
+    "evidence_authenticated": false,
+    "authenticated_by": null,
+    "limitations": [
+      "Resolver validates structure and scope, not evidence authenticity or sensitivity (receipt section 9).",
+      "CP3 archived netlist mismatch remains disclosed; rejecting entries are historical diagnostic evidence, not verified paired measurements.",
+      "CP3 reviewer session ids are not recorded in the fixture notes or receipt. The receipt author is a transcriber, not substituted as the independent reviewer.",
+      "S3 reviews examined PDF-path PNG surfaces, not the native SVG directly; subject bindings retain the exact reviewed PNG and manifest root where recorded.",
+      "No accepting entry is inferred from Review 6 or Reviews 7-11 general ACCEPT verdicts; they are not blanket class decisions.",
+      "Clean/b1 cases remain hand-verified, unadjudicated and are not accepting entries. CP1/CP2 remain permanently blocked."
+    ],
+    "subjects": {
+      "cp3_usbc": {
+        "fixture_root": "tests/fixtures/readability_render/cp3",
+        "artifact_hashes": {
+          "usbc.kicad_sch": "63432d2fe61134d3f78cbfd542b6add59eff25a1f401104593aef1e8796f2760",
+          "usbc.svg": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+          "usbc.archived.net": "2fb48c0911fa6dbe720cae2df9c76560d07634f4587dc1a9c26f0b1150e0205e"
+        },
+        "review_notes": "tests/fixtures/readability_render/cp3/usbc.reviewer-cp3.md",
+        "reviewer_session_id": null,
+        "receipt_transcriber_session_id": "ses_ef0e7e310ffeYHnGBQ4FrFzZIr"
+      },
+      "cp3_power_rail": {
+        "fixture_root": "tests/fixtures/readability_render/cp3",
+        "artifact_hashes": {
+          "power_rail.kicad_sch": "e91672c4f35990263274ca5f57c72a5ba543b41aa45004ac64ccc6809dc2f933",
+          "power_rail.svg": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289",
+          "power_rail.archived.net": "97a2f6ec57569c9930964ccf45ab2bda5c6f1988dc6f250559bdc8761d860c18"
+        },
+        "review_notes": "tests/fixtures/readability_render/cp3/power_rail.reviewer-cp3.md",
+        "reviewer_session_id": null,
+        "receipt_transcriber_session_id": "ses_ef0e7e310ffeYHnGBQ4FrFzZIr"
+      },
+      "s3_review2": {
+        "fixture_root": "tests/fixtures/readability_render/s3_usbc_20261006",
+        "artifact_hashes": {
+          "usbc.kicad_sch": "dcfdc6b2e6ac2d830922b6e56cd02190ccd30439dc3e495dc66918ba20095bf5",
+          "usbc.svg": "28bd7d5e7355ec5e6711439700d18fb4c564c8ce7899a18cee45679c398e91c8",
+          "usbc.net": "aed12f2f50943e7293e5d8c3df91450716423f23d2971ee11d16c230e164fa8a"
+        },
+        "reviewed_surface": "native/pdfpath/usbc-1.png",
+        "reviewed_surface_sha256": "ddd66e937d04892d277d2651f05e4eb6a061a07cc1b8992b83b54180300fcdbc",
+        "binding_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#review-2--ses_ef0334aadffeqenaipz6si1kz8-on-nativepdfpathusbc-1png-pdf-render"
+      },
+      "s3_review5": {
+        "fixture_root": "tests/fixtures/readability_render/r5b_usbc_20261006",
+        "artifact_hashes": {
+          "usbc.kicad_sch": "1a898ecc9158197e9d403b9a8fcc5886ba578aa86d303a8f463f38d17185856b",
+          "usbc.svg": "54fca7ad2508d686f15d0cdb7a455181c65fc3096a8b031dceea29510009f10b",
+          "usbc.net": "188cc95ccbe36242878750ef6f2637b45c02485e2cb9b724f2eb19f9fbb993f2"
+        },
+        "reviewed_surface": "run-r5b-s1-165624/native/pdfpath/usbc-1.png",
+        "reviewed_surface_sha256": "db0ba9ec09fb0ee829a49646c005c0d77e12ddba65dce3350f240f3d9d76b30b",
+        "review_manifest_root_sha256": "1001bc33b0c6f359a9c3ff92d41a8c22e982f159a43ea1e6866c1b153cc97638",
+        "binding_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#review-5--ses_eef8cff90ffe1jrnczvskovmw6-on-r5b-candidate-run-r5b-s1-165624-nativepdfpathusbc-1png",
+        "fixture_binding_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#132-what-was-built-files"
+      }
+    },
+    "classes": {
+      "a": {
+        "rejecting": [
+          {
+            "artifact_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#3-per-artifact-calibration-table",
+            "kind": "rejecting",
+            "adjudication": "independent",
+            "subject_ref": "cp3_usbc",
+            "decision": "usbc CP3: a, c, d, f; A_DOT_ON_PIN_TIP F1.1"
+          }
+        ],
+        "accepting": [
+          {
+            "artifact_sha256": "54fca7ad2508d686f15d0cdb7a455181c65fc3096a8b031dceea29510009f10b",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#corpus-classification-officer--r5b",
+            "reviewer_session_id": "ses_eef8cff90ffe1jrnCZvSkoVMW6",
+            "kind": "accepting",
+            "adjudication": "independent",
+            "subject_ref": "s3_review5",
+            "decision": "a none; all dots correct, none missing, none spurious"
+          }
+        ]
+      },
+      "b": {
+        "rejecting": [
+          {
+            "artifact_sha256": "28bd7d5e7355ec5e6711439700d18fb4c564c8ce7899a18cee45679c398e91c8",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#corpus-classification-officer",
+            "reviewer_session_id": "ses_ef0334aadffeqEnaIpz6SI1Kz8",
+            "kind": "rejecting",
+            "adjudication": "independent",
+            "subject_ref": "s3_review2",
+            "decision": "Class b2 (class b): REJECTING evidence, adjudicated, S1 and reviewer coincide on location"
+          }
+        ],
+        "accepting": [
+          {
+            "artifact_sha256": "54fca7ad2508d686f15d0cdb7a455181c65fc3096a8b031dceea29510009f10b",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#corpus-classification-officer--r5b",
+            "reviewer_session_id": "ses_eef8cff90ffe1jrnCZvSkoVMW6",
+            "kind": "accepting",
+            "adjudication": "independent",
+            "subject_ref": "s3_review5",
+            "decision": "b1 none; b2 none (no dot-free crossing of different nets)"
+          }
+        ]
+      },
+      "c": {
+        "rejecting": [
+          {
+            "artifact_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#3-per-artifact-calibration-table",
+            "kind": "rejecting",
+            "adjudication": "independent",
+            "subject_ref": "cp3_usbc",
+            "decision": "C_PIN_LABEL_ONLY R1.1/R2.1/J1.B5/D1.4; reviewer: R1/R2 not wired to J1 (label-only)"
+          }
+        ],
+        "accepting": [
+          {
+            "artifact_sha256": "54fca7ad2508d686f15d0cdb7a455181c65fc3096a8b031dceea29510009f10b",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#corpus-classification-officer--r5b",
+            "reviewer_session_id": "ses_eef8cff90ffe1jrnCZvSkoVMW6",
+            "kind": "accepting",
+            "adjudication": "independent",
+            "subject_ref": "s3_review5",
+            "decision": "c none; own pull-downs, never touch"
+          }
+        ]
+      },
+      "d": {
+        "rejecting": [
+          {
+            "artifact_sha256": "1e670c1a2c51b93c8bd7ee26911ef56e27635a1655bd905a7ff207ceab1ad8f8",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#3-per-artifact-calibration-table",
+            "kind": "rejecting",
+            "adjudication": "independent",
+            "subject_ref": "cp3_usbc",
+            "decision": "D_DOT_ON_PIN_CONTINUES F1; reviewer: F1 bypassed"
+          }
+        ],
+        "accepting": [
+          {
+            "artifact_sha256": "54fca7ad2508d686f15d0cdb7a455181c65fc3096a8b031dceea29510009f10b",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s3-first-leaf-review-20261006.md#corpus-classification-officer--r5b",
+            "reviewer_session_id": "ses_eef8cff90ffe1jrnCZvSkoVMW6",
+            "kind": "accepting",
+            "adjudication": "independent",
+            "subject_ref": "s3_review5",
+            "decision": "d none; F1 SERIES (no bypass)"
+          }
+        ]
+      },
+      "e": {
+        "rejecting": [
+          {
+            "artifact_sha256": "bf19a2bd51ee84b2e38397d13dd36b670a0cb2d28235d38ef4571ed6dfd87289",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#3-per-artifact-calibration-table",
+            "kind": "rejecting",
+            "adjudication": "independent",
+            "subject_ref": "cp3_power_rail",
+            "decision": "E_PIN_ROW_CORRIDOR U1.2/6/13/8/7/11"
+          },
+          {
+            "artifact_sha256": "c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907",
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#145-second-class-e-targeted-review-review-7-power_rail-candidate-2026-10-09",
+            "reviewer_session_id": "ses_edfc83d67",
+            "kind": "rejecting",
+            "adjudication": "independent",
+            "decision": "class-e NOT CLEAN; location G: IN/VBUS-node horizontal wire along the VBUS global-label outline",
+            "reviewed_surface": "PDF-path PNG",
+            "reviewed_png_sha256": "1acb3d761b32d67d29745796e03e80ba9459458383a24cc8705eb04a2a96981d",
+            "artifact_hashes": {
+              "sheet": "8d5e3e7d5d5731e645b3de796833d12ccaada7c39d8c971ad140efbe0fb8c6fd",
+              "svg": "c55ea2a767e871f539af13ab861162dc51ac0c2588861de6794a48d157840907",
+              "netlist": "cecc3c0f9a5e4af7a6b2b2a2655d22384f54c6f1b899b40b671e6cd538a344cc"
+            }
+          }
+        ],
+        "accepting": [],
+        "missing_cell": "Explicit independently reviewed accepting class-e decision covering the implemented corridor/pin-row population and disclosed symbol-coherence gap; Review 6 general ACCEPT does not adjudicate full class e."
+      },
+      "f": {
+        "applicability": [
+          {
+            "decision_ref": "plans/eda-bridge_unified-collaborative-rebuild/s1-instrument-receipt.md#138-seal-round-r9-phaseseal-approval_ref-officerses_04db7a1c5ffelvbxylp1p6xlrhs1-r9-seal-20261006",
+            "approval_ref": "officer:ses_04db7a1c5ffelvbxyLP1p6xlRH/s1-r9-seal-20261006",
+            "status": "partial; applicability only, outside calibrated a-e scope",
+            "D1_quote": "these parameters affect OBSERVATIONS only, never decision policy or the calibration population.",
+            "D2_quote": "An ink-free subject's unchanged manifest identifies the same SUBJECT, not the same instrument execution or coverage.",
+            "D3_quote": "Observations attach after the `_class_f` verdict is fixed",
+            "limits": "Observations are not findings or calibration evidence. Text/symbol clearance, legible scale and page-use remain limited; no class-f or six-class PASS is authorized."
+          }
+        ]
+      }
+    }
+  },
+  "declared_pin_nets": {
+    "J1.A4": "VBUS_CON",
+    "J1.A9": "VBUS_CON",
+    "J1.B4": "VBUS_CON",
+    "J1.B9": "VBUS_CON",
+    "F1.1": "VBUS_CON",
+    "D1.1": "VBUS_CON",
+    "F1.2": "VBUS",
+    "C1.1": "VBUS",
+    "J1.A5": "CC1",
+    "R1.1": "CC1",
+    "D1.3": "CC1",
+    "J1.B5": "CC2",
+    "R2.1": "CC2",
+    "D1.4": "CC2",
+    "J1.A1": "GND",
+    "J1.A12": "GND",
+    "J1.B1": "GND",
+    "J1.B12": "GND",
+    "J1.S1": "GND",
+    "D1.2": "GND",
+    "D1.5": "GND",
+    "C1.2": "GND",
+    "R1.2": "GND",
+    "R2.2": "GND"
+  },
+  "required_local_pairs": [
+    [
+      "J1.A4",
+      "J1.A9"
+    ],
+    [
+      "J1.A4",
+      "J1.B4"
+    ],
+    [
+      "J1.A4",
+      "J1.B9"
+    ],
+    [
+      "J1.A4",
+      "F1.1"
+    ],
+    [
+      "J1.A4",
+      "D1.1"
+    ],
+    [
+      "F1.2",
+      "C1.1"
+    ],
+    [
+      "J1.A5",
+      "R1.1"
+    ],
+    [
+      "J1.A5",
+      "D1.3"
+    ],
+    [
+      "J1.B5",
+      "R2.1"
+    ],
+    [
+      "J1.B5",
+      "D1.4"
+    ]
+  ],
+  "required_local_pairs_mode": "explicit",
+  "rule_pairs": "R7 compatibility: star from first sheet-local pin of each engine-drawn declared net",
+  "local_exceptions": {
+    "J1.A1": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "J1.A12": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "J1.B1": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "J1.B12": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "J1.S1": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "D1.2": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "D1.5": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "C1.2": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "R1.2": "continuation: GND forced label continuation (DD-14 slice bound / policy)",
+    "R2.2": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+  },
+  "export_receipt": "/home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v2/native/usbc/usbc.export-receipt.json"
+}
