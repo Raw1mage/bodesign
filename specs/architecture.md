@@ -194,3 +194,25 @@ license, capability, credentials and data-egress approval; no proprietary runtim
 or upstream AGPL code is adopted by this amendment. These are not shipped features.
 The duty officer holds master P0 dispatch until the amended design receipt is
 accepted; existing independent collaborative work continues.
+
+## MCP Fleet Telemetry & Retrospective Feedback (plan `mcp_fleet-telemetry-feedback`, 2026-10-10)
+
+bodesign exposes a standardized retrospective reporting and feedback collection interface back to the Mother daemon (`opencode`). Contract SSOT: `/home/pkcs12/projects/bodesign/plans/mcp_fleet-telemetry-feedback/spec.md` and global specification `specs/mcp-fleet-telemetry.md`.
+
+1. **Boundary Split & Zero-Network Application Core (DD-1)**:
+   - Application tools (`services/mcp/`) remain purely offline with zero network egress, signing logic, or secret handling.
+   - The tool `submit_retrospective` (and canonical alias `bodesign_submit_retrospective` in `services/mcp/server.py`) writes structured draft records to local SQLite (`.artifacts/feedback_drafts.db` via `services/mcp/feedback_drafts.py`).
+   - On draft commit, a 1-byte wake datagram (`b"1"`) is pinged to `FLEET_SIDECAR_SOCKET` in a non-blocking fashion.
+
+2. **Event-Driven Outbox Sidecar (DD-2, DD-3)**:
+   - Dedicated harness sidecar `deploy/fleet-outbox-adapter.py` blocks on the UNIX datagram socket, pulling pending drafts immediately upon receipt without periodic polling.
+   - On startup, a sweep of `status = 'pending'` drafts recovers unpushed events.
+   - Canonical wire format: `${timestamp}.${nodeId}.${deploymentId}.${eventId}.${sha256(rawBodyBytes)}` signed with HMAC-SHA256 (`X-Fleet-Signature: t=...,k=...,v1=...`).
+   - Retries follow a 5-attempt schedule with backoff (1s, 2s, 4s, 8s). Unrecoverable errors (400, 401, 403, 404, 409, 413) or exhausted retries are quarantined into dead-letter state.
+   - Operator CLI `scripts/fleet-outbox-reconcile.py` provides dead-letter inspection (`--list`, `--show`) and requeuing (`--requeue`).
+
+3. **Mother System Ingress & Triaged Issue Filing Loop (DD-4)**:
+   - Node registered in Mother system (`~/.config/opencode/fleet-nodes.json` under `dockerlab-bodesign-01`), bound to `ownerUser: pkcs12` and `owningRepo: /home/pkcs12/projects/bodesign`.
+   - Mother Gateway (`opencode-gateway.c`) verifies node identity and proxies to Mother Daemon (`routes/fleet.ts`).
+   - Daemon validates HMAC, timestamp freshness (±300s), and stores events into `/home/pkcs12/projects/bodesign/.specbase/fleet-events.sqlite`.
+   - Notifications (`[FLEET-EVENT receiptId=...]`) wake bodesign duty officer (`★main`), who triages via `fleet_read_event` and `fleet_triage_event` to file BRs or dispatch fixes.

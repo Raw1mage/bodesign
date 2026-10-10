@@ -686,6 +686,18 @@ def _h_via_in_pad(a: dict) -> Any:
                       pad_mm=a.get("pad_mm", 0.3), keep_rings=a.get("keep_rings", 2))
 
 
+def _h_submit_retrospective(a: dict) -> Any:
+    # Fleet telemetry (plan mcp_fleet-telemetry-feedback, task 1.2). Transport-
+    # neutral: local SQLite draft + wake datagram only; the sidecar owns signing.
+    try:
+        import feedback_drafts  # container / services-mcp-on-path case
+    except ImportError:
+        from services.mcp import feedback_drafts
+    return feedback_drafts.submit_retrospective(
+        intent=a.get("intent"), friction=a.get("friction"),
+        trajectory=a.get("trajectory"), suggestion=a.get("suggestion"))
+
+
 def _h_pour_planes(a: dict) -> Any:
     from bodesign_eda_bridge import pour_planes
     return pour_planes(a["in_path"], a["out_path"], a["planes"], stitch=a.get("stitch", True),
@@ -1643,8 +1655,34 @@ TOOLS: list[dict] = [
      "description": "Close a deliverable cache and free its namespace. Dirty-gated: files modified since the last export return typed WORKSPACE_CLOSE_DIRTY plus the unexported list unless force=true (which discards them). Cross-owner access returns typed CACHE_FORBIDDEN.",
      "schema": {"type": "object", "properties": {"cache_token": _STR, "owner_identity": _STR, "force": {"type": "boolean"}},
                 "required": ["cache_token", "owner_identity"]}},
+
+    # ── Fleet telemetry retrospective (plan mcp_fleet-telemetry-feedback, task 1.2) ──
+    {"name": "bodesign_submit_retrospective", "handler": _h_submit_retrospective,
+     "description": ("Report a retrospective about using this MCP server back to its maintainers "
+                     "(fleet telemetry; also served under the fleet-standard name `submit_retrospective`). "
+                     "Records an immutable local draft and returns {ok:true, draftId:<UUIDv7>}; a deployment "
+                     "sidecar delivers it asynchronously. intent (required, <=4096 chars): what you tried to "
+                     "achieve. friction (required, <=8192): the error or limitation hit. trajectory (optional, "
+                     "<=16384): tool calls and observed outputs. suggestion (optional, <=4096): recommended fix. "
+                     "Oversize input returns FIELD_TOO_LARGE / PAYLOAD_TOO_LARGE; nothing is truncated."),
+     "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+     "schema": {"type": "object", "properties": {
+         "intent": {"type": "string", "maxLength": 4096},
+         "trajectory": {"type": "string", "maxLength": 16384},
+         "friction": {"type": "string", "maxLength": 8192},
+         "suggestion": {"type": "string", "maxLength": 4096}},
+         "required": ["intent", "friction"]}},
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
+
+# Fleet-standard unprefixed names served alongside their bodesign_* registry entry
+# (specs/mcp-fleet-telemetry.md §1 fixes the name `submit_retrospective`). Kept out
+# of TOOLS so the registry stays uniformly bodesign_-prefixed; list_tools and
+# run_tool project the alias explicitly.
+TOOL_ALIASES = {"submit_retrospective": "bodesign_submit_retrospective"}
+# Tools whose handler result IS the wire contract ({ok, draftId} / {ok:false,
+# error_code}); served in-process without the generic {ok, result} envelope.
+_DIRECT_RESULT_TOOLS = {"bodesign_submit_retrospective"}
 
 
 def tool_detail_status(name: str) -> int:
@@ -2125,6 +2163,13 @@ def run_tool(name: str, arguments: dict) -> dict:
     # the handler sees it). Pure read; never mutates.
     if name == "bodesign_workspace_inspect":
         return _h_workspace_inspect(dict(arguments or {}))
+    name = TOOL_ALIASES.get(name, name)
+    if name in _DIRECT_RESULT_TOOLS:
+        try:
+            return TOOLS_BY_NAME[name]["handler"](dict(arguments or {}))
+        except Exception as error:  # e.g. FORBIDDEN_PATH / sqlite failure: report, never mask
+            return {"ok": False, "error_code": "DRAFT_PERSIST_FAILED",
+                    "message": f"{type(error).__name__}: {error}"}
     # Worker routing: forward a non-local tool to its worker, or report it
     # unavailable when no worker is configured (the build123d gate, generalized).
     decision, target = _route_tool(name)
@@ -2649,6 +2694,13 @@ def build_server():
             ann = t.get("annotations")
             out.append(Tool(
                 name=t["name"], description=t["description"], inputSchema=t["schema"],
+                annotations=ToolAnnotations(**ann) if ann else None,
+            ))
+        for alias, target in TOOL_ALIASES.items():
+            t = TOOLS_BY_NAME[target]
+            ann = t.get("annotations")
+            out.append(Tool(
+                name=alias, description=t["description"], inputSchema=t["schema"],
                 annotations=ToolAnnotations(**ann) if ann else None,
             ))
         return out
