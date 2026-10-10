@@ -296,3 +296,60 @@ Instrument: Frozen instrument `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee2
 - **Manifest SHA256**: `c4aa76dd72451a1221c406f0fc6eda5488b5d5e44673c019eb368410aed58768` (63 files).
 - **Dual Verification Evidence**: `sha256sum -c hashes.sha256` executed cleanly on both experiment root and products mirror (exit code 0).
 
+---
+
+## 12. 1(c) raster — Six-Leaf Rasterisation for Blind Visual Review
+
+Status: Rasterisation complete. Deliverables staged in scratch.
+Authority: Mainline R-L item 1(c) (freeze §4.20). Dispatch: `[BRNS-DISPATCH] br=R-L-1c-six-leaf-raster-for-blind-review reply-to=ses_04db7a1c5ffelvbxyLP1p6xlRH`.
+Scope: Rasterisation only — no review performed, no judgement rendered, no engine/spec changes made.
+
+### 12.1 Renderer & Invocation
+
+- **Renderer**: `cairosvg 2.9.0 (Cairo 1.18.0 / pycairo / Python 3.12.3)`
+  - *Provenance vs Review 5/6*: Review 5 (R5b) and Review 6 (R6) evaluated PNGs generated from `kicad-cli sch export pdf` via `pdftoppm -r 150 -png` (`poppler-utils 24.02.0 / pdftoppm 24.02.0`). For the immutable v3 native SVG inputs dispatched here (`experiments/s3-formal/c03_engine-v3/native/<leaf>/svg/<leaf>.svg`), rasterisation was executed on host via `cairosvg 2.9.0` with `background_color="white"`.
+- **Invocation Script**: Scratch pipeline `/home/pkcs12/.cache/scratch/s3-formal/raster_v3.py`
+- **Output Directory**: `~/.cache/scratch/s3-formal/v3-png/` (scratch only; dual mirrored to `/home/pkcs12/.cache/scratch/s3-formal/v3-png/`)
+- **Rasterisation Parameters**:
+  - **Full Sheets (`<leaf>-full.png`)**: Long edge cap 2000 px (review-admission cap), white background. A4 sheets (`usbc`, `power_rail`, `battery`, `charge_enable`): 2000×1414 / 1414×2000 (6.734 px/mm); A3 sheets (`mcu_swd`, `io`): 1414×2000 (4.762 px/mm).
+  - **Crops (`<leaf>-crop-<n>.png`)**: Focused vector rasterisation of each region carrying an S1 finding in v3 (10 accepted class-e sites: power_rail ×7, battery ×1, mcu_swd ×2) PLUS every symbol with ≥ 4 pins per leaf (U1, U2, J1, J2, J3, D1). Long edge 1200–1700 px (≤ 2000 px cap), scale 20.00–46.15 px/mm (≥ 3.4× to 9.7× full-sheet scale, strictly ≥ 2× scale requirement). Crop box in mm recorded for every crop.
+
+### 12.2 Per-Leaf Image Manifest (22 Images)
+
+| File | SHA256 | Pixels | Crop Box [x0, y0, x1, y1] mm | Scale (vs Full) | Region Description |
+|---|---|:---:|:---:|:---:|---|
+| `usbc-full.png` | `038e1602a1ac1673dd5215807218df01c6a7f6215ea9c64618b22f587bbd5821` | 2000×1414 | null (full sheet) | 6.734 px/mm (1.0×) | Whole sheet usbc (2000 px long edge cap) |
+| `usbc-crop-1.png` | `9e2986497fe2e09fc0c2d886202e6a475def42ce8c99e8ddba850ec8d81a415e` | 1018×1400 | [30.0, 100.0, 70.0, 155.0] | 25.45 px/mm (3.78×) | Symbol J1 (Connector:USB_C_Receptacle_USB2.0_16P, 17 pins) |
+| `usbc-crop-2.png` | `9573a30b08e0a9f0e786bdd695ae3486e5da4b820e56d2276572e28b2d6dc5de` | 1120×1200 | [90.0, 98.0, 118.0, 128.0] | 40.00 px/mm (5.94×) | Symbol D1 (Bodesign_Presentation:PESD5V0L4UF_Boxed TVS array, 6 pins) |
+| `power_rail-full.png` | `de897ead33c19138f1699503b8d9d786d602f7574587141af3418c3910b426d8` | 1414×2000 | null (full sheet) | 6.734 px/mm (1.0×) | Whole sheet power_rail (2000 px long edge cap) |
+| `power_rail-crop-1.png` | `a0ca14fe65f2e02550d7d475e4fb63bd6a7ae69044d104acd493296773dc9df2` | 1500×992 | [50.0, 45.0, 115.0, 88.0] | 23.08 px/mm (3.43×) | Symbol U1 (local:ETA6003 PMIC, 17 pins) |
+| `power_rail-crop-2.png` | `02bd12d5e404961a580b2df9e11f223cbb469028c86994e4c32fd672d688f16f` | 1400×525 | [35.0, 50.0, 75.0, 65.0] | 35.00 px/mm (5.20×) | S1 Finding 1 (wire VBUS vs U1.6 GND flag corridor, at [57.1841, 55.88]) |
+| `power_rail-crop-3.png` | `5d762cc9ea5e7d6fb509c7e41074234bf7e45324156cd2ecb486a5ab508e92e2` | 1400×525 | [35.0, 52.0, 75.0, 67.0] | 35.00 px/mm (5.20×) | S1 Finding 2 (wire /USB_DET vs U1.6 GND flag corridor, at [57.1841, 60.96]) |
+| `power_rail-crop-4.png` | `268c11576eddeefe63ab6c33141a58c3457816e4ba5db19063efe3fe7c2c35fc` | 1400×525 | [35.0, 56.0, 75.0, 71.0] | 35.00 px/mm (5.20×) | S1 Finding 3 (wire /USB_DET vs U1.8 ENPPB flag corridor, at [54.7651, 60.96]) |
+| `power_rail-crop-5.png` | `e2d7800464677b38f132abb44783a15aa6da8c3ee1e6ef08cc698b37e04f45e3` | 1400×525 | [35.0, 60.0, 75.0, 75.0] | 35.00 px/mm (5.20×) | S1 Finding 4 (wire /ISET1 vs U1.7 NTC flag corridor, at [57.4865, 68.58]) |
+| `power_rail-crop-6.png` | `c6253fec11dad3ecc86fad101011fcabac796aabb6984af2dbbfc6f3ff952bc4` | 1400×525 | [90.0, 52.0, 130.0, 67.0] | 35.00 px/mm (5.20×) | S1 Finding 5 (wire /SW_NODE vs U1.1 SYS flag corridor, at [102.7113, 58.42]) |
+| `power_rail-crop-7.png` | `60bc2416d10d62e48c1a0af6c36b2c37a60866583a71d3179b2444b1550f4053` | 1400×525 | [90.0, 58.0, 130.0, 73.0] | 35.00 px/mm (5.20×) | S1 Finding 6 (wire BATT vs U1.15 SYS flag corridor, at [102.7113, 66.04]) |
+| `power_rail-crop-8.png` | `ba84fabd217af4c31173d805ea0dc24e71c0145b78c1e9eedad4f3e55648dc8c` | 1400×525 | [90.0, 63.0, 130.0, 78.0] | 35.00 px/mm (5.20×) | S1 Finding 7 (wire BATT vs U1.9 STAT flag corridor, at [102.7113, 68.58]) |
+| `battery-full.png` | `87d29e262c0ceb0a070a38a310fffc5315e29b417f31bd69557453cd36428403` | 2000×1414 | null (full sheet) | 6.734 px/mm (1.0×) | Whole sheet battery (2000 px long edge cap) |
+| `battery-crop-1.png` | `49c963110f330ff4c385ba88401d4b97ff4f159024d23ffff8f6a19d7134979c` | 1500×409 | [50.0, 110.0, 105.0, 125.0] | 27.27 px/mm (4.05×) | S1 Finding 1 (wire NTC vs J2.3 GND flag corridor, at [86.3941, 115.57]) |
+| `battery-crop-2.png` | `2185706b6887ebb0a24b5184ec024277a85730810a267b3156184151d3857ab6` | 1200×933 | [85.0, 105.0, 112.0, 126.0] | 44.44 px/mm (6.60×) | Symbol J2 (Connector_Generic:Conn_01x03 BAT_PH2.0 connector) |
+| `charge_enable-full.png` | `d846d00a12e87a175e53bfe100f7da25393d003679b1acf59ae5eab558cf35a4` | 2000×1414 | null (full sheet) | 6.734 px/mm (1.0×) | Whole sheet charge_enable (2000 px long edge cap) |
+| `mcu_swd-full.png` | `4ed0752d3562286985cbaa76ada6165273dd19d9e521faf9b00f3f2efa329a96` | 1414×2000 | null (full sheet) | 4.762 px/mm (1.0×) | Whole sheet mcu_swd (2000 px long edge cap) |
+| `mcu_swd-crop-1.png` | `66b939c436a227256682780eff2fcc951d1f37bdb1938f40ffc4d717a0367382` | 1200×1700 | [40.0, 45.0, 100.0, 130.0] | 20.00 px/mm (4.20×) | Symbol U2 (MCU_Module:RaspberryPi_Pico_W_Debug, 43 pins) |
+| `mcu_swd-crop-2.png` | `964edfa0d715b40b0f910a25436e6729439e14ce3d06d9fab8178784a0549576` | 1200×923 | [122.0, 145.0, 148.0, 165.0] | 46.15 px/mm (9.69×) | Symbol J3 (Connector_Generic:Conn_01x03 SWD debug header) |
+| `mcu_swd-crop-3.png` | `4230093da26ebe5621b2a41fed645ef1c8e0f7ddd3f4ad7715d21125ffb73d7f` | 1400×600 | [100.0, 146.0, 142.0, 164.0] | 33.33 px/mm (7.00×) | S1 Finding 1 (wire /SWCLK vs J3.2 GND flag corridor, at [124.4941, 157.48]) |
+| `mcu_swd-crop-4.png` | `00b39fe318ffff97460f0c5f38c50ddd4f4198b172922cb07af5de5006b008b5` | 1400×600 | [100.0, 144.0, 142.0, 162.0] | 33.33 px/mm (7.00×) | S1 Finding 2 (wire /SWDIO vs J3.2 GND flag corridor, at [124.4941, 152.4]) |
+| `io-full.png` | `d9bdd23ea1aa00b7362a1c1fd0470d934e31236bc2a57946d9900db30de52e7d` | 1414×2000 | null (full sheet) | 4.762 px/mm (1.0×) | Whole sheet io (2000 px long edge cap) |
+
+### 12.3 Verification & Hashes
+
+- **Manifest File**: `~/.cache/scratch/s3-formal/v3-png/v3-png-manifest.json`
+- **Manifest SHA256**: `dc9722a49566db63d0748ffd7c87d8b173dd5598e2b3b6951ec86cca615be4b1`
+- **Directory Hashes**: `~/.cache/scratch/s3-formal/v3-png/hashes.sha256`
+- **Integrity Evidence**: `sha256sum -c hashes.sha256` executed cleanly across all 23 items (22 PNGs + 1 JSON manifest, exit code 0).
+
+### 12.4 NOT MEASURED (Boundaries)
+
+1. **No Visual Review Performed**: This dispatch performed deterministic rasterisation and staging only. No evaluation of visual aesthetics, component arrangements, wire routing legibility, or readability acceptance was conducted.
+2. **No Adjudication / Verdict**: No claim is made regarding pass/fail status or whether an engineer should sign off on any sheet or crop; review is reserved for the independent reviewer sessions under mainline R-L 1(c).
+3. **No Engine / Invocation Modifications**: No python files, EDA bridge code, or multisheet invocation parameters were modified.
