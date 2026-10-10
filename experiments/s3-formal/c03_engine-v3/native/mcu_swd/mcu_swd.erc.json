@@ -1,0 +1,267 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-10T10:25:49+0800",
+    "included_severities": [
+        "error",
+        "warning"
+    ],
+    "kicad_version": "9.0.9",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/7f68c12a-856b-4935-b735-774e9125caca",
+            "violations": [
+                {
+                    "description": "Input Power pin not driven by any Output Power pins",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 39 [VSYS, Power input, Line]",
+                            "pos": {
+                                "x": 0.6477,
+                                "y": 0.508
+                            },
+                            "uuid": "90953f72-be95-4e53-bff5-a058e9c2f6ac"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "power_pin_not_driven"
+                },
+                {
+                    "description": "Pins of type Power output and Power output are connected",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 3 [GND, Power output, Line]",
+                            "pos": {
+                                "x": 0.6985,
+                                "y": 1.2446
+                            },
+                            "uuid": "6a1534ef-1641-4e87-8ca5-02a2266d10c1"
+                        },
+                        {
+                            "description": "Symbol U2 Pin 33 [AGND, Power output, Line]",
+                            "pos": {
+                                "x": 0.9271,
+                                "y": 1.1176
+                            },
+                            "uuid": "a8dfa6eb-9c26-433e-8e75-f9be0f8b4caf"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_to_pin"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'MCU_Module'",
+                    "items": [
+                        {
+                            "description": "Symbol U2 [RaspberryPi_Pico_W_Debug]",
+                            "pos": {
+                                "x": 0.6985,
+                                "y": 0.889
+                            },
+                            "uuid": "ee90d774-e469-4a74-9682-51094888c558"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'LED_BT'",
+                            "pos": {
+                                "x": 0.9271,
+                                "y": 0.762
+                            },
+                            "uuid": "c8f1ff5e-dcc3-4f21-9c55-312c9991db35"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'LED_WIFI'",
+                            "pos": {
+                                "x": 0.9271,
+                                "y": 0.7874
+                            },
+                            "uuid": "8f4b7931-169f-4524-9d6c-852cc82d0e44"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'SW_USER'",
+                            "pos": {
+                                "x": 0.9271,
+                                "y": 0.8128
+                            },
+                            "uuid": "1b5c09c9-8b11-459f-aaed-3892fc6763cb"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'VBAT_SENSE'",
+                            "pos": {
+                                "x": 0.9271,
+                                "y": 1.016
+                            },
+                            "uuid": "4edc46b1-b0c0-4db4-8497-081a03b1e0be"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Switch'",
+                    "items": [
+                        {
+                            "description": "Symbol SW2 [SW_Push]",
+                            "pos": {
+                                "x": 1.3081,
+                                "y": 0.7112
+                            },
+                            "uuid": "f20b4f69-9a8f-4964-aac3-8ad460a99f71"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C7 [C]",
+                            "pos": {
+                                "x": 1.3335,
+                                "y": 0.9652
+                            },
+                            "uuid": "b09b81db-450e-4aed-aa9c-8b39337fc5be"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R8 [R]",
+                            "pos": {
+                                "x": 1.3335,
+                                "y": 1.3208
+                            },
+                            "uuid": "66eb08a2-a102-46cb-b295-d5f6d3c15a9f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C8 [C]",
+                            "pos": {
+                                "x": 0.7874,
+                                "y": 1.8034
+                            },
+                            "uuid": "98c5a3f0-2c0c-4a81-8634-8ffeb888bbae"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector_Generic'",
+                    "items": [
+                        {
+                            "description": "Symbol J3 [Conn_01x03]",
+                            "pos": {
+                                "x": 1.3589,
+                                "y": 1.5494
+                            },
+                            "uuid": "4cf4baf8-15f3-448d-be39-634e1180589b"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C9 [C]",
+                            "pos": {
+                                "x": 0.7874,
+                                "y": 2.1463
+                            },
+                            "uuid": "ffe8fb10-3ec9-41ea-9005-6c0c2e267a36"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C10 [C]",
+                            "pos": {
+                                "x": 0.7874,
+                                "y": 2.5019
+                            },
+                            "uuid": "05c76fd9-e328-4a01-8c36-089f04934df5"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C11 [C]",
+                            "pos": {
+                                "x": 0.7874,
+                                "y": 2.8448
+                            },
+                            "uuid": "441961ff-1682-4b32-8d69-6956ed3ba753"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector'",
+                    "items": [
+                        {
+                            "description": "Symbol TP1 [TestPoint]",
+                            "pos": {
+                                "x": 0.7874,
+                                "y": 3.0734
+                            },
+                            "uuid": "42cad722-8657-4c2c-bd1d-465b0248a93c"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        }
+    ],
+    "source": "mcu_swd.kicad_sch"
+}

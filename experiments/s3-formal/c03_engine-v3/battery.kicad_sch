@@ -1,0 +1,963 @@
+(kicad_sch
+  (version 20250114)
+  (generator "bodesign")
+  (generator_version "9.0")
+  (uuid "4ec4cc11-c4ed-42b7-93e2-5e7018aed999")
+  (paper "A4")
+  (title_block
+    (title "btdongle_ms - battery")
+    (date "2026-10-10")
+    (rev "v1.0")
+    (company "bodesign")
+  )
+  (lib_symbols
+(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Transistor_FET:DMG2301L"
+(pin_names
+			(hide yes)
+		)
+(exclude_from_sim no)
+(in_bom yes)
+(on_board yes)
+(embedded_fonts no)
+(property "Reference" "Q"
+			(at 5.08 1.905 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+(property "Value" "DMG2301L"
+			(at 5.08 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 5.08 -1.905 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+(property "Datasheet" "https://www.diodes.com/assets/Datasheets/DMG2301L.pdf"
+			(at 5.08 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+(property "Description" "-3A Id, -20V Vds, P-Channel MOSFET, SOT-23"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+(property "ki_keywords" "P-Channel MOSFET"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+(property "ki_fp_filters" "SOT?23*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+(symbol "DMG2301L_0_1"
+			(polyline
+				(pts
+					(xy 0.254 1.905) (xy 0.254 -1.905)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.254 0) (xy -2.54 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 2.286) (xy 0.762 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 1.778) (xy 3.302 1.778) (xy 3.302 -1.778) (xy 0.762 -1.778)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 0.508) (xy 0.762 -0.508)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 -1.27) (xy 0.762 -2.286)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 1.651 0)
+				(radius 2.794)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.286 0) (xy 1.27 0.381) (xy 1.27 -0.381) (xy 2.286 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.54 2.54) (xy 2.54 1.778)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 2.54 1.778)
+				(radius 0.254)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(circle
+				(center 2.54 -1.778)
+				(radius 0.254)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.54 -2.54) (xy 2.54 0) (xy 0.762 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.794 -0.508) (xy 2.921 -0.381) (xy 3.683 -0.381) (xy 3.81 -0.254)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 3.302 -0.381) (xy 2.921 0.254) (xy 3.683 0.254) (xy 3.302 -0.381)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+(symbol "DMG2301L_1_1"
+			(pin input line
+				(at -5.08 0 0)
+				(length 2.54)
+				(name "G"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 2.54 5.08 270)
+				(length 2.54)
+				(name "D"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "3"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 2.54 -5.08 90)
+				(length 2.54)
+				(name "S"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+)
+(symbol "Connector_Generic:Conn_01x03"
+		(pin_names
+			(offset 1.016)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "J"
+			(at 0 5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Conn_01x03"
+			(at 0 -5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "connector"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "Connector*:*_1x??_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "Conn_01x03_1_1"
+			(rectangle
+				(start -1.27 3.81)
+				(end 1.27 -3.81)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
+			(rectangle
+				(start -1.27 2.667)
+				(end 0 2.413)
+				(stroke
+					(width 0.1524)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(rectangle
+				(start -1.27 0.127)
+				(end 0 -0.127)
+				(stroke
+					(width 0.1524)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(rectangle
+				(start -1.27 -2.413)
+				(end 0 -2.667)
+				(stroke
+					(width 0.1524)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(pin passive line
+				(at -5.08 2.54 0)
+				(length 3.81)
+				(name "Pin_1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -5.08 0 0)
+				(length 3.81)
+				(name "Pin_2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -5.08 -2.54 0)
+				(length 3.81)
+				(name "Pin_3"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "3"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Device:C"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0.254)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "C"
+			(at 0.635 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "C"
+			(at 0.635 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 0.9652 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "cap capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "C_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "C_0_1"
+			(polyline
+				(pts
+					(xy -2.032 0.762) (xy 2.032 0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.032 -0.762) (xy 2.032 -0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "C_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Connector:TestPoint"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0.762)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "TP"
+			(at 0 6.858 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "TestPoint"
+			(at 0 5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 5.08 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 5.08 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "test point"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "test point tp"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "Pin* Test*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "TestPoint_0_1"
+			(circle
+				(center 0 3.302)
+				(radius 0.762)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "TestPoint_1_1"
+			(pin passive line
+				(at 0 0 90)
+				(length 2.54)
+				(name "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 55.88 127.0 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "5eae7374-3616-483c-934a-a541a2100e00")
+    (property "Reference" "R5" (at 58.166 125.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 58.166 128.27 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 55.88 127.0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "d98bd03f-b9f5-4024-b7b9-3461f7c108c7"))
+    (pin "2" (uuid "dbbd7f3e-aa4d-4c14-9771-bc5a6449d117"))
+    (instances (project "battery" (path "/1ada09f4-8204-4172-b7dd-2b3204516779/409da28c-7ca3-42c4-b90f-286b48cf4597" (reference "R5") (unit 1))))
+  )
+  (symbol
+    (lib_id "Transistor_FET:DMG2301L")
+    (at 57.15 68.58 0) (mirror y)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "945ca226-05a3-41b1-a145-3e1885d1f39e")
+    (property "Reference" "Q1" (at 49.97 67.31 0) (effects (font (size 1.27 1.27)) (justify right)))
+    (property "Value" "DMG2301L" (at 43.67 69.85 0) (effects (font (size 1.27 1.27)) (justify right)))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 57.15 68.58 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "6b154449-0bcd-43fc-8064-052ebd1d43b0"))
+    (pin "2" (uuid "ba23a42d-b2fe-4244-9588-6c03cb8ba46c"))
+    (instances (project "battery" (path "/1ada09f4-8204-4172-b7dd-2b3204516779/409da28c-7ca3-42c4-b90f-286b48cf4597" (reference "Q1") (unit 1))))
+  )
+  (symbol
+    (lib_id "Connector_Generic:Conn_01x03")
+    (at 97.79 115.57 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "9a1c0246-34cc-4707-a1c1-1ea3cbbbd163")
+    (property "Reference" "J2" (at 100.33 114.3 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "BAT_PH2.0" (at 100.33 116.84 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Connector_JST:JST_PH_B3B-PH-K_1x03_P2.00mm_Vertical" (at 97.79 115.57 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "abf7c5fb-084d-4614-84bd-6ad17958f7d1"))
+    (pin "2" (uuid "2aae2ac0-5adf-4fb2-9566-81b4ef248474"))
+    (instances (project "battery" (path "/1ada09f4-8204-4172-b7dd-2b3204516779/409da28c-7ca3-42c4-b90f-286b48cf4597" (reference "J2") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:C")
+    (at 97.79 92.71 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "6d6fc114-a047-4e74-a960-4e26f98e49ee")
+    (property "Reference" "C6" (at 101.092 91.44 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100nF" (at 101.092 93.98 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric" (at 97.79 92.71 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "3e4d5997-2274-40b1-a8ba-2cf5765dcbc4"))
+    (pin "2" (uuid "fdd18117-fdfb-48af-8baa-3a355bd06f8d"))
+    (instances (project "battery" (path "/1ada09f4-8204-4172-b7dd-2b3204516779/409da28c-7ca3-42c4-b90f-286b48cf4597" (reference "C6") (unit 1))))
+  )
+  (symbol
+    (lib_id "Connector:TestPoint")
+    (at 97.79 41.91 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "3321d36b-f9df-4d26-a0f3-480caca07a6d")
+    (property "Reference" "TP2" (at 99.06 38.989 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "TP_BATT" (at 99.06 41.529 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm" (at 97.79 41.91 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "1e78000a-234f-4e3e-8cdd-6e35a7906ec2"))
+    (pin "2" (uuid "ac685f3e-6e7a-436e-966d-992a2bea38e2"))
+    (instances (project "battery" (path "/1ada09f4-8204-4172-b7dd-2b3204516779/409da28c-7ca3-42c4-b90f-286b48cf4597" (reference "TP2") (unit 1))))
+  )
+  (wire (pts (xy 54.61 55.88) (xy 54.61 63.5))
+    (stroke (width 0) (type default)) (uuid "8f471d5f-b648-4089-8337-09f6d285c520"))
+  (wire (pts (xy 54.61 55.88) (xy 97.79 55.88))
+    (stroke (width 0) (type default)) (uuid "d5d05425-d38b-478f-9c9f-91ef8715420d"))
+  (wire (pts (xy 97.79 41.91) (xy 97.79 55.88))
+    (stroke (width 0) (type default)) (uuid "107ba273-4247-4af9-b99a-8202cabd4fa3"))
+  (wire (pts (xy 54.61 73.66) (xy 54.61 81.28))
+    (stroke (width 0) (type default)) (uuid "94b99b0d-789a-40b1-bc70-e5e2698b5fb8"))
+  (wire (pts (xy 54.61 81.28) (xy 77.47 81.28))
+    (stroke (width 0) (type default)) (uuid "5d02fcbc-ebba-4e6d-adcf-0d23e32308d8"))
+  (wire (pts (xy 77.47 81.28) (xy 97.79 81.28))
+    (stroke (width 0) (type default)) (uuid "0c903bc6-d8a0-40ce-a6ce-6cd90183a926"))
+  (wire (pts (xy 77.47 81.28) (xy 77.47 113.03))
+    (stroke (width 0) (type default)) (uuid "208faecf-2694-4805-b508-6f415fdca64c"))
+  (wire (pts (xy 77.47 113.03) (xy 92.71 113.03))
+    (stroke (width 0) (type default)) (uuid "8c96f000-abf8-4e61-adc1-b39936570913"))
+  (wire (pts (xy 97.79 81.28) (xy 97.79 88.9))
+    (stroke (width 0) (type default)) (uuid "8ef85551-fedb-4797-98bb-cff5ee84e57a"))
+  (wire (pts (xy 55.88 115.57) (xy 55.88 123.19))
+    (stroke (width 0) (type default)) (uuid "8e6d54ef-0803-4c42-9584-774279cb6386"))
+  (wire (pts (xy 55.88 115.57) (xy 92.71 115.57))
+    (stroke (width 0) (type default)) (uuid "949e38b6-a360-4161-9e16-06ed7580029e"))
+  (junction (at 77.47 81.28) (diameter 0) (color 0 0 0 0) (uuid "64b042bb-fcd0-40b9-804f-b888775e45d9"))
+  (global_label "BATT" (shape bidirectional) (at 54.61 63.5 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "89a542fd-0bc1-4282-9b1c-554fa7a8bac3"))
+  (label "BAT_EXT" (at 97.79 81.28 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "8ab9ac9e-a65e-4a67-8935-43defde71d64"))
+  (global_label "NTC" (shape bidirectional) (at 55.88 123.19 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "978393bf-f94b-442c-af8b-228d36ab9905"))
+  (global_label "GND" (shape bidirectional) (at 55.88 130.81 270)
+    (effects (font (size 1.27 1.27)) (justify right)) (uuid "7da5983a-9add-4254-aa03-e15dcddeb128"))
+  (global_label "GND" (shape bidirectional) (at 62.23 68.58 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "981bbf35-b83d-433a-8d97-ad6e33d0ff50"))
+  (global_label "GND" (shape bidirectional) (at 92.71 118.11 180)
+    (effects (font (size 1.27 1.27)) (justify right)) (uuid "481d309c-6147-487b-b363-e3bad3bd53e6"))
+  (global_label "GND" (shape bidirectional) (at 97.79 96.52 270)
+    (effects (font (size 1.27 1.27)) (justify right)) (uuid "58f92a8c-e986-4b0f-b373-ef97893bac07"))
+  (global_label "NTC" (shape bidirectional) (at 35.56 35.56 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "bbd452e7-3875-42fd-9016-8a99f5214223"))
+  (text "→ U1.7 NTC — home: power_rail"
+    (at 38.1 33.02 0)
+    (effects (font (size 1.27 1.27) (italic yes)) (justify left))
+  )
+  (sheet_instances (path "/409da28c-7ca3-42c4-b90f-286b48cf4597" (page "4")))
+)

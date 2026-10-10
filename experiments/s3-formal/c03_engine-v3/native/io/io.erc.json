@@ -1,0 +1,244 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-10T10:25:50+0800",
+    "included_severities": [
+        "error",
+        "warning"
+    ],
+    "kicad_version": "9.0.9",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/7cda7dcb-5a72-49ea-bc4d-6d6e6869778d",
+            "violations": [
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R9 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.5461
+                            },
+                            "uuid": "5977230e-6e0f-469d-8a99-efff8864ffba"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'LED_BT'",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.8382
+                            },
+                            "uuid": "d0117304-0360-4dfc-9680-196084862841"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R10 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.8763
+                            },
+                            "uuid": "0eff6b88-ef7f-4a8c-a5ff-18552e80a102"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D3 [LED]",
+                            "pos": {
+                                "x": 0.9652,
+                                "y": 0.5207
+                            },
+                            "uuid": "501d1afa-3ec3-4fa4-b4ac-8094c0d5b801"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D4 [LED]",
+                            "pos": {
+                                "x": 0.9652,
+                                "y": 0.889
+                            },
+                            "uuid": "311ba668-e583-48b7-b7eb-455f14b296bd"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'LED_WIFI'",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 1.2319
+                            },
+                            "uuid": "b8453912-7bc1-4408-bdfa-030d6764785a"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R11 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 1.27
+                            },
+                            "uuid": "2535df76-5b47-48da-84b1-d7822a0c9f1d"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D5 [LED]",
+                            "pos": {
+                                "x": 0.9652,
+                                "y": 1.2827
+                            },
+                            "uuid": "0f85906b-1a40-4133-86a8-50676da2de7b"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Switch'",
+                    "items": [
+                        {
+                            "description": "Symbol SW3 [SW_Push]",
+                            "pos": {
+                                "x": 0.5842,
+                                "y": 1.6002
+                            },
+                            "uuid": "fb9a624d-5c67-4ebe-b1db-926be2631df7"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R12 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 1.8669
+                            },
+                            "uuid": "f004b2f7-4a41-4003-bffc-85c1dadfd40e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C12 [C]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 2.2733
+                            },
+                            "uuid": "0b809a28-eaff-4075-b9d6-ffe53f7d9a15"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'BATT'",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 2.5908
+                            },
+                            "uuid": "a94b925f-3814-41ef-87e0-c2acdeb0686f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R13 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 2.6289
+                            },
+                            "uuid": "412fdeed-ad13-4f8a-8db7-2a91cd26962d"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R14 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 3.1242
+                            },
+                            "uuid": "5030ca9c-d57e-4f4d-80ab-22f5ddb82a68"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C13 [C]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 3.5433
+                            },
+                            "uuid": "c75f27c1-7189-4622-b148-77d4612b4ce8"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        }
+    ],
+    "source": "io.kicad_sch"
+}

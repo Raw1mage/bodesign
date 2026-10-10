@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v3/native/power_rail/power_rail.net /work/experiments/s3-formal/c03_engine-v3/power_rail.kicad_sch",
+    "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v3/native/power_rail/svg --no-background-color /work/experiments/s3-formal/c03_engine-v3/power_rail.kicad_sch"
+  ],
+  "kicad_version": "9.0.9",
+  "netlist_sha256": "492ba615d2076d6609698e050edcaa6b6ced8f964db3306e2e59b5a1962a4bbe",
+  "render_sha256": "f0ce163321c5266f6affbb55aad6720ffa20f50a7bec3c58b8293f44c4006be0",
+  "schema": "s1-export-receipt-v1",
+  "sheet_set": {
+    "power_rail.kicad_sch": "6387532228dab3c5793e860c330a61ecea95eba85c52da26d5e0b400eaf19ba5"
+  }
+}

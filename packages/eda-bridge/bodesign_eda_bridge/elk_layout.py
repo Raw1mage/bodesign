@@ -1393,7 +1393,15 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                     seen_pt.add(pt)
                     anchors.append((pt, None, None))
         for pt, ref, first in anchors:
-            dirs = ([first] if first else []) + [d for d in _FLAG_DIRS[1:] if d != first]
+            if ref is not None:
+                # Pin-anchored flag: MUST point away from symbol body along outward normal
+                # Inward direction into symbol body is (-first[0], -first[1])
+                inward = (-first[0], -first[1]) if first else None
+                dirs = [d for d in ([first] if first else []) + [d for d in _FLAG_DIRS if d != first]
+                        if inward is None or d != inward]
+            else:
+                # Wire-anchored flag: unconstrained by symbol body
+                dirs = list(_FLAG_DIRS)
             for d in dirs:
                 box = _rect(_label_bbox(net, pt[0], pt[1], True, d, page_scale))
                 if _free(box, owner=net, own_hull_ok=ref, own_net=net, hull_clear=0.0,
@@ -1404,9 +1412,9 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                 break
         if pick is None:
             raise ElkLayoutError(
-                "E_ELK_FLAG_NO_POSITION",
+                "E_FLAG_NO_OUTWARD",
                 f"net {net!r} is cross-sheet and drawn locally; no anchor on its own "
-                f"pins/wires admits a clear continuation flag on the solved layout",
+                f"pins/wires admits a clear outward continuation flag on the solved layout",
                 net=net, variant=build.variant)
         flags[net] = pick
         placed.append((f"flag:{net}", pick.box))

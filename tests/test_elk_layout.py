@@ -467,3 +467,67 @@ class D1OutlineEmit(unittest.TestCase):
             subprocess.run(["kicad-cli", "sch", "export", "svg", "-o", str(svgdir), str(sch)],
                            check=True, capture_output=True)
             self.assertTrue(list(svgdir.glob("*.svg")))
+
+
+class PinAnchoredFlagOutwardAndGridSnap(unittest.TestCase):
+    def _fixture(self):
+        from bodesign_eda_bridge.elk_layout import (
+            ElkGraphBuild, NodeInk, PropChoice, place_ink
+        )
+        pc = PropChoice(name="c", ref_at=(0, 0), val_at=(0, 0), ref_box=(0, 0, 1, 1), val_box=None)
+        comp = EmitComponent(ref="U1", lib_id="Test:U1", value="U1", footprint="", x=0, y=0)
+        sol = PresentationSolution(
+            poses={"U1": (100.0, 100.0)},
+            segments={"NET": []},
+            junctions={},
+            label_anchors={},
+            drawn_nets=["NET"],
+            undrawn={},
+            pin_tips={("U1", "1"): (110.0, 100.0)},
+        )
+        build = ElkGraphBuild(
+            graph={"id": "root"},
+            ports={"p1": ("U1", "1")},
+            edge_nets={},
+            origins={"U1": (0.0, 0.0)},
+            net_pins={"NET": [("U1", "1")]},
+            inks={"U1": NodeInk(ref="U1", hull=(90.0, 90.0, 110.0, 110.0), flags=[], exits=[], candidates=[pc], natural=0, margins=(0, 0, 0, 0))},
+            variant="default",
+            pin_rot={("U1", "1"): 180.0},  # right-edge pin: outward normal (1.0, 0.0)
+            drawn_nets=["NET"],
+            undrawn={},
+            declared_pin_nets={("U1", "1"): "NET"},
+        )
+        return comp, sol, build
+
+    def test_pin_anchored_flag_never_points_inward(self):
+        from bodesign_eda_bridge.elk_layout import place_ink
+        comp, sol, build = self._fixture()
+        res = place_ink(sol, build, [comp], cross_sheet_nets={"NET"})
+        flag = res["flags"]["NET"]
+        self.assertEqual(flag["edge"], [1.0, 0.0])
+        self.assertEqual(sol.flags["NET"].edge, (1.0, 0.0))
+
+    def test_no_outward_option_reports_named_failure_not_inward_fallback(self):
+        from bodesign_eda_bridge.elk_layout import place_ink
+        comp, sol, build = self._fixture()
+        # Block the outward direction with a foreign wire; inward (-1.0, 0.0) into U1 body must not be used
+        sol.segments = {"NET": [], "FOREIGN": [((112.0, 95.0), (112.0, 105.0))]}
+        with self.assertRaises(ElkLayoutError) as cm:
+            place_ink(sol, build, [comp], cross_sheet_nets={"NET"})
+        self.assertEqual(cm.exception.code, "E_FLAG_NO_OUTWARD")
+
+    def test_fit_page_translation_is_multiple_of_grid_on_both_axes(self):
+        from bodesign_eda_bridge.hierarchical import fit_page
+        sch_text = """(kicad_sch (version 20231120) (generator "eeschema")
+  (paper "A4" portrait)
+  (lib_symbols
+    (symbol "Device:R" (pin passive line (at 0 0 0) (length 2.54)))
+  )
+  (wire (pts (xy 38.1 38.1) (xy 140 257.81)))
+)"""
+        _new_text, _paper, rep = fit_page(sch_text, "A4")
+        dx, dy = rep["dx_mm"], rep["dy_mm"]
+        self.assertAlmostEqual(dx % 1.27, 0.0, places=4)
+        self.assertAlmostEqual(dy % 1.27, 0.0, places=4)
+        self.assertEqual(dy, -6.35)

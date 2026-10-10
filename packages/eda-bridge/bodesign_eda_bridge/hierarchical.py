@@ -980,7 +980,7 @@ def fit_page(text: str, paper: str) -> tuple[str, str, dict]:
             _shifted_max_x = max_x + dx
             _shifted_max_y = max_y + dy
             if _shifted_max_x > width - _tb_w and _shifted_max_y > height - _tb_h:
-                _shift_up_needed = _shifted_max_y - (height - _tb_h)
+                _shift_up_needed = math.ceil((_shifted_max_y - (height - _tb_h)) / 1.27) * 1.27
                 _avail_headroom = (min_y + dy) - _PAGE_MARGIN_MM
                 if _shift_up_needed <= _avail_headroom:
                     dy -= _shift_up_needed
@@ -997,6 +997,9 @@ def fit_page(text: str, paper: str) -> tuple[str, str, dict]:
             f"page whose content is known to be clipped.",
             needed_mm=[round(need_w, 2), round(need_h, 2)], paper=paper,
         )
+    # Quantize translation to KiCad 1.27 mm grid so every placed endpoint stays on-grid
+    dx = round(dx / 1.27) * 1.27
+    dy = round(dy / 1.27) * 1.27
     report = {
         "status": "measured",
         "extent_mm": [round(v, 2) for v in extent],

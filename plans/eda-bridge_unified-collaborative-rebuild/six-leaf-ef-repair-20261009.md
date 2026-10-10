@@ -202,7 +202,97 @@ The formal multisheet invocation v2 was constructed strictly applying the knobs 
 
 ## 10. NOT MEASURED & Boundaries
 
-1. **Emitter Code Integrity**: Zero python source files were modified. Emitter adjustments for `label_anchor_offsets` and `fit_page` grid snapping are deferred to the 求好 phase per instructions.
+1. **Emitter Code Integrity**: Zero python source files were modified in Round 1. Emitter adjustments for `label_anchor_offsets` are deferred to the 求好 phase per instructions.
 2. **Human Baseline Schematics**: The human baseline schematics in `editable/` were untouched.
 3. **Electrical Sufficiency**: ERC adjudications address schematic presentation formalization and cross-sheet connector continuations; adequacy of electrical power sources, thermal margins, and high-speed signal integrity were not evaluated in this presentation pass.
+
+---
+
+## 11. Round 2 — Emitter Flag Outward Invariant and fit_page Grid Snap
+
+Status: Deliverables complete. Verification passed.
+Authority: `[BRNS-DISPATCH] br=R-L-1b-round2-emitter-flag-outward-and-grid reply-to=ses_04db7a1c5ffelvbxyLP1p6xlRH`.
+Instrument: Frozen instrument `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`, policy `63bee5d02a5ec147`.
+
+### 11.1 Landed Engine Changes
+
+1. **CHANGE A — Flag Orientation Invariant (`packages/eda-bridge/bodesign_eda_bridge/elk_layout.py:1396-1406`)**:
+   - The flag solver previously allowed candidate directions `([first] if first else []) + [d for d in _FLAG_DIRS[1:] if d != first]`. For right-edge pins (`first = (1.0, 0.0)`), `_FLAG_DIRS[1:]` contained `(-1.0, 0.0)` pointing directly into the symbol body.
+   - Fixed by removing the inward direction:
+     ```python
+     if ref is not None:
+         # Pin-anchored flag: MUST point away from symbol body along outward normal
+         # Inward direction into symbol body is (-first[0], -first[1])
+         inward = (-first[0], -first[1]) if first else None
+         dirs = [d for d in ([first] if first else []) + [d for d in _FLAG_DIRS if d != first]
+                 if inward is None or d != inward]
+     else:
+         # Wire-anchored flag: unconstrained by symbol body
+         dirs = list(_FLAG_DIRS)
+     ```
+   - When no outward candidate is collision-free on any anchor, the solver raises `ElkLayoutError("E_FLAG_NO_OUTWARD", ...)`.
+   - The `ENGINE_ORIENT_UNSUPPORTED` invariant in `kicad_emit.py:1328` was left untouched.
+
+2. **CHANGE B — Grid Snap after `fit_page` (`packages/eda-bridge/bodesign_eda_bridge/hierarchical.py:982, 1000-1002`)**:
+   - In `fit_page`, `_shift_up_needed` and total translations `dx`, `dy` are now quantized to the 1.27 mm KiCad grid:
+     ```python
+     _shift_up_needed = math.ceil((_shifted_max_y - (height - _tb_h)) / 1.27) * 1.27
+     ...
+     dx = round(dx / 1.27) * 1.27
+     dy = round(dy / 1.27) * 1.27
+     ```
+   - All 41 `endpoint_off_grid` warnings previously observed on `power_rail` and `root` are eliminated (count dropped to 0).
+
+### 11.2 Unit Tests & Regression Evidence
+
+- Appended `PinAnchoredFlagOutwardAndGridSnap` to `tests/test_elk_layout.py` with 3 test methods:
+  1. `test_pin_anchored_flag_never_points_inward`: Pin-anchored flag never points inward on right-edge pin.
+  2. `test_no_outward_option_reports_named_failure_not_inward_fallback`: Blocked outward option raises `E_FLAG_NO_OUTWARD`.
+  3. `test_fit_page_translation_is_multiple_of_grid_on_both_axes`: `dx` and `dy` are strictly multiples of 1.27 mm (`dy = -6.35 mm`).
+- Test execution with pycache cleared:
+  - `test_elk_layout`: `Ran 24 tests in 2.947s, OK` (was 21 baseline).
+  - Full multisheet suite (`test_elk_layout`, `test_sheet_partition`, `test_multisheet_emit`, `test_multisheet_global_label_link`, `test_replica_emit`, `test_replica_fidelity`, `test_mcp_emit_multisheet`): `Ran 141 tests in 11.922s, OK` (was 138 baseline).
+
+### 11.3 Served Execution & Regeneration (Invocation v3)
+
+- Invocation v3 equals v2 with only `out_dir` updated to `/work/experiments/s3-formal/c03_engine-v3/`.
+- Executed over UDS socket `/home/pkcs12/projects/bodesign/.run/bodesign.sock` to EE container.
+- Result: `ok: true`, `sheet_count: 6`, `unresolved_pins: {}`.
+
+### 11.4 Findings Delta: v1 Baseline vs v2 vs v3
+
+| Leaf | Class a (v1/v2/v3) | Class b (v1/v2/v3) | Class c (v1/v2/v3) | Class d (v1/v2/v3) | Class e (v1/v2/v3) | Class f (v1/v2/v3) | Total v1 | Total v2 | Total v3 | Gate Verdict |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `usbc` | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 1 / 0 / **0** | 0 / 0 / **0** | 1 | 0 | **0** | **CLEAN** |
+| `power_rail` | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 8 / 7 / **7** | 5 / 5 / **0** | 13 | 12 | **7** | **ALL ACCEPTED** (f dropped to 0) |
+| `battery` | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 1 / 1 / **1** | 1 / 1 / **0** | 2 | 2 | **1** | **ALL ACCEPTED** (f dropped to 0) |
+| `charge_enable` | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 | 0 | **0** | **CLEAN** |
+| `mcu_swd` | 0 / 0 / 0 | 1 / 0 / **0** | 0 / 0 / 0 | 0 / 0 / 0 | 2 / 2 / **2** | 0 / 0 / **0** | 3 | 2 | **2** | **ALL ACCEPTED** (b dropped to 0) |
+| `io` | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 | 0 | **0** | **CLEAN** |
+| **Total** | **0 / 0 / 0** | **1 / 0 / 0** | **0 / 0 / 0** | **0 / 0 / 0** | **12 / 10 / 10** | **6 / 6 / 0** | **19** | **16** | **10** | **HARD GATE PASSED** |
+
+### 11.5 Final Finding Disposition (All 19 Findings Resolved)
+
+- **Findings Repaired**:
+  - #1 (`usbc` e): Repaired by `edgeNode: 7.62` and clean flag anchor at C1.1.
+  - #2 (`power_rail` e): Repaired by `edgeNode: 7.62`.
+  - #10, #11, #12, #13, #14 (`power_rail` f): All 5 Class F findings eliminated (count 5 -> 0) by flag outward invariant.
+  - #16 (`battery` f): Eliminated (count 1 -> 0) by flag outward invariant.
+  - #17 (`mcu_swd` b): Eliminated (count 1 -> 0) by `engine_orientation_sets: {"J3": ["R0", "MX"]}`.
+- **Findings Accepted**:
+  - Exactly 10 findings (#3–#9 on `power_rail`, #15 on `battery`, #18–#19 on `mcu_swd`) are Class E 2.54 mm pin pitch proximity, accepted under `accept-adjacent_pin_flag_at_2.54mm_pitch` per ruling.
+- **Remaining Open Findings**: **0** (Zero).
+
+### 11.6 ERC Grid Adjudication & Netlist Fidelity
+
+- `endpoint_off_grid` on `power_rail`: **0** (down from 41 in v2).
+- `endpoint_off_grid` on `root`: **0** (down from 41 in v2).
+- Netlist pin fidelity: **100%** on all 6 sheets (19/19 usbc, 27/27 power_rail, 10/10 battery, 6/6 charge_enable, 44/44 mcu_swd, 28/28 io; 0 missing, 0 extra, 0 mismatch).
+
+### 11.7 Manifest & Dual Mirror Verification
+
+- **Experiment Directory**: `/home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v3/`
+- **Product Mirror**: `/home/pkcs12/products/bodesign/outputs/btdongle_ms/c03_engine-v3/`
+- **Manifest SHA256**: `c4aa76dd72451a1221c406f0fc6eda5488b5d5e44673c019eb368410aed58768` (63 files).
+- **Dual Verification Evidence**: `sha256sum -c hashes.sha256` executed cleanly on both experiment root and products mirror (exit code 0).
 
