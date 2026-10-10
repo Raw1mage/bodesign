@@ -1114,6 +1114,53 @@ yes-with-notes, 0 BLOCKING, 35 NOTE).
 5. Commits ahead of `gitlab/main` (@ e1a6f42) after S56: S53, S54, S55, S56. Push on user
    instruction only.
 
+### 4.24 R-N: C03 graduation of the six-leaf package on v5 (2026-10-10, user)
+
+User ruling: next mainline = §4.23 option (ii). Scope and officer rulings on the deferred items:
+
+1. **Bundle**: same-revision bundle on v5 bytes, same procedure as R-L 1(d) (S51): per-reference
+   BOM with `symbol_source`, served `check_c03` must report gate=PASS and R3_DRAWABILITY=PASS
+   (before/after raw recorded), crosscheck fidelity 45/45, `hashes.sha256` + manifest carrying
+   Review 36 results and the non-claims list; `experiments/s3-formal/c03_engine-v5/` and
+   `~/products/bodesign/outputs/btdongle_ms/c03_engine-v5/` byte-identical; human-eye tree
+   `btdongle_ms/` top level updated to v5 under `NN.<stage>-<name>-vN.<ext>`.
+2. **Deferred items ruled at graduation** (officer, no engine change):
+   - page occupancy (io ≈80 %, charge_enable ≈85–90 %, usbc ≈70 % blank): ACCEPTED — A4 sheet
+     with `fit_page` quantised to 1.27 mm; a per-leaf sheet-size rule is 求好, not a blocker.
+   - power_rail four-wire 2.54 mm corridor (~170 mm): ACCEPTED — parallel, not collinear; two
+     reviewers confirmed no misread at crop scale.
+   - net naming (`PWR_LED_K`, `CHG_LED_A`): SANDBOX-ASSUMPTION — btdongle sandbox content, names
+     come from the declared circuit, not the emitter.
+   - charge_enable SW1 SPDT common-to-GND and D2 STAT polarity: SANDBOX-ASSUMPTION, recorded for
+     the design owner in the graduation receipt.
+3. **specs/ promotion** is scoped to `specs/architecture.md` C03 section sync (as-built delivery
+   contract: engine parameters in the `bodesign_emit_multisheet` schema, EE routing, S1 dual
+   instrument v2 frozen / v3 recalibrated, bundle layout, `check_c03` gate) and the
+   `tasks.md` ticks held back under R-L (3.3c, 3.4, 3.5). The master plan does not advance to
+   `verified` (24 boxes still open); no new spec file is created.
+4. Receipt: `c03-graduation-receipt-20261010.md`. Hard gates: no edits under
+   `packages/`/`services/`; v5 hashes unchanged (`sha256sum -c` rc=0 before and after); `git diff
+   --check` rc=0; no commit by the handler.
+5. **Officer rulings on the graduation receipt ASKs** (2026-10-10, after
+   `c03-graduation-receipt-20261010.md` 38fe0db8 was verified: bundle 97 files, both mirrors
+   `sha256sum -c` rc=0, `diff -r` rc=0, gate after=PASS / before=FAIL on the v1 BOM, PC-001
+   U1/U2 `ok`, crosscheck 45/45/0/0/0):
+   - **Gate transport**: the served `check_c03` over the local UDS (`.run/bodesign.sock`) is the
+     gate of record, exactly as in S51; the dispatch text naming the LAN endpoint was the
+     officer's error. CT105 cannot see host files (`BOM_MISSING`, raw kept in scratch), and the
+     served code path is the same image either way. A CT105 run is NOT required for
+     graduation; it stays NOT MEASURED.
+   - **Human-eye tree landing** (`~/products/bodesign/btdongle_ms/`, prefix `04` = C03):
+     (a) `vN` carries the engine revision → `v5` (same convention as `01.c04-*-v4`);
+     (b) PNG source = the S55 cairosvg full-sheet rasters (`v5-png/<leaf>-full.png`, the exact
+     bytes Review 36 signed; no fresh render); (c) `07..11` stay where they are — nothing is
+     moved or deleted in the human tree; (d) no review summary file in the human tree — the
+     receipt lives in `plans/`. Files: `04.c03-<leaf>-v5.png` ×6, `04.c03-bom-v5.csv`
+     (= `bom_per_ref.csv`), `04.c03-bundle_manifest-v5.json` (= `c03_bundle_manifest-v1.json`),
+     each a byte copy with sha recorded in the receipt §6.
+   - `bom_per_ref.csv` / `bom_crosscheck.json` byte-identical to v4: expected (round 4 changed
+     geometry only); recorded, not a finding.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
