@@ -799,3 +799,107 @@ Evaluated across all six leaves under both instruments:
 2. **Review 36 Scope**: Final visual acceptance of the v5 deliverables is reserved for independent Review 36.
 3. **No Unsolicited Circuit Spec Edits**: No schematic netlist connections, components, or sheet partition boundaries were altered.
 
+### 15.12 Frozen v2 Control Column — Takeover Measurement
+
+Subject snapshot: HEAD `cf35774c8a2a8b07ed5bddb0631f11aed4ffdeee` (S54). The experiment v5 input manifest was verified before measurement: all 63 entries `OK`, exit 0. No product mirror was accessed in this dispatch.
+
+S54 was committed by the handler without dispatcher authorisation; dispatcher verified post hoc.
+
+Exact commands (each command synchronous; working directories explicitly stated):
+
+```sh
+# cwd: /home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v5
+sha256sum -c hashes.sha256
+# cwd: /home/pkcs12/projects/bodesign
+mkdir -p -m 700 /home/pkcs12/.cache/scratch/s3-formal/round4/instrument-v2 /home/pkcs12/.cache/scratch/s3-formal/v5-png
+git show bcb0f64:packages/eda-bridge/bodesign_eda_bridge/readability_render.py > /home/pkcs12/.cache/scratch/s3-formal/round4/instrument-v2/readability_render.py
+sha256sum /home/pkcs12/.cache/scratch/s3-formal/round4/instrument-v2/readability_render.py
+python3 /home/pkcs12/.cache/scratch/s3-formal/round4/measure_v2.py
+sha256sum /home/pkcs12/.cache/scratch/s3-formal/round4/measure_v2.py
+```
+
+Instrument SHA256: `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`.
+Scratch measurement script SHA256: `ef29b528a8002f67b5997a63ad8fba9308f9127c5b7818607c35a4c972a0388d`.
+The script loads that exact module by `importlib.util.spec_from_file_location`, not the working-tree v3 module. It passes `s1-calibration-record-v2.json`, asserts policy `63bee5d02a5ec147`, and reuses each version's per-leaf `s1_invocation.json` values for `declared_pin_nets`, `required_local_pairs`, and `local_exceptions`. Paired sheet/SVG/netlist and export receipt paths are bound to the subject version's own native directory (v5 invocation's historical v4 receipt path is not used). Twelve complete reports and `v2-tables.json` are in `/home/pkcs12/.cache/scratch/s3-formal/round4/`.
+
+#### v4 Under Frozen v2 (Control)
+
+| Leaf | a | b | c | d | e | f |
+|---|---:|---:|---:|---:|---:|---:|
+| usbc | 0 | 0 | 0 | 0 | 0 | 0 |
+| power_rail | 0 | 0 | 0 | 0 | 7 | 0 |
+| battery | 0 | 0 | 0 | 0 | 1 | 0 |
+| charge_enable | 0 | 0 | 0 | 0 | 0 | 0 |
+| mcu_swd | 0 | 0 | 0 | 0 | 2 | 0 |
+| io | 0 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **0** | **0** | **0** | **0** | **10** | **0** |
+
+#### v5 Under Frozen v2
+
+| Leaf | a | b | c | d | e | f |
+|---|---:|---:|---:|---:|---:|---:|
+| usbc | 0 | 0 | 0 | 0 | 0 | 0 |
+| power_rail | 0 | 0 | 0 | 0 | 7 | 0 |
+| battery | 0 | 0 | 0 | 0 | 1 | 0 |
+| charge_enable | 0 | 0 | 0 | 0 | 0 | 0 |
+| mcu_swd | 0 | 0 | 0 | 0 | 2 | 0 |
+| io | 0 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **0** | **0** | **0** | **0** | **10** | **0** |
+
+Raw final measurement output: `v4 committed-report control: PASS; policy 63bee5d02a5ec147`. Every v4 per-leaf count matches its committed `s1_report.json`; both total assertions pass, measurement process exit 0. This closes the previously unmeasured v2 column; it does not certify the earlier isolated-run v2 columns anew.
+
+NOT MEASURED: fresh v3 run, isolated variants, ERC/fidelity, visual acceptance, product mirror, or tests (dispatch: none). No repository Python, experiment, or human-tree bytes were edited, staged, or committed.
+
+### 15.13 v5 Raster Packet — Review 36 Input Only
+
+Output: `/home/pkcs12/.cache/scratch/s3-formal/v5-png/` (scratch only).
+Renderer: `cairosvg 2.9.0 (Cairo 1.18.0 / pycairo / Python 3.12.3)`; exact string asserted before rendering, no substitution.
+Pipeline reuses `/home/pkcs12/.cache/scratch/s3-formal/raster_v4.py` by import, unchanged SHA256 `817087cfe98bebe6414a2de858d092884ad624e3424849f35f554ef7780e1066`.
+Invocation: `python3 /home/pkcs12/.cache/scratch/s3-formal/raster_v5.py` (cwd `/home/pkcs12/projects/bodesign`). Wrapper SHA256: `908e50bbc4c7b75fd2160ae84d34b60e2c3aa982f98699c8ce9e8b8c3116f97d`.
+
+Six full-sheet PNGs: long edge 2000 px, white background. Thirty vector-rendered crops: all at least 2× full-sheet scale (asserted per image), crop boxes in mm, pixel dimensions, source SVG SHA256/path, renderer, and `review35_ref` recorded per image in `v5-png-manifest.json`.
+Manifest SHA256: `ae64c52ce87d271e389a4313624affc34e684a0c3dbfc9bdd156a5fc765e8f9b`.
+The synchronous wrapper executes `sha256sum -c hashes.sha256` with cwd `/home/pkcs12/.cache/scratch/s3-formal/v5-png`; all 37 entries `OK`, exit 0. Raw final output: `hashes -c rc=0; full=6; crops=30`.
+
+PNG list and crop → Review 35 map follow. Row references identify the leaf row in `six-leaf-review35-20261010.md`; symbol-only crops are explicitly identified rather than represented as NOTE findings.
+
+| PNG | SHA256 | Review 35 Ref / Coverage |
+|---|---|---|
+| usbc-full.png | `75a70114269422b8dae47b65a184bcc12f2208d30539b8a1f30ba51659a4372e` | usbc whole sheet |
+| usbc-crop-1.png | `cf1a4649f4dbaaa7becd4af4380220a50451594781cd8b42a4b0233878e15fc8` | J1 ≥4 pins |
+| usbc-crop-2.png | `363fbbf69260cf89155bb6c4da6cbebb83cad422124bff7ffad9e2b572383e5b` | D1 ≥4 pins |
+| usbc-crop-3.png | `f8271de9c1dd7902c427d6aedbafd9ab987c83bec6ae8f1852d69ba59222e1f0` | usbc: CC1/CC2/VBUS_CON column x≈67–71 mm, CC gap and offset |
+| usbc-crop-4.png | `7341e702f9d42613ed1e2332ed2f4b64489ff686d43838d7198b600838279893` | usbc: VBUS@F1.2 |
+| power_rail-full.png | `0098b2080e5d8926256cb0329afd3aee3375dbef6c56b43204f5572242bfd852` | power_rail whole sheet |
+| power_rail-crop-1.png | `ada5601d1ef5bdfb3835bc86dc55b2f35646b5368272f049b95c463a153d44fd` | power_rail: abutting flags, U1 ≥4 pins |
+| power_rail-crop-2.png | `3c76622703ceaff29c6de1f1c0c8fdcd99e94a9f21d5e5b9a7546826f5c7a81a` | power_rail: accepted site 1, USB_DET/VBUS parallel |
+| power_rail-crop-3.png | `e4dd3b39c9c728a0394621fccb9b734311fc4f1abbfb83f95a1beeaca125e71d` | power_rail: accepted site 2, USB_DET/VBUS parallel |
+| power_rail-crop-4.png | `a9681417467fc1e4639a4cff0208e63376032885818cfd256609b318b924b2d6` | power_rail: accepted site 3, ENPPB/NTC |
+| power_rail-crop-5.png | `3f25076d8a0d344332c0ebd8cdfc1dc1b4bec90f89b07f38567671385de13b5b` | power_rail: accepted site 4, ENPPB/NTC |
+| power_rail-crop-6.png | `5357e18a1358dddeed0731290ba07d4fbc70ba6bdb85dc80d0a4253331ac3d55` | power_rail: accepted site 5, SW_NODE label/tie wire |
+| power_rail-crop-7.png | `93d0bd5fbf3eefc2c601bf2471cab6fde529f32a388f287263c3f77be7b4f160` | power_rail: accepted site 6, SYS/SYS |
+| power_rail-crop-8.png | `ac06533a50c21feaa0f77f3c31e06f07b0db03059fc66485f2f9f5950d8449b9` | power_rail: accepted site 7 |
+| power_rail-crop-9.png | `ee5414a4196c464d8abb453689c7f994bbceb5d36340a2f36e839c2eae2b1c17` | power_rail: BATT at C5 node |
+| power_rail-crop-10.png | `59006522869d081599f81345df0f35774713ab8b5c503131a78d57692e8d053b` | power_rail: four-wire left corridor, upper [30,50,50,140] mm |
+| power_rail-crop-11.png | `67082303dfdfb5c77cd7f4f69b94ce6b639cf0a616e974836544a0c5dd204268` | power_rail: four-wire left corridor, lower [30,135,50,230] mm |
+| battery-full.png | `41d9f1d5da53edef39da11666a2138a1e78956400e773f713156f1d53fe3cb65` | battery whole sheet |
+| battery-crop-1.png | `ddc0fa436bc66bfd34575be03830165fced793ea0bc3e61cd20cccb9ad713dda` | battery: NTC above J2.3 GND; standalone NTC/annotation |
+| battery-crop-2.png | `c9bbb6f368abb664328a16d3a9b0018f592ae59dba2eebf87a82a00ee4c2ea74` | battery: J2.3 corridor |
+| battery-crop-3.png | `d43228bfd7b4b4c6a81f02dcdf43a79a2c630421e99b68ffc481d3ca94333e8c` | battery: Q1 value and BATT@Q1.3 |
+| battery-crop-4.png | `c84720bdc2834a0094afbf33be4469472a9d2a5aae69a4345a1cabf59cfa00c4` | battery: BAT_EXT B-1 |
+| charge_enable-full.png | `b3dec358ea21d5b7eb3ad21338f8441a20d3f0b3087224a5f58761bafcb67914` | charge_enable whole sheet |
+| charge_enable-crop-1.png | `c09191d72f34a79c33db2f9c9587b746d1649e9d3830d007ec1ccfa1174b0fe0` | charge_enable: CHG_LED_A B-1, R7→D2 U-route |
+| charge_enable-crop-2.png | `830b3b5870afd834dfeaecead425ab7b2fa71759a69c3b997dc4db86b0fab375` | charge_enable: STAT zero-stub |
+| charge_enable-crop-3.png | `cce7a3b25b073c3d0a0b59f7afce29cfad52ddff75975cd85f8773f63d922385` | charge_enable: ENPPB, SW1 common-to-GND design aside |
+| mcu_swd-full.png | `c990cc0d449f185a023c2f02608647f85215095ae7682933ff4eaffdccac33b7` | mcu_swd whole sheet |
+| mcu_swd-crop-1.png | `a2292420f317d7095b5daa211df3490bcac54f7098d678cdf4ef1507c4a5d096` | mcu_swd: U2 ≥4 pins, internal AGND→GND / pin-3 name |
+| mcu_swd-crop-2.png | `e2c4bcb1209c69d75070d22d29a244ad65a440e9611f5e7ae96eff4837a87328` | mcu_swd: J3 |
+| mcu_swd-crop-3.png | `bb625452592fd4d95c3af309953063bd49260cbe0cd6187c873d8e96c9bf4d87` | mcu_swd: SWCLK J3.2 corridor |
+| mcu_swd-crop-4.png | `f1bc20eabc2da45479bbd17f042f5ff857521e7cc5122617773e57f39cc2787b` | mcu_swd: SWDIO J3.2 corridor |
+| mcu_swd-crop-5.png | `f486ae7c19f5c8fecd8a673d4e02dead676a09d4b7e4de9625108099d51da26b` | mcu_swd: SWCLK/SWDIO B-1 |
+| io-full.png | `d110b9d64e92e252e9774d75beb591ba421036c7c0bf92c5348120e3d9f27e8b` | io: whole sheet / 80% blank note |
+| io-crop-1.png | `4b9e904feb06b6db0fc3968a5d46d71106de41216bbe78d9b484fd48a4de47b3` | io: PWR_LED_K B-1 and naming |
+| io-crop-2.png | `f51978eb12747b18a9bc0388b0ca5240883d8e3d7d368d768edfd2a157de6d20` | io: BT_LED_A B-1, D4 loop artefact |
+| io-crop-3.png | `b2cd39f08c8b482e8900009304c4ea5a0b4a7f3533886f2057b8b7156561f74d` | io: WIFI_LED_A B-1 |
+
+NOT MEASURED: no review performed; no Review 36 SIGN, blocker count, NOTE resolution, or aesthetic verdict is claimed. ERC/fidelity, renderer correctness/colour, product mirrors, and tests were not rerun. Source repository Python and schematic/SVG bytes remain untouched; no stage, commit, restart, or human-tree edits.
