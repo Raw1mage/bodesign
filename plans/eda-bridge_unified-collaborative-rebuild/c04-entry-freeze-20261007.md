@@ -1042,6 +1042,28 @@ engineer could accept. Rulings:
    sub-plans) is deferred until mainline item 1(a) lands; it is bookkeeping, not product.
 4. Officer reports progress against 1(a)–(d) only; a task checkbox is not progress.
 
+### 4.21 R-L mainline closed: 1(a)–(d) landed on v4 (officer, 2026-10-10)
+
+| Item | Evidence | Commit |
+|---|---|---|
+| 1(a) served `check_c03` real PC-001 verdict | U1 rail VBUS, U2 rails +3V3/SYS, all `identified_by: type`; `ics_without_identifiable_rail=[]`; `not_run` with unidentified ICs now blocking | S41 405f1c7 |
+| 1(b) S1 class e/f repaired or named accepted | round 1 knobs (S42), round 2 flag-outward + grid snap (S43), round 3 A (foreign-collinear ≥2.54 mm) + D (prop text 1.30 mm/char) (S48 c467211). Final v4: e=10 (all `accept-adjacent_pin_flag_at_2.54mm_pitch`), f=0, b=0, off-grid 0, crossings 0, fidelity 100%. B-1/C-1 dropped by isolation gate — deferred to 求好 | S42–S43, S48 |
+| 1(c) one-reviewer-per-leaf blind review | Review 34 on v3: usbc no, five yes-with-notes. Review 35 on v4: 6/6 READ_OK, 6/6 yes-with-notes, 0 blocking; usbc blocker (VBUS_CON/CC1/CC2 column) resolved | S44, S49 5ed6969, S50 3451781 |
+| 1(d) same-revision bundle on final bytes | `c03_engine-v4/bundle/` 85 files `sha256sum -c` rc=0, manifest v2 `04d0eab4…`, `bom_per_ref.csv` + `symbol_source`, crosscheck 45/45/0/0/0, served `check_c03` gate=PASS / R3_DRAWABILITY=PASS (v1 BOM: FAIL) | S51 571616a |
+
+Residual (NOT claimed, carried to 求好): AC16 still partial (e: rejecting 2 / accepting 0);
+AC18/AC19 not claimed (Review 35 "yes-with-notes" is reviewer sign-willingness, not AC19 text);
+emitter rules B (local-label corner stub) and C (flag collinear with pin stub) failed isolation
+and are not landed — their Review 34/35 NOTE-level sites persist (flush labels on 4 leaves,
+zero-stub flags, CC1–CC2 single-grid collinear on usbc, BATT flag at C5 node); cairosvg
+sub-pixel artefact recorded; leaf-level `passive_waivers.json` not honoured from root (bounded,
+no BR); `export_bom` lossy grouping BR open.
+
+Parked items from §4.20 ruling 2 remain parked. Plan hygiene (§4.20 ruling 3) is now unblocked.
+Next direction requires user ruling: (i) 求好 phase on the six leaves (B/C emitter rules,
+S1 recalibration to 2.54 mm pitch), (ii) resume parked §2/§4/§5/§6 or S2 ingestion, or
+(iii) C04 re-entry on the v4 schematic revision.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
