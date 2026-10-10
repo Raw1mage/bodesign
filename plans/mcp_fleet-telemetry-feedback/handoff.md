@@ -61,3 +61,30 @@
 - Raw outputs: `/home/pkcs12/.cache/scratch/fleet-rollout/` (runtime.txt,
   health-after.json, smoke.sse, draft-and-dead-letter.txt, smoke-evidence.txt,
   push.txt, rollout.txt, nginx-restart.txt). No stage/commit or peer edits.
+
+### Post-3R requeue 2026-10-10T08:08:05Z
+
+- post-3R requeue 2026-10-10T08:08:05Z: status=UNMEASURED
+  body=UNMEASURED receipt_id=rcpt_01a124da-9ad2-7000-939c-8afa3dc7e6e1.
+  The deployed adapter does not log or retain the successful HTTP status or
+  response body and deletes the successful outbox record. No verbatim wire
+  response was captured; do not label this as an observed HTTP 202.
+- Requeued only event `01a12474-a602-74ae-b8ea-8081ef8b0446`, draft
+  `01a12474-a602-7d96-aa99-58a431e1e6b6`. CLI raw:
+  `requeued 01a12474-a602-74ae-b8ea-8081ef8b0446` and
+  `next sidecar wake (or restart catch-up scan) will retry the requeued events`.
+- Trigger: one documented `docker compose restart fleet-sidecar`; no second
+  delivery trigger, signing/header/transport changes or key rotation.
+- Read-only SQLite before: status=`dead_letter`, attempts=1, receipt_id=null,
+  last_error=`401:unauthorized`. After: status=`delivered`, attempts=1,
+  receipt_id=`rcpt_01a124da-9ad2-7000-939c-8afa3dc7e6e1`, last_error=null,
+  updated_at=`2026-10-10T08:07:49.383Z`.
+- Raw adapter log: `catch-up scan: {'delivered': 1, 'dead_letter': 0}`.
+  Reconcile listing: `{"deadLetter": [], "count": 0}`.
+- Measured: successful adapter acceptance branch, receipt persisted, one
+  delivery attempt, dead-letter cleared. That branch accepts either HTTP 202
+  with `mother_accepted` or HTTP 200 with `duplicate:true`; wire status/body
+  cannot be distinguished from the retained evidence. Mother triage and
+  notification were not measured. No extra POST was made to obtain evidence.
+- Raw evidence: `/home/pkcs12/.cache/scratch/fleet-rollout/requeue/`
+  (`before.json`, `cli.txt`, `restart.txt`, `after.txt`). No stage/commit.
