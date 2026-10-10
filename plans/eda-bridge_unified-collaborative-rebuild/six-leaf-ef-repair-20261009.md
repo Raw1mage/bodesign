@@ -491,3 +491,108 @@ Evaluated against frozen detector `readability_render.py` (`53acfd4b8399091b35db
 1. **No Human Tree Edits**: No files in `btdongle_ms/` or `editable/` were created or modified.
 2. **Frozen Instrument Invariant**: `bodesign_eda_bridge/readability_render.py` remained 100% frozen with byte-identical sha256 `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`.
 3. **No Unsolicited Spec Changes**: No schematic components, net connections, or sheet partitions were modified.
+
+---
+
+## 14. 1(c) raster v4 — Six-Leaf Rasterisation for Review 35
+
+Status: Rasterisation complete. Deliverables staged in scratch.
+Authority: Mainline R-L item 1(c) second pass. Dispatch: `[BRNS-DISPATCH] br=R-L-1c-v4-raster-for-review35 reply-to=ses_04db7a1c5ffelvbxyLP1p6xlRH`.
+Scope: Rasterisation only — no review performed, no judgement rendered, no engine/spec changes made.
+
+### 14.1 Renderer & Invocation
+
+- **Renderer**: `cairosvg 2.9.0 (Cairo 1.18.0 / pycairo / Python 3.12.3)`
+- **Input Provenance**: Immutable, tracked v4 schematic SVGs from `experiments/s3-formal/c03_engine-v4/native/<leaf>/svg/<leaf>.svg` (manifest `b3bdfe8bbdd6215b7171ad6c0ec3938f4e37d27cda09d4ea132d767e73d11289`; verified with `sha256sum -c hashes.sha256` rc=0 prior to rasterisation).
+- **Invocation Script**: Scratch pipeline `/home/pkcs12/.cache/scratch/s3-formal/raster_v4.py`
+- **Output Directory**: `~/.cache/scratch/s3-formal/v4-png/` (scratch only; dual mirrored to `/home/pkcs12/.cache/scratch/s3-formal/v4-png/`)
+- **Rasterisation Parameters**:
+  - **Full Sheets (`<leaf>-full.png`)**: Long edge cap 2000 px (review-admission cap), white background.
+    - A4 sheets (`usbc`, `power_rail`, `battery`, `charge_enable`): 2000×1414 / 1414×2000 (6.734 px/mm).
+    - A3 sheets (`mcu_swd`, `io`): 1414×2000 (4.762 px/mm).
+  - **Crops (`<leaf>-crop-<n>.png`)**: Vector rasterisation of every Review 34 finding site, the 10 accepted class-e sites, and every symbol with $\ge 4$ pins (plus headers J2, J3).
+    - Long edge: 1200–1700 px ($\le 2000\text{ px}$ cap).
+    - Scale: 20.00–50.00 px/mm ($\ge 3.43\times$ to $10.50\times$ full-sheet scale, strictly satisfying the $\ge 2\times$ scale requirement).
+    - Crop box in mm recorded for every crop.
+
+### 14.2 Per-Leaf Image Manifest (34 Images)
+
+| File | SHA256 | Pixels | Crop Box [x0, y0, x1, y1] mm | Scale (vs Full) | Review 34 Ref / Description |
+|---|---|:---:|:---:|:---:|---|
+| `usbc-full.png` | `16c8877b51beb41504edd3211c718b227071c729ba135228da84e0490dd9dab8` | 2000×1414 | null (full sheet) | 6.734 px/mm (1.00×) | `usbc` (whole sheet): Whole sheet usbc (2000 px long edge cap) |
+| `usbc-crop-1.png` | `d8dfeb02172928e6bf4f0d55679fca13509056d64eef89742fd57b3fa1f74a8a` | 1018×1400 | [30.0, 100.0, 70.0, 155.0] | 25.454 px/mm (3.78×) | `usbc` (symbol ≥ 4 pins): Symbol J1 (Connector:USB_C_Receptacle_USB2.0_16P, 17 pins) |
+| `usbc-crop-2.png` | `1c88605242ef237821185582da60f5e0a8974faab487b27d48f1e5951925e774` | 1120×1200 | [90.0, 98.0, 118.0, 128.0] | 40.000 px/mm (5.94×) | `usbc` (symbol ≥ 4 pins): Symbol D1 (Bodesign_Presentation:PESD5V0L4UF_Boxed TVS array, 6 pins) |
+| `usbc-crop-3.png` | `a088eb35602322d536dcc7753a027712a90b9eefb2677dc50ef0414444b48195` | 1400×1067 | [58.0, 98.0, 100.0, 130.0] | 33.333 px/mm (4.95×) | `usbc` (blocking finding): Review 34 Blocking site: VBUS_CON / CC1 / CC2 column (Item A repair: separated channels at x=68.58 mm vs x=67.31 mm) |
+| `usbc-crop-4.png` | `88c630ad0c0e692022e6e84fdc4fb928a7e01c19c3792e4c95da8eb6003eb0a7` | 1000×1200 | [65.0, 35.0, 90.0, 65.0] | 40.000 px/mm (5.94×) | `usbc` (cosmetic note): Review 34 Cosmetic site: Symbol F1 and VBUS flag at F1 lower pin (x=73.66, y=53.34) |
+| `power_rail-full.png` | `9b76434bac34dd1f94c60d99b5aacaa34383659965f570319bf35a5cf7135d63` | 1414×2000 | null (full sheet) | 6.734 px/mm (1.00×) | `power_rail` (whole sheet): Whole sheet power_rail (2000 px long edge cap) |
+| `power_rail-crop-1.png` | `a0ca14fe65f2e02550d7d475e4fb63bd6a7ae69044d104acd493296773dc9df2` | 1500×992 | [50.0, 45.0, 115.0, 88.0] | 23.077 px/mm (3.43×) | `power_rail` (symbol ≥ 4 pins, SYS/STAT outward flags): Symbol U1 (local:ETA6003 PMIC, 17 pins) showing outward SYS/STAT flags |
+| `power_rail-crop-2.png` | `02bd12d5e404961a580b2df9e11f223cbb469028c86994e4c32fd672d688f16f` | 1400×525 | [35.0, 50.0, 75.0, 65.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 1): S1 Finding 1 (wire VBUS vs U1.6 GND flag corridor, at [57.1841, 55.88]) |
+| `power_rail-crop-3.png` | `5d762cc9ea5e7d6fb509c7e41074234bf7e45324156cd2ecb486a5ab508e92e2` | 1400×525 | [35.0, 52.0, 75.0, 67.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 2, USB_DET/VBUS parallel line): S1 Finding 2 (wire /USB_DET vs U1.6 GND flag corridor, at [57.1841, 60.96]) |
+| `power_rail-crop-4.png` | `268c11576eddeefe63ab6c33141a58c3457816e4ba5db19063efe3fe7c2c35fc` | 1400×525 | [35.0, 56.0, 75.0, 71.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 3): S1 Finding 3 (wire /USB_DET vs U1.8 ENPPB flag corridor, at [54.7651, 60.96]) |
+| `power_rail-crop-5.png` | `e2d7800464677b38f132abb44783a15aa6da8c3ee1e6ef08cc698b37e04f45e3` | 1400×525 | [35.0, 60.0, 75.0, 75.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 4): S1 Finding 4 (wire /ISET1 vs U1.7 NTC flag corridor, at [57.4865, 68.58]) |
+| `power_rail-crop-6.png` | `c6253fec11dad3ecc86fad101011fcabac796aabb6984af2dbbfc6f3ff952bc4` | 1400×525 | [90.0, 52.0, 130.0, 67.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 5): S1 Finding 5 (wire /SW_NODE vs U1.1 SYS flag corridor, at [102.7113, 58.42]) |
+| `power_rail-crop-7.png` | `60bc2416d10d62e48c1a0af6c36b2c37a60866583a71d3179b2444b1550f4053` | 1400×525 | [90.0, 58.0, 130.0, 73.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 6): S1 Finding 6 (wire BATT vs U1.15 SYS flag corridor, at [102.7113, 66.04]) |
+| `power_rail-crop-8.png` | `ba84fabd217af4c31173d805ea0dc24e71c0145b78c1e9eedad4f3e55648dc8c` | 1400×525 | [90.0, 63.0, 130.0, 78.0] | 35.000 px/mm (5.20×) | `power_rail` (accepted class-e site 7): S1 Finding 7 (wire BATT vs U1.9 STAT flag corridor, at [102.7113, 68.58]) |
+| `power_rail-crop-9.png` | `ee5414a4196c464d8abb453689c7f994bbceb5d36340a2f36e839c2eae2b1c17` | 1200×1040 | [125.0, 62.0, 155.0, 88.0] | 40.000 px/mm (5.94×) | `power_rail` (cosmetic note): Review 34 Cosmetic site: BATT flag on wire above C5 not at pin ([138.43, 73.66]) |
+| `battery-full.png` | `5561cc0ac7ce31f76b70968fe67c5cfb9fa03de41cf11cbb43c4d9224346d9b6` | 2000×1414 | null (full sheet) | 6.734 px/mm (1.00×) | `battery` (whole sheet): Whole sheet battery (2000 px long edge cap) |
+| `battery-crop-1.png` | `ddc0fa436bc66bfd34575be03830165fced793ea0bc3e61cd20cccb9ad713dda` | 1500×491 | [50.0, 110.0, 105.0, 128.0] | 27.273 px/mm (4.05×) | `battery` (accepted class-e site, NTC flag over R5 feed): S1 Finding 1 / Review 34 site: wire NTC vs J2.3 GND flag corridor at [86.3941, 115.57] & NTC flag left apex over R5 feed wire |
+| `battery-crop-2.png` | `c9bbb6f368abb664328a16d3a9b0018f592ae59dba2eebf87a82a00ee4c2ea74` | 1200×920 | [85.0, 105.0, 115.0, 128.0] | 40.000 px/mm (5.94×) | `battery` (connector symbol J2): Symbol J2 (Connector_Generic:Conn_01x03 BAT_PH2.0 connector) |
+| `battery-crop-3.png` | `11fa49d01eca65883a707b9c48b9921836dd790fda2b98ef2bd9d01aa13cc94f` | 1400×805 | [35.0, 55.0, 75.0, 78.0] | 35.000 px/mm (5.20×) | `battery` (cosmetic notes: Q1 value text & BATT flag): Review 34 sites: Q1 value text clearance (Item D repair) & BATT flag on Q1.3 stub |
+| `battery-crop-4.png` | `b77c5b3acdeecdc898dd4094f28c4edebe05b81ce674ff95f59047590b9d449f` | 1200×690 | [75.0, 72.0, 115.0, 95.0] | 30.000 px/mm (4.46×) | `battery` (cosmetic note): Review 34 site: BAT_EXT text flush to wire end at [101.6, 81.28] |
+| `charge_enable-full.png` | `dfdb2c675f340dd90f6c2183d4230695d2ae4c8e292c8fbfe357f4c0dab88520` | 2000×1414 | null (full sheet) | 6.734 px/mm (1.00×) | `charge_enable` (whole sheet): Whole sheet charge_enable (2000 px long edge cap) |
+| `charge_enable-crop-1.png` | `6dc7e8ece4539425a2d967732cde4be9e0e2cf4f6f81b186ee5e9fcfe54c403e` | 1400×871 | [80.0, 42.0, 125.0, 70.0] | 31.111 px/mm (4.62×) | `charge_enable` (cosmetic notes: CHG_LED_A & U-route): Review 34 sites: CHG_LED_A text flush to wire corner at [111.76, 62.23] & R7→D2 U-route |
+| `charge_enable-crop-2.png` | `6892559ab8ad637ecd4dd6c534c6b8aae67b498e9ffd17ce0acb36a4f88b10d8` | 1200×1040 | [45.0, 42.0, 75.0, 68.0] | 40.000 px/mm (5.94×) | `charge_enable` (cosmetic note): Review 34 site: STAT flag on R7.1 pin with no stub at [55.88, 50.8] |
+| `charge_enable-crop-3.png` | `cce7a3b25b073c3d0a0b59f7afce29cfad52ddff75975cd85f8773f63d922385` | 1200×891 | [40.0, 70.0, 75.0, 96.0] | 34.286 px/mm (5.09×) | `charge_enable` (cosmetic note): Review 34 site: Switch SW1 and standalone ENPPB flag at [59.69, 82.55] |
+| `mcu_swd-full.png` | `39c155bf1489dd76d36b4f124d7128e07e155dace07c920cec77720ff203a3ab` | 1414×2000 | null (full sheet) | 4.762 px/mm (1.00×) | `mcu_swd` (whole sheet): Whole sheet mcu_swd (2000 px long edge cap) |
+| `mcu_swd-crop-1.png` | `3ca6b68eb128ab292d34321bca79048ae5678e2f9fd4c8741e25028bf9f94ed0` | 1200×1700 | [40.0, 45.0, 100.0, 130.0] | 20.000 px/mm (4.20×) | `mcu_swd` (symbol ≥ 4 pins): Symbol U2 (MCU_Module:RaspberryPi_Pico_W_Debug, 43 pins) |
+| `mcu_swd-crop-2.png` | `e2c4bcb1209c69d75070d22d29a244ad65a440e9611f5e7ae96eff4837a87328` | 1200×632 | [122.0, 145.0, 160.0, 165.0] | 31.579 px/mm (6.63×) | `mcu_swd` (debug header symbol J3): Symbol J3 (Connector_Generic:Conn_01x03 SWD debug header) |
+| `mcu_swd-crop-3.png` | `bb625452592fd4d95c3af309953063bd49260cbe0cd6187c873d8e96c9bf4d87` | 1400×600 | [100.0, 146.0, 142.0, 164.0] | 33.333 px/mm (7.00×) | `mcu_swd` (accepted class-e site 1): S1 Finding 1 (wire /SWCLK vs J3.2 GND flag corridor, at [124.4941, 157.48]) |
+| `mcu_swd-crop-4.png` | `f1bc20eabc2da45479bbd17f042f5ff857521e7cc5122617773e57f39cc2787b` | 1400×600 | [100.0, 144.0, 142.0, 162.0] | 33.333 px/mm (7.00×) | `mcu_swd` (accepted class-e site 2): S1 Finding 2 (wire /SWDIO vs J3.2 GND flag corridor, at [124.4941, 152.4]) |
+| `mcu_swd-crop-5.png` | `fd338cbbc70ea0f485c284e887081255662cbeb9015dd7dc5285f6e9a6b1c9ac` | 1400×1000 | [30.0, 52.0, 58.0, 72.0] | 50.000 px/mm (10.50×) | `mcu_swd` (cosmetic note): Review 34 site: SWDIO label flush against own vertical wire at [40.64, 62.23] & SWCLK label |
+| `io-full.png` | `21b23bb4a0d1df47b48ba845b3feabbb649e9924ac4db2bcbd81b6b4201312d8` | 1414×2000 | null (full sheet) | 4.762 px/mm (1.00×) | `io` (whole sheet): Whole sheet io (2000 px long edge cap) |
+| `io-crop-1.png` | `89f1fdcd434712edf14af340e06936c0d24fe25681402545ffa8ba959907393d` | 1400×980 | [85.0, 42.0, 125.0, 70.0] | 35.000 px/mm (7.35×) | `io` (cosmetic note): Review 34 site: PWR_LED_K label flush to wire corner at [114.3, 62.23] & D3 diode |
+| `io-crop-2.png` | `2ebeb086682e09911de0634e1f938bd496128cec21f3d72ab5707e346b57bdfa` | 1400×980 | [85.0, 78.0, 125.0, 106.0] | 35.000 px/mm (7.35×) | `io` (cosmetic notes: BT_LED_A & D4 loop): Review 34 sites: BT_LED_A label flush to wire corner at [114.3, 99.06] & D4 loop area |
+| `io-crop-3.png` | `ed561bd392810adbfad1f6b4d4172fd04925361a13e4423a34ecb53a60e2f341` | 1400×980 | [85.0, 118.0, 125.0, 146.0] | 35.000 px/mm (7.35×) | `io` (cosmetic note): Review 34 site: WIFI_LED_A label flush to wire corner at [114.3, 138.43] & D5 diode |
+
+### 14.3 Crop → Review 34 Coverage Mapping
+
+Every single Review 34 row, blocking finding, cosmetic note, accepted class-e site, and symbol with $\ge 4$ pins is fully and redundantly mapped to $\ge 2\times$ crops for Review 35 blind visual inspection:
+
+| Review 34 Row / Topic | Leaf | Review 34 Finding Description | Corresponding v4 Crop(s) | Scale (vs Full) |
+|---|:---:|---|---|:---:|
+| **Row 1 (`usbc`)** | `usbc` | VBUS_CON / CC1 / CC2 collinear column (Blocking) | `usbc-crop-3.png` | 4.95× |
+| **Row 1 (`usbc`)** | `usbc` | VBUS flag jammed onto F1 lower pin (Cosmetic) | `usbc-crop-4.png` | 5.94× |
+| **Row 1 (`usbc`)** | `usbc` | Symbols with $\ge 4$ pins | `usbc-crop-1.png` (J1, 17p), `usbc-crop-2.png` (D1, 6p) | 3.78×, 5.94× |
+| **Row 2 (`power_rail`)** | `power_rail` | U1 right-edge SYS/STAT flags outward | `power_rail-crop-1.png` | 3.43× |
+| **Row 2 (`power_rail`)** | `power_rail` | Adjacent flag outlines share edge (Accepted Class E ×7) | `power_rail-crop-2.png` through `power_rail-crop-8.png` | 5.20× |
+| **Row 2 (`power_rail`)** | `power_rail` | BATT flag on wire above C5 not at pin | `power_rail-crop-9.png` | 5.94× |
+| **Row 2 (`power_rail`)** | `power_rail` | USB_DET/VBUS parallel 1 grid | `power_rail-crop-2.png`, `power_rail-crop-3.png` | 5.20× |
+| **Row 2 (`power_rail`)** | `power_rail` | Symbol U1 ($\ge 4$ pins) | `power_rail-crop-1.png` (U1, 17p) | 3.43× |
+| **Row 3 (`battery`)** | `battery` | Q1 value text clipped by body (Cosmetic / Item D repair) | `battery-crop-3.png` | 5.20× |
+| **Row 3 (`battery`)** | `battery` | BATT flag on Q1.3 stub overlapping wire | `battery-crop-3.png` | 5.20× |
+| **Row 3 (`battery`)** | `battery` | NTC flag left apex over R5 feed wire / NTC vs J2.3 GND | `battery-crop-1.png` (Accepted Class E ×1) | 4.05× |
+| **Row 3 (`battery`)** | `battery` | BAT_EXT text flush to wire end | `battery-crop-4.png` | 4.46× |
+| **Row 3 (`battery`)** | `battery` | Connector J2 | `battery-crop-2.png` | 5.94× |
+| **Row 4 (`charge_enable`)** | `charge_enable` | CHG_LED_A text flush to wire corner & R7→D2 U-route | `charge_enable-crop-1.png` | 4.62× |
+| **Row 4 (`charge_enable`)** | `charge_enable` | STAT flag on R7 pin with no stub | `charge_enable-crop-2.png` | 5.94× |
+| **Row 4 (`charge_enable`)** | `charge_enable` | Standalone ENPPB flag on SW1 | `charge_enable-crop-3.png` | 5.09× |
+| **Row 5 (`mcu_swd`)** | `mcu_swd` | SWDIO label flush against own vertical wire | `mcu_swd-crop-5.png` | 10.50× |
+| **Row 5 (`mcu_swd`)** | `mcu_swd` | SWCLK / SWDIO vs J3.2 GND corridor (Accepted Class E ×2) | `mcu_swd-crop-3.png`, `mcu_swd-crop-4.png` | 7.00× |
+| **Row 5 (`mcu_swd`)** | `mcu_swd` | Symbol U2 ($\ge 4$ pins) | `mcu_swd-crop-1.png` (U2, 43p) | 4.20× |
+| **Row 5 (`mcu_swd`)** | `mcu_swd` | Debug header J3 | `mcu_swd-crop-2.png` | 6.63× |
+| **Row 6 (`io`)** | `io` | PWR_LED_K label flush to wire corner | `io-crop-1.png` | 7.35× |
+| **Row 6 (`io`)** | `io` | BT_LED_A label flush to wire corner & D4 loop area | `io-crop-2.png` | 7.35× |
+| **Row 6 (`io`)** | `io` | WIFI_LED_A label flush to wire corner | `io-crop-3.png` | 7.35× |
+
+### 14.4 Verification & Hashes
+
+- **Manifest File**: `~/.cache/scratch/s3-formal/v4-png/v4-png-manifest.json` (mirrored to `/home/pkcs12/.cache/scratch/s3-formal/v4-png/v4-png-manifest.json`)
+- **Manifest SHA256**: `dd9702ab1ff1975b679be891548b52c3194c0d0ae25598122538c8647ede00da`
+- **Directory Hashes**: `~/.cache/scratch/s3-formal/v4-png/hashes.sha256`
+- **Integrity Evidence**: `sha256sum -c hashes.sha256` executed cleanly across all 35 items (34 PNGs + 1 JSON manifest, exit code 0) on both host scratch paths.
+
+### 14.5 NOT MEASURED (Boundaries)
+
+1. **No Visual Review Performed**: This dispatch performed deterministic rasterisation and staging only. No evaluation of visual aesthetics, component arrangements, wire routing legibility, or readability acceptance was conducted.
+2. **No Adjudication / Verdict**: No claim is made regarding pass/fail status or whether an engineer should sign off on any sheet or crop; review is reserved for the independent reviewer sessions under mainline R-L 1(c) (Review 35).
+3. **No Engine / Invocation Modifications**: No python files, EDA bridge code, or multisheet invocation parameters were modified.
