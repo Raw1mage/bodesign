@@ -1064,6 +1064,32 @@ Next direction requires user ruling: (i) 求好 phase on the six leaves (B/C emi
 S1 recalibration to 2.54 mm pitch), (ii) resume parked §2/§4/§5/§6 or S2 ingestion, or
 (iii) C04 re-entry on the v4 schematic revision.
 
+### 4.22 R-M: 求好 phase on the six leaves (2026-10-10, user)
+
+User ruling: next mainline = option (i). S48–S52 pushed to `gitlab/main` @ e1a6f42. Scope:
+
+1. **Emitter rule B (local label at a corner)**: land B-1 (1.27 mm dead-end stub along the
+   straight run, label at the stub end) and resolve the isolation failure at `mcu_swd:SWCLK`
+   (point-to-point net, no dead-end terminal, corner candidates refused by
+   `E_ELK_LABEL_NO_POSITION`) as a general rule — not a site special case.
+2. **Emitter rule C (flag collinear with pin stub)**: land C-1 and resolve the isolation
+   failure at `usbc:VBUS@F1.2` (channel depth 7.62 mm < stub 1.27 + flag 6.60) as a general
+   rule — no wire-anchoring fallback, no conditional stub.
+3. **S1 recalibration**: the detector policy freeze (§4.19) is lifted for ONE change: the
+   `accept-adjacent_pin_flag_at_2.54mm_pitch` class becomes a non-finding (a flag's
+   neighbour wire that is the neighbour pin's own stub is exempt from `E_LABEL_FLAG_CORRIDOR`).
+   New policy hash + `s1-calibration-record-v3.json`; AC16 must gain accepting examples
+   (currently rejecting 2 / accepting 0). Instrument sha changes are recorded, not hidden.
+4. **Review 35 NOTE residuals** are the acceptance list: flush labels (mcu_swd, charge_enable,
+   battery, io ×3), zero-stub flags (battery BATT@Q1.3 / NTC@R5, charge_enable STAT@R7.1,
+   usbc VBUS@F1.2), usbc CC1–CC2 single-grid collinear, power_rail BATT flag at C5 node and
+   SYS/SYS + ENPPB/NTC abutting flag outlines. Done = Review 36 (one reviewer per leaf, v5)
+   reports 0 BLOCKING and every Review 35 NOTE either RESOLVED or named accepted by the officer.
+5. Hard gates unchanged: no new a/c/d, f=0, off-grid 0, crossings ≤ v4, fidelity 100%,
+   ERC non-lib delta by reference. Same bisection-and-ASK discipline as round 3.
+6. Step 0 is measure-then-ASK (quote functions, measure the two isolation-failure sites on v4
+   bytes, propose the general rule for each); no edits before ruling.
+
 ## 5. Summary and Next Steps
 
 1. **Task 7.3 Status**: **COMPLETED** as a design deliverable (`c04-entry-freeze-20261007.md`).
