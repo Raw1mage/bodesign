@@ -1,0 +1,109 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-10T13:25:33+0800",
+    "included_severities": [
+        "error",
+        "warning"
+    ],
+    "kicad_version": "9.0.9",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/bc5c92e8-b0f3-41af-8968-1b2fb5cc530d",
+            "violations": [
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol F1 [Polyfuse]",
+                            "pos": {
+                                "x": 0.7366,
+                                "y": 0.4953
+                            },
+                            "uuid": "65b45c31-9eaf-4822-adda-610af7fdf871"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C1 [C]",
+                            "pos": {
+                                "x": 1.0414,
+                                "y": 0.7239
+                            },
+                            "uuid": "7555c499-7f87-44f4-99bd-0a618204a78a"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector'",
+                    "items": [
+                        {
+                            "description": "Symbol J1 [USB_C_Receptacle_USB2.0_16P]",
+                            "pos": {
+                                "x": 0.4826,
+                                "y": 1.2446
+                            },
+                            "uuid": "6ded16b1-7507-422c-8d18-001e84de98aa"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R1 [R]",
+                            "pos": {
+                                "x": 0.762,
+                                "y": 1.2573
+                            },
+                            "uuid": "729ba6d5-2079-43ab-8069-bedb9cbacc9d"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Bodesign_Presentation'",
+                    "items": [
+                        {
+                            "description": "Symbol D1 [PESD5V0L4UF_Boxed]",
+                            "pos": {
+                                "x": 1.0414,
+                                "y": 1.0541
+                            },
+                            "uuid": "6144fd5a-8441-4d5d-bba9-8b540da5430b"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R2 [R]",
+                            "pos": {
+                                "x": 1.3081,
+                                "y": 1.6002
+                            },
+                            "uuid": "f3822268-692c-4da2-a7f8-0697b3696aad"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        }
+    ],
+    "source": "usbc.kicad_sch"
+}

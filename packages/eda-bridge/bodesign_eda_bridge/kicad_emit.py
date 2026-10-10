@@ -45,6 +45,24 @@ NAME_RE = re.compile(r'\(name\s+"([^"]+)"')
 _PIN_NAME_OFFSET_MM = 0.508   # KiCad default pin_names offset from the pin endpoint
 _PIN_NAME_CH_MM = 1.27        # rendered pin-name text height
 _PIN_NAME_CW_MM = 1.05        # per-char advance (matches _LABEL_CW_MM)
+_PROP_TEXT_CW_MM = 1.30       # per-char advance for Reference/Value property text (measured KiCad stroke font average ~1.26 mm/char for uppercase text e.g. DMG2301L)
+
+
+def _r3_enabled(flag: str) -> bool:
+    val = os.getenv(f"R3_ENABLE_{flag}")
+    if val is not None:
+        return val == "1"
+    for p in ("/work/experiments/s3-formal/bisect_flags.json",
+              "/home/pkcs12/projects/bodesign/experiments/s3-formal/bisect_flags.json"):
+        if os.path.exists(p):
+            try:
+                import json
+                with open(p) as f:
+                    data = json.load(f)
+                return bool(data.get(flag, True))
+            except Exception:
+                pass
+    return True
 
 
 @dataclass(slots=True)
@@ -1028,7 +1046,8 @@ def _prop_text_box(text: str, x: float, y: float,
     KiCad default => runs +x from its anchor). Same char/height model as pin
     names so the QA and the emitter agree. M3-1 (DD-4): ×page_scale so the box
     reflects the true rendered text size (byte-stable at page_scale==1.0)."""
-    w = len(text) * (_PIN_NAME_CW_MM * page_scale)
+    cw = _PROP_TEXT_CW_MM if _r3_enabled("D") else _PIN_NAME_CW_MM
+    w = len(text) * (cw * page_scale)
     h = _PIN_NAME_CH_MM * page_scale + _LABEL_VMARGIN_MM
     return (x, x + w, y - h / 2, y + h / 2)
 

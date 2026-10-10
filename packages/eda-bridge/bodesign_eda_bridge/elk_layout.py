@@ -41,6 +41,8 @@ from .kicad_emit import (
     _graphics_bbox,
     _label_bbox,
     _prop_text_box,
+    _PROP_TEXT_CW_MM,
+    _r3_enabled,
     _native_pitch_and_count,
     _page_pitch_floor,
     _snap_grid,
@@ -442,6 +444,11 @@ def plan_node_ink(c: EmitComponent, g: SymbolGeometry, flag_pins: dict[str, str]
     width, height, ox, oy = node_box
     nb: Box = (-ox, -oy, width - ox, height - oy)
     chosen = cands[natural]
+    # Hard gate (Round 3 ruling D): Reference/Value box ∩ expanded hull (INK_CLEAR_MM) must be empty
+    if _r3_enabled("D"):
+        _chosen_boxes = [chosen.ref_box] + ([chosen.val_box] if chosen.val_box else [])
+        assert not any(_boxes_overlap(b, hull, INK_CLEAR_MM) for b in _chosen_boxes), \
+            f"{c.ref}: chosen prop box intersects symbol hull inflated by INK_CLEAR_MM"
     ink_boxes = [f[2] for f in flags] + [chosen.ref_box] + ([chosen.val_box] if chosen.val_box else [])
     if outline_box is not None:
         ink_boxes.append(outline_box)
@@ -1068,6 +1075,181 @@ def _proper_cross(a: Point, b: Point, c: Point, d: Point) -> Point | None:
     return None
 
 
+def _foreign_crossings_segs(segments: dict[str, list[Segment]]) -> list[dict]:
+    out: list[dict] = []
+    items = [(n, s) for n, ss in segments.items() for s in ss]
+    for i, (ni, (a, b)) in enumerate(items):
+        for nj, (c, d) in items[i + 1:]:
+            if ni == nj:
+                continue
+            x = _proper_cross(a, b, c, d)
+            if x is not None:
+                out.append({"nets": sorted([ni, nj]), "at": list(x)})
+    return out
+
+
+def _resolve_foreign_collinear_channels(sol: PresentationSolution, build: ElkGraphBuild) -> None:
+    """Invariant: two wire segments of DIFFERENT nets that are collinear (same x
+    for verticals / same y for horizontals) must be separated along the shared axis
+    by >= 2.54 mm; otherwise one of them moves to an adjacent track.
+    Offsets the shorter segment by whole grid steps (+/-1.27, +/-2.54) and re-stitches
+    its orthogonal connectors.
+    Raises E_COLLINEAR_FOREIGN_NO_TRACK if no legal track exists."""
+    hull_boxes = []
+    for ref, ink in build.inks.items():
+        pos = sol.poses.get(ref, (0.0, 0.0))
+        hull_boxes.append(_shift(ink.hull, pos[0], pos[1]))
+
+    for _pass in range(20):
+        all_segs = [(net, s) for net, ss in sol.segments.items() for s in ss]
+        violation = None
+        for i, (ni, (a, b)) in enumerate(all_segs):
+            for nj, (c, d) in all_segs[i + 1:]:
+                if ni == nj:
+                    continue
+                # Vertical collinear
+                if abs(a[0] - b[0]) < EPS and abs(c[0] - d[0]) < EPS and abs(a[0] - c[0]) < EPS:
+                    s1_y = (min(a[1], b[1]), max(a[1], b[1]))
+                    s2_y = (min(c[1], d[1]), max(c[1], d[1]))
+                    gap = s2_y[0] - s1_y[1] if s1_y[1] <= s2_y[0] else (s1_y[0] - s2_y[1] if s2_y[1] <= s1_y[0] else 0.0)
+                    if gap < 2.54 - EPS:
+                        violation = ("V", a[0], (ni, (a, b)), (nj, (c, d)), gap)
+                        break
+                # Horizontal collinear
+                elif abs(a[1] - b[1]) < EPS and abs(c[1] - d[1]) < EPS and abs(a[1] - c[1]) < EPS:
+                    s1_x = (min(a[0], b[0]), max(a[0], b[0]))
+                    s2_x = (min(c[0], d[0]), max(c[0], d[0]))
+                    gap = s2_x[0] - s1_x[1] if s1_x[1] <= s2_x[0] else (s1_x[0] - s2_x[1] if s2_x[1] <= s1_x[0] else 0.0)
+                    if gap < 2.54 - EPS:
+                        violation = ("H", a[1], (ni, (a, b)), (nj, (c, d)), gap)
+                        break
+            if violation:
+                break
+        if not violation:
+            return  # Invariant satisfied for all foreign segments!
+
+        orient, coord, (n1, seg1), (n2, seg2), gap = violation
+        len1 = abs(seg1[1][1] - seg1[0][1]) if orient == "V" else abs(seg1[1][0] - seg1[0][0])
+        len2 = abs(seg2[1][1] - seg2[0][1]) if orient == "V" else abs(seg2[1][0] - seg2[0][0])
+        candidates = [(n1, seg1), (n2, seg2)] if len1 <= len2 else [(n2, seg2), (n1, seg1)]
+        orig_crossings = len(_foreign_crossings_segs(sol.segments))
+
+        resolved = False
+        for move_net, move_seg in candidates:
+            for offset in (GRID_MM, -GRID_MM, 2 * GRID_MM, -2 * GRID_MM):
+                if orient == "V":
+                    min_y, max_y = min(move_seg[0][1], move_seg[1][1]), max(move_seg[0][1], move_seg[1][1])
+                    new_coord = round(coord + offset, 4)
+                    new_seg = ((new_coord, min_y), (new_coord, max_y))
+                    ep_a, ep_b = (coord, min_y), (coord, max_y)
+                    tgt_a, tgt_b = (new_coord, min_y), (new_coord, max_y)
+                else:
+                    min_x, max_x = min(move_seg[0][0], move_seg[1][0]), max(move_seg[0][0], move_seg[1][0])
+                    new_coord = round(coord + offset, 4)
+                    new_seg = ((min_x, new_coord), (max_x, new_coord))
+                    ep_a, ep_b = (min_x, coord), (max_x, coord)
+                    tgt_a, tgt_b = (min_x, new_coord), (max_x, new_coord)
+
+                # Constraint (1a): hull collision
+                if any(_seg_hits_box(new_seg[0], new_seg[1], h, 0.0) for h in hull_boxes):
+                    continue
+
+                # Constraint (1b): foreign pin tips
+                foreign_tips = [tip for (r, p), tip in sol.pin_tips.items() if build.declared_pin_nets.get((r, p)) != move_net]
+                if any(_on_segment(tip, new_seg[0], new_seg[1]) for tip in foreign_tips):
+                    continue
+
+                # Re-stitch connectors in move_net
+                trial_segs = [s for s in sol.segments[move_net] if s != move_seg and s != (move_seg[1], move_seg[0])]
+                stitching_ok = True
+                new_connectors = []
+                for ep, tgt in ((ep_a, tgt_a), (ep_b, tgt_b)):
+                    conn_indices = [idx for idx, s in enumerate(trial_segs) if ep in s]
+                    if conn_indices:
+                        for idx in conn_indices:
+                            s = trial_segs[idx]
+                            is_perp = (abs(s[0][1] - s[1][1]) < EPS) if orient == "V" else (abs(s[0][0] - s[1][0]) < EPS)
+                            if is_perp:
+                                new_s = (tgt, s[1]) if s[0] == ep else (s[0], tgt)
+                                if any(_seg_hits_box(new_s[0], new_s[1], h, 0.0) for h in hull_boxes):
+                                    stitching_ok = False; break
+                                trial_segs[idx] = new_s
+                            else:
+                                jog = (ep, tgt)
+                                if any(_seg_hits_box(jog[0], jog[1], h, 0.0) for h in hull_boxes):
+                                    stitching_ok = False; break
+                                new_connectors.append(jog)
+                    else:
+                        if ep in sol.pin_tips.values():
+                            jog = (ep, tgt)
+                            if any(_seg_hits_box(jog[0], jog[1], h, 0.0) for h in hull_boxes):
+                                stitching_ok = False; break
+                            new_connectors.append(jog)
+                    if not stitching_ok:
+                        break
+                if not stitching_ok:
+                    continue
+
+                trial_segs.append(new_seg)
+                trial_segs.extend(new_connectors)
+                trial_segs = _split_at_contacts(_merge_collinear(trial_segs))
+
+                # Constraint (1c): wire contacts with foreign nets
+                foreign_segs = [s for net, ss in sol.segments.items() if net != move_net for s in ss]
+                hit_foreign = False
+                for s in trial_segs:
+                    for fs in foreign_segs:
+                        if _collinear_overlap(s[0], s[1], fs[0], fs[1]):
+                            hit_foreign = True; break
+                        if any(_on_segment(p, fs[0], fs[1]) for p in (s[0], s[1])):
+                            hit_foreign = True; break
+                        if any(_on_segment(p, s[0], s[1]) for p in (fs[0], fs[1])):
+                            hit_foreign = True; break
+                    if hit_foreign: break
+                if hit_foreign:
+                    continue
+
+                # Constraint (1d): collinear gap with any foreign segment on new_coord >= 2.54 mm
+                new_gap_bad = False
+                for fs in foreign_segs:
+                    if orient == "V":
+                        if abs(fs[0][0] - fs[1][0]) < EPS and abs(fs[0][0] - new_coord) < EPS:
+                            fy = (min(fs[0][1], fs[1][1]), max(fs[0][1], fs[1][1]))
+                            for s in trial_segs:
+                                if abs(s[0][0] - s[1][0]) < EPS and abs(s[0][0] - new_coord) < EPS:
+                                    sy = (min(s[0][1], s[1][1]), max(s[0][1], s[1][1]))
+                                    gap_f = sy[0] - fy[1] if fy[1] <= sy[0] else (fy[0] - sy[1] if sy[1] <= fy[0] else 0.0)
+                                    if gap_f < 2.54 - EPS:
+                                        new_gap_bad = True; break
+                    else:
+                        if abs(fs[0][1] - fs[1][1]) < EPS and abs(fs[0][1] - new_coord) < EPS:
+                            fx = (min(fs[0][0], fs[1][0]), max(fs[0][0], fs[1][0]))
+                            for s in trial_segs:
+                                if abs(s[0][1] - s[1][1]) < EPS and abs(s[0][1] - new_coord) < EPS:
+                                    sx = (min(s[0][0], s[1][0]), max(s[0][0], s[1][0]))
+                                    gap_f = sx[0] - fx[1] if fx[1] <= sx[0] else (fx[0] - sx[1] if sx[1] <= fx[0] else 0.0)
+                                    if gap_f < 2.54 - EPS:
+                                        new_gap_bad = True; break
+                    if new_gap_bad: break
+                if new_gap_bad:
+                    continue
+
+                # Constraint (2): foreign crossing count per sheet must not increase
+                trial_dict = {k: (trial_segs if k == move_net else v) for k, v in sol.segments.items()}
+                if len(_foreign_crossings_segs(trial_dict)) > orig_crossings:
+                    continue
+
+                sol.segments[move_net] = trial_segs
+                resolved = True
+                break
+            if resolved:
+                break
+        if not resolved:
+            raise ElkLayoutError("E_COLLINEAR_FOREIGN_NO_TRACK",
+                                 f"no free channel track exists to separate foreign collinear nets {n1} and {n2} by >= 2.54 mm",
+                                 net1=n1, net2=n2, gap=gap)
+
+
 class _DSU:
     def __init__(self):
         self.p: dict = {}
@@ -1136,6 +1318,25 @@ def verify_solution(sol: PresentationSolution, build: ElkGraphBuild) -> dict:
                 if ni != nj:
                     problems.append({"code": "E_ELK_FOREIGN_COLLINEAR", "nets": [ni, nj],
                                      "segs": [[a, b], [c, d]]})
+            elif ni != nj and _r3_enabled("A"):
+                # Invariant: two wire segments of DIFFERENT nets that are collinear
+                # must be separated along the shared axis by >= 2.54 mm.
+                if abs(a[0] - b[0]) < EPS and abs(c[0] - d[0]) < EPS and abs(a[0] - c[0]) < EPS:
+                    s1_y = (min(a[1], b[1]), max(a[1], b[1]))
+                    s2_y = (min(c[1], d[1]), max(c[1], d[1]))
+                    gap = s2_y[0] - s1_y[1] if s1_y[1] <= s2_y[0] else (s1_y[0] - s2_y[1] if s2_y[1] <= s1_y[0] else 0.0)
+                    if gap < 2.54 - EPS:
+                        problems.append({"code": "E_ELK_FOREIGN_COLLINEAR_GAP", "nets": [ni, nj],
+                                         "axis": "x", "val": a[0], "gap": round(gap, 4),
+                                         "segs": [[a, b], [c, d]]})
+                elif abs(a[1] - b[1]) < EPS and abs(c[1] - d[1]) < EPS and abs(a[1] - c[1]) < EPS:
+                    s1_x = (min(a[0], b[0]), max(a[0], b[0]))
+                    s2_x = (min(c[0], d[0]), max(c[0], d[0]))
+                    gap = s2_x[0] - s1_x[1] if s1_x[1] <= s2_x[0] else (s1_x[0] - s2_x[1] if s2_x[1] <= s1_x[0] else 0.0)
+                    if gap < 2.54 - EPS:
+                        problems.append({"code": "E_ELK_FOREIGN_COLLINEAR_GAP", "nets": [ni, nj],
+                                         "axis": "y", "val": a[1], "gap": round(gap, 4),
+                                         "segs": [[a, b], [c, d]]})
     # a wire endpoint that is neither a pin tip nor on another segment is dangling
     for i, (net, (a, b)) in enumerate(all_segs):
         for p in (a, b):
@@ -1262,11 +1463,15 @@ _FLAG_DIRS = ((1.0, 0.0), (-1.0, 0.0))
 
 
 def _box_hits_wires(box: Box, wires, *, own_net: str | None,
-                    own_strict: bool = False) -> bool:
+                    own_strict: bool = False,
+                    anchor_seg: Segment | None = None) -> bool:
     """Foreign wires (and, with own_net=None, every wire) hit within INK_CLEAR_MM.
     `own_strict`: the owning net's wires count only when they run THROUGH the box
-    (touching its edge, as at the flag anchor, is the attachment itself)."""
+    (touching its edge, as at the flag anchor, is the attachment itself).
+    `anchor_seg`: optional carrier segment on which a label is anchored; exempt."""
     for net, a, b in wires:
+        if anchor_seg is not None and ((a == anchor_seg[0] and b == anchor_seg[1]) or (a == anchor_seg[1] and b == anchor_seg[0])):
+            continue
         if own_net is not None and net == own_net:
             if own_strict and _seg_hits_box(a, b, box, 0.0):
                 return True
@@ -1294,8 +1499,9 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
 
     def _free(box: Box, *, owner: str | None, own_hull_ok: str | None = None,
               own_net: str | None = None, hull_clear: float = INK_CLEAR_MM,
-              own_strict: bool = False) -> bool:
-        if _box_hits_wires(box, wires, own_net=own_net, own_strict=own_strict):
+              own_strict: bool = False,
+              anchor_seg: Segment | None = None) -> bool:
+        if _box_hits_wires(box, wires, own_net=own_net, own_strict=own_strict, anchor_seg=anchor_seg):
             return False
         for ref, h in hulls.items():
             if ref == own_hull_ok:
@@ -1394,22 +1600,128 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
                     anchors.append((pt, None, None))
         for pt, ref, first in anchors:
             if ref is not None:
-                # Pin-anchored flag: MUST point away from symbol body along outward normal
-                # Inward direction into symbol body is (-first[0], -first[1])
-                inward = (-first[0], -first[1]) if first else None
-                dirs = [d for d in ([first] if first else []) + [d for d in _FLAG_DIRS if d != first]
-                        if inward is None or d != inward]
-            else:
-                # Wire-anchored flag: unconstrained by symbol body
-                dirs = list(_FLAG_DIRS)
-            for d in dirs:
-                box = _rect(_label_bbox(net, pt[0], pt[1], True, d, page_scale))
-                if _free(box, owner=net, own_hull_ok=ref, own_net=net, hull_clear=0.0,
-                         own_strict=True):
-                    pick = LabelPlacement(net, "flag", pt, d, box, ref and f"{ref}")
+                if _r3_enabled("C"):
+                    # Pin-anchored flag: dedicated stub wire of exactly 1.27 mm along first
+                    stub_vec = first if first is not None else (1.0, 0.0)
+                    stub_far = (round(pt[0] + stub_vec[0] * GRID_MM, 4), round(pt[1] + stub_vec[1] * GRID_MM, 4))
+                    stub_seg = (pt, stub_far)
+                    # Stub must clear other component hulls
+                    if any(_seg_hits_box(stub_seg[0], stub_seg[1], h, 0.0) for r, h in hulls.items() if r != ref):
+                        continue
+                    # Check if an existing carrier segment leaves pt along stub_vec:
+                    collinear_seg = None
+                    tail_seg = None
+                    for s in sol.segments.get(net, []):
+                        if s[0] == pt:
+                            other = s[1]
+                        elif s[1] == pt:
+                            other = s[0]
+                        else:
+                            continue
+                        vec = (other[0] - pt[0], other[1] - pt[1])
+                        if abs(stub_vec[0]) > 0:
+                            if abs(vec[1]) < EPS and vec[0] * stub_vec[0] > 0 and abs(vec[0]) >= GRID_MM - EPS:
+                                collinear_seg = s
+                                if abs(vec[0]) > GRID_MM + EPS:
+                                    tail_seg = (stub_far, other)
+                                break
+                        elif abs(stub_vec[1]) > 0:
+                            if abs(vec[0]) < EPS and vec[1] * stub_vec[1] > 0 and abs(vec[1]) >= GRID_MM - EPS:
+                                collinear_seg = s
+                                if abs(vec[1]) > GRID_MM + EPS:
+                                    tail_seg = (stub_far, other)
+                                break
+                    # Flag box at stub_far pointing outward along stub_vec (collinear)
+                    box = _rect(_label_bbox(net, stub_far[0], stub_far[1], True, stub_vec, page_scale))
+                    # Closed-interval test: flag box must not intersect any wire except its own stub (and carrier tail if collinear)
+                    hits_wire = False
+                    for wnet, wa, wb in wires:
+                        if (wa == stub_seg[0] and wb == stub_seg[1]) or (wa == stub_seg[1] and wb == stub_seg[0]):
+                            continue
+                        if collinear_seg is not None and ((wa == collinear_seg[0] and wb == collinear_seg[1]) or (wa == collinear_seg[1] and wb == collinear_seg[0])):
+                            continue
+                        if tail_seg is not None and ((wa == tail_seg[0] and wb == tail_seg[1]) or (wa == tail_seg[1] and wb == tail_seg[0])):
+                            continue
+                        sx0, sx1 = sorted((wa[0], wb[0]))
+                        sy0, sy1 = sorted((wa[1], wb[1]))
+                        if not (sx1 < box[0] or box[2] < sx0 or sy1 < box[1] or box[3] < sy0):
+                            hits_wire = True
+                            break
+                        if wnet != net and _seg_hits_box(wa, wb, box, INK_CLEAR_MM):
+                            hits_wire = True
+                            break
+                    if hits_wire:
+                        continue
+                    if any(_boxes_overlap(box, h, 0.0) for r, h in hulls.items() if r != ref):
+                        continue
+                    if any(_boxes_overlap(box, d) for d in dots):
+                        continue
+                    if any(_boxes_overlap(box, pb, 0.1) for who, pb in placed):
+                        continue
+                    pick = LabelPlacement(net, "flag", stub_far, stub_vec, box, ref and f"{ref}")
+                    if collinear_seg is not None:
+                        segs = sol.segments.get(net, [])
+                        idx = segs.index(collinear_seg)
+                        segs.pop(idx)
+                        segs.append(stub_seg)
+                        if tail_seg:
+                            segs.append(tail_seg)
+                        for i, w in enumerate(wires):
+                            if w[0] == net and ((w[1] == collinear_seg[0] and w[2] == collinear_seg[1]) or (w[1] == collinear_seg[1] and w[2] == collinear_seg[0])):
+                                wires.pop(i)
+                                break
+                        wires.append((net, stub_seg[0], stub_seg[1]))
+                        if tail_seg:
+                            wires.append((net, tail_seg[0], tail_seg[1]))
+                    else:
+                        sol.segments.setdefault(net, []).append(stub_seg)
+                        wires.append((net, stub_seg[0], stub_seg[1]))
                     break
-            if pick:
-                break
+                else:
+                    inward = (-first[0], -first[1]) if first else None
+                    dirs = [d for d in ([first] if first else []) + [d for d in _FLAG_DIRS if d != first]
+                            if inward is None or d != inward]
+                    for d in dirs:
+                        box = _rect(_label_bbox(net, pt[0], pt[1], True, d, page_scale))
+                        if _free(box, owner=net, own_hull_ok=ref, own_net=net, hull_clear=0.0, own_strict=True):
+                            pick = LabelPlacement(net, "flag", pt, d, box, ref and f"{ref}")
+                            break
+                    if pick:
+                        break
+            else:
+                if _r3_enabled("C"):
+                    continue
+                # Wire-anchored flag
+                dirs = list(_FLAG_DIRS)
+                for d in dirs:
+                    box = _rect(_label_bbox(net, pt[0], pt[1], True, d, page_scale))
+                    hits_wire = False
+                    for wnet, wa, wb in wires:
+                        if _on_segment(pt, wa, wb):
+                            if _seg_hits_box(wa, wb, box, 0.0):
+                                hits_wire = True
+                                break
+                            continue
+                        sx0, sx1 = sorted((wa[0], wb[0]))
+                        sy0, sy1 = sorted((wa[1], wb[1]))
+                        if not (sx1 < box[0] or box[2] < sx0 or sy1 < box[1] or box[3] < sy0):
+                            hits_wire = True
+                            break
+                        if wnet != net and _seg_hits_box(wa, wb, box, INK_CLEAR_MM):
+                            hits_wire = True
+                            break
+                    if hits_wire:
+                        continue
+                    if any(_boxes_overlap(box, h, INK_CLEAR_MM) for r, h in hulls.items()):
+                        continue
+                    if any(_boxes_overlap(box, d) for d in dots):
+                        continue
+                    if any(_boxes_overlap(box, pb, 0.1) for who, pb in placed):
+                        continue
+                    pick = LabelPlacement(net, "flag", pt, d, box, None)
+                    break
+                if pick:
+                    break
         if pick is None:
             raise ElkLayoutError(
                 "E_FLAG_NO_OUTWARD",
@@ -1427,26 +1739,110 @@ def place_ink(sol: "PresentationSolution", build: ElkGraphBuild,
             continue
         segs = sol.segments.get(net, [])
         jset = set(sol.junctions.get(net, []))
-        cands: list[tuple[tuple, Point]] = []
+        if not _r3_enabled("B"):
+            cands_v3: list[tuple[tuple, Point]] = []
+            for a, b in segs:
+                horiz = abs(a[1] - b[1]) < EPS
+                length = abs(a[0] - b[0]) + abs(a[1] - b[1])
+                n = int(round(length / GRID_MM))
+                for k in range(0, n + 1):
+                    t = k / n if n else 0.0
+                    p = (round(a[0] + (b[0] - a[0]) * t, 4), round(a[1] + (b[1] - a[1]) * t, 4))
+                    if p in jset or p in tipset:
+                        continue
+                    cands_v3.append(((0 if horiz else 1, -length, p[1], p[0]), p))
+            cands_v3.sort(key=lambda t: t[0])
+            pick_v3 = None
+            for _k, p in cands_v3:
+                box = _rect(_label_bbox(net, p[0], p[1], False, (1.0, 0.0), page_scale))
+                if _free(box, owner=net, own_net=net, own_strict=True):
+                    pick_v3 = LabelPlacement(net, "local", p, (1.0, 0.0), box)
+                    break
+            if pick_v3 is None:
+                raise ElkLayoutError(
+                    "E_ELK_LABEL_NO_POSITION",
+                    f"net {net!r}: no on-wire anchor admits a clear local label on the solved "
+                    f"layout (refused rather than relabelled or rerouted)",
+                    net=net, variant=build.variant)
+            labels[net] = pick_v3
+            placed.append((f"label:{net}", pick_v3.box))
+            continue
+
+        # Rule B-1: local-label anchor stays a wire TERMINAL (dead-end).
+        # When the only available terminal is a 90° corner vertex, grow a dedicated
+        # 1.27 mm dead-end stub from that vertex along the straight run's own direction,
+        # same net, on grid, and anchor the label at the stub's far end.
+        term_cands: list[tuple[Point, Segment]] = []
         for a, b in segs:
-            horiz = abs(a[1] - b[1]) < EPS
-            length = abs(a[0] - b[0]) + abs(a[1] - b[1])
-            n = int(round(length / GRID_MM))
-            for k in range(0, n + 1):
-                t = k / n if n else 0.0
-                p = (round(a[0] + (b[0] - a[0]) * t, 4), round(a[1] + (b[1] - a[1]) * t, 4))
+            for p, other in ((a, b), (b, a)):
                 if p in jset or p in tipset:
                     continue
-                cands.append(((0 if horiz else 1, -length, p[1], p[0]), p))
-        cands.sort(key=lambda t: t[0])
+                deg = sum(1 for sa, sb in segs if p in (sa, sb))
+                if deg == 1 and other[0] < p[0] - EPS:
+                    term_cands.append((p, (other, p)))
         pick = None
-        for _k, p in cands:
-            # Full emitted text box, centred on the anchor line; the owning net's
-            # wires may only TOUCH it at the anchor (text starts where the wire
-            # ends/bends), never run through it.
+        for p, seg in term_cands:
             box = _rect(_label_bbox(net, p[0], p[1], False, (1.0, 0.0), page_scale))
-            if _free(box, owner=net, own_net=net, own_strict=True):
+            # Text box must clear its OWN other wires by >= 1.27 mm
+            clear_wires = True
+            for oa, ob in segs:
+                if (oa == seg[0] and ob == seg[1]) or (oa == seg[1] and ob == seg[0]):
+                    continue
+                sx0, sx1 = sorted((oa[0], ob[0]))
+                sy0, sy1 = sorted((oa[1], ob[1]))
+                if not (sx1 <= box[0] - GRID_MM + EPS or box[2] + GRID_MM - EPS <= sx0 or
+                        sy1 <= box[1] - GRID_MM + EPS or box[3] + GRID_MM - EPS <= sy0):
+                    clear_wires = False
+                    break
+            if not clear_wires:
+                continue
+            if _free(box, owner=net, own_net=net, own_strict=True, anchor_seg=seg):
                 pick = LabelPlacement(net, "local", p, (1.0, 0.0), box)
+                break
+
+        if pick is None:
+            corners: list[tuple[Point, Point]] = []
+            for i, s1 in enumerate(segs):
+                h1 = abs(s1[0][1] - s1[1][1]) < EPS
+                for j, s2 in enumerate(segs):
+                    if j <= i:
+                        continue
+                    h2 = abs(s2[0][1] - s2[1][1]) < EPS
+                    if h1 != h2:
+                        for p in (s1[0], s1[1]):
+                            if p in (s2[0], s2[1]) and p not in jset and p not in tipset:
+                                H = s1 if h1 else s2
+                                V = s2 if h1 else s1
+                                h_other = H[1] if H[0] == p else H[0]
+                                v_other = V[1] if V[0] == p else V[0]
+                                if h_other[0] < p[0] - EPS:
+                                    corners.append((p, (round(p[0] + GRID_MM, 4), p[1])))
+            for p, stub_far in corners:
+                stub_seg = (p, stub_far)
+                box = _rect(_label_bbox(net, stub_far[0], stub_far[1], False, (1.0, 0.0), page_scale))
+                hits_wire = False
+                for wnet, wa, wb in wires:
+                    if (wa == stub_seg[0] and wb == stub_seg[1]) or (wa == stub_seg[1] and wb == stub_seg[0]):
+                        continue
+                    sx0, sx1 = sorted((wa[0], wb[0]))
+                    sy0, sy1 = sorted((wa[1], wb[1]))
+                    if not (sx1 < box[0] or box[2] < sx0 or sy1 < box[1] or box[3] < sy0):
+                        hits_wire = True
+                        break
+                    if wnet != net and _seg_hits_box(wa, wb, box, INK_CLEAR_MM):
+                        hits_wire = True
+                        break
+                if hits_wire:
+                    continue
+                if any(_boxes_overlap(box, h, INK_CLEAR_MM) for r, h in hulls.items()):
+                    continue
+                if any(_boxes_overlap(box, d) for d in dots):
+                    continue
+                if any(_boxes_overlap(box, pb, 0.1) for who, pb in placed):
+                    continue
+                pick = LabelPlacement(net, "local", stub_far, (1.0, 0.0), box)
+                sol.segments.setdefault(net, []).append(stub_seg)
+                wires.append((net, stub_seg[0], stub_seg[1]))
                 break
         if pick is None:
             raise ElkLayoutError(
@@ -1520,16 +1916,7 @@ def build_rot(build: ElkGraphBuild, ref: str, pin: str) -> float:
 
 
 def _foreign_crossings(sol: "PresentationSolution") -> list[dict]:
-    out: list[dict] = []
-    items = [(n, s) for n, ss in sol.segments.items() for s in ss]
-    for i, (ni, (a, b)) in enumerate(items):
-        for nj, (c, d) in items[i + 1:]:
-            if ni == nj:
-                continue
-            x = _proper_cross(a, b, c, d)
-            if x is not None:
-                out.append({"nets": sorted([ni, nj]), "at": list(x)})
-    return out
+    return _foreign_crossings_segs(sol.segments)
 
 
 
@@ -1700,6 +2087,8 @@ def solve_sheet(components: list[EmitComponent], nets: list[EmitNet], *,
             solution, receipt = run_elk(build.graph, timeout_s=timeout_s)
             sol = quantize_solution(solution, build, geometry)
             sol.receipt = receipt
+            if _r3_enabled("A"):
+                _resolve_foreign_collinear_channels(sol, build)
             verify_solution(sol, build)
             entry["realized_placement"] = realized_placement(sol, build, pm)
             if pm.get("partitions") and not entry["realized_placement"]["executed"]:
@@ -1772,4 +2161,5 @@ __all__ = [
     "run_elk",
     "solve_sheet",
     "verify_solution",
+    "_resolve_foreign_collinear_channels",
 ]

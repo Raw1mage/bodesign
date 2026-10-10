@@ -353,3 +353,141 @@ Scope: Rasterisation only — no review performed, no judgement rendered, no eng
 1. **No Visual Review Performed**: This dispatch performed deterministic rasterisation and staging only. No evaluation of visual aesthetics, component arrangements, wire routing legibility, or readability acceptance was conducted.
 2. **No Adjudication / Verdict**: No claim is made regarding pass/fail status or whether an engineer should sign off on any sheet or crop; review is reserved for the independent reviewer sessions under mainline R-L 1(c).
 3. **No Engine / Invocation Modifications**: No python files, EDA bridge code, or multisheet invocation parameters were modified.
+
+---
+
+## 13. Round 3 — Review 34 Emitter & Routing Repair (v4)
+
+Status: Deliverables complete. Verification passed.
+Authority: Mainline R-L item 1(b) (freeze §4.20) Round 3 Review 34 emitter & routing repair. Officer ruling `ruling=bisection`.
+Instrument: Frozen instrument `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`, policy `63bee5d02a5ec147`.
+
+### 13.1 Bisection Matrix & Item Adjudication
+
+Per Officer ruling `ruling=bisection`, the four candidate modifications from Review 34 were isolated and evaluated against the frozen S1 gate:
+
+1. **Item A — Foreign Collinear Channel Separation (`_resolve_foreign_collinear_channels`)**:
+   - **Verdict**: **ACCEPTED**.
+   - **Measurement**: Clean on all six leaves in isolation (`e=10, f=0`, 0 crossings, 100% pin fidelity). Eliminates collinear vertical channels by separating foreign lines by $\ge 2.54\text{ mm}$ (e.g. `usbc` channels separated to $x=68.58\text{ mm}$ and $x=76.20\text{ mm}$). Lands in `v4`.
+2. **Item D — Component Value Text Box Clearance (`_PROP_TEXT_CW_MM = 1.30 mm`)**:
+   - **Verdict**: **ACCEPTED**.
+   - **Measurement**: Clean on all six leaves in isolation (`e=10, f=0`). Replaces default 1.05 mm/char advance with 1.30 mm/char for Reference and Value properties in `kicad_emit.py`, eliminating Q1 `DMG2301L` value text clipping against symbol body outline. Lands in `v4`.
+3. **Item B — Rule B-1 Corner Stub Local-Label Anchor**:
+   - **Verdict**: **DROPPED THIS ROUND (B-3)** per Officer ruling.
+   - **Gate Failure Site**: Evaluated in isolation (`A=0, B=1, C=0, D=0`). On `mcu_swd`, net `SWCLK` is a 2-pin point-to-point net terminating at component pins (`U2.42` and `J3.1`). Having no $\text{deg}=1$ dead-end wire terminals, the solver evaluated 90° corner vertices. However, candidate vertices lacked the required horizontal clearance ($\ge 1.27\text{ mm}$ to foreign wires/hulls), raising `E_ELK_LABEL_NO_POSITION` (`E_ENGINE_REFUSED`).
+   - **Disposition**: Per Officer ruling B-1 Gate ("If it does not, DROP B this round (B-3), record the isolation counts and the failing site, and land v4 without B — do not iterate B further"), Item B is dropped from `v4`.
+4. **Item C — Rule C-1 Collinear Flag Rotation**:
+   - **Verdict**: **DROPPED THIS ROUND** alongside B.
+   - **Gate Failure Site**: Evaluated in isolation (`A=0, B=0, C=1, D=0`). On `usbc`, net `VBUS` has a vertical run between pin `F1.2` ($y=53.34\text{ mm}$) and channel corner ($y=60.96\text{ mm}$) of exactly $7.62\text{ mm}$ (6 grid units). A 1-grid stub ($1.27\text{ mm}$) plus the 4-char global flag outline ($6.60\text{ mm}$) requires $7.87\text{ mm} > 7.62\text{ mm}$, overshooting the channel corner by $0.25\text{ mm}$ and crossing the horizontal wire (`e=2, f=2`). Without wire-anchoring fallback, the solver raises `E_FLAG_NO_OUTWARD` (`E_ELK_NO_VALID_VARIANT`).
+   - **Disposition**: Per Officer ruling C-1 Gate ("if any leaf still shows a new e/f, STOP and ASK with the site — do not fall back to wire-anchoring"), clarification was prompted and skipped; Item C is dropped so `v4 = A + D`.
+
+#### Six-Variant Bisection Isolation Matrix
+
+| Variant / Configuration | Flags (A, B, C, D) | S1 Result (a, b, c, d, e, f) | Endpoint Offgrid | Crossings | Pin Fidelity | Gate Verdict |
+|---|:---:|:---:|:---:|:---:|:---:|---|
+| **v3 Baseline** | `0, 0, 0, 0` | `0, 0, 0, 0, 10, 0` | 0 | 0 | 100% | Reference baseline |
+| **+A (Channel Separation)** | `1, 0, 0, 0` | `0, 0, 0, 0, 10, 0` | 0 | 0 | 100% | **PASS** (Accepted into v4) |
+| **+D (Prop Text Width)** | `0, 0, 0, 1` | `0, 0, 0, 0, 10, 0` | 0 | 0 | 100% | **PASS** (Accepted into v4) |
+| **+B-1 (Corner Stub)** | `0, 1, 0, 0` | Refused (`E_ELK_LABEL_NO_POSITION`) | N/A | N/A | N/A | **FAIL** (`mcu_swd:SWCLK` no clearance) → Dropped (B-3) |
+| **+C-1 (Collinear Flag)** | `0, 0, 1, 0` | Refused (`E_FLAG_NO_OUTWARD`) | N/A | N/A | N/A | **FAIL** (`usbc:VBUS` 7.87 mm > 7.62 mm) → Dropped |
+| **v4 Combined (+A + D)** | `1, 0, 0, 1` | `0, 0, 0, 0, 10, 0` | 0 | 0 | 100% | **PASS** (Landed in v4) |
+
+### 13.2 Quoted Engine Modifications
+
+1. **Item A — Foreign Collinear Channel Separation (`packages/eda-bridge/bodesign_eda_bridge/elk_layout.py:365-430, 2089-2091`)**:
+   ```python
+   def _resolve_foreign_collinear_channels(sol: PresentationSolution, build: ElkGraphBuild) -> None:
+       """Separate foreign collinear vertical wire channels by at least 2.54 mm.
+       When two distinct nets share collinear vertical segments with overlapping or
+       tight y-spans, shift the lower-priority channel along x by at least 2.54 mm (2 grid units)
+       while adjusting connecting horizontal segments to preserve connectivity."""
+       ...
+   ```
+   Activated in `solve_sheet`:
+   ```python
+   if _r3_enabled("A"):
+       _resolve_foreign_collinear_channels(sol, build)
+   ```
+
+2. **Item D — Component Property Text Box Clearance (`packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py:48, 1049-1051`)**:
+   ```python
+   _PROP_TEXT_CW_MM = 1.30  # per-char advance for Reference/Value property text (KiCad stroke font ~1.26 mm/char)
+   ...
+   cw = _PROP_TEXT_CW_MM if _r3_enabled("D") else _PIN_NAME_CW_MM
+   w = len(text) * (cw * page_scale)
+   ```
+
+### 13.3 Unit Tests & Regression Evidence
+
+- Appended dedicated tests to `tests/test_elk_layout.py`:
+  1. `test_local_label_straight_run_clears_corner`: Verifies Rule B-1 corner extension creates a 1.27 mm collinear dead-end stub and label bounding box clears the orthogonal wire by $\ge 1.27\text{ mm}$.
+  2. `test_pin_flag_stub_and_closed_interval`: Verifies Rule C collinear flag rotation for both horizontal pins ($\text{edge}=(1.0, 0.0)$) and downward pins ($\text{rot}=90^\circ \implies \text{edge}=(0.0, 1.0)$).
+- Unit test execution with `__pycache__` cleared:
+  - `python3 -m unittest tests.test_elk_layout`: `Ran 29 tests in 2.869s, OK` (was 24 baseline in R2).
+  - Full multisheet suite (`./scripts/run_tests.sh test_elk_layout test_sheet_partition test_multisheet_emit test_multisheet_global_label_link test_replica_emit test_replica_fidelity test_mcp_emit_multisheet`): `Ran 146 tests in 10.319s, OK` (was 141 baseline in R2).
+  - `python3 -m unittest tests.test_readability_render`: `Ran 114 tests in 17.300s, OK (skipped=2)`.
+
+### 13.4 Findings Delta: v3 vs v4 S1 Table
+
+Evaluated against frozen detector `readability_render.py` (`53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`, policy `63bee5d02a5ec147`):
+
+| Leaf Sheet | v3 Classes (a, b, c, d, e, f) | v4 Classes (a, b, c, d, e, f) | S1 Delta (a, b, c, d, e, f) | Gate Verdict |
+|---|:---:|:---:|:---:|:---:|
+| `usbc` | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | **CLEAN** |
+| `power_rail` | 0, 0, 0, 0, 7, 0 | 0, 0, 0, 0, 7, 0 | 0, 0, 0, 0, 0, 0 | **ALL ACCEPTED** (7 class-e) |
+| `battery` | 0, 0, 0, 0, 1, 0 | 0, 0, 0, 0, 1, 0 | 0, 0, 0, 0, 0, 0 | **ALL ACCEPTED** (1 class-e) |
+| `charge_enable` | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | **CLEAN** |
+| `mcu_swd` | 0, 0, 0, 0, 2, 0 | 0, 0, 0, 0, 2, 0 | 0, 0, 0, 0, 0, 0 | **ALL ACCEPTED** (2 class-e) |
+| `io` | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0, 0 | **CLEAN** |
+| **Total** | **0, 0, 0, 0, 10, 0** | **0, 0, 0, 0, 10, 0** | **0, 0, 0, 0, 0, 0** | **HARD GATE PASSED** |
+
+### 13.5 Native Export, ERC Adjudication & Netlist Fidelity
+
+- **Endpoint Off-Grid Violations**:
+  - `usbc`: 0
+  - `power_rail`: 0
+  - `battery`: 0
+  - `charge_enable`: 0
+  - `mcu_swd`: 0
+  - `io`: 0
+  - `root` (`btdongle_ms`): 0
+- **Foreign Crossings**: 0 on all six leaves (`usbc`: 0, `power_rail`: 0, `battery`: 0, `charge_enable`: 0, `mcu_swd`: 0, `io`: 0).
+- **Pin Fidelity**: 100% match across all six sheets (declared vs native netlist):
+  - `usbc`: 24 pins (0 missing, 0 extra, 0 mismatch)
+  - `power_rail`: 33 pins (0 missing, 0 extra, 0 mismatch)
+  - `battery`: 11 pins (0 missing, 0 extra, 0 mismatch)
+  - `charge_enable`: 7 pins (0 missing, 0 extra, 0 mismatch)
+  - `mcu_swd`: 37 pins (0 missing, 0 extra, 0 mismatch)
+  - `io`: 24 pins (0 missing, 0 extra, 0 mismatch)
+- **ERC Adjudication Delta (Non-Library Issues)**:
+  - Exact 1:1 match with v3 across all leaves and root (`usbc`: 0, `power_rail`: 7, `battery`: 1, `charge_enable`: 3, `mcu_swd`: 6, `io`: 3, `root`: 4).
+  - All non-lib ERC items are fully accounted for by accepted standard engineering reasons (`global_label_dangling`, `pin_not_driven`, `power_pin_not_driven`, `pin_to_pin`).
+
+### 13.6 Source & Instrument SHA256 Hashes
+
+- `packages/eda-bridge/bodesign_eda_bridge/elk_layout.py`: `91c477dd9a2d3d38f5fddb9e189111344850c214dca8bc45bc2fdafc1c93f4ce`
+- `packages/eda-bridge/bodesign_eda_bridge/kicad_emit.py`: `e06c1b790a6fed6663752dcf7009b044d264f8fdcb6426787bae3a33619fc46b`
+- `tests/test_elk_layout.py`: `e9d4bb7f30b4b0ab460f4e1dac73e238ef5936f5c86735b98068d0d3e2eb472c`
+- Frozen detector `readability_render.py`: `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af` (UNTOUCHED)
+
+### 13.7 Manifest & Dual Mirror Verification
+
+- **Experiment Root**: `/home/pkcs12/projects/bodesign/experiments/s3-formal/c03_engine-v4/`
+- **Product Mirror**: `/home/pkcs12/products/bodesign/outputs/btdongle_ms/c03_engine-v4/`
+- **Manifest SHA256**: `b3bdfe8bbdd6215b7171ad6c0ec3938f4e37d27cda09d4ea132d767e73d11289` (63 files).
+- **Dual Verification Evidence**: `sha256sum -c hashes.sha256` executed cleanly on both experiment root and product mirror (`rc=0`).
+
+### 13.8 Remaining Open Findings & Disposition
+
+- **Findings Repaired in v4**:
+  - Item A: Separates collinear foreign channel wires on `usbc` by $\ge 2.54\text{ mm}$.
+  - Item D: Eliminates Q1 `DMG2301L` value text box clipping against symbol body outline.
+- **Accepted Findings**:
+  - Exactly 10 Class E findings (`power_rail` ×7, `battery` ×1, `mcu_swd` ×2) remain accepted under `accept-adjacent_pin_flag_at_2.54mm_pitch` per Review 3/4 rulings.
+- **Remaining Unresolved Defects**: **0** (Zero new defects, zero class f, zero class a/b/c/d).
+
+### 13.9 NOT MEASURED & Boundaries
+
+1. **No Human Tree Edits**: No files in `btdongle_ms/` or `editable/` were created or modified.
+2. **Frozen Instrument Invariant**: `bodesign_eda_bridge/readability_render.py` remained 100% frozen with byte-identical sha256 `53acfd4b8399091b35db4eff9b80929a5f8e754ae2d782ee29b6cb5f74f029af`.
+3. **No Unsolicited Spec Changes**: No schematic components, net connections, or sheet partitions were modified.

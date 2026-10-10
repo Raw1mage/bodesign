@@ -1,0 +1,564 @@
+(kicad_sch
+  (version 20250114)
+  (generator "bodesign")
+  (generator_version "9.0")
+  (uuid "c8adeb9a-0fea-42c4-a13c-8f18f82ff24f")
+  (paper "A4")
+  (title_block
+    (title "btdongle_ms - charge_enable")
+    (date "2026-10-10")
+    (rev "v1.0")
+    (company "bodesign")
+  )
+  (lib_symbols
+(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Device:LED"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 1.016)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "D"
+			(at 0 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "LED"
+			(at 0 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Light emitting diode"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Pins" "1=K 2=A"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "LED diode"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "LED* LED_SMD:* LED_THT:*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LED_0_1"
+			(polyline
+				(pts
+					(xy -3.048 -0.762) (xy -4.572 -2.286) (xy -3.81 -2.286) (xy -4.572 -2.286) (xy -4.572 -1.524)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.778 -0.762) (xy -3.302 -2.286) (xy -2.54 -2.286) (xy -3.302 -2.286) (xy -3.302 -1.524)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 0) (xy 1.27 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 -1.27) (xy -1.27 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -1.27) (xy 1.27 1.27) (xy -1.27 0) (xy 1.27 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "LED_1_1"
+			(pin passive line
+				(at -3.81 0 0)
+				(length 2.54)
+				(name "K"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 3.81 0 180)
+				(length 2.54)
+				(name "A"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Switch:SW_SPDT"
+		(pin_names
+			(offset 0)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "SW"
+			(at 0 5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SW_SPDT"
+			(at 0 -5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 -7.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Switch, single pole double throw"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "switch single-pole double-throw spdt ON-ON"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "SW_SPDT_0_1"
+			(circle
+				(center -2.032 0)
+				(radius 0.4572)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.651 0.254) (xy 1.651 2.286)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 2.032 2.54)
+				(radius 0.4572)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 2.032 -2.54)
+				(radius 0.4572)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "SW_SPDT_1_1"
+			(rectangle
+				(start -3.175 3.81)
+				(end 3.175 -3.81)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
+			(pin passive line
+				(at -5.08 0 0)
+				(length 2.54)
+				(name "B"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 5.08 2.54 180)
+				(length 2.54)
+				(name "A"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 5.08 -2.54 180)
+				(length 2.54)
+				(name "C"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "3"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 55.88 54.61 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "fbd1b138-567d-4354-9ae7-053a6e390d35")
+    (property "Reference" "R7" (at 58.166 53.34 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 58.166 55.88 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric" (at 55.88 54.61 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "033d9ab5-01e8-4f57-946d-6ee4391478c7"))
+    (pin "2" (uuid "251ceb0d-0edd-446b-ab81-5149b696afa1"))
+    (instances (project "charge_enable" (path "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/b7d4d17b-d8a7-499e-8fb7-17e39a897477" (reference "R7") (unit 1))))
+  )
+  (symbol
+    (lib_id "Device:LED")
+    (at 95.25 52.07 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "65650527-d2ec-466c-98fc-95545e059a05")
+    (property "Reference" "D2" (at 90.678 46.355 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "CHG_AMBER" (at 90.678 48.895 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "LED_SMD:LED_0603_1608Metric" (at 95.25 52.07 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "be5308e4-59e7-49bb-a72d-4a437f13beb3"))
+    (pin "2" (uuid "53260b4b-4dc6-4a5c-867f-870c7b08814e"))
+    (instances (project "charge_enable" (path "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/b7d4d17b-d8a7-499e-8fb7-17e39a897477" (reference "D2") (unit 1))))
+  )
+  (symbol
+    (lib_id "Switch:SW_SPDT")
+    (at 54.61 85.09 0)
+    (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "d7eaad77-59de-4324-9a05-964efe4c0c90")
+    (property "Reference" "SW1" (at 49.53 76.835 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "PWR_SW" (at 49.53 79.375 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Button_Switch_SMD:SW_SPDT_PCM12" (at 54.61 85.09 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "d231e162-6826-4b7e-90bd-fe28affaf657"))
+    (pin "2" (uuid "6301d443-6911-491f-8ea9-3d01bd7b817a"))
+    (instances (project "charge_enable" (path "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/b7d4d17b-d8a7-499e-8fb7-17e39a897477" (reference "SW1") (unit 1))))
+  )
+  (wire (pts (xy 55.88 58.42) (xy 55.88 62.23))
+    (stroke (width 0) (type default)) (uuid "82659479-5695-4f2b-b9ac-6b18e4b3b5f2"))
+  (wire (pts (xy 55.88 62.23) (xy 111.76 62.23))
+    (stroke (width 0) (type default)) (uuid "16cc61a8-9859-4f6b-aaf4-d38bd691b1cc"))
+  (wire (pts (xy 111.76 52.07) (xy 111.76 62.23))
+    (stroke (width 0) (type default)) (uuid "109d31e2-4a80-4302-900b-297cfb9aa835"))
+  (wire (pts (xy 99.06 52.07) (xy 111.76 52.07))
+    (stroke (width 0) (type default)) (uuid "24fd5aae-725f-4e41-8d6f-a94518db755c"))
+  (label "CHG_LED_A" (at 111.76 62.23 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "df20252b-2263-4263-b438-2996513ba086"))
+  (global_label "GND" (shape bidirectional) (at 49.53 85.09 180)
+    (effects (font (size 1.27 1.27)) (justify right)) (uuid "0b90859b-b6eb-4def-b207-0329a3f681e6"))
+  (global_label "STAT" (shape bidirectional) (at 55.88 50.8 90)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "015787bf-4785-46f9-8f34-73a9de55b82d"))
+  (global_label "ENPPB" (shape bidirectional) (at 59.69 82.55 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "52bd4e27-059c-4ca8-9672-c03597067d1b"))
+  (global_label "BATT" (shape bidirectional) (at 59.69 87.63 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "15577638-05a8-43fd-9c5b-a9b5520ce45e"))
+  (global_label "GND" (shape bidirectional) (at 91.44 52.07 180)
+    (effects (font (size 1.27 1.27)) (justify right)) (uuid "601531ad-e839-4cfa-ae15-24cb30ca3eb9"))
+  (global_label "ENPPB" (shape bidirectional) (at 35.56 35.56 0)
+    (effects (font (size 1.27 1.27)) (justify left)) (uuid "68bc818c-e4e4-4069-bc19-1fa94210d722"))
+  (text "→ U1.8 ENPPB — home: power_rail"
+    (at 38.1 33.02 0)
+    (effects (font (size 1.27 1.27) (italic yes)) (justify left))
+  )
+  (sheet_instances (path "/b7d4d17b-d8a7-499e-8fb7-17e39a897477" (page "5")))
+)

@@ -531,3 +531,161 @@ class PinAnchoredFlagOutwardAndGridSnap(unittest.TestCase):
         self.assertAlmostEqual(dx % 1.27, 0.0, places=4)
         self.assertAlmostEqual(dy % 1.27, 0.0, places=4)
         self.assertEqual(dy, -6.35)
+
+
+# --------------------------------------------------------------------------
+# Round 3: Review 34 emitter & routing repair tests (Mainline R-L item 1(b))
+# A: foreign collinear >= 2.54 mm separation & failure mode
+# B: local label straight run clears corner & vertical wire
+# C: pin-anchored flag gets dedicated 1.27 mm stub
+# D: DMG2301L value box does not intersect hull with _PROP_TEXT_CW_MM = 1.30
+# --------------------------------------------------------------------------
+
+
+class Round3EmitterAndRoutingTests(unittest.TestCase):
+    def test_foreign_collinear_separated_post_pass(self):
+        from bodesign_eda_bridge.elk_layout import (
+            PresentationSolution, ElkGraphBuild, _resolve_foreign_collinear_channels,
+            _foreign_crossings_segs
+        )
+        sol = PresentationSolution(
+            poses={"U1": (0.0, 0.0)},
+            segments={"NET1": [((50.0, 10.0), (50.0, 20.0))], "NET2": [((50.0, 21.27), (50.0, 30.0))]},
+            junctions={}, label_anchors={}, drawn_nets=["NET1", "NET2"], undrawn={}, pin_tips={}
+        )
+        build = ElkGraphBuild(
+            graph={"id": "root"}, ports={}, edge_nets={}, origins={}, net_pins={"NET1": [], "NET2": []},
+            inks={}, variant="default", pin_rot={}, drawn_nets=["NET1", "NET2"], undrawn={}, declared_pin_nets={}
+        )
+        _resolve_foreign_collinear_channels(sol, build)
+        # One segment shifted to adjacent track; crossing count unchanged (0)
+        self.assertEqual(len(_foreign_crossings_segs(sol.segments)), 0)
+        s1 = sol.segments["NET1"][0]
+        s2 = sol.segments["NET2"][0]
+        if abs(s1[0][0] - s2[0][0]) < 1e-4:
+            gap = abs(s2[0][1] - s1[1][1]) if s1[1][1] <= s2[0][1] else abs(s1[0][1] - s2[1][1])
+            self.assertGreaterEqual(gap, 2.54 - 1e-4)
+        else:
+            self.assertAlmostEqual(abs(s1[0][0] - s2[0][0]), 1.27, places=4)
+
+    def test_foreign_collinear_no_free_track_raises(self):
+        from bodesign_eda_bridge.elk_layout import (
+            PresentationSolution, ElkGraphBuild, NodeInk, _resolve_foreign_collinear_channels,
+            ElkLayoutError
+        )
+        sol = PresentationSolution(
+            poses={"U1": (0.0, 0.0)},
+            segments={"NET1": [((50.0, 10.0), (50.0, 20.0))], "NET2": [((50.0, 21.27), (50.0, 30.0))]},
+            junctions={}, label_anchors={}, drawn_nets=["NET1", "NET2"], undrawn={}, pin_tips={}
+        )
+        # Block adjacent tracks x=48.73, 51.27, 47.46, 52.54 with hulls
+        hulls = [
+            (48.0, 0.0, 49.0, 40.0),
+            (51.0, 0.0, 52.0, 40.0),
+            (47.0, 0.0, 48.0, 40.0),
+            (52.0, 0.0, 53.0, 40.0),
+        ]
+        build = ElkGraphBuild(
+            graph={"id": "root"}, ports={}, edge_nets={}, origins={"U1": (0.0, 0.0)}, net_pins={"NET1": [], "NET2": []},
+            inks={f"B{i}": NodeInk(ref=f"B{i}", hull=h, flags=[], exits=[], candidates=[], natural=0, margins=(0,0,0,0)) for i, h in enumerate(hulls)},
+            variant="default", pin_rot={}, drawn_nets=["NET1", "NET2"], undrawn={}, declared_pin_nets={}
+        )
+        sol.poses = {f"B{i}": (0.0, 0.0) for i in range(len(hulls))}
+        with self.assertRaises(ElkLayoutError) as cm:
+            _resolve_foreign_collinear_channels(sol, build)
+        self.assertEqual(cm.exception.code, "E_COLLINEAR_FOREIGN_NO_TRACK")
+
+    def test_local_label_straight_run_clears_corner(self):
+        import unittest.mock
+        from bodesign_eda_bridge.elk_layout import (
+            PresentationSolution, ElkGraphBuild, NodeInk, PropChoice, place_ink
+        )
+        comp = EmitComponent(ref="U1", lib_id="Device:R", x=100.0, y=100.0)
+        pc = PropChoice(name="c1", ref_at=(0, 0), val_at=(0, 0), ref_box=(120.0, 120.0, 130.0, 125.0), val_box=None)
+        sol = PresentationSolution(
+            poses={"U1": (100.0, 100.0)},
+            segments={"NET": [((20.0, 30.0), (40.0, 30.0)), ((40.0, 30.0), (40.0, 50.0))]},
+            junctions={}, label_anchors={}, drawn_nets=["NET"], undrawn={}, pin_tips={}
+        )
+        build = ElkGraphBuild(
+            graph={"id": "root"}, ports={}, edge_nets={}, origins={"U1": (0.0, 0.0)}, net_pins={"NET": []},
+            inks={"U1": NodeInk(ref="U1", hull=(90.0, 90.0, 110.0, 110.0), flags=[], exits=[], candidates=[pc], natural=0, margins=(0,0,0,0))},
+            variant="default", pin_rot={}, drawn_nets=["NET"], undrawn={}, declared_pin_nets={}
+        )
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_B": "1"}):
+            res = place_ink(sol, build, [comp], cross_sheet_nets=set())
+        lbl = res["local_labels"]["NET"]
+        self.assertNotEqual(tuple(lbl["at"]), (40.0, 30.0), "Local label anchor must not be at corner")
+        # Rule B-1: stub grows along straight run's own direction (+x) from corner (40.0, 30.0) to (41.27, 30.0)
+        self.assertEqual(tuple(lbl["at"]), (41.27, 30.0))
+        self.assertIn(((40.0, 30.0), (41.27, 30.0)), sol.segments["NET"])
+        # Text box clears vertical wire x=40.0 by >= 1.27 mm
+        box = sol.local_labels["NET"].box
+        self.assertGreaterEqual(box[0], 40.0 + 1.27 - 1e-4)
+
+    def test_pin_flag_stub_and_closed_interval(self):
+        import unittest.mock
+        from bodesign_eda_bridge.elk_layout import (
+            PresentationSolution, ElkGraphBuild, NodeInk, PropChoice, place_ink
+        )
+        comp = EmitComponent(ref="U1", lib_id="Device:R", x=100.0, y=100.0)
+        pc = PropChoice(name="c1", ref_at=(0, 0), val_at=(0, 0), ref_box=(120.0, 120.0, 130.0, 125.0), val_box=None)
+        # Test horizontal pin: rot 180 => _pin_out_vec = (1.0, 0.0)
+        sol = PresentationSolution(
+            poses={"U1": (100.0, 100.0)},
+            segments={"NET": []},
+            junctions={}, label_anchors={}, drawn_nets=["NET"], undrawn={}, pin_tips={("U1", "1"): (110.0, 100.0)}
+        )
+        build = ElkGraphBuild(
+            graph={"id": "root"}, ports={"p1": ("U1", "1")}, edge_nets={}, origins={"U1": (0.0, 0.0)}, net_pins={"NET": [("U1", "1")]},
+            inks={"U1": NodeInk(ref="U1", hull=(90.0, 90.0, 110.0, 110.0), flags=[], exits=[], candidates=[pc], natural=0, margins=(0,0,0,0))},
+            variant="default", pin_rot={("U1", "1"): 180.0}, drawn_nets=["NET"], undrawn={}, declared_pin_nets={("U1", "1"): "NET"}
+        )
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_C": "1"}):
+            res = place_ink(sol, build, [comp], cross_sheet_nets={"NET"})
+        flag = res["flags"]["NET"]
+        self.assertEqual(flag["at"], [111.27, 100.0])
+        self.assertEqual(flag["edge"], [1.0, 0.0])
+        self.assertIn(((110.0, 100.0), (111.27, 100.0)), sol.segments["NET"])
+
+        # Test down-pin: rot 90 => _pin_out_vec = (0.0, 1.0)
+        sol_down = PresentationSolution(
+            poses={"U1": (100.0, 100.0)},
+            segments={"NET": []},
+            junctions={}, label_anchors={}, drawn_nets=["NET"], undrawn={}, pin_tips={("U1", "1"): (100.0, 110.0)}
+        )
+        build_down = ElkGraphBuild(
+            graph={"id": "root"}, ports={"p1": ("U1", "1")}, edge_nets={}, origins={"U1": (0.0, 0.0)}, net_pins={"NET": [("U1", "1")]},
+            inks={"U1": NodeInk(ref="U1", hull=(90.0, 90.0, 110.0, 110.0), flags=[], exits=[], candidates=[pc], natural=0, margins=(0,0,0,0))},
+            variant="default", pin_rot={("U1", "1"): 90.0}, drawn_nets=["NET"], undrawn={}, declared_pin_nets={("U1", "1"): "NET"}
+        )
+        with unittest.mock.patch.dict(os.environ, {"R3_ENABLE_C": "1"}):
+            res_down = place_ink(sol_down, build_down, [comp], cross_sheet_nets={"NET"})
+        flag_down = res_down["flags"]["NET"]
+        self.assertEqual(flag_down["at"], [100.0, 111.27])
+        self.assertEqual(flag_down["edge"], [0.0, 1.0])
+        self.assertIn(((100.0, 110.0), (100.0, 111.27)), sol_down.segments["NET"])
+
+    def test_dmg2301l_prop_text_clears_hull(self):
+        from pathlib import Path
+        from bodesign_eda_bridge.elk_layout import (
+            resolve_symbol_geometry, plan_node_ink, _boxes_overlap, INK_CLEAR_MM, _PROP_TEXT_CW_MM
+        )
+        from bodesign_eda_bridge.kicad_emit import _prop_text_box
+        self.assertEqual(_PROP_TEXT_CW_MM, 1.30)
+        box = _prop_text_box("DMG2301L", 41.57, 70.0)
+        width = box[1] - box[0]
+        self.assertAlmostEqual(width, len("DMG2301L") * 1.30, places=2)
+        q1 = EmitComponent(ref="Q1", lib_id="Transistor_FET:DMG2301L", x=57.15, y=68.58, value="DMG2301L")
+        geo = resolve_symbol_geometry([q1], Path("/usr/share/kicad/symbols"))
+        g = geo["Q1"]
+        w = g.bbox[2] - g.bbox[0]
+        h = g.bbox[3] - g.bbox[1]
+        node_box = (w, h, -g.bbox[0], -g.bbox[1])
+        ink = plan_node_ink(q1, g, {}, node_box, 1.0)
+        for cand in ink.candidates:
+            if cand.val_box:
+                self.assertFalse(
+                    _boxes_overlap(cand.val_box, ink.hull, INK_CLEAR_MM),
+                    f"Candidate {cand.name} val_box overlaps hull: {cand.val_box} vs {ink.hull}"
+                )

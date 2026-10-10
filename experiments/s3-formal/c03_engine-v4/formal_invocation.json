@@ -1,0 +1,746 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "bodesign_emit_multisheet",
+    "arguments": {
+      "connection_style": "wire",
+      "out_dir": "/work/experiments/s3-formal/c03_engine-v4/",
+      "power_ports": false,
+      "project_name": "btdongle_ms",
+      "spec": {
+        "components": [
+          {
+            "footprint": "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12",
+            "group": "power",
+            "ref": "J1",
+            "sheet": "usbc",
+            "symbol": "Connector:USB_C_Receptacle_USB2.0_16P",
+            "value": "USB_C_16P"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R1",
+            "sheet": "usbc",
+            "symbol": "Device:R",
+            "value": "5.1k"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R2",
+            "sheet": "usbc",
+            "symbol": "Device:R",
+            "value": "5.1k"
+          },
+          {
+            "footprint": "Fuse:Fuse_1206_3216Metric",
+            "group": "power",
+            "ref": "F1",
+            "sheet": "usbc",
+            "symbol": "Device:Polyfuse",
+            "value": "500mA"
+          },
+          {
+            "footprint": "Package_TO_SOT_SMD:SOT-363_SC-70-6",
+            "group": "power",
+            "ref": "D1",
+            "sheet": "usbc",
+            "symbol": "Bodesign_Presentation:PESD5V0L4UF_Boxed",
+            "value": "PESD5V0L4UF"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0805_2012Metric",
+            "group": "power",
+            "ref": "C1",
+            "sheet": "usbc",
+            "symbol": "Device:C",
+            "value": "10uF/16V"
+          },
+          {
+            "footprint": "Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm",
+            "group": "power",
+            "ref": "U1",
+            "replicas": [
+              {
+                "nets": [
+                  "NTC"
+                ],
+                "sheet": "battery"
+              },
+              {
+                "nets": [
+                  "ENPPB"
+                ],
+                "sheet": "charge_enable"
+              }
+            ],
+            "sheet": "power_rail",
+            "symbol": "local:ETA6003",
+            "value": "ETA6003"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0805_2012Metric",
+            "group": "power",
+            "ref": "C2",
+            "sheet": "power_rail",
+            "symbol": "Device:C",
+            "value": "10uF/16V"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0805_2012Metric",
+            "group": "power",
+            "ref": "C3",
+            "sheet": "power_rail",
+            "symbol": "Device:C",
+            "value": "10uF/16V"
+          },
+          {
+            "footprint": "Inductor_SMD:L_Bourns-SRN4018",
+            "group": "power",
+            "ref": "L1",
+            "sheet": "power_rail",
+            "symbol": "Device:L",
+            "value": "2.2uH/3A"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0805_2012Metric",
+            "group": "power",
+            "ref": "C4",
+            "sheet": "power_rail",
+            "symbol": "Device:C",
+            "value": "22uF/10V"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "power",
+            "ref": "C5",
+            "sheet": "power_rail",
+            "symbol": "Device:C",
+            "value": "1uF/10V"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R3",
+            "sheet": "power_rail",
+            "symbol": "Device:R",
+            "value": "2k"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R4",
+            "sheet": "power_rail",
+            "symbol": "Device:R",
+            "value": "2k"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R5",
+            "sheet": "battery",
+            "symbol": "Device:R",
+            "value": "10k"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R6",
+            "sheet": "power_rail",
+            "symbol": "Device:R",
+            "value": "100k"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "power",
+            "ref": "R7",
+            "sheet": "charge_enable",
+            "symbol": "Device:R",
+            "value": "1k"
+          },
+          {
+            "footprint": "LED_SMD:LED_0603_1608Metric",
+            "group": "power",
+            "ref": "D2",
+            "sheet": "charge_enable",
+            "symbol": "Device:LED",
+            "value": "CHG_AMBER"
+          },
+          {
+            "footprint": "Button_Switch_SMD:SW_SPDT_PCM12",
+            "group": "power",
+            "ref": "SW1",
+            "sheet": "charge_enable",
+            "symbol": "Switch:SW_SPDT",
+            "value": "PWR_SW"
+          },
+          {
+            "footprint": "Package_TO_SOT_SMD:SOT-23",
+            "group": "power",
+            "ref": "Q1",
+            "sheet": "battery",
+            "symbol": "Transistor_FET:DMG2301L",
+            "value": "DMG2301L"
+          },
+          {
+            "footprint": "Connector_JST:JST_PH_B3B-PH-K_1x03_P2.00mm_Vertical",
+            "group": "power",
+            "ref": "J2",
+            "sheet": "battery",
+            "symbol": "Connector_Generic:Conn_01x03",
+            "value": "BAT_PH2.0"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "power",
+            "ref": "C6",
+            "sheet": "battery",
+            "symbol": "Device:C",
+            "value": "100nF"
+          },
+          {
+            "footprint": "Module:RaspberryPi_Pico_W_SMD",
+            "group": "mcu",
+            "ref": "U2",
+            "sheet": "mcu_swd",
+            "symbol": "MCU_Module:RaspberryPi_Pico_W_Debug",
+            "value": "RaspberryPi_Pico_2W"
+          },
+          {
+            "footprint": "Connector_PinHeader_1.27mm:PinHeader_1x03_P1.27mm_Vertical",
+            "group": "mcu",
+            "ref": "J3",
+            "sheet": "mcu_swd",
+            "symbol": "Connector_Generic:Conn_01x03",
+            "value": "SWD"
+          },
+          {
+            "footprint": "Button_Switch_SMD:SW_SPST_SKQG_WithStem",
+            "group": "mcu",
+            "ref": "SW2",
+            "sheet": "mcu_swd",
+            "symbol": "Switch:SW_Push",
+            "value": "RESET"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "mcu",
+            "ref": "R8",
+            "sheet": "mcu_swd",
+            "symbol": "Device:R",
+            "value": "10k"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "mcu",
+            "ref": "C7",
+            "sheet": "mcu_swd",
+            "symbol": "Device:C",
+            "value": "100nF"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0805_2012Metric",
+            "group": "mcu",
+            "ref": "C8",
+            "sheet": "mcu_swd",
+            "symbol": "Device:C",
+            "value": "10uF/10V"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "mcu",
+            "ref": "C9",
+            "sheet": "mcu_swd",
+            "symbol": "Device:C",
+            "value": "100nF"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0805_2012Metric",
+            "group": "mcu",
+            "ref": "C10",
+            "sheet": "mcu_swd",
+            "symbol": "Device:C",
+            "value": "10uF/10V"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "mcu",
+            "ref": "C11",
+            "sheet": "mcu_swd",
+            "symbol": "Device:C",
+            "value": "100nF"
+          },
+          {
+            "footprint": "LED_SMD:LED_0603_1608Metric",
+            "group": "io",
+            "ref": "D3",
+            "sheet": "io",
+            "symbol": "Device:LED",
+            "value": "PWR_GREEN"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "io",
+            "ref": "R9",
+            "sheet": "io",
+            "symbol": "Device:R",
+            "value": "1k"
+          },
+          {
+            "footprint": "LED_SMD:LED_0603_1608Metric",
+            "group": "io",
+            "ref": "D4",
+            "sheet": "io",
+            "symbol": "Device:LED",
+            "value": "BT_BLUE"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "io",
+            "ref": "R10",
+            "sheet": "io",
+            "symbol": "Device:R",
+            "value": "1k"
+          },
+          {
+            "footprint": "LED_SMD:LED_0603_1608Metric",
+            "group": "io",
+            "ref": "D5",
+            "sheet": "io",
+            "symbol": "Device:LED",
+            "value": "WIFI_GREEN"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "io",
+            "ref": "R11",
+            "sheet": "io",
+            "symbol": "Device:R",
+            "value": "1k"
+          },
+          {
+            "footprint": "Button_Switch_SMD:SW_SPST_SKQG_WithStem",
+            "group": "io",
+            "ref": "SW3",
+            "sheet": "io",
+            "symbol": "Switch:SW_Push",
+            "value": "USER"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "io",
+            "ref": "R12",
+            "sheet": "io",
+            "symbol": "Device:R",
+            "value": "10k"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "io",
+            "ref": "C12",
+            "sheet": "io",
+            "symbol": "Device:C",
+            "value": "100nF"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "io",
+            "ref": "R13",
+            "sheet": "io",
+            "symbol": "Device:R",
+            "value": "100k"
+          },
+          {
+            "footprint": "Resistor_SMD:R_0402_1005Metric",
+            "group": "io",
+            "ref": "R14",
+            "sheet": "io",
+            "symbol": "Device:R",
+            "value": "100k"
+          },
+          {
+            "footprint": "Capacitor_SMD:C_0402_1005Metric",
+            "group": "io",
+            "ref": "C13",
+            "sheet": "io",
+            "symbol": "Device:C",
+            "value": "100nF"
+          },
+          {
+            "footprint": "TestPoint:TestPoint_Pad_D1.5mm",
+            "group": "io",
+            "ref": "TP1",
+            "sheet": "mcu_swd",
+            "symbol": "Connector:TestPoint",
+            "value": "TP_SYS"
+          },
+          {
+            "footprint": "TestPoint:TestPoint_Pad_D1.5mm",
+            "group": "io",
+            "ref": "TP2",
+            "sheet": "battery",
+            "symbol": "Connector:TestPoint",
+            "value": "TP_BATT"
+          }
+        ],
+        "nc": [
+          "J1.A6",
+          "J1.A7",
+          "J1.B6",
+          "J1.B7",
+          "J1.A8",
+          "J1.B8",
+          "D1.6",
+          "U2.1",
+          "U2.2",
+          "U2.4",
+          "U2.5",
+          "U2.6",
+          "U2.7",
+          "U2.9",
+          "U2.10",
+          "U2.11",
+          "U2.12",
+          "U2.14",
+          "U2.15",
+          "U2.16",
+          "U2.17",
+          "U2.19",
+          "U2.20",
+          "U2.25",
+          "U2.26",
+          "U2.27",
+          "U2.29",
+          "U2.32",
+          "U2.34",
+          "U2.37",
+          "U2.40"
+        ],
+        "nets": [
+          {
+            "name": "VBUS_CON",
+            "nodes": [
+              "J1.A4",
+              "J1.A9",
+              "J1.B4",
+              "J1.B9",
+              "F1.1",
+              "D1.1"
+            ]
+          },
+          {
+            "name": "VBUS",
+            "nodes": [
+              "F1.2",
+              "C1.1",
+              "U1.2",
+              "C2.1",
+              "C3.1"
+            ]
+          },
+          {
+            "name": "CC1",
+            "nodes": [
+              "J1.A5",
+              "R1.1",
+              "D1.3"
+            ]
+          },
+          {
+            "name": "CC2",
+            "nodes": [
+              "J1.B5",
+              "R2.1",
+              "D1.4"
+            ]
+          },
+          {
+            "name": "SW_NODE",
+            "nodes": [
+              "U1.3",
+              "U1.4",
+              "L1.1"
+            ]
+          },
+          {
+            "name": "SYS",
+            "nodes": [
+              "L1.2",
+              "U1.1",
+              "U1.15",
+              "C4.1",
+              "R6.1",
+              "U2.39",
+              "C8.1",
+              "C9.1",
+              "TP1.1"
+            ]
+          },
+          {
+            "name": "BATT",
+            "nodes": [
+              "U1.14",
+              "U1.16",
+              "C5.1",
+              "Q1.3",
+              "R13.1",
+              "TP2.1",
+              "SW1.3"
+            ]
+          },
+          {
+            "name": "BAT_EXT",
+            "nodes": [
+              "Q1.2",
+              "J2.1",
+              "C6.1"
+            ]
+          },
+          {
+            "name": "NTC",
+            "nodes": [
+              "U1.7",
+              "R5.1",
+              "J2.2"
+            ]
+          },
+          {
+            "name": "ISET1",
+            "nodes": [
+              "U1.11",
+              "R3.1"
+            ]
+          },
+          {
+            "name": "ISET2",
+            "nodes": [
+              "U1.12",
+              "R4.1"
+            ]
+          },
+          {
+            "name": "USB_DET",
+            "nodes": [
+              "U1.13",
+              "R6.2"
+            ]
+          },
+          {
+            "name": "ENPPB",
+            "nodes": [
+              "U1.8",
+              "SW1.1"
+            ]
+          },
+          {
+            "name": "STAT",
+            "nodes": [
+              "U1.9",
+              "R7.1"
+            ]
+          },
+          {
+            "name": "CHG_LED_A",
+            "nodes": [
+              "R7.2",
+              "D2.2"
+            ]
+          },
+          {
+            "name": "+3V3",
+            "nodes": [
+              "U2.36",
+              "U2.35",
+              "C10.1",
+              "C11.1",
+              "R8.1",
+              "R9.1",
+              "R12.1"
+            ]
+          },
+          {
+            "name": "RUN",
+            "nodes": [
+              "U2.30",
+              "R8.2",
+              "C7.1",
+              "SW2.1"
+            ]
+          },
+          {
+            "name": "SWCLK",
+            "nodes": [
+              "U2.D1",
+              "J3.1"
+            ]
+          },
+          {
+            "name": "SWDIO",
+            "nodes": [
+              "U2.D3",
+              "J3.3"
+            ]
+          },
+          {
+            "name": "PWR_LED_K",
+            "nodes": [
+              "R9.2",
+              "D3.2"
+            ]
+          },
+          {
+            "name": "LED_BT",
+            "nodes": [
+              "U2.21",
+              "R10.1"
+            ]
+          },
+          {
+            "name": "BT_LED_A",
+            "nodes": [
+              "R10.2",
+              "D4.2"
+            ]
+          },
+          {
+            "name": "LED_WIFI",
+            "nodes": [
+              "U2.22",
+              "R11.1"
+            ]
+          },
+          {
+            "name": "WIFI_LED_A",
+            "nodes": [
+              "R11.2",
+              "D5.2"
+            ]
+          },
+          {
+            "name": "SW_USER",
+            "nodes": [
+              "U2.24",
+              "R12.2",
+              "C12.1",
+              "SW3.1"
+            ]
+          },
+          {
+            "name": "VBAT_SENSE",
+            "nodes": [
+              "R13.2",
+              "R14.1",
+              "C13.1",
+              "U2.31"
+            ]
+          },
+          {
+            "name": "GND",
+            "nodes": [
+              "J1.A1",
+              "J1.A12",
+              "J1.B1",
+              "J1.B12",
+              "J1.S1",
+              "D1.2",
+              "D1.5",
+              "C1.2",
+              "C2.2",
+              "C3.2",
+              "C4.2",
+              "C5.2",
+              "C6.2",
+              "C7.2",
+              "C8.2",
+              "C9.2",
+              "C10.2",
+              "C11.2",
+              "C12.2",
+              "C13.2",
+              "U1.5",
+              "U1.6",
+              "U1.10",
+              "U1.17",
+              "R3.2",
+              "R4.2",
+              "R5.2",
+              "R14.2",
+              "R1.2",
+              "R2.2",
+              "D2.1",
+              "D3.1",
+              "D4.1",
+              "D5.1",
+              "Q1.1",
+              "J2.3",
+              "SW2.2",
+              "SW3.2",
+              "SW1.2",
+              "J3.2",
+              "U2.3",
+              "U2.8",
+              "U2.13",
+              "U2.18",
+              "U2.23",
+              "U2.28",
+              "U2.33",
+              "U2.38",
+              "U2.D2"
+            ]
+          }
+        ]
+      },
+      "subsystem_views": {
+        "battery": [
+          "BAT_EXT",
+          "NTC"
+        ],
+        "charge_enable": [
+          "CHG_LED_A",
+          "ENPPB"
+        ],
+        "mcu_swd": [
+          "SWCLK",
+          "SWDIO"
+        ],
+        "power_rail": [
+          "BATT",
+          "SYS"
+        ],
+        "usbc": [
+          "CC1",
+          "CC2",
+          "VBUS_CON"
+        ]
+      },
+      "symbol_dirs": [
+        "/app/packages/eda-bridge/vendor_symbols",
+        "/work/products/thesmart_products/04.btdongle/C03-EE/02_build/sch_gen",
+        "/usr/share/kicad/symbols"
+      ],
+      "engine_placement_models": [
+        "R0",
+        "M2-R1|D1|R2"
+      ],
+      "engine_spacing_overrides": {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "6.35",
+        "elk.spacing.nodeNode": "3.81",
+        "elk.spacing.edgeNode": "7.62"
+      },
+      "layout_engine": "elk-layered",
+      "engine_orientation_sets": {
+        "J3": [
+          "R0",
+          "MX"
+        ],
+        "Q1": [
+          "R0",
+          "MY"
+        ]
+      }
+    }
+  }
+}

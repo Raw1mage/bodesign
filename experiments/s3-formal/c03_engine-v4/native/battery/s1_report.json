@@ -1,0 +1,470 @@
+{
+  "subject_manifest_sha256": "413ed1e08219396e47caa11c8b3def452e9a6dc0de48290e572bbb720c74523c",
+  "presentation_baseline_ref": "6380a9a002a9b1fce10317d9e95a75371f90eb65e62601feb8a6bf6ac92786e0",
+  "render_context": {
+    "renderer": "kicad-cli sch export svg (version not embedded in SVG; pin externally)",
+    "artifact_hashes": {
+      "sheet": "6380a9a002a9b1fce10317d9e95a75371f90eb65e62601feb8a6bf6ac92786e0",
+      "svg": "9f8b1f3595093606aec6fccedd7ebe49ee715e6853dbbf6564589ff7a7aff33b",
+      "netlist": "de159965016df82b0087180edef7eb6cece0f9b6fbb1e3ca6727ab3d458eff28"
+    },
+    "viewbox": [
+      0.0,
+      0.0,
+      297.0022,
+      210.0072
+    ],
+    "viewbox_unit_to_mm": 1.0,
+    "page_mm": [
+      297.0022,
+      210.0072
+    ],
+    "stroke_width_mm": 0.4,
+    "text_count": 54,
+    "sheet_paper": "A4",
+    "provenance": {
+      "status": "verified",
+      "kicad_version": "9.0.9",
+      "commands": [
+        "EE container: kicad-cli sch export netlist --format kicadsexpr -o /work/experiments/s3-formal/c03_engine-v4/native/battery/battery.net /work/experiments/s3-formal/c03_engine-v4/battery.kicad_sch",
+        "EE container: kicad-cli sch export svg -o /work/experiments/s3-formal/c03_engine-v4/native/battery/svg --no-background-color /work/experiments/s3-formal/c03_engine-v4/battery.kicad_sch"
+      ],
+      "sheet_set": {
+        "battery.kicad_sch": "6380a9a002a9b1fce10317d9e95a75371f90eb65e62601feb8a6bf6ac92786e0"
+      }
+    }
+  },
+  "policy_ref": {
+    "version": "s1-readability-policy-v1",
+    "frozen_on": "2026-10-06",
+    "digest": "63bee5d02a5ec147",
+    "values": {
+      "version": "s1-readability-policy-v1",
+      "frozen_on": "2026-10-06",
+      "coord_eps_mm": 0.01,
+      "pin_tip_band_mm": 1.27,
+      "corridor_band_mm": 2.54,
+      "corridor_min_pins": 2,
+      "e": {
+        "label_flag_corridor_band_mm": 1.6
+      },
+      "local_net_max_nodes_k": 4,
+      "text_graphics_clearance_mm": 0.25,
+      "text_overlap_ratio": 0.15,
+      "page_use_gate": null,
+      "page_grid_cell_mm": 10.0,
+      "frame_margin_mm": 12.0,
+      "rotation_support": "0/90/180/270 + mirror implemented; calibrated at 0 only"
+    }
+  },
+  "classes": [
+    {
+      "id": "a",
+      "title": "junction ambiguity",
+      "applicability": "all wire/pin meets",
+      "measured": true,
+      "expected_ids": [
+        "junction:066a04db-aa02-4567-8c29-c66722179cc3"
+      ],
+      "examined_ids": [
+        "meet@(57.15, 55.88)",
+        "meet@(57.15, 63.5)",
+        "meet@(101.6, 55.88)",
+        "meet@(101.6, 41.91)",
+        "meet@(57.15, 73.66)",
+        "meet@(57.15, 81.28)",
+        "meet@(80.01, 81.28)",
+        "meet@(101.6, 81.28)",
+        "meet@(80.01, 113.03)",
+        "meet@(95.25, 113.03)",
+        "meet@(101.6, 88.9)",
+        "meet@(57.15, 115.57)",
+        "meet@(57.15, 123.19)",
+        "meet@(95.25, 115.57)",
+        "meet@(57.15, 130.81)",
+        "meet@(64.77, 68.58)",
+        "meet@(95.25, 118.11)",
+        "meet@(101.6, 96.52)"
+      ],
+      "omitted": [],
+      "measurements": {
+        "meet_points": 18,
+        "dots": 1
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "b",
+      "title": "cross-net contact / crossing ambiguity",
+      "applicability": "all wire contacts and crossings; identity from declared circuit",
+      "measured": true,
+      "expected_ids": [
+        "contact@(57.15, 55.88)",
+        "contact@(101.6, 55.88)",
+        "contact@(57.15, 81.28)",
+        "contact@(80.01, 81.28)",
+        "contact@(101.6, 81.28)",
+        "contact@(80.01, 113.03)",
+        "contact@(57.15, 115.57)"
+      ],
+      "examined_ids": [
+        "contact@(57.15, 55.88)",
+        "contact@(101.6, 55.88)",
+        "contact@(57.15, 81.28)",
+        "contact@(80.01, 81.28)",
+        "contact@(101.6, 81.28)",
+        "contact@(80.01, 113.03)",
+        "contact@(57.15, 115.57)",
+        "wire:1c61c675-c453-4a3b-a099-28eafd23aa3b",
+        "wire:e78e2f13-3c20-49e5-a21f-4e746d9dd577",
+        "wire:ab5d7f77-33cc-4a6c-9489-a754df540fdf",
+        "wire:1154498c-9ae8-483e-9b5b-d72b03c760de",
+        "wire:faf9fe02-e867-44a8-9802-e938501a3734",
+        "wire:0dddd013-547b-4c3f-81e2-08621d7197cf",
+        "wire:1a9699a8-4cab-47f9-9f62-1b6f07a770e7",
+        "wire:fcfec8f9-5b72-43a2-a5e5-9e8124f4558b",
+        "wire:3efd83c7-dce1-4a70-9631-cc2558a2c362",
+        "wire:01123a84-fd19-4044-b468-4a0c040934d6",
+        "wire:eedb6513-5271-4d41-a6e3-485382c3ec90"
+      ],
+      "omitted": [],
+      "measurements": {
+        "b1_electrical": 0,
+        "b2_perceptual": 0,
+        "contacts_examined": 7
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "c",
+      "title": "local wired-path completeness",
+      "applicability": "caller-declared required pin pairs",
+      "measured": true,
+      "expected_ids": [
+        "Q1.3~TP2.1",
+        "Q1.2~J2.1",
+        "Q1.2~C6.1",
+        "R5.1~J2.2"
+      ],
+      "examined_ids": [
+        "Q1.3~TP2.1",
+        "Q1.2~J2.1",
+        "Q1.2~C6.1",
+        "R5.1~J2.2"
+      ],
+      "omitted": [
+        {
+          "pin": "C6.2",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "J2.3",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "Q1.1",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        },
+        {
+          "pin": "R5.2",
+          "reason": "continuation: GND forced label continuation (DD-14 slice bound / policy)"
+        }
+      ],
+      "measurements": {
+        "required_pairs": 4,
+        "examined_pairs": 4,
+        "label_only_pins": 0
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "d",
+      "title": "series-path legibility",
+      "applicability": "two-terminal non-power elements; pin identity from declared circuit",
+      "measured": true,
+      "expected_ids": [
+        "R5",
+        "C6"
+      ],
+      "examined_ids": [
+        "R5",
+        "C6"
+      ],
+      "omitted": [],
+      "measurements": {
+        "series_elements": 2,
+        "expected": 2,
+        "not_assessed": 0
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "e",
+      "title": "foreign-net corridors / pin-row proximity / wire through body",
+      "applicability": "all wires vs foreign pins/wires/bodies",
+      "measured": true,
+      "expected_ids": [],
+      "examined_ids": [
+        "wire:1c61c675-c453-4a3b-a099-28eafd23aa3b",
+        "wire:e78e2f13-3c20-49e5-a21f-4e746d9dd577",
+        "wire:ab5d7f77-33cc-4a6c-9489-a754df540fdf",
+        "wire:1154498c-9ae8-483e-9b5b-d72b03c760de",
+        "wire:faf9fe02-e867-44a8-9802-e938501a3734",
+        "wire:0dddd013-547b-4c3f-81e2-08621d7197cf",
+        "wire:1a9699a8-4cab-47f9-9f62-1b6f07a770e7",
+        "wire:fcfec8f9-5b72-43a2-a5e5-9e8124f4558b",
+        "wire:3efd83c7-dce1-4a70-9631-cc2558a2c362",
+        "wire:01123a84-fd19-4044-b468-4a0c040934d6",
+        "wire:eedb6513-5271-4d41-a6e3-485382c3ec90"
+      ],
+      "omitted": [],
+      "measurements": {
+        "render_stroke_width_mm": 0.4,
+        "label_flag_corridors": 1,
+        "pin_row_corridors": 0,
+        "collinear_foreign": 0,
+        "wire_through_body": 0,
+        "foreign_wire_near_pin_tip": 0
+      },
+      "findings": [
+        {
+          "cls": "e",
+          "code": "E_LABEL_FLAG_CORRIDOR",
+          "kind": "perceptual",
+          "message": "wire of ['NTC'] passes global_label 'GND' outline within 1.6 mm over 7.15 mm; electrical equality does not establish perceptual clarity",
+          "at": [
+            88.9341,
+            115.57
+          ],
+          "objects": [
+            "wire:eedb6513-5271-4d41-a6e3-485382c3ec90",
+            "label:69de5747-6057-4a9d-a2e4-5d507c98d883"
+          ],
+          "region": [
+            57.15,
+            115.57,
+            95.25,
+            119.3804
+          ],
+          "measurements": {
+            "net_relation": "unbound",
+            "distance_mm": 1.2696000000000112,
+            "label_net_authority": "none",
+            "contact": "corridor",
+            "corridor_length_mm": 7.152024802142548,
+            "band_mm": 1.6
+          }
+        }
+      ],
+      "verdict": "fail",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {}
+    },
+    {
+      "id": "f",
+      "title": "text clearance, clipping, scale, page occupancy",
+      "applicability": "partial: text-vs-text, wire-through-text and label-flag-outline-through-text only; text-vs-symbol-body/pin-graphics clearance NOT measured; page area excluding frame reported, not gated",
+      "measured": true,
+      "expected_ids": [],
+      "examined_ids": [
+        "text:1@(35.0, 11.65)",
+        "text:2@(85.0, 11.65)",
+        "text:3@(135.0, 11.65)",
+        "text:4@(185.0, 11.65)",
+        "text:5@(235.0, 11.65)",
+        "text:6@(285.0, 11.65)",
+        "text:1@(35.0, 199.6572)",
+        "text:2@(85.0, 199.6572)",
+        "text:3@(135.0, 199.6572)",
+        "text:4@(185.0, 199.6572)",
+        "text:5@(235.0, 199.6572)",
+        "text:6@(285.0, 199.6572)",
+        "text:A@(11.0, 35.65)",
+        "text:B@(11.0, 85.65)",
+        "text:C@(11.0, 135.65)",
+        "text:D@(11.0, 185.65)",
+        "text:A@(286.0022, 35.65)",
+        "text:B@(286.0022, 85.65)",
+        "text:C@(286.0022, 135.65)",
+        "text:D@(286.0022, 185.65)",
+        "text:Date: 2026-10-10@(200.0022, 193.8572)",
+        "text:KiCad E.D.A. 9.0.9@(178.0022, 196.6572)",
+        "text:Rev: v1.0@(263.0022, 193.8572)",
+        "text:Size: A4@(178.0022, 193.8572)",
+        "text:Id: 1/1@(263.0022, 196.6572)",
+        "text:Title: btdongle_ms - battery@(178.0022, 190.3072)",
+        "text:File: battery.kicad_sch@(178.0022, 186.4572)",
+        "text:Sheet: /@(178.0022, 183.7572)",
+        "text:bodesign@(178.0022, 180.7572)",
+        "text:R5@(60.7869, 126.365)",
+        "text:10k@(61.2707, 128.905)",
+        "text:C6@(106.2529, 92.075)",
+        "text:100nF@(107.9462, 94.615)",
+        "text:TP2@(104.7047, 39.624)",
+        "text:TP_BATT@(106.7307, 42.164)",
+        "text:1@(97.155, 112.776)",
+        "text:2@(97.155, 115.316)",
+        "text:3@(97.155, 117.856)",
+        "text:J2@(104.0697, 114.935)",
+        "text:BAT_PH2.0@(107.9402, 117.475)",
+        "text:1@(63.5, 68.326)",
+        "text:3@(56.896, 64.77)",
+        "text:2@(56.896, 72.39)",
+        "text:Q1@(53.3912, 67.945)",
+        "text:DMG2301L@(49.2499, 70.485)",
+        "text:GND@(101.6908, 98.5838)",
+        "text:NTC@(58.5788, 123.9158)",
+        "text:GND@(57.2408, 132.8738)",
+        "text:GND@(93.8212, 118.8358)",
+        "text:NTC@(36.9888, 36.2858)",
+        "text:BATT@(58.5788, 64.2258)",
+        "text:GND@(66.1988, 69.3058)",
+        "text:BAT_EXT@(101.6, 81.5657)",
+        "text:\u2192 U1.7 NTC \u2014 home: power_rail@(38.1, 33.405)"
+      ],
+      "omitted": [],
+      "measurements": {
+        "texts": 54,
+        "text_text_overlaps": 0,
+        "wire_through_text": 0,
+        "flag_through_text": 0,
+        "clipped": 0,
+        "page_mm": [
+          297.0022,
+          210.0072
+        ],
+        "drawable_mm": [
+          273.0,
+          186.01
+        ],
+        "page_use_bbox_ratio": 0.1239,
+        "page_use_grid_ratio": 0.0514,
+        "page_use_gate": null,
+        "min_font_mm": 1.6933
+      },
+      "findings": [],
+      "verdict": "pass",
+      "not_measured_reason": null,
+      "observations": [],
+      "observation_counts": {
+        "F_WIRE_THROUGH_INK": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        },
+        "F_INK_THROUGH_TEXT": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        },
+        "F_FLAG_THROUGH_INK": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        },
+        "F_INK_THROUGH_PIN": {
+          "expected": 0,
+          "examined": 0,
+          "omitted": [],
+          "emitted": 0
+        }
+      }
+    }
+  ],
+  "calibration_ref": {
+    "status": "out_of_scope",
+    "record_version": "2026-10-09-3.3a-existing-evidence",
+    "reason": "subject rotations ['mirror'] not in supported [0]",
+    "classes": {
+      "a": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "b": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "c": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "d": {
+        "rejecting": 1,
+        "accepting": 1,
+        "missing": []
+      },
+      "e": {
+        "rejecting": 2,
+        "accepting": 0,
+        "missing": [
+          "no independently reviewed accepting case"
+        ]
+      }
+    }
+  },
+  "execution": "succeeded",
+  "verdict": "fail",
+  "human_review_ref": null,
+  "does_not_authorize": [
+    "electrical_correctness",
+    "fidelity",
+    "manufacturing_release",
+    "human_readability_acceptance"
+  ],
+  "anomalies": [],
+  "verdict_scope": "a-e",
+  "scoped_verdict": "fail",
+  "authority_digests": {
+    "declared_pin_nets": "1e2a1a53f479e6fc3d6fcabb6874708da78d6a06e3286e29716e04d1b358f6a9",
+    "required_local_pairs": "a0a824af0551c172c38f2daac41d5726dd348e5c0c28ae436963c6b4df6ab0a8",
+    "local_exceptions": "97e7a591239720a8b2f10126add5b2187121048c1e4d331ccf1516a813e8f67d",
+    "policy_digest": "63bee5d02a5ec147"
+  },
+  "measurement_scope": {
+    "version": "s1-measurement-scope-v2-sheet-ink-observations",
+    "policy_digest": "63bee5d02a5ec147",
+    "ink_chord_tol_mm": 0.05,
+    "observations": "f: F_WIRE_THROUGH_INK, F_INK_THROUGH_TEXT, F_FLAG_THROUGH_INK, F_INK_THROUGH_PIN (kind=observation; never findings)",
+    "not_assessed": [
+      "dash gaps",
+      "stroke envelope",
+      "fill",
+      "z-order",
+      "ink meaning / grouping",
+      "symbol coherence",
+      "package-implies-internal-connection"
+    ]
+  },
+  "sheet_graphic_ink": [],
+  "ink_report": {
+    "count": 0,
+    "ink_missing_uuid": 0,
+    "ink_unparsed_by_kind": {},
+    "owner_mode": "none",
+    "ink_owner_unknown": [],
+    "owner_declaration_mismatch": []
+  }
+}

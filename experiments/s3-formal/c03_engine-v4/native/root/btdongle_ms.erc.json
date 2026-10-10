@@ -1,0 +1,794 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-10T13:25:39+0800",
+    "included_severities": [
+        "error",
+        "warning"
+    ],
+    "kicad_version": "9.0.9",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6",
+            "violations": [
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol F1 [Polyfuse]",
+                            "pos": {
+                                "x": 0.7366,
+                                "y": 0.4953
+                            },
+                            "uuid": "65b45c31-9eaf-4822-adda-610af7fdf871"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C1 [C]",
+                            "pos": {
+                                "x": 1.0414,
+                                "y": 0.7239
+                            },
+                            "uuid": "7555c499-7f87-44f4-99bd-0a618204a78a"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector'",
+                    "items": [
+                        {
+                            "description": "Symbol J1 [USB_C_Receptacle_USB2.0_16P]",
+                            "pos": {
+                                "x": 0.4826,
+                                "y": 1.2446
+                            },
+                            "uuid": "6ded16b1-7507-422c-8d18-001e84de98aa"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R1 [R]",
+                            "pos": {
+                                "x": 0.762,
+                                "y": 1.2573
+                            },
+                            "uuid": "729ba6d5-2079-43ab-8069-bedb9cbacc9d"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Bodesign_Presentation'",
+                    "items": [
+                        {
+                            "description": "Symbol D1 [PESD5V0L4UF_Boxed]",
+                            "pos": {
+                                "x": 1.0414,
+                                "y": 1.0541
+                            },
+                            "uuid": "6144fd5a-8441-4d5d-bba9-8b540da5430b"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R2 [R]",
+                            "pos": {
+                                "x": 1.3081,
+                                "y": 1.6002
+                            },
+                            "uuid": "f3822268-692c-4da2-a7f8-0697b3696aad"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'MCU_Module'",
+                    "items": [
+                        {
+                            "description": "Symbol U2 [RaspberryPi_Pico_W_Debug]",
+                            "pos": {
+                                "x": 0.6985,
+                                "y": 0.889
+                            },
+                            "uuid": "6f675620-a81c-4472-8a81-a6944cf1d51c"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Switch'",
+                    "items": [
+                        {
+                            "description": "Symbol SW2 [SW_Push]",
+                            "pos": {
+                                "x": 1.4986,
+                                "y": 0.7112
+                            },
+                            "uuid": "9b03b571-11ee-43c8-b4d8-59956fec87cf"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C7 [C]",
+                            "pos": {
+                                "x": 1.5113,
+                                "y": 0.9652
+                            },
+                            "uuid": "11514b50-4aff-4f12-852f-e89f93e82fe8"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C8 [C]",
+                            "pos": {
+                                "x": 0.8763,
+                                "y": 1.8034
+                            },
+                            "uuid": "3eaf169f-2811-4793-b485-e16440305ec4"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R8 [R]",
+                            "pos": {
+                                "x": 1.5113,
+                                "y": 1.3208
+                            },
+                            "uuid": "b9e78af8-3c5b-4046-85f9-22ec55e010bb"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector_Generic'",
+                    "items": [
+                        {
+                            "description": "Symbol J3 [Conn_01x03]",
+                            "pos": {
+                                "x": 1.5367,
+                                "y": 1.5494
+                            },
+                            "uuid": "69bb071c-54b1-41cb-ab5a-bb80eb759092"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C9 [C]",
+                            "pos": {
+                                "x": 0.8763,
+                                "y": 2.1463
+                            },
+                            "uuid": "cf184821-e117-4830-95f7-3b756c6bad5e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C10 [C]",
+                            "pos": {
+                                "x": 0.8763,
+                                "y": 2.5019
+                            },
+                            "uuid": "0f433819-53c4-4772-9516-da2dec51ac0f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C11 [C]",
+                            "pos": {
+                                "x": 0.8763,
+                                "y": 2.8448
+                            },
+                            "uuid": "7c6b766e-8aee-45f8-a64c-440568b32a94"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector'",
+                    "items": [
+                        {
+                            "description": "Symbol TP1 [TestPoint]",
+                            "pos": {
+                                "x": 0.8763,
+                                "y": 3.0734
+                            },
+                            "uuid": "8fe97c24-4ece-45ab-b4c1-dd4333547bd1"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'local'",
+                    "items": [
+                        {
+                            "description": "Symbol U1 [ETA6003]",
+                            "pos": {
+                                "x": 0.8255,
+                                "y": 0.635
+                            },
+                            "uuid": "08954b37-2da3-47fe-b500-dd9316ef6743"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol L1 [L]",
+                            "pos": {
+                                "x": 1.3843,
+                                "y": 0.4318
+                            },
+                            "uuid": "77a2e8e8-8f36-4ae4-836f-9ff3f94e79c3"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C5 [C]",
+                            "pos": {
+                                "x": 1.3843,
+                                "y": 0.7747
+                            },
+                            "uuid": "5ffee3c2-0f5e-4631-8aa1-b85a24abd0d9"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R4 [R]",
+                            "pos": {
+                                "x": 1.4351,
+                                "y": 1.1176
+                            },
+                            "uuid": "2d6cf5ad-2fdf-40b9-95d5-c7db7c38937f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R3 [R]",
+                            "pos": {
+                                "x": 1.4351,
+                                "y": 1.4605
+                            },
+                            "uuid": "b3012f37-8778-42fe-9b2f-60c4c6343d69"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R6 [R]",
+                            "pos": {
+                                "x": 1.4351,
+                                "y": 1.8034
+                            },
+                            "uuid": "929144cb-b1d4-4a31-ba22-b1ff8d6aaa26"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C3 [C]",
+                            "pos": {
+                                "x": 1.3716,
+                                "y": 2.0574
+                            },
+                            "uuid": "1d1205ff-c818-4ca1-9097-3bc040e76151"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C4 [C]",
+                            "pos": {
+                                "x": 0.8636,
+                                "y": 2.4765
+                            },
+                            "uuid": "97138f64-17e2-4047-ab92-d39e4451b084"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C2 [C]",
+                            "pos": {
+                                "x": 1.3716,
+                                "y": 2.4003
+                            },
+                            "uuid": "2b8f5ed8-00c0-4778-a7eb-bb4bc4e7aaef"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R9 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.5461
+                            },
+                            "uuid": "3a4250e1-b898-4a0f-8234-99d3550df09e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R10 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.8763
+                            },
+                            "uuid": "6bb4d176-fc70-4f1a-bb40-9ed890f00e85"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D3 [LED]",
+                            "pos": {
+                                "x": 0.9652,
+                                "y": 0.5207
+                            },
+                            "uuid": "85b5556e-28af-40d6-80e4-91d0cf5050b2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D4 [LED]",
+                            "pos": {
+                                "x": 0.9652,
+                                "y": 0.889
+                            },
+                            "uuid": "f71aa4c9-709d-43b2-b421-f0b77c6b2f0e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R11 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 1.27
+                            },
+                            "uuid": "137ebeba-eb38-4614-87df-a3041e6b2afc"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D5 [LED]",
+                            "pos": {
+                                "x": 0.9652,
+                                "y": 1.2827
+                            },
+                            "uuid": "a4a309be-5a56-4760-9f06-0bb5130a5844"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Switch'",
+                    "items": [
+                        {
+                            "description": "Symbol SW3 [SW_Push]",
+                            "pos": {
+                                "x": 0.5842,
+                                "y": 1.6002
+                            },
+                            "uuid": "d3ad6d65-b451-4eeb-91c7-355da146b110"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R12 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 1.8669
+                            },
+                            "uuid": "8d64963c-c7c1-4cf7-8570-e69c5d7418a6"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C12 [C]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 2.2733
+                            },
+                            "uuid": "4010864d-9d86-46bd-99bb-24cea7e14da5"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R13 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 2.6289
+                            },
+                            "uuid": "acf51cde-871a-49fb-b0d1-01dbe07865b9"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R14 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 3.1242
+                            },
+                            "uuid": "abbd836c-d65e-4f73-b5de-484c3b5f83a8"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C13 [C]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 3.5433
+                            },
+                            "uuid": "656d5966-1425-483e-b70e-d6aa70ba7c62"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'NTC'",
+                            "pos": {
+                                "x": 0.3556,
+                                "y": 0.3556
+                            },
+                            "uuid": "b20c3b2c-d6bd-4f53-94b5-dc7c033bde0e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Transistor_FET'",
+                    "items": [
+                        {
+                            "description": "Symbol Q1 [DMG2301L]",
+                            "pos": {
+                                "x": 0.5969,
+                                "y": 0.6858
+                            },
+                            "uuid": "bba0d513-d624-43aa-85cd-3978caeaeaed"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector'",
+                    "items": [
+                        {
+                            "description": "Symbol TP2 [TestPoint]",
+                            "pos": {
+                                "x": 1.016,
+                                "y": 0.4191
+                            },
+                            "uuid": "313c4fac-61f3-44ca-896e-95bea0719e50"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol C6 [C]",
+                            "pos": {
+                                "x": 1.016,
+                                "y": 0.9271
+                            },
+                            "uuid": "a3212e59-5563-4493-a76f-54db7861175a"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R5 [R]",
+                            "pos": {
+                                "x": 0.5715,
+                                "y": 1.27
+                            },
+                            "uuid": "17f8f7de-c651-4f53-9922-8877ea98c206"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Connector_Generic'",
+                    "items": [
+                        {
+                            "description": "Symbol J2 [Conn_01x03]",
+                            "pos": {
+                                "x": 1.0033,
+                                "y": 1.1557
+                            },
+                            "uuid": "334f88a3-9403-49b8-b6f1-575317dfe0e6"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "Global label not connected anywhere else in the schematic",
+                    "items": [
+                        {
+                            "description": "Global Label 'ENPPB'",
+                            "pos": {
+                                "x": 0.3556,
+                                "y": 0.3556
+                            },
+                            "uuid": "68bc818c-e4e4-4069-bc19-1fa94210d722"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "global_label_dangling"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol R7 [R]",
+                            "pos": {
+                                "x": 0.5588,
+                                "y": 0.5461
+                            },
+                            "uuid": "fbd1b138-567d-4354-9ae7-053a6e390d35"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Switch'",
+                    "items": [
+                        {
+                            "description": "Symbol SW1 [SW_SPDT]",
+                            "pos": {
+                                "x": 0.5461,
+                                "y": 0.8509
+                            },
+                            "uuid": "d7eaad77-59de-4324-9a05-964efe4c0c90"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "The current configuration does not include the symbol library 'Device'",
+                    "items": [
+                        {
+                            "description": "Symbol D2 [LED]",
+                            "pos": {
+                                "x": 0.9525,
+                                "y": 0.5207
+                            },
+                            "uuid": "65650527-d2ec-466c-98fc-95545e059a05"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        },
+        {
+            "path": "/usbc/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/218b214b-5551-489d-a589-d880c6bbee99",
+            "violations": []
+        },
+        {
+            "path": "/power_rail/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/b2c7e8e8-c6e3-4348-a256-442fe04c4112",
+            "violations": [
+                {
+                    "description": "Input Power pin not driven by any Output Power pins",
+                    "items": [
+                        {
+                            "description": "Symbol U1 Pin 2 [IN, Power input, Line]",
+                            "pos": {
+                                "x": 0.635,
+                                "y": 0.5588
+                            },
+                            "uuid": "ab43e8ae-a92e-43e0-b7d4-df10a3ec551b"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "power_pin_not_driven"
+                }
+            ]
+        },
+        {
+            "path": "/battery/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/af9f47a7-a6af-4695-8af0-05031c151db1",
+            "violations": []
+        },
+        {
+            "path": "/charge_enable/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/b7d4d17b-d8a7-499e-8fb7-17e39a897477",
+            "violations": []
+        },
+        {
+            "path": "/mcu_swd/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/476db79f-30c9-4e8a-8f27-30ff0241fefc",
+            "violations": [
+                {
+                    "description": "Pins of type Power output and Power output are connected",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 3 [GND, Power output, Line]",
+                            "pos": {
+                                "x": 0.6985,
+                                "y": 1.2446
+                            },
+                            "uuid": "c7466bb2-4dc8-435d-a4f1-e4b0f5d8744c"
+                        },
+                        {
+                            "description": "Symbol U2 Pin 33 [AGND, Power output, Line]",
+                            "pos": {
+                                "x": 0.9271,
+                                "y": 1.1176
+                            },
+                            "uuid": "1b803daa-22cc-4ae2-8a53-4b18630f5c37"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_to_pin"
+                }
+            ]
+        },
+        {
+            "path": "/io/",
+            "uuid_path": "/24ae1d5d-ecfe-48f1-8e08-0b643165f5c6/aacebdac-5556-4b24-bfa3-33bbbc945550",
+            "violations": []
+        }
+    ],
+    "source": "btdongle_ms.kicad_sch"
+}
