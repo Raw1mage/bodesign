@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "state": "designed",
+  "state": "implementing",
   "profile": [],
   "history": [
     {
@@ -18,6 +18,22 @@
       "by": "pkcs12",
       "mode": "promote",
       "reason": "Duty officer approved DD-1 through DD-8; Task 0.3 models and contracts complete; dedicated IDEF0/GRAFCET validation and full planned-artifact lint passed; runtime acceptance remains unmeasured"
+    },
+    {
+      "from": "designed",
+      "to": "planned",
+      "at": "2026-10-10T16:42:10.735Z",
+      "by": "coordinator",
+      "mode": "promote",
+      "reason": "Plan hygiene (§4.20 ruling 3): master plan executed S36–S57 while stuck at designed; advancing through planned to implementing."
+    },
+    {
+      "from": "planned",
+      "to": "implementing",
+      "at": "2026-10-10T16:42:16.772Z",
+      "by": "coordinator",
+      "mode": "promote",
+      "reason": "Master plan executed S36–S57 (R-L/R-M/R-N closed, 21/24 tasks ticked); state now reflects reality."
     }
   ],
   "tasks_contract": {
