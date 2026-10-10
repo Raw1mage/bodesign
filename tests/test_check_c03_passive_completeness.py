@@ -255,5 +255,147 @@ class PC001WaiverScopeTests(unittest.TestCase):
         self.assertIn("NOT ported", res.passive_completeness["waivers"]["reason"])
 
 
+# ── type-identified rails and blocking non-verdicts ─────────────────────────
+
+class PC001TypeIdentifiedRailTests(unittest.TestCase):
+    """(a) power_in-typed pin named 'IN' on net 'SYS' with cap to GND -> rail identified by type, decoupled, status run.
+    (b) same with cap removed -> PC-001 finding (negative control).
+    (c) hint-only netlist without types still works as before.
+    (d) ics_without_identifiable_rail non-empty -> blocking.
+    """
+
+    def test_type_identified_rail_sys_decoupled_status_run(self):
+        """(a) pinfunction 'IN' (not in hints), pintype 'power_in', net 'SYS' (not power by _polarity_of).
+        With cap to GND: rail identified by type, decoupled, passive_completeness status=run, no PC-001.
+        """
+        comps = ['(comp (ref "U1") (value "ETA6003"))', '(comp (ref "C1") (value "10u"))']
+        rail_nodes = [
+            '(node (ref "U1") (pin "2") (pinfunction "IN") (pintype "power_in"))',
+            '(node (ref "C1") (pin "1") (pintype "passive"))',
+        ]
+        gnd_nodes = [
+            '(node (ref "U1") (pin "5") (pinfunction "PGND") (pintype "power_in"))',
+            '(node (ref "C1") (pin "2") (pintype "passive"))',
+        ]
+        net_text = f"""(export (version "E")
+  (design (source "/work/probe/test_a.kicad_sch"))
+  (components
+    {chr(10).join('    ' + c for c in comps)})
+  (nets
+    (net (code "1") (name "SYS") (class "Default")
+      {chr(10).join('      ' + n for n in rail_nodes)})
+    (net (code "2") (name "GND") (class "Default")
+      {chr(10).join('      ' + n for n in gnd_nodes)})))
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            bom = _write(tmp, "bom.csv", _HDR + "PRODUCT,U1,ETA6003,ETA6003,1,finalized,official\nPRODUCT,C1,10u,CC0805,1,finalized,official\n")
+            net = _write(tmp, "board.net", net_text)
+            res = check_c03.check_c03(bom, netlist_path=net)
+
+        self.assertEqual(res.passive_completeness["status"], "run")
+        self.assertNotIn("PC-001", _codes(res))
+        u1_check = [c for c in res.passive_completeness["ics_checked"] if c["ref"] == "U1"][0]
+        self.assertEqual(u1_check["rails"], ["SYS"])
+        self.assertEqual(u1_check["identified_by"], {"SYS": "type"})
+        self.assertEqual(u1_check["verdict"], "ok")
+        self.assertEqual(res.passive_completeness["ics_without_identifiable_rail"], [])
+
+    def test_type_identified_rail_sys_undecoupled_pc001_negative_control(self):
+        """(b) Same as (a) with cap C1 removed -> PC-001 finding on U1 for rail SYS."""
+        comps = ['(comp (ref "U1") (value "ETA6003"))']
+        rail_nodes = [
+            '(node (ref "U1") (pin "2") (pinfunction "IN") (pintype "power_in"))',
+        ]
+        gnd_nodes = [
+            '(node (ref "U1") (pin "5") (pinfunction "PGND") (pintype "power_in"))',
+        ]
+        net_text = f"""(export (version "E")
+  (design (source "/work/probe/test_b.kicad_sch"))
+  (components
+    {chr(10).join('    ' + c for c in comps)})
+  (nets
+    (net (code "1") (name "SYS") (class "Default")
+      {chr(10).join('      ' + n for n in rail_nodes)})
+    (net (code "2") (name "GND") (class "Default")
+      {chr(10).join('      ' + n for n in gnd_nodes)})))
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            bom = _write(tmp, "bom.csv", _HDR + "PRODUCT,U1,ETA6003,ETA6003,1,finalized,official\n")
+            net = _write(tmp, "board.net", net_text)
+            res = check_c03.check_c03(bom, netlist_path=net)
+
+        self.assertEqual(res.gate, "FAIL")
+        self.assertEqual(res.passive_completeness["status"], "run")
+        self.assertIn("PC-001", _codes(res))
+        u1_check = [c for c in res.passive_completeness["ics_checked"] if c["ref"] == "U1"][0]
+        self.assertEqual(u1_check["rails"], ["SYS"])
+        self.assertEqual(u1_check["identified_by"], {"SYS": "type"})
+        self.assertEqual(u1_check["undecoupled"], ["SYS"])
+        self.assertEqual(u1_check["verdict"], "gap")
+
+    def test_hint_only_netlist_without_types_still_works_as_before(self):
+        """(c) Netlist carrying pinfunction hints but NO pintype/type attributes:
+        supply rails identified by hint fallback, decoupled, status run.
+        """
+        comps = ['(comp (ref "U1") (value "STM32"))', '(comp (ref "C1") (value "100n"))']
+        rail_nodes = [
+            '(node (ref "U1") (pin "1") (pinfunction "VDD"))',
+            '(node (ref "C1") (pin "1"))',
+        ]
+        gnd_nodes = [
+            '(node (ref "U1") (pin "2") (pinfunction "VSS"))',
+            '(node (ref "C1") (pin "2"))',
+        ]
+        net_text = f"""(export (version "E")
+  (design (source "/work/probe/test_c.kicad_sch"))
+  (components
+    {chr(10).join('    ' + c for c in comps)})
+  (nets
+    (net (code "1") (name "+3V3") (class "Default")
+      {chr(10).join('      ' + n for n in rail_nodes)})
+    (net (code "2") (name "GND") (class "Default")
+      {chr(10).join('      ' + n for n in gnd_nodes)})))
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            bom = _write(tmp, "bom.csv", _HDR + "PRODUCT,U1,STM32,STM32,1,finalized,official\nPRODUCT,C1,100n,CC0402,1,finalized,official\n")
+            net = _write(tmp, "board.net", net_text)
+            res = check_c03.check_c03(bom, netlist_path=net)
+
+        self.assertEqual(res.passive_completeness["status"], "run")
+        self.assertNotIn("PC-001", _codes(res))
+        u1_check = [c for c in res.passive_completeness["ics_checked"] if c["ref"] == "U1"][0]
+        self.assertEqual(u1_check["rails"], ["+3V3"])
+        self.assertEqual(u1_check["identified_by"], {"+3V3": "hint"})
+        self.assertEqual(u1_check["verdict"], "ok")
+
+    def test_ics_without_identifiable_rail_non_empty_is_blocking(self):
+        """(d) Active IC U1 in BOM has netlist nodes, but none qualify as a supply rail.
+        ics_without_identifiable_rail is non-empty -> gate=FAIL carrying blocking PC-001 finding.
+        """
+        comps = ['(comp (ref "U1") (value "ACTIVE_IC"))']
+        nodes = [
+            '(node (ref "U1") (pin "1") (pinfunction "IO_PA0") (pintype "bidirectional"))',
+        ]
+        net_text = f"""(export (version "E")
+  (design (source "/work/probe/test_d.kicad_sch"))
+  (components
+    {chr(10).join('    ' + c for c in comps)})
+  (nets
+    (net (code "1") (name "SIG_A") (class "Default")
+      {chr(10).join('      ' + n for n in nodes)})))
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            bom = _write(tmp, "bom.csv", _HDR + "PRODUCT,U1,ACTIVE_IC,ACTIVE_IC,1,finalized,official\n")
+            net = _write(tmp, "board.net", net_text)
+            res = check_c03.check_c03(bom, netlist_path=net)
+
+        self.assertEqual(res.gate, "FAIL")
+        self.assertIn("PC-001", _codes(res))
+        self.assertIn("U1", res.passive_completeness["ics_without_identifiable_rail"])
+        pc_findings = [f for f in res.blocking if f.code == "PC-001" and f.ref == "U1"]
+        self.assertTrue(len(pc_findings) >= 1)
+        self.assertIn("NO identifiable power rail", pc_findings[0].detail)
+
+
 if __name__ == "__main__":
     unittest.main()

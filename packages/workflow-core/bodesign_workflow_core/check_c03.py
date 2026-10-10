@@ -660,6 +660,7 @@ def _polarity_of(name: str) -> str | None:
         return None
     head = re.split(r"[\s,;]", n)[0]
     if any(head == g or head.startswith(g + "_") or head.endswith("_" + g)
+           or (head.startswith(g) and head[len(g):].isdigit())
            for g in _GND_TOKENS) or head in _GND_TOKENS:
         return "gnd"
     if _PWR_PATTERN.search(head) or head.startswith(_PWR_PREFIXES):
@@ -766,6 +767,37 @@ _MANDATED_PASSIVES: tuple[dict, ...] = (
 )
 
 
+def _netlist_pin_meta(paths: list[str]) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """{ref: {pin: pinfunction}}, {ref: {pin: pintype}} for the nodes that carry one.
+
+    Single pass over netlist node definitions extracting both pinfunction and
+    pintype / type attributes without duplicate reading or separate AST passes.
+    """
+    fns: dict[str, dict[str, str]] = {}
+    types: dict[str, dict[str, str]] = {}
+    ref_re = re.compile(r'\(\s*ref\s+"([^"]+)"', re.I)
+    pin_re = re.compile(r'\(\s*pin\s+"([^"]+)"', re.I)
+    fn_re = re.compile(r'\(\s*pinfunction\s+"([^"]+)"', re.I)
+    type_re = re.compile(r'\(\s*(?:pintype|type)\s+"([^"]+)"', re.I)
+    for path in paths:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        bounds = [m.start() for m in re.finditer(r'\(\s*node\b', text)]
+        for i, start in enumerate(bounds):
+            end = bounds[i + 1] if i + 1 < len(bounds) else len(text)
+            chunk = text[start:end]
+            rm, pm = ref_re.search(chunk), pin_re.search(chunk)
+            if rm and pm:
+                ref = rm.group(1)
+                pin = pm.group(1)
+                fm = fn_re.search(chunk)
+                if fm:
+                    fns.setdefault(ref, {})[pin] = fm.group(1)
+                tm = type_re.search(chunk)
+                if tm:
+                    types.setdefault(ref, {})[pin] = tm.group(1)
+    return fns, types
+
+
 def _netlist_pin_functions(paths: list[str]) -> dict[str, dict[str, str]]:
     """{ref: {pin: pinfunction}} for the nodes that carry one.
 
@@ -774,25 +806,8 @@ def _netlist_pin_functions(paths: list[str]) -> dict[str, dict[str, str]]:
     pad is number K1". Without it neither rule can run, and both say so rather
     than guessing a pin number from a package drawing.
     """
-    out: dict[str, dict[str, str]] = {}
-    # Slice per node rather than one composite regex: a node's attributes are a
-    # variable-length list of (key "value") pairs, and a single pattern that
-    # tries to span them silently matches the empty string when the shape
-    # differs by one paren — i.e. it fails by reporting "no pinfunction here",
-    # which is indistinguishable from a netlist that genuinely has none.
-    ref_re = re.compile(r'\(\s*ref\s+"([^"]+)"', re.I)
-    pin_re = re.compile(r'\(\s*pin\s+"([^"]+)"', re.I)
-    fn_re = re.compile(r'\(\s*pinfunction\s+"([^"]+)"', re.I)
-    for path in paths:
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
-        bounds = [m.start() for m in re.finditer(r'\(\s*node\b', text)]
-        for i, start in enumerate(bounds):
-            end = bounds[i + 1] if i + 1 < len(bounds) else len(text)
-            chunk = text[start:end]
-            rm, pm, fm = ref_re.search(chunk), pin_re.search(chunk), fn_re.search(chunk)
-            if rm and pm and fm:
-                out.setdefault(rm.group(1), {})[pm.group(1)] = fm.group(1)
-    return out
+    fns, _ = _netlist_pin_meta(paths)
+    return fns
 
 
 def _nets_to_refs(pin_nets: dict[str, dict[str, str]]) -> dict[str, set[str]]:
@@ -985,24 +1000,49 @@ _PC_POWER_PIN_HINTS = ("VDD", "VCC", "AVDD", "DVDD", "VBAT", "VIN", "VDDA",
 
 def _ic_power_rails(pin_nets: dict[str, dict[str, str]],
                     pin_fns: dict[str, dict[str, str]],
-                    ref: str) -> list[str]:
-    """Distinct power-rail nets an active IC's supply pins connect to.
+                    ref: str,
+                    pin_types: dict[str, dict[str, str]] | None = None) -> tuple[list[str], dict[str, str]]:
+    """Distinct power-rail nets an active IC's supply pins connect to, plus identification basis.
 
-    A rail qualifies only when BOTH hold: the pin's FUNCTION names a supply pin,
-    and the NET it sits on reads as power rather than ground. Requiring both is
-    what keeps a GND pin (function "VSS", net "GND") out of the rail set without
-    hard-coding a ground list at this level — _polarity_of already owns that.
+    A pin is a supply pin if pintype == 'power_in' OR pinfunction matches
+    _PC_POWER_PIN_HINTS (type first, hints as fallback for netlists lacking type).
+    When the pin is power_in-typed and the net is NOT ground by _polarity_of,
+    the net is treated as a rail regardless of its name.
+    When identified by hint, the net must read as power by _polarity_of.
+
+    Returns (rails, identified_by) where identified_by maps rail name to 'type' or 'hint'.
     """
     rails: list[str] = []
-    for pin, fn in sorted((pin_fns.get(ref) or {}).items()):
-        if not any(h in fn.upper() for h in _PC_POWER_PIN_HINTS):
+    identified_by: dict[str, str] = {}
+    types_for_ref = (pin_types.get(ref) or {}) if pin_types else {}
+    fns_for_ref = pin_fns.get(ref) or {}
+    nets_for_ref = pin_nets.get(ref) or {}
+
+    all_pins = sorted(nets_for_ref.keys())
+    for pin in all_pins:
+        net = nets_for_ref[pin]
+        if not net:
             continue
-        net = (pin_nets.get(ref) or {}).get(pin)
-        if not net or _polarity_of(net) != "power":
-            continue
-        if net not in rails:
-            rails.append(net)
-    return rails
+        ptype = types_for_ref.get(pin, "")
+        fn = fns_for_ref.get(pin, "")
+
+        # 1. Type first: power_in on non-ground net
+        if ptype.lower().startswith("power_in"):
+            if _polarity_of(net) != "gnd":
+                if net not in rails:
+                    rails.append(net)
+                identified_by[net] = "type"
+                continue
+
+        # 2. Hint fallback: pinfunction matches hints and net is power
+        if any(h in fn.upper() for h in _PC_POWER_PIN_HINTS):
+            if _polarity_of(net) == "power":
+                if net not in rails:
+                    rails.append(net)
+                if net not in identified_by:
+                    identified_by[net] = "hint"
+
+    return rails, identified_by
 
 
 def _rail_has_decoupling(pin_nets: dict[str, dict[str, str]],
@@ -1046,7 +1086,7 @@ def _check_passive_completeness(rows: list[dict],
     `ics_without_identifiable_rail`, never folded into the green.
     """
     pin_nets = _netlist_pin_nets(netlist_paths)
-    pin_fns = _netlist_pin_functions(netlist_paths)
+    pin_fns, pin_types = _netlist_pin_meta(netlist_paths)
     waivers = {
         "status": "not_run",
         "reason": "passive_waivers.json sidecar (DD-3) is NOT ported to the "
@@ -1076,18 +1116,28 @@ def _check_passive_completeness(rows: list[dict],
     rails_checked = 0
 
     for ref in ics:
-        rails = _ic_power_rails(pin_nets, pin_fns, ref)
+        rails, id_by = _ic_power_rails(pin_nets, pin_fns, ref, pin_types)
         if not rails:
             # No supply pin identifiable on this IC — reported by name, never
             # folded into the green. "I could not look" is not "it is fine".
             ics_no_rail.append(ref)
+            findings.append(RowFinding(
+                board_of.get(ref, ""), ref, "PC-001",
+                f"active IC has NO identifiable power rail in the netlist "
+                f"(supply pins missing, not connected, or not recognized as power rail); "
+                f"decoupling obligation cannot be discharged.",
+            ))
             continue
         rails_checked += len(rails)
         undecoupled = [r for r in rails
                        if not _rail_has_decoupling(pin_nets, net_refs, r)]
-        ics_checked.append({"ref": ref, "rails": rails,
-                            "undecoupled": undecoupled,
-                            "verdict": "gap" if undecoupled else "ok"})
+        ics_checked.append({
+            "ref": ref,
+            "rails": rails,
+            "identified_by": id_by,
+            "undecoupled": undecoupled,
+            "verdict": "gap" if undecoupled else "ok",
+        })
         if not undecoupled:
             continue
         zero_anywhere = len(undecoupled) == len(rails)
@@ -1107,7 +1157,7 @@ def _check_passive_completeness(rows: list[dict],
         # The netlist HAS pinfunction data, yet no active IC exposed a supply
         # pin on a power net. Same discipline as R8: a rule that inspected zero
         # subjects has not run, whatever its loop did.
-        return [], {
+        return findings, {
             "status": "not_run",
             "reason": "the netlist carries pinfunction annotations but NO active "
                       "IC in the BOM exposed a supply pin on a power net, so zero "

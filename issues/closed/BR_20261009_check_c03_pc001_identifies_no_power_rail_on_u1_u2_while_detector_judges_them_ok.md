@@ -2,7 +2,7 @@
 id: BR_20261009_check_c03_pc001_identifies_no_power_rail_on_u1_u2_while_detector_judges_them_ok
 title: Served bodesign_check_c03 PC-001 finds no identifiable power rail on U1/U2 of the S36 board (status not_run) while the public detector judges both ICs decoupled OK — two seams disagree on identical bytes
 date: 2026-10-09
-status: open
+status: closed
 severity: high
 priority: P1
 component: services/mcp/server.py (_h_check_c03 PC-001 port), skills/bodesign/engines/kicad/scripts/validation_detectors.py (PC-001)

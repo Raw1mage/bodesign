@@ -144,3 +144,82 @@ git diff --check
 3. Fabrication/manufacturing readiness approval.
 4. Source code modifications to `validation_detectors.py` or `check_c03.py` (explicitly forbidden by dispatch order: measure + test + document only).
 5. Re-measurement of the historical `aiguard` board (explicitly excluded by dispatch order).
+
+---
+
+## 8. Fix: Served bodesign_check_c03 PC-001 Real Verdict (BR_20261009)
+
+Authority: Dispatch `[BRNS-DISPATCH] br=BR_20261009_check_c03_pc001_identifies_no_power_rail_on_u1_u2_while_detector_judges_them_ok reply-to=ses_04db7a1c5ffelvbxyLP1p6xlRH`.
+
+### 8.1 Root Cause & Diff Summary
+- **Root Cause**: `check_c03.py` `_ic_power_rails` identified supply pins solely via pinfunction matching `_PC_POWER_PIN_HINTS` on nets where `_polarity_of(net) == "power"`. Symbols on KiCad netlists already carry `pintype "power_in"` (e.g. ETA6003 pin 2 "IN" on `VBUS`, Pico_W pin 39 "VSYS" on `SYS`, pin 35 "ADC_VREF" on `+3V3`), and net `SYS` returned `_polarity_of("SYS") = None`. Consequently, supply pins were missed and reported as 0 rails examined (`not_run`).
+- **Diff Summary**:
+  1. `_polarity_of`: Recognise numbered ground tokens (e.g. `gnd2`, `vss1`) as `"gnd"` via `head.startswith(g) and head[len(g):].isdigit()`.
+  2. `_netlist_pin_meta`: Single-pass netlist parser extracting `{ref: {pin: pinfunction}}` and `{ref: {pin: pintype}}` without redundant reading. `_netlist_pin_functions` delegates to it.
+  3. `_ic_power_rails`: Type-first supply pin identification (`power_in` on non-ground net, `_polarity_of(net) != "gnd"`), fallback to hint matching on power nets (`_polarity_of(net) == "power"`). Returns `(rails, identified_by)` tracking `identified_by: type|hint` per rail.
+  4. `_check_passive_completeness`: Exposes `identified_by` in `ics_checked`. Active ICs without identifiable rails (`ics_no_rail`) emit blocking `RowFinding(..., ref, "PC-001", ...)` entries, ensuring `gate=FAIL` and never a silent non-verdict.
+
+### 8.2 Per-IC Rails & Identification Table (S36 btdongle_ms.net)
+
+| Ref | IC Part | Netlist Supply Pins | Rail(s) Identified | identified_by | Decoupling Caps to GND | Verdict |
+|---|---|---|---|---|---|---|
+| **U1** | ETA6003 | Pin 2 (`IN`, `power_in`) | `['VBUS']` | `{'VBUS': 'type'}` | C1, C2 bridge VBUS to GND | **ok** |
+| **U2** | RaspberryPi_Pico_2W | Pin 35 (`ADC_VREF`, `power_in`), Pin 39 (`VSYS`, `power_in`) | `['+3V3', 'SYS']` | `{'+3V3': 'type', 'SYS': 'type'}` | C9, C10, C11 bridge +3V3 to GND; C4–C8 bridge SYS to GND | **ok** |
+
+- `passive_completeness.status`: `"run"`
+- `passive_completeness.reason`: `None`
+- `passive_completeness.rails_checked`: `3`
+- `passive_completeness.ics_without_identifiable_rail`: `[]`
+
+### 8.3 Test Execution Evidence (pycache cleared)
+
+- **BEFORE**:
+```text
+Ran 37 tests in 0.036s
+
+OK
+```
+
+- **AFTER** (4 new unit tests added covering cases a–d):
+```text
+Ran 41 tests in 0.039s
+
+OK
+```
+
+Git whitespace check:
+```bash
+git diff --check
+# rc=0 (clean)
+```
+
+### 8.4 Changed Files and SHA256
+
+```text
+ab167ee212689dec27e63f7439ebb184c5510db28d42f05d144a017f33eb1519  packages/workflow-core/bodesign_workflow_core/check_c03.py
+65dbfd5ce62c078a4f884106d313b5f012cd9911363aff28309adce9ade2c05d  tests/test_check_c03_passive_completeness.py
+```
+
+### 8.5 Served Raw SSE Excerpt (Live UDS `/mcp/`)
+
+Invoked over `/home/pkcs12/projects/bodesign/.run/bodesign.sock` against:
+- BOM: `/work/products/bodesign/outputs/btdongle_ms/c03_engine-v1/bundle/bom/bom_per_ref.csv`
+- Netlist: `/work/experiments/s3-formal/c03_engine-v1/native/root/btdongle_ms.net`
+
+**Before Fix**:
+```json
+"passive_completeness": {
+  "status": "not_run",
+  "reason": "the netlist carries pinfunction annotations but NO active IC in the BOM exposed a supply pin on a power net, so zero rails were examined. A PASS here means nothing was looked at.",
+  "rails_checked": null,
+  "ics_checked": null,
+  "ics_without_identifiable_rail": ["U1", "U2"],
+  "waivers": { ... }
+}
+```
+
+**After Fix (Served Raw Excerpt)**:
+```text
+event: message
+data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"{\n  \"ok\": true,\n  \"result\": {\n    \"schema\": \"bodesign.c03.stage_entry_gate.v1\",\n    \"gate\": \"FAIL\",\n    \"blocking\": [\n      {\n        \"board\": \"\",\n        \"ref\": \"<schema>\",\n        \"code\": \"R3_DRAWABILITY\",\n        \"detail\": \"no symbol-source column found in BOM header (looked for: symbol_source, symbol, sym_source, drawability, deck_status) — cannot assess drawability for any row\"\n      }\n    ],\n    \"warnings\": [],\n    \"bom_rows\": 45,\n    \"active_parts\": 8,\n    \"ssot_checked\": false,\n    \"netlist_crosscheck\": {\n      \"status\": \"run\",\n      \"netlists\": [\n        \"btdongle_ms.net\"\n      ],\n      ...\n    },\n    \"passive_completeness\": {\n      \"status\": \"run\",\n      \"reason\": null,\n      \"ics_checked\": [\n        {\n          \"ref\": \"U1\",\n          \"rails\": [\n            \"VBUS\"\n          ],\n          \"identified_by\": {\n            \"VBUS\": \"type\"\n          },\n          \"undecoupled\": [],\n          \"verdict\": \"ok\"\n        },\n        {\n          \"ref\": \"U2\",\n          \"rails\": [\n            \"+3V3\",\n            \"SYS\"\n          ],\n          \"identified_by\": {\n            \"+3V3\": \"type\",\n            \"SYS\": \"type\"\n          },\n          \"undecoupled\": [],\n          \"verdict\": \"ok\"\n        }\n      ],\n      \"rails_checked\": 3,\n      \"ics_without_identifiable_rail\": [],\n      \"scope\": \"presence of >=1 rail->GND capacitor per identified power rail on U* parts; value, count and placement are NOT examined\",\n      \"waivers\": {\n        \"status\": \"not_run\",\n        \"reason\": \"passive_waivers.json sidecar (DD-3) is NOT ported to the delivery path in this pass — every decoupling gap blocks here and NO waiver can be honoured, however well-provenanced\"\n      }\n    }\n  }\n}"}],"isError":false}}
+```
