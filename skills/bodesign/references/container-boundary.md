@@ -39,10 +39,10 @@ without first confirming `root_visible` is `true`.
 
 ## Decision rule
 
-1. Is the path under one of the mounts above? → pass the host path directly as `folder`.
-2. Otherwise → use the **file model**: upload the tree as a tarball to `POST /files` (or call
-   `bodesign_stage_dir` with an inline `{relpath:{content,encoding}}` map) → you get
-   `{token, doc_dir}`. Then call the tool in ONE of two equivalent ways:
+1. Host paths are never passed as `folder` — the container cannot see them.
+2. Use the **WebDAV workspace**: call `system-manager_webdav_mount(app="bodesign")` → you get
+   `{mount_path, token}`; copy the tree into `mount_path` with ordinary file tools. Then call the
+   tool in ONE of two equivalent ways:
    - **`token` + relative path** (preferred — portable): e.g. `bodesign_c00_emit_prd_docx(token="tok_…", folder=".")`.
      The server resolves every path arg inside the token's tree; `folder="."` is the tree root,
      `folder="C00-PRD"` a subdir. Produced files come back as `/files/{token}/blob/{rel}`.

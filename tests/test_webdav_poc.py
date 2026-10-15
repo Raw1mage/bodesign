@@ -273,6 +273,12 @@ class CacheLifecycleLogicTests(CacheEnvBase):
         self.assertNotIn("webdav_password", r)
         self.assertNotIn("webdav_username", r)
         self.assertIn("/dav/" + r["token"], r["mount_url"])
+        # BR_20261016: mount_url is always absolute (opencode webdav-mount
+        # rejects non-http(s) with dav_url_unknown); the base source is named.
+        self.assertRegex(r["mount_url"], r"^https?://")
+        self.assertIn(r["mount_url_base_source"],
+                      ("BODESIGN_PUBLIC_URL", "BODESIGN_WEBDAV_BASE",
+                       "BODESIGN_HTTP_BASE", "default"))
         # R14.5: explicit per-host provision state on every provision payload
         self.assertEqual(r["host_provision"]["state"], "provisioned")
         self.assertEqual(r["host_provision"]["provider"], "builtin")

@@ -110,20 +110,15 @@ python3 skills/bodesign/scripts/gate.py <verb> --repo <abs專案路徑> [--json 
 誤把已落地的名字當 MCP 工具呼叫，會收到 typed error `TOOL_LANDED`，內附等效的 gate.py 指令。
 
 **Compute plane（容器 token 檔案模型，docxmcp 風格）** — 重工具鏈（pcbnew/kicad-cli/ngspice/
-渲染/3D）留在容器內的 43 個 MCP 工具。bodesign **不內含任何工作資料**：把專案樹以 tarball
-上傳 → 取得 **token**；將 token 傳給任一工具（路徑參數在 token 的 `doc_dir` 內解析）；以 token
-下載產出檔。伺服端工作資料依 TTL 自動垃圾回收；工具也接受一般主機路徑（本機使用）。
-
-```bash
-tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
-     -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
-curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
-```
+渲染/3D）留在容器內的 43 個 MCP 工具。bodesign **不內含任何工作資料**：檔案只走一條路——WebDAV
+工作區。Agent 呼叫 opencode runtime verb `system-manager_webdav_mount(app="bodesign")` 取得
+`mount_path` + `token`；把輸入檔放進 `mount_path`，將 token 傳給任一工具（路徑參數在工作區樹內解析），
+產出檔直接在 `mount_path` 讀回。伺服端工作資料依 TTL 自動垃圾回收；容器看不到主機路徑。
 
 **Working cache（WebDAV，消滅整包進出儀式）** — 需要多檔往返的交付物改用伺服端工作快取：
-`bodesign_cache_provision` 取得 token + mount URL + 專屬 Basic 憑證 → 以 rclone/davfs2 掛載
-`/dav/{token}`（或讓重工具直接寫入快取命名空間）→ `bodesign_cache_export` 匯回主機目標 →
-`bodesign_cache_close`（有未匯出的變更時 dirty-gate 409，除非 force）。每個 cache 依擁有者隔離，
+`bodesign_cache_provision`（由 opencode runtime 呼叫，不由 agent 呼叫）回傳 token + 絕對
+`mount_url`（`…/dav/{token}/`）+ 選用的專屬 Basic 憑證；重工具直接寫入快取命名空間，產出檔在掛載目錄
+直接可見——不需匯出步驟。`bodesign_cache_close` 回收工作區。每個 cache 依擁有者隔離，
 免於 idle 回收（長 safety-net TTL 把關）。
 
 ## Skill 配對

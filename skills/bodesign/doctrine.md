@@ -140,17 +140,13 @@ source); `mcp.json.skillPaths`, `GET /skills` and `bodesign_init` all name it.
   - **truth store** = the client-owned project tree (durable inputs + deliverables);
     landing verbs read/write it directly on the host; the container ingests it
     read-only.
-  - **working cache** = a per-deliverable WebDAV workspace on the server;
-    `bodesign_cache_provision` (idempotent per owner+subject; returns cache token +
-    `/dav/{token}/` mount URL + optional Basic credential) → mount with rclone/davfs2
-    or let heavy tools emit into it → `bodesign_cache_export` back to a host target →
-    `bodesign_cache_close` (dirty-gated: `WORKSPACE_CLOSE_DIRTY` unless exported or
-    `force=true`).
+  - **working cache** = the WebDAV workspace on the server. Agents obtain it with
+    the opencode runtime verb `system-manager_webdav_mount(app="bodesign")` →
+    `mount_path` + `token`; copy inputs into `mount_path`, pass `token` to compute
+    tools, read deliverables directly from `mount_path`. No export step. Do not call
+    `bodesign_cache_provision` or `rclone mount` yourself.
   - **vault** = cross-project component knowledge (server SQLite); `vault_*` tools
     only.
-- **Small one-shot trees use the token file model:** `POST /files` (tarball) or
-  `bodesign_stage_dir` → pass the returned `token` to any tool (path args resolve
-  inside its doc_dir) → `GET /files/{token}/blob/{rel}` to read back.
 - **Runtime is managed ONLY via `./mcpctl.sh`** (docker-compose; per-user project).
   A new tool / prompt / instruction takes effect after a container restart
   (`BODESIGN_DEV=1 ./mcpctl.sh restart` in dev; `rebuild` only when dependencies
@@ -166,19 +162,15 @@ Fleet SSOT: `opencode/specs/mcp-integration-standard` R2.0 (transfer modes) + R1
     / host path). This does NOT decide transport. A file being on gdrive has ZERO
     bearing on whether WebDAV works.
   - **Transfer** — how bytes cross the host↔container boundary. Route by this only.
-- **Transfer is one of two modes:**
-  - **pass-by-value** (DEFAULT, works on every deployment): `bodesign_stage_dir`
-    (inline) AND a WebDAV mount are both this — bytes go over the UDS / WebDAV wire;
-    the container needs to see NO host path.
-  - **pass-by-reference** (special case, saves base64): only
-    `cache_export(target)` and container-namespace paths. The container reads/writes
-    that path itself, so it MUST be inside the container namespace. The deciding
-    question is "is the path in the container namespace", NOT "is the workspace on
-    gdrive".
+- **Transfer has one rail: the WebDAV workspace.** `system-manager_webdav_mount(app="bodesign")`
+  returns `mount_path` + `token`; move files to/from `mount_path` with ordinary file
+  tools (`cp` / `cat` / `sha256sum`). The container never needs to see a host path.
+  Not agent rails: host paths, inline base64 / `bodesign_stage_dir`,
+  `bodesign_cache_export` as an egress step, agent-run `cache_provision` /
+  `rclone mount`, bare `curl --unix-socket` JSON-RPC.
 - **The anti-reflex rule:** a file being on gdrive is NEVER the reason WebDAV is
-  unusable. If WebDAV isn't working the real cause is credential / mount provision
-  not ready — unrelated to gdrive/FUSE. When in doubt, pass-by-value
-  (`bodesign_stage_dir`) always works.
+  unusable. If the mount fails, quote the exact error and report it — do not switch
+  to another rail.
 
 ## 5. Counter-intuitive gotchas
 

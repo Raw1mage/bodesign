@@ -71,13 +71,13 @@ INSTRUCTIONS = (
     "  python3 <bodesign-skill>/scripts/gate.py --list   # enumerate every landing verb\n"
     "Calling a landed name as an MCP tool returns a typed TOOL_LANDED error carrying the equivalent "
     "gate.py command — it is not an unknown tool.\n\n"
-    "3) CACHE LIFECYCLE (batch file exchange for heavy flows): bodesign_cache_provision "
-    "(idempotent per owner+subject; returns cache token + /dav/{token}/ mount URL + a WebDAV Basic "
-    "credential) -> mount with rclone/davfs2 or PUT over WebDAV -> run compute tools against the "
-    "cache tree -> bodesign_cache_export (land the whole tree to a host dir) -> bodesign_cache_close "
-    "(dirty-gated: typed WORKSPACE_CLOSE_DIRTY unless exported or force=true). For small one-shot "
-    "trees the token file model still works: POST /files (tarball) or bodesign_stage_dir -> pass "
-    "`token` to any tool (path args resolve inside its doc_dir) -> GET /files/{token}/blob/{rel}.\n\n"
+    "3) FILE TRANSFER (one rail: the WebDAV workspace): call the opencode runtime verb "
+    "system-manager_webdav_mount(app=\"bodesign\") — it provisions and mounts the repo-level WebDAV "
+    "workspace and returns `mount_path` + `token`. Put inputs into `mount_path` and read deliverables "
+    "back from `mount_path` with ordinary file tools (cp / cat / sha256sum); pass `token` to any compute "
+    "tool (path args resolve inside that workspace tree). Files written by compute tools appear in "
+    "`mount_path` directly — there is no separate export step. Do not run cache_provision / rclone "
+    "yourself, do not inline-stage bytes, and do not pass host paths: the container cannot see them.\n\n"
     "PAIRS WITH the companion `bodesign` skill (the C00-C07 workflow brain + the kicad/kidoc "
     "analysis+doc engines + gate.py): the skill drives these tools to generate, and the verification "
     "tools (bodesign_simulate / analyze_emc / analyze_thermal) call the skill's engines back via "
@@ -1082,8 +1082,12 @@ def _h_cache_provision(a: dict) -> Any:
     # R14.5 (BR_20260706): explicit per-host provision state — additive
     # observability so the caller decides webdav-mount vs stage-inline
     # (R14.7) from an explicit signal, never by implication.
+    # BR_20261016: mount_url MUST be absolute — the opencode webdav-mount
+    # verb rejects a non-http(s) URL with dav_url_unknown.
+    base_url, base_source = _public_base_url()
     out = {"token": meta.token, "subject_id": meta.subject_id, "owner": meta.owner_identity,
-           "mount_url": f"{_base()}/dav/{meta.token}/",
+           "mount_url": f"{base_url}/dav/{meta.token}/",
+           "mount_url_base_source": base_source,
            "soft_cap": _cache_soft_cap_status(store, owner),
            "host_provision": ap.host_provision_state()}
     # R14.6 (BR_20260706): credential issuance over the MCP rail is OPT-IN.
@@ -1644,7 +1648,7 @@ TOOLS: list[dict] = [
 
     # ── Deliverable-cache lifecycle (plan mcp_r13-landing-webdav-cache, DD-5/DD-6) ──
     {"name": "bodesign_cache_provision", "handler": _h_cache_provision,
-     "description": "Provision (find-or-mint, idempotent per owner+subject) a per-deliverable WebDAV working cache. Returns the cache token, the /dav/{token}/ mount URL, and host_provision (explicit per-host provision state — decide webdav-mount vs stage-inline from this field). Set issue_webdav_credential=true to ALSO mint the owner's WebDAV Basic credential: the password is returned plaintext ONCE and ROTATED on every issuance (stored salted-hashed; rotation invalidates the previous password, so don't re-issue under a live mount). Default payload carries NO credential. soft_cap is a WARN-FIRST per-owner usage signal; it never blocks. Mount with rclone/davfs2 (class-2 DAV), let heavy tools read/write the same namespace, then bodesign_cache_export + bodesign_cache_close.",
+     "description": "Provision (find-or-mint, idempotent per owner+subject) a per-deliverable WebDAV working cache. Returns the cache token, the /dav/{token}/ mount URL, and host_provision (explicit per-host provision state — decide webdav-mount vs stage-inline from this field). Set issue_webdav_credential=true to ALSO mint the owner's WebDAV Basic credential: the password is returned plaintext ONCE and ROTATED on every issuance (stored salted-hashed; rotation invalidates the previous password, so don't re-issue under a live mount). Default payload carries NO credential. soft_cap is a WARN-FIRST per-owner usage signal; it never blocks. mount_url is always an absolute http(s) URL (base from BODESIGN_PUBLIC_URL / BODESIGN_WEBDAV_BASE / BODESIGN_HTTP_BASE, else the standard endpoint; mount_url_base_source names which). Agents normally reach this via the opencode runtime verb system-manager_webdav_mount(app=\"bodesign\") and then read/write the mounted directory directly; heavy tools read/write the same namespace.",
      "schema": {"type": "object", "properties": {"owner_identity": _STR, "subject_id": _STR, "issue_webdav_credential": {"type": "boolean", "description": "opt-in: mint+rotate the owner's WebDAV Basic credential and include it in the payload (R14.6)"}},
                 "required": ["owner_identity", "subject_id"]}},
     {"name": "bodesign_cache_export", "handler": _h_cache_export,
@@ -1910,18 +1914,19 @@ def _resolve_token_path(doc_dir: Path, raw: str) -> str:
 # described `folder`. This is injected centrally rather than in 32 literals.
 _FOLDER_DESC = (
     "Project folder. MUST be visible to the bodesign container: a path under a container mount "
-    "(.run / sessions / vault), OR — for a tree that is NOT mounted (a host / Google-Drive / FUSE "
-    "path) — set `token` (from bodesign_stage_dir or POST /files) and give this RELATIVE to that "
-    "token's tree (\".\" = tree root). A raw unmounted host path is INVISIBLE here; readiness then "
+    "(.run / sessions / vault), OR — for any tree living on the caller's side — copy it into the "
+    "WebDAV workspace (system-manager_webdav_mount(app=\"bodesign\") -> mount_path), set `token` to "
+    "that workspace token and give this RELATIVE to the token's tree (\".\" = tree root). A host "
+    "path is INVISIBLE here; readiness then "
     "returns root_visible:false. Do NOT pass a bare token as folder — pass it in the `token` arg."
 )
 _TOKEN_PROP = {
     "type": "string",
     "description": (
-        "Optional file-model token from bodesign_stage_dir / POST /files. When set, every path arg "
-        "(folder, out_dir, …) resolves INSIDE the token's uploaded tree (doc_dir), and produced "
-        "files are returned as /files/{token}/blob/{rel}. Use this for ANY tree not under a "
-        "container mount — it is how you operate on host/Google-Drive trees the container can't see."
+        "Optional WebDAV workspace token (from system-manager_webdav_mount(app=\"bodesign\")). When "
+        "set, every path arg (folder, out_dir, …) resolves INSIDE that workspace tree (doc_dir), and "
+        "produced files land in the same tree, visible directly under the caller's mount_path. Use "
+        "this for ANY tree not under a container mount: copy it into mount_path first."
     ),
 }
 
@@ -2385,8 +2390,8 @@ I18N = {
                          "<b>在 MCP client 註冊</b>（見 <code>mcp.json</code>）：transport <code>streamable-http</code>，url <code>unix://…/bodesign.sock:/mcp/</code>。容器不對外 publish TCP port；遠端存取請在 socket 前面擺 gateway。"),
     "file_body": ("Upload your whole project tree as a tarball → a <b>token</b> whose <code>doc_dir</code> is your tree; pass <code>token</code> to any tool (its path args resolve inside it) and download produced files by token. No host bind mount needed.",
                   "把整個專案樹以 tarball 上傳 → 取得 <b>token</b>（其 <code>doc_dir</code> 即你的樹）；將 <code>token</code> 傳給任何工具（路徑參數在樹內解析），再依 token 下載產物。免主機 bind mount。"),
-    "file_stage": ("Or stage inline with the <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> tool. Tools also accept plain host paths for the local same-host case.",
-                   "或用 <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> 工具以 inline 方式上傳。工具也接受本機路徑（同機 UDS）。"),
+    "file_stage": ("Or stage inline with the <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> tool.",
+                   "或用 <a href=\"{b}/tools/bodesign_stage_dir\"><code>bodesign_stage_dir</code></a> 工具以 inline 方式上傳。"),
     "caveat": ("Reliability is <b>shown, not asserted</b>: bodesign cross-checks against a known-good shipped board (control group) and runs SPICE/EMC. These are pre-silicon risk layers — they do not replace accredited EMC / EVT / DVT at the lab/factory, and no send-to-fab output is emitted without validation + explicit approval.",
                "可靠度是「<b>展示，而非宣稱</b>」：bodesign 以已量產良品（對照組）交叉檢核並執行 SPICE/EMC。這些是矽前風險層，無法取代實驗室／工廠的 EMC／EVT／DVT 認證；未經驗證與明確批准不會輸出送廠檔案。"),
     "skills_intro": ("Install the bodesign lifecycle skill for the C00–C07 workflow; install the EDA companion bundle for verification/source/document engines. These run agent-side (or on the server host via <code>BODESIGN_*_SKILL</code> / <code>~/.claude/skills</code>):",
@@ -2460,6 +2465,25 @@ def _base() -> str:
     """
     import os
     return os.environ.get("BODESIGN_HTTP_BASE", "").rstrip("/")
+
+
+_DEFAULT_PUBLIC_URL = "http://192.168.100.141:8177"
+
+
+def _public_base_url() -> tuple[str, str]:
+    """Absolute http(s) base for client-facing URLs (BR_20261016 ask 4).
+
+    First absolute value among BODESIGN_PUBLIC_URL / BODESIGN_WEBDAV_BASE /
+    BODESIGN_HTTP_BASE wins. Otherwise the standard DockerLab endpoint is used,
+    with a relative BODESIGN_HTTP_BASE prefix (gateway path) appended. The
+    second element names the source so the choice is never silent.
+    """
+    import os
+    for var in ("BODESIGN_PUBLIC_URL", "BODESIGN_WEBDAV_BASE", "BODESIGN_HTTP_BASE"):
+        val = os.environ.get(var, "").strip().rstrip("/")
+        if val.startswith(("http://", "https://")):
+            return val, var
+    return _DEFAULT_PUBLIC_URL + _base(), "default"
 
 
 def _assets_dir() -> Path:

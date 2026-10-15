@@ -280,7 +280,7 @@ The tool surface is split into two planes. Route by plane, not by habit:
 | Tier | What it is | How you touch it |
 |---|---|---|
 | **truth store** | client-owned project tree (durable inputs + deliverables) | landing verbs read/write it directly on the host; the container ingests it read-only |
-| **working cache** | per-deliverable WebDAV workspace (`deliverable-cache` kind) on the server | `bodesign_cache_provision` → mount `/dav/{token}` (rclone/davfs2, per-owner Basic credential) or let heavy tools emit into it → `bodesign_cache_export` back to a host target → `bodesign_cache_close` (dirty-gate: un-exported changes 409 unless forced) |
+| **working cache** | per-deliverable WebDAV workspace (`deliverable-cache` kind) on the server | `system-manager_webdav_mount(app="bodesign")` → `mount_path` + `token`; copy inputs into `mount_path`, pass `token` to compute tools, read deliverables directly from `mount_path` (no export step; never agent-run `cache_provision` / `rclone`) |
 | **vault** | cross-project component knowledge (server SQLite) | `vault_*` tools only |
 
 **Stage → MCP tool family** (use when the MCP is present; otherwise fall back to the manual/KiCad
@@ -429,8 +429,8 @@ subagents into an engine-R&D marathon that shipped nothing. The post-mortem
      handle. The docxmcp facade reads `doc_dir` ONLY; a bare `tok_…` or a relative
      path resolves to `/app` and fails (`DOCUMENT_DOC_DIR_NOT_FOUND` / bare
      `--doc-dir` usage error). Pass the **absolute** container `doc_dir`.
-   - **Transfer axis, not location axis, decides bytes-crossing** (§4): default
-     pass-by-value (`stage_dir` inline OR a WebDAV mount) works on every deployment;
+   - **Transfer axis, not location axis, decides bytes-crossing** (§4): the one
+     transfer rail is the WebDAV workspace from `system-manager_webdav_mount(app="bodesign")`;
      a file sitting on gdrive/`/tmp` has ZERO bearing on whether WebDAV works. Do
      not "fix" a transfer question by moving the file's location.
    - **Scratch-to-tmp for intermediates.** Preview renders / OOXML dumps / figure
@@ -440,9 +440,9 @@ subagents into an engine-R&D marathon that shipped nothing. The post-mortem
    - **Handle handoff is explicit, never re-derived.** A relay hands the LIVE
      `token` + `doc_dir` (+ cache token / `/dav/{token}/` URL if a working cache is
      mounted) to the next relay verbatim; the next relay does NOT re-provision or
-     re-tar to "rediscover" which workspace is live. A cache workspace is closed
-     via `bodesign_cache_close` only after `cache_export` to a host target
-     (dirty-gated) — an un-exported close loses the work.
+     re-tar to "rediscover" which workspace is live. Deliverables are read directly
+     from the mounted directory; copy what you keep out of `mount_path` before the
+     workspace is closed.
 
 Deploy discipline for the engine: there is exactly ONE legitimate in-container
 copy — `/app/packages` (a read-only bind mount of the host working tree in dev

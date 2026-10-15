@@ -88,21 +88,18 @@ gate.py command.
 **Compute plane (container token file model, docxmcp-style)** — heavy-toolchain work (pcbnew /
 kicad-cli / ngspice / rendering / 3D) stays in the container's MCP tools (`/tools` is the
 authoritative roster). bodesign ships **no
-working data**: upload a project tree as a tarball → a **token**; pass the token to any tool (path
-args resolve inside the token's `doc_dir`); download produced files by token. Server-side session
-data is TTL-garbage-collected. Tools also accept plain host paths for local use.
-
-```bash
-tar -C myproject -cf - . | curl --unix-socket .run/bodesign.sock \
-     -X POST -H 'Content-Type: application/x-tar' --data-binary @- http://bd/files
-curl --unix-socket .run/bodesign.sock http://bd/files/{token}/blob/{rel}
-```
+working data**: files move through one rail, the WebDAV workspace. Agents call the opencode
+runtime verb `system-manager_webdav_mount(app="bodesign")`, which returns a `mount_path` + `token`;
+copy inputs into `mount_path`, pass the `token` to any tool (path args resolve inside the
+workspace tree), and read produced files straight back from `mount_path`. Server-side session data
+is TTL-garbage-collected. Host paths are not visible to the container.
 
 **Working cache (WebDAV — kills the pack/unpack ritual)** — deliverables that need many file
-round-trips use a server-side working cache instead: `bodesign_cache_provision` returns a token +
-mount URL + per-owner Basic credential → mount `/dav/{token}` with rclone/davfs2 (or let heavy
-tools emit straight into the cache namespace) → `bodesign_cache_export` back to a host target →
-`bodesign_cache_close` (a dirty-gate 409s on un-exported changes unless forced). Caches are
+round-trips use the server-side working cache behind that mount: `bodesign_cache_provision`
+(called by the opencode runtime, not by agents) returns a token + an absolute `mount_url`
+(`…/dav/{token}/`) + optional per-owner Basic credential; heavy tools emit straight into the cache
+namespace and the files are visible directly in the mounted directory — no export step.
+`bodesign_cache_close` reclaims the workspace. Caches are
 owner-isolated and exempt from idle reaping (a long safety-net TTL backstops them).
 
 ## Skill pairing
