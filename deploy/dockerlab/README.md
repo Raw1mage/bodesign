@@ -5,8 +5,8 @@
 - **Assigned Ingress Port**: `TCP 8177` (allocated via central `port_registry`, project `bodesign-dockerlab`; LAN-plain HTTP, see §3)
 - **Assigned Path**: `/opt/bodesign/`
 - **Application Image**:
-  - Registry URL: `registore.thesmart.cc/bodesign:98dba5e` (`:latest` and `eaf16cc` unchanged)
-  - Image Digest: `sha256:5687001f8537fc1e9cb3961fc99a3880c70e2da07c2e6f2f111001ae82abfe96`
+  - Registry URL: `registore.thesmart.cc/bodesign:f89db55` (`:latest` and `98dba5e` unchanged)
+  - Image Digest: `sha256:9d1923d45ff375ca13781673dfa8a8159688a970e7395837c7146ae00c3a7339`
   - Image Size: `2886613597` bytes (2.89 GB; monolith)
   - Architecture: `linux/amd64`
 - **Component KB Snapshot**:
