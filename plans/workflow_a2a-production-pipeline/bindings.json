@@ -1,0 +1,184 @@
+{
+  "version": "1.0.0",
+  "definition": "PCB hardware design workflow bindings for bodesign A2A production pipeline. Decorates GRAFCET steps 1-6 with roles, activation, capabilities, gates and named constraints.",
+  "bindings": [
+    {
+      "grafcet_step": 1,
+      "idef0_activity": "A1",
+      "task_class": "interaction",
+      "objective": "Elicit electrical and mechanical requirements, ingest 01_refs SSOT, and freeze FaceLayout",
+      "role": "systems-architect",
+      "session_binding": { "title": "Systems Architect：Requirements & SSOT", "reuse": "reuse-first" },
+      "activate": {
+        "skills": ["bodesign-discipline", "bodesign-architect", "bodesign-kb"],
+        "ragbase": [{ "scope": "domain", "query": "PCB hardware requirements minimal spec fields" }]
+      },
+      "question_set": {
+        "answer_schema": {
+          "product_name": "string",
+          "supply_voltage": "string",
+          "current_budget_ma": "number",
+          "form_factor": "string",
+          "key_components": "string[]",
+          "interfaces": "string[]"
+        },
+        "target_artifact": "requirements-spec"
+      },
+      "capabilities": [],
+      "icom_bindings": [
+        { "port": "output", "artifact": "requirements-spec", "label": "frozen requirements spec" },
+        { "port": "output", "artifact": "interface-constraints", "label": "interface & mechanical constraints" }
+      ],
+      "validate": [
+        { "type": "schema", "artifact": "requirements-spec", "required_fields": ["product_name", "supply_voltage", "current_budget_ma", "form_factor", "key_components", "interfaces"] },
+        { "type": "schema", "artifact": "interface-constraints", "required_fields": ["schema", "envelope", "connectors"] }
+      ],
+      "human_gates": [],
+      "stop_conditions": [{ "type": "REQUIREMENTS_INCOMPLETE" }]
+    },
+    {
+      "grafcet_step": 2,
+      "idef0_activity": "A2",
+      "task_class": "engineering",
+      "objective": "Author multi-sheet schematic and motifs, export netlist and initial per-ref BOM",
+      "role": "ee-designer",
+      "session_binding": { "title": "EE Designer：Schematic & Circuit", "reuse": "reuse-first" },
+      "activate": {
+        "skills": ["bodesign-discipline", "bodesign-ee", "bodesign-tools"],
+        "ragbase": [{ "scope": "domain", "query": "schematic motifs and vault component rules" }]
+      },
+      "capabilities": ["bodesign_compose_schematic", "bodesign_export_bom", "bodesign_export_netlist"],
+      "icom_bindings": [
+        { "port": "input", "artifact": "requirements-spec", "label": "frozen requirements spec" },
+        { "port": "control", "artifact": "interface-constraints", "label": "interface & mechanical constraints" },
+        { "port": "output", "artifact": "schematic", "label": "schematic capture" },
+        { "port": "output", "artifact": "netlist", "label": "connectivity netlist" },
+        { "port": "output", "artifact": "bom-per-ref", "label": "preliminary per-ref BOM" },
+        { "port": "output", "artifact": "circuit-spec", "label": "circuit component and net declaration" },
+        { "port": "output", "artifact": "route-stats", "label": "live compose route statistics" }
+      ],
+      "validate": [
+        { "type": "exists", "artifact": "schematic" },
+        { "type": "exists", "artifact": "netlist" },
+        { "type": "exists", "artifact": "bom-per-ref" },
+        { "type": "exists", "artifact": "circuit-spec" },
+        { "type": "exists", "artifact": "route-stats" }
+      ],
+      "human_gates": [],
+      "stop_conditions": [{ "type": "CAPABILITY_UNRESOLVED" }, { "type": "SCHEMATIC_SYNTHESIS_FAIL" }]
+    },
+    {
+      "grafcet_step": 3,
+      "idef0_activity": "A3",
+      "task_class": "engineering",
+      "objective": "Build 3D enclosure solid, place footprints honoring face layout, route board, and pour copper planes",
+      "role": "layout-engineer",
+      "session_binding": { "title": "Layout Specialist：Placement & Routing", "reuse": "reuse-first" },
+      "activate": {
+        "skills": ["bodesign-discipline", "bodesign-layout", "bodesign-tools"],
+        "ragbase": [{ "scope": "domain", "query": "PCB layout routing and enclosure geometry rules" }]
+      },
+      "capabilities": ["bodesign_placement_preflight", "bodesign_autoroute", "bodesign_pour_planes", "c02_export_stl"],
+      "icom_bindings": [
+        { "port": "input", "artifact": "schematic", "label": "schematic capture & footprints" },
+        { "port": "control", "artifact": "netlist", "label": "netlist connectivity SSOT" },
+        { "port": "control", "artifact": "interface-constraints", "label": "frozen face layout & keepouts" },
+        { "port": "output", "artifact": "routed-board", "label": "routed PCB layout" },
+        { "port": "output", "artifact": "enclosure-model", "label": "enclosure 3D solid" }
+      ],
+      "validate": [
+        { "type": "exists", "artifact": "routed-board" },
+        { "type": "exists", "artifact": "enclosure-model" }
+      ],
+      "human_gates": [],
+      "stop_conditions": [{ "type": "CAPABILITY_UNRESOLVED" }, { "type": "ROUTING_UNRESOLVED" }, { "type": "FACE_LAYOUT_CONFLICT" }]
+    },
+    {
+      "grafcet_step": 4,
+      "idef0_activity": "A4",
+      "task_class": "validation",
+      "objective": "Perform adversarial deterministic verification across electrical fidelity, readability, DRC, and SI",
+      "role": "verification-adversary",
+      "session_binding": { "title": "Verification Adversary：Deterministic Gate & SI", "reuse": "reuse-first" },
+      "activate": {
+        "skills": ["bodesign-discipline", "bodesign-verify", "bodesign-tools"],
+        "ragbase": [{ "scope": "domain", "query": "netlist fidelity and layout DRC verification rules" }]
+      },
+      "capabilities": ["bodesign_verify_netlist_fidelity", "bodesign_check_c03", "bodesign_readability_gate", "bodesign_layout_drc_gate"],
+      "icom_bindings": [
+        { "port": "input", "artifact": "schematic", "label": "schematic capture" },
+        { "port": "input", "artifact": "netlist", "label": "netlist connectivity" },
+        { "port": "input", "artifact": "bom-per-ref", "label": "per-ref BOM" },
+        { "port": "input", "artifact": "circuit-spec", "label": "circuit component and net declaration" },
+        { "port": "input", "artifact": "route-stats", "label": "live compose route statistics" },
+        { "port": "input", "artifact": "routed-board", "label": "routed PCB layout" },
+        { "port": "output", "artifact": "verification-ledger", "label": "verification evidence ledger" }
+      ],
+      "validate": [
+        { "type": "tool-verdict", "validator": "bodesign_verify_netlist_fidelity", "rubric_ref": "control.geometry.fab-short-gates" },
+        { "type": "tool-verdict", "validator": "bodesign_check_c03", "rubric_ref": "control.deterministic-validation-before-fab" },
+        { "type": "tool-verdict", "validator": "bodesign_readability_gate", "rubric_ref": "control.placement.post-place-quality-checks" },
+        { "type": "tool-verdict", "validator": "bodesign_layout_drc_gate", "rubric_ref": "control.dfm.jlcpcb-ipc-thresholds" },
+        { "type": "exists", "artifact": "verification-ledger" }
+      ],
+      "human_gates": [],
+      "stop_conditions": [{ "type": "FIDELITY_MISMATCH" }, { "type": "READABILITY_GATE_FAIL" }, { "type": "DRC_VIOLATION" }]
+    },
+    {
+      "grafcet_step": 5,
+      "idef0_activity": "A5",
+      "task_class": "authoring",
+      "objective": "Assemble gerbers, drill files, IPC-D-356A, pick-and-place, and BOM per-ref into the verified fab-ready deliverable",
+      "role": "mfg-release-engineer",
+      "session_binding": { "title": "Release Engineer：Fab Package", "reuse": "reuse-first" },
+      "activate": {
+        "skills": ["bodesign-discipline", "bodesign-release", "bodesign-tools"],
+        "ragbase": [{ "scope": "domain", "query": "manufacturing fab package assembly and release" }]
+      },
+      "capabilities": ["bodesign_emit_fab", "bodesign_render_gerber_preview", "bodesign_render_board_model"],
+      "icom_bindings": [
+        { "port": "input", "artifact": "routed-board", "label": "DRC-clean routed board" },
+        { "port": "input", "artifact": "bom-per-ref", "label": "verified per-ref BOM" },
+        { "port": "control", "artifact": "verification-ledger", "label": "verification evidence ledger" },
+        { "port": "output", "artifact": "manufacturing-package", "label": "manufacturing release package" }
+      ],
+      "validate": [
+        { "type": "schema", "artifact": "manufacturing-package", "required_fields": ["package_path", "sha256", "gerbers_present", "drill_present", "ipc356_present", "bom_present", "cpl_present"] },
+        { "type": "exists", "artifact": "manufacturing-package" }
+      ],
+      "human_gates": [{ "authority": "mfg-release-engineer", "scope": "mfg-release", "decision": "approve manufacturing package for production release" }],
+      "stop_conditions": [{ "type": "PACKAGE_INCOMPLETE" }]
+    },
+    {
+      "grafcet_step": 6,
+      "idef0_activity": "A6",
+      "task_class": "handoff",
+      "objective": "Persist typed blocker (BLK-<nnn>.json); adjudicate resolution and route back to owning activity",
+      "role": "orchestrator",
+      "session_binding": { "title": "Orchestrator：Blocker Hub", "reuse": "reuse-first" },
+      "activate": {
+        "skills": ["plan-builder", "coordinator-discipline"],
+        "ragbase": []
+      },
+      "capabilities": [],
+      "icom_bindings": [
+        { "port": "output", "artifact": "blocker-record", "label": "typed blocker record" }
+      ],
+      "validate": [
+        { "type": "exists", "artifact": "blocker-record" }
+      ],
+      "human_gates": [],
+      "stop_conditions": [
+        { "type": "REQUIREMENTS_INCOMPLETE" },
+        { "type": "CAPABILITY_UNRESOLVED" },
+        { "type": "SCHEMATIC_SYNTHESIS_FAIL" },
+        { "type": "FACE_LAYOUT_CONFLICT" },
+        { "type": "ROUTING_UNRESOLVED" },
+        { "type": "FIDELITY_MISMATCH" },
+        { "type": "READABILITY_GATE_FAIL" },
+        { "type": "DRC_VIOLATION" },
+        { "type": "PACKAGE_INCOMPLETE" }
+      ]
+    }
+  ]
+}
