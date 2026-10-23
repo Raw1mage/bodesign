@@ -1,10 +1,13 @@
 # bodesign — MCP server for AI PCB design (G10c).
 #
-# Bundles the toolchain the bodesign tools genuinely need:
+# Bundles the toolchain the bodesign tools genuinely need (monolith = core + ee + me):
 #   - KiCad 9 (kicad-cli + the pcbnew Python module + symbol/footprint libs)
+#   - ngspice for C06 SPICE circuit simulation
+#   - freerouting (default-jre + xvfb) for C04 DSN/SES autorouting
+#   - atopile 0.12.5 (ato) + Node 22 / elkjs 0.12.0 for C03 declarative & layered schematics
 #   - LibreOffice (soffice) for docx/pdf companions
 #   - pygerber for Gerber raster companions
-#   - OpenSCAD for C02 prototype enclosure STL export
+#   - OpenSCAD (STL) + build123d/OCP (STEP) + pyrender (3D board render) for C02 CAD
 #   - the mcp SDK + starlette/uvicorn for the MCP Streamable-HTTP transport
 #
 # The image is intentionally heavy (~GB) because circuit design needs real EDA
@@ -58,7 +61,54 @@ WORKDIR /app
 COPY services/mcp/requirements.txt /app/services/mcp/requirements.txt
 RUN pip install --no-cache-dir -r /app/services/mcp/requirements.txt
 
+# Monolith parity with Dockerfile.ee + Dockerfile.me:
+# - ngspice (C06 SPICE simulation)
+# - default-jre + xvfb + freerouting.jar (C04 autoroute)
+# - GL/X runtime libs + requirements-me.txt (build123d/OCP STEP export + pyrender 3D board render)
+# - atopile 0.12.5 (C03 declarative DSL)
+# - Node 22.23.3 + elkjs 0.12.0 (C03 layered presentation engine)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        ngspice \
+        default-jre xvfb wget xz-utils \
+        libgl1 libglx-mesa0 libglu1-mesa libx11-6 libxext6 libxrender1 libxcb1 libsm6 libexpat1 \
+ && wget -q -O /opt/freerouting.jar https://github.com/freerouting/freerouting/releases/download/v1.9.0/freerouting-1.9.0.jar \
+ && test -s /opt/freerouting.jar \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY services/mcp/requirements-me.txt /app/services/mcp/requirements-me.txt
+RUN pip install --no-cache-dir -r /app/services/mcp/requirements-me.txt \
+ && kicad-cli version \
+ && ngspice --version \
+ && python3 -c "import build123d; print('build123d', build123d.__version__)"
+
+RUN pip install --no-cache-dir uv \
+ && UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.13 atopile==0.12.5 \
+ && ato --version
+
+ARG NODE_VERSION=22.23.3
+ARG NODE_SHA256_LINUX_X64=df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de
+RUN set -eu; \
+    arch="$(uname -m)"; \
+    case "$arch" in x86_64) node_arch=x64; node_sha="${NODE_SHA256_LINUX_X64}" ;; \
+      *) echo "E_NODE_ARCH_UNSUPPORTED: no pinned Node ${NODE_VERSION} digest for ${arch}" >&2; exit 1 ;; esac; \
+    curl -fsSLo /opt/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz"; \
+    echo "${node_sha}  /opt/node.tar.xz" | sha256sum -c -; \
+    mkdir -p /opt/node && tar -xJf /opt/node.tar.xz -C /opt/node --strip-components=1; \
+    rm /opt/node.tar.xz; \
+    /opt/node/bin/node --version; PATH="/opt/node/bin:$PATH" /opt/node/bin/npm --version
+ENV PATH="/opt/node/bin:$PATH" BODESIGN_NODE_BIN=/opt/node/bin/node
+
+WORKDIR /app/packages/eda-bridge/elk
+COPY packages/eda-bridge/elk/package.json packages/eda-bridge/elk/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+ && test "$(npm ls --all --parseable --omit=dev | grep -c node_modules)" = "1"
+WORKDIR /app
+
 COPY packages /app/packages
+RUN cd /app/packages/eda-bridge/elk \
+ && test "$(npm ls --all --parseable --omit=dev | grep -c node_modules)" = "1" \
+ && node -e "const p=require('elkjs/package.json'); if (p.version!=='0.12.0') throw new Error('elkjs '+p.version); require('elkjs/lib/elk.bundled.js'); console.log('elkjs', p.version, 'ok')"
 COPY services /app/services
 
 # R9 skill-shipping contract, BOTH halves from ONE source (BR_20260730).
@@ -105,7 +155,9 @@ ENV PYTHONPATH="/app/packages/shared:/app/packages/design-ir:/app/packages/compo
     BODESIGN_SESSIONS_ROOT=/var/cache/bodesign/sessions \
     BODESIGN_KICAD_SKILL=/opt/bodesign-engines/bodesign/engines/kicad \
     BODESIGN_SPICE_SKILL=/opt/bodesign-engines/spice \
-    BODESIGN_EMC_SKILL=/opt/bodesign-engines/emc
+    BODESIGN_EMC_SKILL=/opt/bodesign-engines/emc \
+    FREEROUTING_JAR=/opt/freerouting.jar \
+    JAVA_BIN=java
 
 # uid-aligned privilege drop (BR_20260705_work_dir_root_owned): start as root,
 # chown the writable mounts to HOST_UID/HOST_GID, re-exec dropped via setpriv.
