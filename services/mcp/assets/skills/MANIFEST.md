@@ -108,10 +108,23 @@ archive. So from a bare install:
 
 ```
 python3 gate.py --list          # works — static registry, 0 dependencies
-python3 gate.py <verb> ...      # LANDING_PACKAGES_NOT_FOUND unless BODESIGN_SRC is set
+python3 gate.py <verb> ...      # LANDING_PACKAGES_NOT_FOUND unless bootstrapped or BODESIGN_SRC is set
 ```
 
-To actually execute a verb you need a bodesign checkout and both of:
+To execute landing verbs on a **repo-less client host**, run the Companion CLI's
+self-contained bootstrap once — it fetches `/skills/bodesign-runtime.tar.gz` (packed
+live from the server's `packages/*` tree), extracts it into
+`~/.local/share/bodesign/runtime` (a built-in literal candidate), and verifies every
+module via `--doctor`:
+
+```
+python3 ~/.claude/skills/bodesign/scripts/gate.py --bootstrap --server <base>
+python3 ~/.claude/skills/bodesign/scripts/gate.py --doctor
+```
+
+Alternatively, if you already have a local `bodesign` checkout outside the default
+candidates (`~/projects/bodesign` or `~/.local/share/bodesign/runtime`), point
+`BODESIGN_SRC` at it:
 
 ```
 BODESIGN_SRC=/path/to/bodesign-repo \
@@ -119,10 +132,9 @@ BODESIGN_SRC=/path/to/bodesign-repo \
 ```
 
 The error is typed and names the fix (`LANDING_PACKAGES_NOT_FOUND`, with a hint
-carrying `BODESIGN_SRC`), so this fails loudly rather than degrading — but the
-requirement belongs here, at the install step, not only in the error you hit
-afterwards (BR_20260730 round 6, Y1). If you want the verbs without a checkout,
-use the container's compute-plane MCP tools instead; they carry their own packages.
+carrying `--bootstrap` and `BODESIGN_SRC`), so this fails loudly rather than
+degrading — and the requirement belongs here, at the install step, not only in the
+error you hit afterwards (BR_20260730 round 6, Y1).
 
 ## Contents
 

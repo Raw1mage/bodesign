@@ -62,6 +62,16 @@ source); `mcp.json.skillPaths`, `GET /skills` and `bodesign_init` all name it.
     `python3 <bodesign-skill>/scripts/gate.py <verb> --repo /abs/project [--json '{…}' | --arg k=v]`
     (`gate.py --list` enumerates every landing verb). They write straight into the
     project tree — no upload, no container round-trip.
+  - **Zero-repo client bootstrap via Companion CLI (`--bootstrap` / `--doctor`).**
+    If you are a remote MCP client without a local `bodesign` checkout, do NOT clone
+    the repo or install heavy CAD/EDA dependencies. Bootstrap the companion skill +
+    pure-Python landing runtime directly from the MCP server in three commands:
+    1. `curl -fSL <base>/skills/bodesign.zip -o bodesign.zip && unzip -q -o bodesign.zip -d ~/.claude/skills/`
+    2. `python3 ~/.claude/skills/bodesign/scripts/gate.py --bootstrap --server <base>`
+       (fetches `/skills/bodesign-runtime.tar.gz` into `~/.local/share/bodesign/runtime`,
+       which `gate.py` resolves automatically without setting `BODESIGN_SRC`)
+    3. `python3 ~/.claude/skills/bodesign/scripts/gate.py --doctor`
+       (verifies `ready:true` and that all required runtime modules import cleanly)
   - **Compute tools — this MCP server, prefix `bodesign_`.** The heavy toolchain a
     host cannot run: KiCad schematic/layout/fab, verification (simulate / si_check
     / analyze_emc / analyze_thermal), CAD/render (c02 STL/STEP/SKP + enclosure/board

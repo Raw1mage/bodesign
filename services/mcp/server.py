@@ -2103,6 +2103,13 @@ def _build_capabilities() -> dict:
                           "bodesign_cache_close"],
         },
         "companion_skill": COMPANION_SKILL,
+        "companion_cli": {
+            "skill_archive_url": f"/skills/{COMPANION_SKILL}.zip",
+            "runtime_bundle_url": f"/skills/{skill_shipping.RUNTIME_BUNDLE_NAME}",
+            "default_runtime_dir": "~/.local/share/bodesign/runtime",
+            "bootstrap_command": "python3 ~/.claude/skills/bodesign/scripts/gate.py --bootstrap",
+            "doctor_command": "python3 ~/.claude/skills/bodesign/scripts/gate.py --doctor",
+        },
         "conditional_tool_families": [
             # available = this process serves the group itself (monolith / that
             # worker) OR forwards it to a configured worker URL. A monolith with no
@@ -3382,7 +3389,9 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                 bundles.append({"file": f.name, "bytes": f.stat().st_size,
                                 "url": f"/skills/{f.name}"})
         return JSONResponse({"service": SERVER_NAME, "count": len(items), "skills": items,
-                             "bundles": bundles, "manifest": "/skills/MANIFEST.md"})
+                             "bundles": bundles,
+                             "runtime_bundle": f"/skills/{skill_shipping.RUNTIME_BUNDLE_NAME}",
+                             "manifest": "/skills/MANIFEST.md"})
 
     async def invoke(request: Request) -> Response:
         # Internal worker entrypoint: the core forwards a tool call here. Runs the
@@ -3413,7 +3422,8 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
         async def _packed(bare: str, fmt: str) -> Response:
             packer = {"zip": skill_shipping.pack_skill_zip,
                       "targz": skill_shipping.pack_skill_targz,
-                      "engine": skill_shipping.pack_engine_targz}[fmt]
+                      "engine": skill_shipping.pack_engine_targz,
+                      "runtime": skill_shipping.pack_runtime_targz}[fmt]
             media = "application/zip" if fmt == "zip" else "application/gzip"
             suffix = ".zip" if fmt == "zip" else ".tar.gz"
             blob = await asyncio.to_thread(packer, bare)
@@ -3436,6 +3446,8 @@ async def run_http(host: str, port: int, uds: str | None = None) -> None:
                 return await _packed(bare, "zip")
             if action == skill_shipping.SERVE_TARGZ:
                 return await _packed(bare, "targz")
+            if action == skill_shipping.SERVE_RUNTIME_TARGZ:
+                return await _packed(bare, "runtime")
             if action == skill_shipping.SERVE_ENGINE_TARGZ:
                 # BR_20260730 round 4 (D4): a vendored bundle name that DOES
                 # have an in-repo source is projected from it, so the frozen

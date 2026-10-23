@@ -343,5 +343,87 @@ class FidelityExitCodeTests(_ScratchGateCase):
         self.assertEqual(env["error"]["code"], "VERB_ARGS_INVALID")
 
 
+class CompanionCliBootstrapAndDoctorTests(_ScratchGateCase):
+    """Self-contained Companion CLI `--doctor` and `--bootstrap` on a repo-less client."""
+
+    def test_doctor_reports_not_run_with_bootstrap_remedy_when_unresolvable(self):
+        with mock.patch.object(
+            self.module, "_LANDING_SRC_CANDIDATES", ("/nonexistent-a", "/nonexistent-b")
+        ):
+            env, rc = _call(self.module, ["--doctor"])
+        self.assertEqual(rc, 1, env)
+        self.assertFalse(env["ok"])
+        self.assertEqual(env["status"], "not-run")
+        self.assertFalse(env["result"]["ready"])
+        self.assertEqual(env["error"]["code"], "LANDING_PACKAGES_NOT_FOUND")
+        self.assertIn("--bootstrap", env["error"]["remedy"])
+
+    def test_doctor_catches_decoy_packages_dir_with_no_importable_modules(self):
+        """BR_20260903a §7 attack 2: an empty `packages/workflow-core` dir passes
+        `_has_packages`, so `--list` reports `packages_resolved: true`, but
+        `--doctor` must actually import the modules and fail loud (`LANDING_DOCTOR_FAILED`).
+        """
+        decoy = self.work / "decoy-runtime"
+        (decoy / "packages" / "workflow-core").mkdir(parents=True)
+        env, rc = _call(self.module, ["--doctor", "--target", str(decoy)])
+        self.assertEqual(rc, 1, env)
+        self.assertFalse(env["ok"])
+        self.assertEqual(env["status"], "failed")
+        self.assertFalse(env["result"]["ready"])
+        self.assertEqual(env["error"]["code"], "LANDING_DOCTOR_FAILED")
+
+    def test_bootstrap_extracts_runtime_and_enables_verbs_without_repo(self):
+        """End-to-end zero-repo flow: pack `bodesign-runtime.tar.gz`, bootstrap
+        into a scratch runtime dir, verify `--doctor` passes with modules loaded
+        from that scratch dir, and run `c00_scaffold_prd` with `_LANDING_SRC_CANDIDATES`
+        pointing ONLY at the bootstrapped runtime dir (repo completely hidden).
+        """
+        ss_spec = importlib.util.spec_from_file_location(
+            "ss_for_bootstrap_test", REPO_ROOT / "services" / "mcp" / "skill_shipping.py"
+        )
+        ss_mod = importlib.util.module_from_spec(ss_spec)
+        ss_spec.loader.exec_module(ss_mod)
+        bundle_bytes = ss_mod.pack_runtime_targz()
+
+        bundle_file = self.work / "bodesign-runtime.tar.gz"
+        bundle_file.write_bytes(bundle_bytes)
+        runtime_target = self.work / "xdg-runtime"
+        project_dir = self.work / "client-project"
+        project_dir.mkdir(parents=True)
+
+        with mock.patch.object(
+            self.module, "_LANDING_SRC_CANDIDATES", (str(runtime_target),)
+        ):
+            boot_env, boot_rc = _call(
+                self.module,
+                [
+                    "--bootstrap",
+                    "--server",
+                    bundle_file.as_uri(),
+                    "--target",
+                    str(runtime_target),
+                ],
+            )
+            self.assertEqual(boot_rc, 0, boot_env)
+            self.assertTrue(boot_env["ok"])
+            self.assertTrue(boot_env["result"]["auto_resolvable"])
+            self.assertTrue(boot_env["result"]["doctor"]["ready"])
+            wf_file = boot_env["result"]["doctor"]["imports"]["bodesign_workflow_core"]["file"]
+            self.assertTrue(
+                wf_file.startswith(str(runtime_target.resolve())),
+                f"expected module imported from bootstrapped target {runtime_target}, got {wf_file}",
+            )
+
+            # Now run a real verb with NO repo in candidates — only runtime_target!
+            verb_env, verb_rc = _call(
+                self.module, ["c00_scaffold_prd", "--repo", str(project_dir)]
+            )
+            self.assertEqual(verb_rc, 0, verb_env)
+            self.assertTrue(verb_env["ok"])
+            self.assertTrue(
+                (project_dir / "C00-PRD" / "03_output" / "answer_state.json").is_file()
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

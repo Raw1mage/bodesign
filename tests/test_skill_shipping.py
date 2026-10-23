@@ -752,6 +752,42 @@ class ShippedSkillSelfContainmentTests(unittest.TestCase):
         self.assertIn('"--repo <absolute project dir> is required"', source)
 
 
+class RuntimeBundleShippingTests(unittest.TestCase):
+    """Companion CLI runtime bundle (`GET /skills/bodesign-runtime.tar.gz`)."""
+
+    def test_runtime_bundle_request_classifies_to_runtime_packer(self):
+        self.assertEqual(
+            (SS.SERVE_RUNTIME_TARGZ, "bodesign-runtime"),
+            SS.classify_skill_request("bodesign-runtime.tar.gz"),
+        )
+
+    def test_runtime_bundle_packs_live_packages_deterministically(self):
+        first = SS.pack_runtime_targz("bodesign-runtime")
+        second = SS.pack_runtime_targz("bodesign-runtime")
+        self.assertEqual(first, second, "runtime bundle must be byte-reproducible")
+        self.assertEqual(0, int.from_bytes(first[4:8], "little"))
+        with tarfile.open(fileobj=io.BytesIO(first), mode="r:gz") as tf:
+            names = {m.name for m in tf.getmembers() if m.isfile()}
+            for member in tf.getmembers():
+                self.assertFalse(member.issym() or member.islnk(), member.name)
+                self.assertTrue(member.name.startswith("packages/"), member.name)
+                self.assertNotIn("__pycache__", Path(member.name).parts)
+                self.assertNotIn("node_modules", Path(member.name).parts)
+        for required in (
+            "packages/workflow-core/bodesign_workflow_core/__init__.py",
+            "packages/shared/bodesign_shared/__init__.py",
+            "packages/eda-bridge/bodesign_eda_bridge/__init__.py",
+            "packages/reverse-core/bodesign_reverse_core/__init__.py",
+            "packages/component-kb/bodesign_component_kb/__init__.py",
+        ):
+            self.assertIn(required, names)
+
+    def test_runtime_bundle_rejects_unknown_name(self):
+        with self.assertRaises(SS.SkillShippingError) as ctx:
+            SS.pack_runtime_targz("other-runtime")
+        self.assertEqual(404, ctx.exception.status)
+
+
 class ManifestDeclarationTests(unittest.TestCase):
 
     def test_manifest_declaration_matches_the_repo_layout(self):

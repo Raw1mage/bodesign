@@ -268,14 +268,19 @@ def resolve_skill_dir(name: str) -> Path:
 SERVE_ZIP = "zip"
 SERVE_TARGZ = "targz"
 SERVE_ENGINE_TARGZ = "engine_targz"
+SERVE_RUNTIME_TARGZ = "runtime_targz"
 SERVE_STATIC = "static"
+
+RUNTIME_BUNDLE_BARE = "bodesign-runtime"
+RUNTIME_BUNDLE_NAME = f"{RUNTIME_BUNDLE_BARE}.tar.gz"
 
 
 def classify_skill_request(name: str) -> tuple[str, str]:
     """Decide what ``GET /skills/<name>`` serves. Pure; no filesystem writes.
 
     Returns ``(action, bare)`` where action is one of ``SERVE_ZIP`` /
-    ``SERVE_TARGZ`` / ``SERVE_STATIC``. For ``SERVE_STATIC`` the caller hands
+    ``SERVE_TARGZ`` / ``SERVE_ENGINE_TARGZ`` / ``SERVE_RUNTIME_TARGZ`` /
+    ``SERVE_STATIC``. For ``SERVE_STATIC`` the caller hands
     ``name`` to :func:`resolve_static_asset`; the bare value is unused.
 
     BR_20260730 round 3 (D4). Round 2 extracted the static-asset half of the
@@ -299,6 +304,8 @@ def classify_skill_request(name: str) -> tuple[str, str]:
         bare = name[: -len(".tar.gz")]
         if bare in {s["name"] for s in list_shippable_skills()}:
             return SERVE_TARGZ, bare
+        if bare == RUNTIME_BUNDLE_BARE:
+            return SERVE_RUNTIME_TARGZ, bare
         # R9.11 applied to the vendored half (round 4, D4): a bundle name with
         # an in-repo source is projected from that source, so the frozen copy
         # can never be what a client receives. Only a name with genuinely no
@@ -306,6 +313,34 @@ def classify_skill_request(name: str) -> tuple[str, str]:
         if resolve_engine_bundle(bare) is not None:
             return SERVE_ENGINE_TARGZ, bare
     return SERVE_STATIC, name
+
+
+def resolve_runtime_packages() -> Path:
+    """The in-repo ``packages/`` directory for the landing-plane runtime bundle."""
+    pkg_root = (REPO_ROOT / "packages").resolve()
+    if not pkg_root.is_dir() or not (pkg_root / "workflow-core").is_dir():
+        raise SkillShippingError(
+            "RUNTIME_PACKAGES_MISSING",
+            f"packages/workflow-core not found under {pkg_root}",
+            500,
+        )
+    return pkg_root
+
+
+def pack_runtime_targz(bare: str = RUNTIME_BUNDLE_BARE) -> bytes:
+    """Project ``bodesign-runtime.tar.gz`` from the live ``packages/`` tree.
+
+    Archive members live under ``packages/<pkg>/...`` so extracting into
+    ``~/.local/share/bodesign/runtime`` (via ``gate.py --bootstrap``) yields
+    ``<target>/packages/workflow-core/...``, which satisfies ``gate.py``'s
+    ``_has_packages`` predicate while keeping ``bodesign.zip`` a pure 1:1
+    R9.11 projection of ``skills/bodesign/``.
+    """
+    if bare != RUNTIME_BUNDLE_BARE:
+        raise SkillShippingError(
+            "SKILL_NOT_FOUND", f"no runtime bundle for {bare}", 404
+        )
+    return _pack_targz(resolve_runtime_packages(), "packages")
 
 
 def resolve_engine_bundle(bare: str) -> Path | None:

@@ -59,6 +59,13 @@ class TestInitCapabilities(unittest.TestCase):
         self.assertFalse(svc[0]["host_executable"],
                          "container UDS endpoint must be host_executable=False")
         self.assertEqual(caps["companion_skill"], "bodesign")
+        self.assertIn("companion_cli", caps)
+        self.assertEqual(
+            caps["companion_cli"]["runtime_bundle_url"],
+            "/skills/bodesign-runtime.tar.gz",
+        )
+        self.assertIn("--bootstrap", caps["companion_cli"]["bootstrap_command"])
+        self.assertIn("--doctor", caps["companion_cli"]["doctor_command"])
 
     def test_tv17_init_tool_returns_capabilities(self):
         res = SERVER.run_tool("bodesign_init", {})

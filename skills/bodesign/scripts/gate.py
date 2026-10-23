@@ -34,10 +34,23 @@ MIN_PYTHON = (3, 10)
 # ── typed error codes (errors.md, BINDING) ─────────────────────────────
 LANDING_PYTHON_TOO_OLD = "LANDING_PYTHON_TOO_OLD"
 LANDING_PACKAGES_NOT_FOUND = "LANDING_PACKAGES_NOT_FOUND"
+LANDING_DOCTOR_FAILED = "LANDING_DOCTOR_FAILED"
+LANDING_BOOTSTRAP_FAILED = "LANDING_BOOTSTRAP_FAILED"
 VERB_UNKNOWN = "VERB_UNKNOWN"
 VERB_NOT_LANDING = "VERB_NOT_LANDING"
 VERB_ARGS_INVALID = "VERB_ARGS_INVALID"
 VERB_RUNTIME_ERROR = "VERB_RUNTIME_ERROR"
+
+DEFAULT_RUNTIME_DIR = os.path.expanduser("~/.local/share/bodesign/runtime")
+DEFAULT_MCP_URL = "http://192.168.100.141:8177"
+RUNTIME_BUNDLE_REL_URL = "/skills/bodesign-runtime.tar.gz"
+_REQUIRED_RUNTIME_MODULES = (
+    "bodesign_shared",
+    "bodesign_workflow_core",
+    "bodesign_eda_bridge",
+    "bodesign_reverse_core",
+    "bodesign_component_kb",
+)
 
 
 class LandingError(Exception):
@@ -101,10 +114,13 @@ def _check_python():
 # DELIBERATELY LITERAL, and deliberately short. No glob, no filesystem search,
 # no $HOME scan: a search that FINDS something is indistinguishable from a
 # search that found the WRONG something, and this function's answer decides
-# which source tree the whole verb roster executes from. Single entry naming
-# ~/projects/bodesign resolves under each user's $HOME dynamically.
+# which source tree the whole verb roster executes from. Entries naming
+# ~/projects/bodesign (developer checkout) and ~/.local/share/bodesign/runtime
+# (populated by `gate.py --bootstrap` on repo-less client hosts) resolve under
+# each user's $HOME dynamically.
 _LANDING_SRC_CANDIDATES = (
     os.path.expanduser("~/projects/bodesign"),
+    DEFAULT_RUNTIME_DIR,
 )
 
 
@@ -176,8 +192,12 @@ def _resolve_src_origin():
     raise LandingError(
         LANDING_PACKAGES_NOT_FOUND,
         "could not find bodesign packages/ (looked for packages/workflow-core); "
-        "tried: " + ", ".join(tried) + ". Set BODESIGN_SRC=/path/to/bodesign repo.",
-        hint="export BODESIGN_SRC=<bodesign repo root containing packages/*>",
+        "tried: " + ", ".join(tried) + ". Run `python3 gate.py --bootstrap` or "
+        "set BODESIGN_SRC=/path/to/bodesign repo.",
+        hint=(
+            "python3 %s --bootstrap (or export BODESIGN_SRC=<bodesign repo root containing packages/*>)"
+            % os.path.abspath(__file__)
+        ),
     )
 
 
@@ -1221,6 +1241,266 @@ def _list_envelope():
                        "not_landing": dict(sorted(NOT_LANDING.items()))}}
 
 
+def _doctor_envelope(explicit_root=None):
+    """Pre-flight health check for the landing-plane runtime (`gate.py --doctor`).
+
+    Unlike `--list` (which only checks `_has_packages`, a directory test),
+    `--doctor` resolves the runtime root, prepends its `packages/*` directories,
+    imports every required landing-plane module (`_REQUIRED_RUNTIME_MODULES`),
+    and verifies the imported module's `__file__` sits inside the resolved root.
+    """
+    import importlib
+
+    py_ver = "%d.%d.%d" % sys.version_info[:3]
+    try:
+        if explicit_root is not None:
+            real_root = os.path.realpath(explicit_root)
+            if not _has_packages(real_root):
+                raise LandingError(
+                    LANDING_PACKAGES_NOT_FOUND,
+                    f"target directory {real_root!r} has no packages/workflow-core",
+                    hint=f"python3 {os.path.abspath(__file__)} --bootstrap --target {real_root}",
+                )
+            root, origin = real_root, f"explicit:{explicit_root}"
+        else:
+            root, origin = _resolve_src_origin()
+    except LandingError as error:
+        err = {"code": error.code, "message": error.message}
+        if error.hint:
+            err["hint"] = error.hint
+        err["remedy"] = (
+            f"python3 {os.path.abspath(__file__)} --bootstrap "
+            f"(or export BODESIGN_SRC=<bodesign repo root>)"
+        )
+        return {
+            "ok": False,
+            "verb": "--doctor",
+            "status": "not-run",
+            "result": {
+                "ready": False,
+                "python_version": py_ver,
+                "python_ok": True,
+                "packages_resolved": False,
+                "packages_root": None,
+                "packages_origin": None,
+                "imports": {},
+            },
+            "error": err,
+        }
+
+    # Prepend packages/ from `root` and evict any cached `bodesign_*` modules
+    # loaded from a different root so in-process runs test `root` honestly.
+    real_root = os.path.realpath(root)
+    pkg_root = os.path.join(real_root, "packages")
+    target_pkg_dirs = set()
+    if os.path.isdir(pkg_root):
+        for d in os.listdir(pkg_root):
+            full = os.path.realpath(os.path.join(pkg_root, d))
+            if os.path.isdir(full):
+                target_pkg_dirs.add(full)
+    # Remove non-matching `packages/*` entries from sys.path during verification
+    sys.path[:] = [
+        p for p in sys.path
+        if not (os.path.basename(os.path.dirname(os.path.realpath(p))) == "packages"
+                and os.path.realpath(p) not in target_pkg_dirs)
+    ]
+    _prepend_packages(real_root)
+    for mod_key, mod_obj in list(sys.modules.items()):
+        if mod_key.startswith("bodesign_"):
+            mod_file = getattr(mod_obj, "__file__", None)
+            if not mod_file or not os.path.realpath(mod_file).startswith(real_root + os.sep):
+                sys.modules.pop(mod_key, None)
+
+    imports = {}
+    failed_mods = []
+    for mod_name in _REQUIRED_RUNTIME_MODULES:
+        try:
+            mod = importlib.import_module(mod_name)
+            mod_file = os.path.realpath(getattr(mod, "__file__", "") or "")
+            if not mod_file.startswith(real_root + os.sep):
+                raise RuntimeError(
+                    f"module {mod_name} loaded from {mod_file!r}, outside {real_root!r}"
+                )
+            imports[mod_name] = {"ok": True, "file": mod_file}
+        except Exception as exc:
+            imports[mod_name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+            failed_mods.append(mod_name)
+
+    ready = len(failed_mods) == 0
+    envelope = {
+        "ok": ready,
+        "verb": "--doctor",
+        "status": "ok" if ready else "failed",
+        "result": {
+            "ready": ready,
+            "python_version": py_ver,
+            "python_ok": True,
+            "packages_resolved": True,
+            "packages_root": real_root,
+            "packages_origin": origin,
+            "imports": imports,
+            "verb_count": len(VERBS),
+        },
+    }
+    if not ready:
+        envelope["error"] = {
+            "code": LANDING_DOCTOR_FAILED,
+            "message": f"failed to import runtime module(s): {', '.join(failed_mods)}",
+            "hint": f"python3 {os.path.abspath(__file__)} --bootstrap",
+        }
+    return envelope
+
+
+def _normalize_server_base(raw_url):
+    """Strip trailing `/` or `/mcp` so an MCP endpoint URL works directly."""
+    base = (raw_url or "").strip().rstrip("/")
+    if base.endswith("/mcp"):
+        base = base[: -len("/mcp")].rstrip("/")
+    return base
+
+
+def _bootstrap_envelope(server_url=None, target_dir=None):
+    """Download `bodesign-runtime.tar.gz` from the MCP server, extract into
+    `target_dir` (default `~/.local/share/bodesign/runtime`), and run `--doctor`
+    against the extracted runtime.
+    """
+    import io
+    import shutil
+    import tarfile
+    import urllib.request
+
+    raw_server = server_url or os.environ.get("BODESIGN_MCP_URL") or DEFAULT_MCP_URL
+    base = _normalize_server_base(raw_server)
+    if not base:
+        return {
+            "ok": False,
+            "verb": "--bootstrap",
+            "status": "failed",
+            "error": {
+                "code": LANDING_BOOTSTRAP_FAILED,
+                "message": "empty server URL",
+                "hint": "pass --server http://<bodesign-host>:8177 or set BODESIGN_MCP_URL",
+            },
+        }
+    bundle_url = base if base.endswith(".tar.gz") else (base + RUNTIME_BUNDLE_REL_URL)
+    dest_root = os.path.abspath(os.path.expanduser(target_dir or DEFAULT_RUNTIME_DIR))
+
+    try:
+        with urllib.request.urlopen(bundle_url, timeout=30) as resp:
+            raw_bytes = resp.read()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "verb": "--bootstrap",
+            "status": "failed",
+            "error": {
+                "code": LANDING_BOOTSTRAP_FAILED,
+                "message": f"failed to download runtime bundle from {bundle_url}: {type(exc).__name__}: {exc}",
+                "hint": "pass --server http://<bodesign-host>:8177 or set BODESIGN_MCP_URL",
+            },
+        }
+
+    try:
+        tf = tarfile.open(fileobj=io.BytesIO(raw_bytes), mode="r:gz")
+    except Exception as exc:
+        return {
+            "ok": False,
+            "verb": "--bootstrap",
+            "status": "failed",
+            "error": {
+                "code": LANDING_BOOTSTRAP_FAILED,
+                "message": f"downloaded archive from {bundle_url} is not a valid .tar.gz: {exc}",
+            },
+        }
+
+    dest_real = os.path.realpath(dest_root)
+    members_to_extract = []
+    with tf:
+        for member in tf.getmembers():
+            if member.issym() or member.islnk():
+                return {
+                    "ok": False,
+                    "verb": "--bootstrap",
+                    "status": "failed",
+                    "error": {
+                        "code": LANDING_BOOTSTRAP_FAILED,
+                        "message": f"refusing symlink/link member in runtime bundle: {member.name!r}",
+                    },
+                }
+            if not (member.isfile() or member.isdir()):
+                continue
+            norm = os.path.normpath(member.name)
+            if (norm.startswith("/") or norm.startswith("..")
+                    or norm == "." or not norm.startswith("packages" + os.sep)):
+                return {
+                    "ok": False,
+                    "verb": "--bootstrap",
+                    "status": "failed",
+                    "error": {
+                        "code": LANDING_BOOTSTRAP_FAILED,
+                        "message": f"refusing unsafe member path in runtime bundle: {member.name!r}",
+                    },
+                }
+            target_path = os.path.realpath(os.path.join(dest_real, norm))
+            if not target_path.startswith(dest_real + os.sep):
+                return {
+                    "ok": False,
+                    "verb": "--bootstrap",
+                    "status": "failed",
+                    "error": {
+                        "code": LANDING_BOOTSTRAP_FAILED,
+                        "message": f"member escapes target directory: {member.name!r}",
+                    },
+                }
+            if member.isfile():
+                payload = tf.extractfile(member)
+                if payload is None:
+                    continue
+                members_to_extract.append((target_path, payload.read()))
+
+    if not members_to_extract:
+        return {
+            "ok": False,
+            "verb": "--bootstrap",
+            "status": "failed",
+            "error": {
+                "code": LANDING_BOOTSTRAP_FAILED,
+                "message": f"runtime bundle from {bundle_url} contained zero files",
+            },
+        }
+
+    pkg_dest = os.path.join(dest_real, "packages")
+    if os.path.isdir(pkg_dest):
+        shutil.rmtree(pkg_dest)
+    os.makedirs(dest_real, exist_ok=True)
+    for file_path, data in members_to_extract:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as fh:
+            fh.write(data)
+
+    doctor = _doctor_envelope(explicit_root=dest_real)
+    candidate_reals = {os.path.realpath(c) for c in _LANDING_SRC_CANDIDATES}
+    auto_resolvable = dest_real in candidate_reals
+    env = {
+        "ok": doctor["ok"],
+        "verb": "--bootstrap",
+        "status": doctor["status"],
+        "result": {
+            "bundle_url": bundle_url,
+            "target_dir": dest_real,
+            "bytes_downloaded": len(raw_bytes),
+            "files_extracted": len(members_to_extract),
+            "auto_resolvable": auto_resolvable,
+            "doctor": doctor["result"],
+        },
+    }
+    if not auto_resolvable:
+        env["result"]["env_hint"] = f"export BODESIGN_SRC={dest_real}"
+    if "error" in doctor:
+        env["error"] = doctor["error"]
+    return env
+
+
 def _build_args(ns, verb, extra=None):
     """`extra` folds verb-specific convenience flags in BEFORE the required-args
     check. Placing it after would reject a fully-specified command line as
@@ -1337,6 +1617,14 @@ def main(argv=None):
                         help="single k=v argument (value parsed as JSON when possible); repeatable")
     parser.add_argument("--list", dest="list_verbs", action="store_true",
                         help="enumerate landing verbs and exit")
+    parser.add_argument("--doctor", dest="run_doctor", action="store_true",
+                        help="verify landing-plane runtime resolution and module imports")
+    parser.add_argument("--bootstrap", dest="run_bootstrap", action="store_true",
+                        help="download and extract the pure-Python landing runtime from the MCP server")
+    parser.add_argument("--server", dest="server_url", default=None,
+                        help="bodesign MCP server base URL for --bootstrap (default: $BODESIGN_MCP_URL or http://192.168.100.141:8177)")
+    parser.add_argument("--target", dest="bootstrap_target", default=None,
+                        help="target directory for --bootstrap/--doctor (default: ~/.local/share/bodesign/runtime)")
     # verify_netlist_fidelity convenience flags (task 4.8). The verb is fully
     # callable through --json; these exist because its real caller is a shell
     # step comparing files on disk, and forcing that caller to inline a whole
@@ -1354,6 +1642,11 @@ def main(argv=None):
 
     if ns.list_verbs:
         return _emit(_list_envelope())
+    if ns.run_bootstrap:
+        return _emit(_bootstrap_envelope(server_url=ns.server_url,
+                                         target_dir=ns.bootstrap_target))
+    if ns.run_doctor:
+        return _emit(_doctor_envelope(explicit_root=ns.bootstrap_target))
 
     verb = ns.verb or ""
 
