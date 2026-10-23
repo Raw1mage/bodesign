@@ -4,7 +4,7 @@
 
 services:
   bodesign:
-    image: registore.thesmart.cc/bodesign:f89db55
+    image: registore.thesmart.cc/bodesign:62095ba
     container_name: bodesign-app
     restart: unless-stopped
     command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8077"]
@@ -43,7 +43,7 @@ services:
       start_period: 15s
 
   fleet-sidecar:
-    image: registore.thesmart.cc/bodesign:f89db55
+    image: registore.thesmart.cc/bodesign:62095ba
     container_name: bodesign-fleet-sidecar
     restart: unless-stopped
     env_file:

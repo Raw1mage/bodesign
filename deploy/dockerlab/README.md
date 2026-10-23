@@ -5,9 +5,10 @@
 - **Assigned Ingress Port**: `TCP 8177` (allocated via central `port_registry`, project `bodesign-dockerlab`; LAN-plain HTTP, see §3)
 - **Assigned Path**: `/opt/bodesign/`
 - **Application Image**:
-  - Registry URL: `registore.thesmart.cc/bodesign:f89db55` (`:latest` and `98dba5e` unchanged)
-  - Image Digest: `sha256:9d1923d45ff375ca13781673dfa8a8159688a970e7395837c7146ae00c3a7339`
-  - Image Size: `2886613597` bytes (2.89 GB; monolith)
+  - Registry URL: `registore.thesmart.cc/bodesign:62095ba` (`:latest`, `98dba5e`, `f89db55` unchanged)
+  - Image Digest: `sha256:284dd62f0c61042e5f2dd485ecfcacfa64f9e47788d4fd5017f22236389259af`
+  - Image Size: `2886832561` bytes (2.89 GB; monolith)
+  - Rollback: `/opt/bodesign/docker-compose.yml.bak-20261023-f89db55`
   - Architecture: `linux/amd64`
 - **Component KB Snapshot**:
   - Source: `.specbase/ragbase.sqlite` (checkpointed with `PRAGMA wal_checkpoint(TRUNCATE)`)
