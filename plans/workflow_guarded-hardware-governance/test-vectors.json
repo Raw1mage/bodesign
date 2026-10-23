@@ -1,0 +1,57 @@
+[
+  {
+    "id": "TV-GOV-01",
+    "description": "Happy path: End-to-end traversal across 6 A2A roles from S0 through S5 and P0 through P7 with receipts",
+    "input": {
+      "prd": "Type-C Sensor Dongle",
+      "blocks": ["usb_c_sink", "power_ldo_3v3"],
+      "board_outline": "60x30mm rectangle"
+    },
+    "expected": {
+      "s5_receipt": "valid, check_c03 blocking=0, signed by Systems Architect",
+      "p3_receipt": "valid, placement_preflight passed=true, signed by Verification Adversary",
+      "p6_receipt": "valid, layout_drc_gate violations=0, mechanical_axes_only=true",
+      "p7_package": "gerber files generated with sha256 manifest and human sign-off"
+    }
+  },
+  {
+    "id": "TV-GOV-02",
+    "description": "Institutional violation: Authoring agent attempts self-approval without Verification Adversary",
+    "input": {
+      "requesting_role": "layout-specialist",
+      "action": "sign_drc_approval"
+    },
+    "expected": {
+      "error_code": "GOV_SELF_APPROVAL_PROHIBITED",
+      "required_role": "verification-adversary"
+    }
+  },
+  {
+    "id": "TV-GOV-03",
+    "description": "Blocker Hub routing: DRC violation produces structured BLK record and routes repair to layout",
+    "input": {
+      "board_state": "P6_DRC_AND_VISUAL_CLOSED",
+      "intentional_clearance_violation": [124.5, 45.2]
+    },
+    "expected": {
+      "blocker_id": "BLK-001",
+      "owning_activity": "A4",
+      "visual_crops_count": 1,
+      "crop_center": [124.5, 45.2],
+      "route": "A4 -> Activity A5 (Blocker Hub) -> A4 Layout Specialist repair"
+    }
+  },
+  {
+    "id": "TV-GOV-04",
+    "description": "Negative gate: Silkscreen overlapping pad detected and corrected by silk_tidy",
+    "input": {
+      "board_state": "P5_PLANES_AND_TIDY",
+      "overlaps_initial": 4
+    },
+    "expected": {
+      "tidy_action": "silk_tidy",
+      "overlaps_final": 0,
+      "state_advanced": true
+    }
+  }
+]

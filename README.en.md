@@ -29,6 +29,20 @@ remotely, put a gateway in front of that socket to supply authentication; the co
 
 ## Architecture diagrams
 
+### A2A Multi-Agent Hardware Governance Architecture (C03-C04 Roles & Substates)
+
+Full spec and lifecycle design in [`plans/workflow_guarded-hardware-governance/`](plans/workflow_guarded-hardware-governance/README.en.md).
+
+**A2A Governance Regime IDEF0 Functional Decomposition (A0)**
+
+![A2A Governance Regime IDEF0 Functional Decomposition](plans/workflow_guarded-hardware-governance/idef0.A0.svg)
+
+**A2A Governance Regime GRAFCET Execution Flow (S0~S5 ➔ P0~P7 & Blocker Repair Loops)**
+
+![A2A Governance Regime GRAFCET Execution Flow](plans/workflow_guarded-hardware-governance/grafcet.svg)
+
+### System-Wide Product Architecture (PCB AI Viewer)
+
 Full spec in [`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md).
 
 **IDEF0 functional decomposition (A0)**

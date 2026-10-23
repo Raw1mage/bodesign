@@ -722,8 +722,14 @@ def _h_length_match_bus(a: dict) -> Any:
 
 def _h_layout_drc_gate(a: dict) -> Any:
     from bodesign_eda_bridge import drc_gate
-    return drc_gate(a["board_path"], classify_intrinsic=a.get("classify_intrinsic", False),
-                    pad_adjacency=a.get("pad_adjacency"))
+    return drc_gate(
+        a["board_path"],
+        classify_intrinsic=a.get("classify_intrinsic", False),
+        pad_adjacency=a.get("pad_adjacency"),
+        visual_crops_dir=a.get("visual_crops_dir"),
+        crop_window_mm=float(a.get("crop_window_mm", 5.0)),
+        crop_format=str(a.get("crop_format", "png")),
+    )
 
 
 def _h_clean_micro_stubs(a: dict) -> Any:
@@ -1363,8 +1369,8 @@ TOOLS: list[dict] = [
      "description": "Clearance-aware C04 bus length matching: add safe serpentine detours to short routed nets when possible; writes a new .kicad_pcb and returns per-net lengths, skew, budget status, tuned count, and explicit untuned statuses.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "nets": {"type": "array", "items": _STR}, "budget_ps": {"type": "number"}, "ps_per_mm": {"type": "number"}, "report_path": _STR, "clearance_mm": {"type": "number"}}, "required": ["in_path", "out_path", "nets", "budget_ps", "ps_per_mm"]}},
     {"name": "bodesign_layout_drc_gate", "handler": _h_layout_drc_gate,
-     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool. classify_intrinsic (BR_20260708): further split copper clearance violations into package_intrinsic (same-footprint adjacent pads at the land-pattern's own spacing — USB-C/LGA pad gaps that a pad-level clearance override resolves, NOT a routing error) vs true copper. When on, `copper` EXCLUDES intrinsic ones, and package_intrinsic + package_intrinsic_items (evidence: refs + description) are reported; clean still requires zero TRUE copper + unconnected, so intrinsic gaps neither silently pass nor masquerade as routing errors. Gate values are never relaxed to pass — reclassified with evidence, not waved through. consider: bodesign_kb_query.",
-     "schema": {"type": "object", "properties": {"board_path": _STR, "classify_intrinsic": {"type": "boolean", "description": "split package-intrinsic pad-gap clearance from true copper errors"}, "pad_adjacency": {"type": "object", "description": "optional {REF: true} for footprints known to have intrinsic sub-rule pad gaps"}}, "required": ["board_path"]}},
+     "description": "Honest DRC gate: copper + unconnected violation counts (hard fail) reported separately from silkscreen overlaps (cosmetic), plus clean=bool. classify_intrinsic (BR_20260708): further split copper clearance violations into package_intrinsic (same-footprint adjacent pads at the land-pattern's own spacing — USB-C/LGA pad gaps that a pad-level clearance override resolves, NOT a routing error) vs true copper. When on, `copper` EXCLUDES intrinsic ones, and package_intrinsic + package_intrinsic_items (evidence: refs + description) are reported; clean still requires zero TRUE copper + unconnected, so intrinsic gaps neither silently pass nor masquerade as routing errors. Gate values are never relaxed to pass — reclassified with evidence, not waved through. Optional visual_crops_dir generates localized 5mm x 5mm raster (PNG) or vector (SVG) crops centered on DRC violations. consider: bodesign_kb_query.",
+     "schema": {"type": "object", "properties": {"board_path": _STR, "classify_intrinsic": {"type": "boolean", "description": "split package-intrinsic pad-gap clearance from true copper errors"}, "pad_adjacency": {"type": "object", "description": "optional {REF: true} for footprints known to have intrinsic sub-rule pad gaps"}, "visual_crops_dir": {"type": "string", "description": "directory to render localized DRC violation visual crops"}, "crop_window_mm": {"type": "number", "description": "window size in mm for visual crops (default 5.0)"}, "crop_format": {"type": "string", "enum": ["png", "svg"], "description": "image format for visual crops (default png)"}}, "required": ["board_path"]}},
     {"name": "bodesign_clean_micro_stubs", "handler": _h_clean_micro_stubs,
      "description": "C04 finish (BR_20260708): remove track segments shorter than min_len_mm (default 0.02mm) left by freerouting SES import — the <0.01mm fragments that read as false unconnected / false clearance (the MIC1 GND 0.0001mm-track symptom). Strips ONLY true micro-stubs below the threshold; vias/zones untouched. Returns removed count + each removed stub's net+length so the cleanup is auditable and never silently drops real routing.",
      "schema": {"type": "object", "properties": {"in_path": _STR, "out_path": _STR, "min_len_mm": {"type": "number"}}, "required": ["in_path", "out_path"]}},

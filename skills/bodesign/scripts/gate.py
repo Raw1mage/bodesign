@@ -101,11 +101,9 @@ def _check_python():
 # DELIBERATELY LITERAL, and deliberately short. No glob, no filesystem search,
 # no $HOME scan: a search that FINDS something is indistinguishable from a
 # search that found the WRONG something, and this function's answer decides
-# which source tree the whole verb roster executes from. Two entries, both
-# naming the same path in the two spellings a deployment may use -- the second
-# lets a non-pkcs12 uid resolve without editing this file.
+# which source tree the whole verb roster executes from. Single entry naming
+# ~/projects/bodesign resolves under each user's $HOME dynamically.
 _LANDING_SRC_CANDIDATES = (
-    "/home/pkcs12/projects/bodesign",
     os.path.expanduser("~/projects/bodesign"),
 )
 
@@ -449,13 +447,24 @@ VERBS = {
                           "traceability. Every delivered item must trace to an SSOT anchor "
                           "(untraceable=憑空發明); every SSOT-required ref must appear "
                           "(unfulfilled=漏做). Either non-empty → blocking. Deterministic, no LLM."),
+    # A2A hardware governance (plans/workflow_guarded-hardware-governance)
+    "c03_substate_advance": (_WC, "c03_substate_advance", ("current_state", "target_state", "agent_id"),
+                             "A2A C03 EE substate transition (S0-S5) with role verification, unmeasured axis disclosure, and receipt minting."),
+    "c04_substate_advance": (_WC, "c04_substate_advance", ("current_state", "target_state", "agent_id"),
+                             "A2A C04 Layout substate transition (P0-P7) with strict role gating, DRC evidence validation, and receipt minting."),
+    "circuit_block_apply": (_WC, "apply_circuit_block_verb", ("block_name",),
+                            "Apply a verified standard circuit block (e.g. usb_c_sink, power_ldo_3v3, power_dcdc_buck, esd_protection_array) with instance-scoped nets."),
+    "layout_tidy": (_WC, "layout_tidy_verb", ("board_path",),
+                    "Execute deterministic layout tidy pipeline (grid snapping, passive distribution, silkscreen overlap clearance) on .kicad_pcb."),
+    "blocker_record": (_WC, "blocker_record_verb", ("folder", "substate", "reason"),
+                       "Log a structured A2A hardware blocker (BLK-nnn.json) with targeted repair routing and retry tracking."),
 }
 
 # Path-like arg keys resolved against --repo when relative; folder/out_dir
 # default to the repo root itself when the verb requires them but the caller
 # did not pass them (the `gate.py <verb> --repo <abs>` short form).
 PATH_KEYS = ("folder", "out_dir", "corpus_dir", "source_image", "ai_export_path", "vault_root", "svg_path",
-             "bom_csv", "pin_allocation_csv", "manifest_path")
+             "bom_csv", "pin_allocation_csv", "manifest_path", "board_path")
 REPO_DEFAULT_KEYS = ("folder", "out_dir")
 
 
@@ -987,6 +996,145 @@ def _v_qa_svg_text(a):
         "violation_count": len(report.violations),
         "ok": report.ok,
     }
+
+
+def _resolve_c03_state(val: str):
+    from bodesign_workflow_core import C03State
+    val_upper = val.strip().upper()
+    for member in C03State:
+        if member.name == val_upper or member.value == val_upper or member.name.startswith(val_upper + "_"):
+            return member
+    raise LandingError(VERB_ARGS_INVALID, f"Invalid C03State '{val}'. Valid states: {[s.name for s in C03State]}")
+
+
+def _resolve_c04_state(val: str):
+    from bodesign_workflow_core import C04State
+    val_upper = val.strip().upper()
+    for member in C04State:
+        if member.name == val_upper or member.value == val_upper or member.name.startswith(val_upper + "_"):
+            return member
+    raise LandingError(VERB_ARGS_INVALID, f"Invalid C04State '{val}'. Valid states: {[s.name for s in C04State]}")
+
+
+def _resolve_role(val: str):
+    from bodesign_workflow_core import A2ARole
+    if not val:
+        raise LandingError(VERB_ARGS_INVALID, "Role or agent_id is required")
+    val_norm = val.strip().lower().replace("_", "-")
+    for r in A2ARole:
+        if r.value == val_norm or r.name.lower().replace("_", "-") == val_norm:
+            return r
+    raise LandingError(VERB_ARGS_INVALID, f"Invalid role '{val}'. Valid roles: {[r.value for r in A2ARole]}")
+
+
+def _v_c03_substate_advance(a):
+    from bodesign_workflow_core import SubstateMachine
+    current = _resolve_c03_state(a["current_state"])
+    target = _resolve_c03_state(a["target_state"])
+    role = _resolve_role(a.get("role") or a.get("agent_id"))
+    sm = SubstateMachine(c03_current=current)
+    receipt = sm.advance_c03(
+        target_state=target,
+        calling_role=role,
+        artifact_payload=a.get("artifact_payload", b""),
+    )
+    return {"ok": True, "current_state": sm.c03_current.value, "receipt": receipt.to_dict()}
+
+
+def _v_c04_substate_advance(a):
+    from bodesign_workflow_core import SubstateMachine, C03State, GateVerdict
+    current = _resolve_c04_state(a["current_state"])
+    target = _resolve_c04_state(a["target_state"])
+    role = _resolve_role(a.get("role") or a.get("agent_id"))
+    c03_state = _resolve_c03_state(a.get("c03_current", "S5_C03_LOCKED"))
+    sm = SubstateMachine(c03_current=c03_state, c04_current=current)
+
+    gate_verdicts = None
+    if a.get("gate_verdicts"):
+        gate_verdicts = [
+            GateVerdict(
+                gate_name=gv["gate_name"],
+                passed=bool(gv["passed"]),
+                blocking_count=int(gv.get("blocking_count", 0)),
+                details=gv.get("details", {}),
+            )
+            for gv in a["gate_verdicts"]
+        ]
+
+    receipt = sm.advance_c04(
+        target_state=target,
+        calling_role=role,
+        gate_verdicts=gate_verdicts,
+        artifact_payload=a.get("artifact_payload", b""),
+        human_approved=bool(a.get("human_approved", False)),
+    )
+    return {"ok": True, "current_state": sm.c04_current.value, "receipt": receipt.to_dict()}
+
+
+def _v_circuit_block_apply(a):
+    from bodesign_workflow_core import apply_circuit_block, CircuitBlockRegistry
+    reg = CircuitBlockRegistry()
+    raw_name = a["block_name"]
+    # Look up by block_id or name
+    block_id = raw_name
+    found = False
+    for b in reg.list_blocks():
+        if b["block_id"] == raw_name or b["name"] == raw_name:
+            block_id = b["block_id"]
+            found = True
+            break
+    if not found:
+        valid_ids = [b["block_id"] for b in reg.list_blocks()]
+        raise LandingError(VERB_ARGS_INVALID, f"Unknown circuit block '{raw_name}'. Available: {valid_ids}")
+
+    block = reg.get(block_id)
+    # Default port mapping to identity if not provided
+    port_mapping = a.get("port_mapping") or a.get("net_mapping")
+    if port_mapping is None:
+        port_mapping = {p.name: p.name for p in block.external_ports if p.required}
+
+    res = apply_circuit_block(
+        block_id=block_id,
+        port_mapping=port_mapping,
+        instance_id=a.get("instance_id", "inst1"),
+        used_refdes=set(a.get("used_refdes", a.get("used_refdes_prefixes", []))),
+        registry=reg,
+    )
+    return {
+        "ok": True,
+        "block_name": block.name,
+        **res.to_dict(),
+    }
+
+
+def _v_layout_tidy(a):
+    from bodesign_workflow_core import tidy_kicad_pcb
+    res = tidy_kicad_pcb(
+        pcb_path=a["board_path"],
+        out_path=a.get("out_path"),
+        grid_pitch_mm=float(a.get("grid_pitch_mm", 0.5)),
+        distribute_refs=a.get("distribute_refs"),
+        axis=a.get("axis", "X"),
+        pitch_mm=float(a.get("pitch_mm", 1.5)),
+        clearance_mm=float(a.get("clearance_mm", 0.15)),
+    )
+    return {"ok": True, **res}
+
+
+def _v_blocker_record(a):
+    from bodesign_workflow_core import BlockerHub
+    hub = BlockerHub(a.get("folder"))
+    owning_act = a.get("owning_activity") or ("A2" if str(a.get("substate", "")).startswith("S") else "A3")
+    blocker = hub.create_blocker(
+        source_step=a.get("substate") or a.get("source_step", "unknown"),
+        owning_activity=owning_act,
+        error_code=a.get("error_code", "ERR_BLOCKER"),
+        summary=a.get("reason") or a.get("summary", ""),
+        evidence=a.get("evidence") or a.get("details", {}),
+        resume_condition=a.get("resume_condition", "Resolution and verification required"),
+        max_retries=int(a.get("max_retries", 2)),
+    )
+    return {"ok": True, "blocker": blocker.to_dict()}
 
 
 HANDLERS = {}

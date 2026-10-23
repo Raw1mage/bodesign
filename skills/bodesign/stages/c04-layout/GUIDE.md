@@ -366,6 +366,34 @@ The thresholds inside these gate tools are the contract. **Do not pass alternati
 make a board pass.** If a board fails, fix the board (route the floating pads, clear the DRC
 violation, re-pour) or report the warn — never move the line.
 
+## A2A IDEF0 Institutional Governance Regime (P0–P7 Lifecycle & Visual DRC Pipeline)
+
+Under the IDEF0 A2A multi-agent hardware regime (`plans/workflow_guarded-hardware-governance`), C04 physical layout is decomposed into monotonic micro-states with strict role boundaries, automated layout tidy primitives, and visual DRC localization:
+
+### 1. Monotonic Micro-States (P0 -> P7)
+- **`P0_BOARD_BOUNDED`**: Board outline, layer stackup, and keepout boundaries established. Invariant: requires locked upstream C03 schematic receipt (`S5_C03_LOCKED`). Owned by `layout-specialist`.
+- **`P1_TOPOLOGY_PLACED`**: Critical fixed anchors (connectors, major ICs, mounting holes) placed. Owned by `layout-specialist`.
+- **`P2_PERIPHERAL_TIDIED`**: Deterministic placement hygiene applied via `gate.py layout_tidy`:
+  - `grid_snap`: Snaps components and vias to user-specified grid (e.g. 0.5mm / 0.1mm).
+  - `distribute_passives`: Uniform linear alignment of decoupling capacitors and termination arrays.
+  - `silk_tidy`: Detection and automated clearance of silkscreen text overlapping component solder pads. Owned by `layout-specialist`.
+- **`P3_PREFLIGHT_PASSED`**: Preflight placement and courtyard check passed. **Zero Self-Approval applies**: owned strictly by `verification-adversary`.
+- **`P4_ROUTED`**: Trace routing completed (Freerouting / pcbnew). Owned by `layout-specialist`.
+- **`P5_PLANES_AND_TIDY`**: Copper pours, thermal reliefs, and micro-stub cleanup (`clean_micro_stubs`) completed. Owned by `layout-specialist`.
+- **`P6_DRC_AND_VISUAL_CLOSED`**: DRC verification passed. Generates localized visual DRC crops for multimodal confirmation. **Zero Self-Approval applies**: owned strictly by `verification-adversary`.
+- **`P7_FAB_RELEASED`**: Final fabrication release. Owned by `release-engineer`. Invariant (天條 3): Requires explicit user approval (`human_approved=true`), else advance is blocked.
+
+### 2. Visual DRC Cropping Pipeline
+When `bodesign_layout_drc_gate` detects violations, pass `visual_crops_dir`:
+- Parses 2D coordinate centers from KiCad DRC JSON reports.
+- Generates 5mm x 5mm localized crops (100px/mm PNG raster or standalone SVG) featuring red target bounding boxes, scale bars, and coordinates.
+- Visual crops provide deterministic ground-truth imagery for multimodal agent review and closed-loop repair.
+
+### 3. Blocker Routing & Zero Self-Approval
+- If `verification-adversary` reports a clearance or courtyard violation at P3 or P6, it logs a blocker (`BLK-nnn.json`) via `gate.py blocker_record`.
+- The blocker automatically routes back to `layout-specialist` for repair (maximum 2 retries before escalating to `orchestrator`).
+- `layout-specialist` is strictly prohibited from signing off on P3 or P6 receipts.
+
 ## Honesty notes for this stage
 
 Applies `../../references/honesty-model.md`:

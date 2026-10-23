@@ -29,6 +29,15 @@ _語言：**繁體中文** · [English](./README.en.md)_
 
 完整紀錄見 [`CHANGELOG.md`](CHANGELOG.md)。近期重點：
 
+- **未發布（2026-10-23）** — **A2A 多 Agent 責任分層硬體設計治理體系（C03-C04）**：
+  參考 `zhoushoujianwork/easyeda-agent` 治理機制，重構為嚴格 IDEF0 規範下的多 Agent 協作制度（規格：[`plans/workflow_guarded-hardware-governance/`](plans/workflow_guarded-hardware-governance/README.md)）。
+  1. **微狀態機與零自我審批（Zero Self-Approval）**：實作 C03（`S0~S5`）與 C04（`P0~P7`）微狀態機，強制作者（EE/Layout）不可兼審查員；
+  2. **密碼學憑證（Receipt）**：每次推進強制顯式列出 `not_checked` 未測軸向，P7 送廠前強制人類授權（天條 3）；
+  3. **阻礙中樞（Blocker Hub）**：結構化異常派工（`BLK-nnn`）與重試邊界防止循環；
+  4. **認證標準電路積木庫**：提供 `usb_c_sink`、`power_ldo_3v3`、`power_dcdc_buck`（含 $C_{FF}$）、`esd_protection_array`，自動處理引腳與佈局約束；
+  5. **確定性佈局整潔原語**：吸附網格（`grid_snap`）、線性元件對齊（`distribute_passives`）、焊盤絲印避讓（`silk_tidy`）；
+  6. **視覺化 DRC 局部裁切**：自動生成 5mm×5mm 高對比度裁切（100px/mm PNG / SVG），為多模態 Review 提供物理真相；
+  7. **Landing Verbs 整合**：新增 `c03_substate_advance`、`c04_substate_advance`、`circuit_block_apply`、`layout_tidy`、`blocker_record` 5 組宿主原生動詞。
 - **未發布（2026-07-06）** — **BR_20260706 五筆 BR 閉環（schematic 交付保真閘群）**：spec
   `eda_schematic-draftsman-quality` extend DD-8..DD-11 至 living——`compose_schematic`
   新增 `fidelity`（net 劃分保真閘，抓 ERC 盲區的共線熔合短路）與 `density_budget`
@@ -55,6 +64,20 @@ _語言：**繁體中文** · [English](./README.en.md)_
 - **0.2.0（2026-07-02）** — R13 compute/landing split（52 verbs 落地）+ WebDAV working cache。
 
 ## 架構圖
+
+### A2A 多 Agent 硬體治理工作流架構（C03-C04 責任分層與微狀態）
+
+完整規格與生命週期設計見 [`plans/workflow_guarded-hardware-governance/`](plans/workflow_guarded-hardware-governance/README.md)。
+
+**A2A 治理體系 IDEF0 功能分解（A0）**
+
+![A2A 治理體系 IDEF0 功能分解](plans/workflow_guarded-hardware-governance/idef0.A0.svg)
+
+**A2A 治理體系 GRAFCET 執行流程（S0~S5 ➔ P0~P7 & Blocker 派工修復迴圈）**
+
+![A2A 治理體系 GRAFCET 執行流程](plans/workflow_guarded-hardware-governance/grafcet.svg)
+
+### 系統全域產品架構（PCB AI Viewer）
 
 完整規格見 [`specs/product/pcb_ai_viewer/`](specs/product/pcb_ai_viewer/README.md)。
 

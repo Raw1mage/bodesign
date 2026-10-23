@@ -594,6 +594,29 @@ Still `draft` if any `high` finding is unexplained, datasheets are unsynced with
 anyway, or a connectivity gap is silently back-filled. SPICE/EMC/thermal *verdicts* are **not**
 a C03 gate — they are `not-run` here and owned by C06.
 
+## A2A IDEF0 Institutional Governance Regime (S0–S5 Lifecycle & Blocker Routing)
+
+Under the IDEF0 A2A multi-agent hardware regime (`plans/workflow_guarded-hardware-governance`), C03 execution is divided into monotonic micro-states governed by role-separated state receipts:
+
+### 1. Monotonic Micro-States (S0 -> S5)
+- **`S0_SPEC_FROZEN`**: Requirements & inputs frozen. Owned by `systems-architect`.
+- **`S1_PARTS_RESOLVED`**: BOM components selected with verified datasheet citations (天條 4). Owned by `ee-designer`.
+- **`S2_BLOCKS_EXPANDED`**: Certified circuit blocks applied via `circuit_block_apply` (`usb_c_sink`, `power_ldo_3v3`, `power_dcdc_buck`, `esd_protection_array`). Generates instance-scoped nets and spatial layout constraints. Owned by `ee-designer`.
+- **`S3_NETS_WIRED`**: Complete schematic capture and netlist wiring. Owned by `ee-designer`.
+- **`S4_CHECK_C03_VERIFIED`**: Stage-entry and fidelity gates verified. **Zero Self-Approval applies**: owned strictly by `verification-adversary`. The authoring `ee-designer` is strictly forbidden from advancing this state.
+- **`S5_C03_LOCKED`**: Netlist frozen (`C03_Netlist_Freeze.json`) and handed off to C04. Owned by `release-engineer`. Downstream C04 layout execution is blocked unless S5 receipt is minted.
+
+### 2. State Receipts & Unmeasured Axis Disclosure
+Every substate advance mintage produces a cryptographic token and explicitly discloses what was **not** measured:
+- Mandatory unmeasured axes: `functional_circuit_simulation`, `high_speed_si_pi_simulation`, `thermal_fem_analysis`, `rf_tuning_and_emc`, `human_visual_inspection`.
+- Receipt tokens are stored in the orchestration spine and prevent backward or skipped transitions.
+
+### 3. Blocker Hub Exception Protocol (BLK-nnn)
+When an automated gate fails or an unresolvable constraint conflict arises:
+- Call `gate.py blocker_record` to create a structured `BLK-nnn.json` record.
+- Repair routing: exceptions automatically route to the responsible activity role (e.g. `ee-designer` for A2).
+- Retry bounding: maximum 2 automated retries before escalating to the `orchestrator` to prevent agent looping.
+
 ## Honesty notes for this stage
 
 Anchored in `../../references/honesty-model.md`:

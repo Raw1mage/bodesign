@@ -217,3 +217,33 @@ bodesign exposes a standardized retrospective reporting and feedback collection 
    - Mother Gateway (`opencode-gateway.c`) verifies node identity and proxies to Mother Daemon (`routes/fleet.ts`).
    - Daemon validates HMAC, timestamp freshness (±300s), and stores events into `/home/pkcs12/projects/bodesign/.specbase/fleet-events.sqlite`.
    - Notifications (`[FLEET-EVENT receiptId=...]`) wake bodesign duty officer (`★main`), who triages via `fleet_read_event` and `fleet_triage_event` to file BRs or dispatch fixes.
+
+## A2A Guarded Hardware Design Governance Regime (C03-C04) (plan `workflow_guarded-hardware-governance`, 2026-10-23)
+
+bodesign incorporates an IDEF0 A2A (Agent-to-Agent) institutional governance regime for C03 (Schematic) and C04 (Layout) hardware workflows, inspired by the cognitive exoskeleton principles of `zhoushoujianwork/easyeda-agent`. Contract SSOT: `plans/workflow_guarded-hardware-governance/`.
+
+1. **Monotonic Substate Lifecycle & State Receipts (DD-A2A-1, DD-A2A-4)**:
+   - C03 Schematic: `S0_SPEC_FROZEN` → `S1_PARTS_RESOLVED` → `S2_BLOCKS_EXPANDED` → `S3_NETS_WIRED` → `S4_CHECK_C03_VERIFIED` → `S5_C03_LOCKED`.
+   - C04 Physical Layout: `P0_BOARD_BOUNDED` → `P1_TOPOLOGY_PLACED` → `P2_PERIPHERAL_TIDIED` → `P3_PREFLIGHT_PASSED` → `P4_ROUTED` → `P5_PLANES_AND_TIDY` → `P6_DRC_AND_VISUAL_CLOSED` → `P7_FAB_RELEASED`.
+   - Substate transitions emit cryptographic state receipts with SHA-256 digests and mandatory disclosure of unmeasured verification axes (`not_checked`: simulation, SI/PI, thermal, EMC, visual review).
+   - **Zero Self-Approval**: Authoring roles (`ee-designer`, `layout-specialist`) are strictly prohibited from approving verification gates (`S4`, `P3`, `P6`), which are exclusively owned by `verification-adversary`.
+   - **Upstream Control Invariant**: Layout entry (`P0`) requires locked C03 receipt (`S5`). Final release (`P7`) strictly requires explicit human approval token (`human_approved=true`, 天條 3).
+
+2. **Verified Standard Circuit Blocks (`circuit_blocks/`)**:
+   - Replaces manual low-level pin wiring with certified reusable functional blocks: `usb_c_sink`, `power_ldo_3v3`, `power_dcdc_buck` (with feed-forward compensation $C_{FF}$), `esd_protection_array`.
+   - Automatic prefix-aware RefDes allocation, instance-scoped net isolation (`NET_<inst>_<pin>`), and spatial layout constraint generation.
+
+3. **Deterministic Layout Tidy Primitives (`tidy/`)**:
+   - `grid_snap`: Snaps component centers and vias to user-specified grid coordinates.
+   - `distribute_passives`: Uniform linear spacing along X/Y axes with secondary-axis alignment.
+   - `silk_tidy`: Detects text bounding-box intersections with solder pads and performs deterministic outward displacement.
+   - Direct S-expression modification adapter for `.kicad_pcb` files.
+
+4. **Visual DRC Cropping Pipeline (`drc_crop.py`)**:
+   - Extracts 2D coordinate centers from KiCad DRC JSON reports.
+   - Renders 5mm × 5mm localized diagnostic visual crops (100px/mm high-contrast PNG or vector SVG) with red target bounding boxes, center crosshairs, and scale bars.
+   - Injected into `bodesign_layout_drc_gate` via `visual_crops_dir` parameter.
+
+5. **Blocker Hub & Repair Dispatch (`blocker_hub.py`) (DD-A2A-3)**:
+   - Centralizes gate failure and constraint conflict management as structured `BLK-nnn.json` records.
+   - Directed repair dispatch back to the responsible A2A role with retry counting (default max 2 retries before escalating to `orchestrator`).

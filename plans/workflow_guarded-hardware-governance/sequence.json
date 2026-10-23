@@ -1,0 +1,119 @@
+[
+  {
+    "title": "Governed Hardware Design Micro-State Sequence (C03-C04)",
+    "participants": [
+      "Agent",
+      "GovernanceEngine",
+      "CircuitBlockDB",
+      "DeterministicGates",
+      "VisualCropper"
+    ],
+    "messages": [
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "AdvanceState(S0 -> S1, parts_list)"
+      },
+      {
+        "from": "GovernanceEngine",
+        "to": "Agent",
+        "label": "StateConfirmed(S1_PARTS_RESOLVED)"
+      },
+      {
+        "from": "Agent",
+        "to": "CircuitBlockDB",
+        "label": "ApplyBlock(usb_c_sink, port=J1)"
+      },
+      {
+        "from": "CircuitBlockDB",
+        "to": "Agent",
+        "label": "BlockExpanded(schematic_nodes, layout_constraints)"
+      },
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "AdvanceState(S2 -> S3, wired_netlist)"
+      },
+      {
+        "from": "GovernanceEngine",
+        "to": "DeterministicGates",
+        "label": "ExecuteGate(check_c03, R1-R8)"
+      },
+      {
+        "from": "DeterministicGates",
+        "to": "GovernanceEngine",
+        "label": "GateVerdict(PASS, 0 blocking, signed_digest)"
+      },
+      {
+        "from": "GovernanceEngine",
+        "to": "Agent",
+        "label": "AdvanceState(S4 -> S5_C03_LOCKED, receipt_token)"
+      },
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "AdvanceState(P0 -> P1, placement_candidates)"
+      },
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "InvokeTidy(grid_snap, distribute_passives)"
+      },
+      {
+        "from": "GovernanceEngine",
+        "to": "Agent",
+        "label": "TidyComplete(P2_PERIPHERAL_TIDIED)"
+      },
+      {
+        "from": "Agent",
+        "to": "DeterministicGates",
+        "label": "ExecuteGate(placement_preflight)"
+      },
+      {
+        "from": "DeterministicGates",
+        "to": "GovernanceEngine",
+        "label": "GateVerdict(PASS, density_ok, P3_PREFLIGHT_PASSED)"
+      },
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "ExecuteRoutingAndPourPlanes(P4 -> P5)"
+      },
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "InvokeTidy(silk_tidy)"
+      },
+      {
+        "from": "GovernanceEngine",
+        "to": "Agent",
+        "label": "SilkClearanceConfirmed(0 pad overlaps)"
+      },
+      {
+        "from": "Agent",
+        "to": "DeterministicGates",
+        "label": "ExecuteGate(layout_drc_gate)"
+      },
+      {
+        "from": "DeterministicGates",
+        "to": "VisualCropper",
+        "label": "IfViolationsExist(generate_crops, coords)"
+      },
+      {
+        "from": "VisualCropper",
+        "to": "Agent",
+        "label": "GateVerdict(FAILED, visual_crops_attached)"
+      },
+      {
+        "from": "Agent",
+        "to": "GovernanceEngine",
+        "label": "RepairAndRecheck(P6_DRC_AND_VISUAL_CLOSED)"
+      },
+      {
+        "from": "GovernanceEngine",
+        "to": "Agent",
+        "label": "ReleaseConfirmed(P7_FAB_RELEASED)"
+      }
+    ]
+  }
+]

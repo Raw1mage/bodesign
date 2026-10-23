@@ -1392,7 +1392,10 @@ def classify_clearance_violation(v: dict, *, pad_adjacency: dict | None = None,
 
 
 def drc_gate(board_path: str, *, classify_intrinsic: bool = False,
-             pad_adjacency: dict | None = None) -> dict:
+             pad_adjacency: dict | None = None,
+             visual_crops_dir: str | None = None,
+             crop_window_mm: float = 5.0,
+             crop_format: str = "png") -> dict:
     """Run DRC and split copper/unconnected (hard) from silk (cosmetic).
 
     ``classify_intrinsic`` (BR_20260708): further split copper clearance violations into
@@ -1408,7 +1411,9 @@ def drc_gate(board_path: str, *, classify_intrinsic: bool = False,
         rep = f.name
     subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rep, board_path],
                    capture_output=True)
-    d = json.load(open(rep)); os.unlink(rep)
+    with open(rep, "r", encoding="utf-8") as rf:
+        d = json.load(rf)
+    os.unlink(rep)
     v = d.get("violations", [])
     silk = sum(1 for x in v if "silk" in (x.get("type") or ""))
     unc = len(d.get("unconnected_items", []))
@@ -1426,6 +1431,15 @@ def drc_gate(board_path: str, *, classify_intrinsic: bool = False,
         out.update({"copper": true_copper, "package_intrinsic": len(intrinsic),
                     "package_intrinsic_items": intrinsic,
                     "clean": true_copper == 0 and unc == 0})
+    if visual_crops_dir:
+        from bodesign_workflow_core.drc_crop import generate_drc_visual_crops
+        crops = generate_drc_visual_crops(
+            violations=v,
+            output_dir=visual_crops_dir,
+            window_mm=crop_window_mm,
+            preferred_format=crop_format,
+        )
+        out["visual_crops"] = [c.to_dict() for c in crops]
     return out
 
 

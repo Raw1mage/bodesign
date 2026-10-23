@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "definition": "Artifact manifest for governed hardware design workflow under IDEF0 A2A institutional regime (C03-C04)",
+  "artifacts": [
+    {
+      "id": "c03-receipt",
+      "class": "working",
+      "path": "eda/c03_lock_receipt.json",
+      "producer_step": "3",
+      "schema_ref": "plans/workflow_guarded-hardware-governance/data-schema.json#/definitions/state_receipt",
+      "evidence_refs": ["eda/schematic.kicad_sch", "eda/netlist.net", "eda/bom_per_ref.csv"]
+    },
+    {
+      "id": "p3-receipt",
+      "class": "working",
+      "path": "eda/p3_preflight_receipt.json",
+      "producer_step": "5",
+      "schema_ref": "plans/workflow_guarded-hardware-governance/data-schema.json#/definitions/state_receipt",
+      "evidence_refs": ["eda/board.kicad_pcb"]
+    },
+    {
+      "id": "p6-drc-crops",
+      "class": "working",
+      "path": "eda/drc_crops/manifest.json",
+      "producer_step": "7",
+      "schema_ref": "plans/workflow_guarded-hardware-governance/data-schema.json#/definitions/visual_drc_crop",
+      "evidence_refs": ["eda/drc_report.rpt"]
+    },
+    {
+      "id": "blocker-record",
+      "class": "working",
+      "path": "eda/blockers/BLK-001.json",
+      "producer_step": "9",
+      "schema_ref": "plans/workflow_guarded-hardware-governance/data-schema.json#/definitions/blocker_record",
+      "evidence_refs": ["eda/drc_report.rpt"]
+    },
+    {
+      "id": "fab-package",
+      "class": "deliverable",
+      "path": "fab/fab_package.zip",
+      "producer_step": "8",
+      "schema_ref": "plans/workflow_guarded-hardware-governance/data-schema.json#/definitions/state_receipt",
+      "evidence_refs": ["eda/board.kicad_pcb", "eda/drc_report.rpt"]
+    }
+  ],
+  "approvals": []
+}

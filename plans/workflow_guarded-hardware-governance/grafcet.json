@@ -1,0 +1,122 @@
+[
+  {
+    "StepNumber": 0,
+    "ModuleRef": "A1",
+    "StepType": "initial",
+    "StepAction": "Receive PRD & interface specs; freeze S0_SPEC_FROZEN state",
+    "LinkInputType": [],
+    "LinkInputNumber": [],
+    "LinkOutputNumber": [1],
+    "LinkOutputType": "track",
+    "Condition": ["S0 frozen"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 1,
+    "ModuleRef": "A1",
+    "StepType": "normal",
+    "StepAction": "Resolve components from Component KB (S1) and expand verified circuit blocks (S2)",
+    "LinkInputType": ["track", "convergence_or"],
+    "LinkInputNumber": [0, 9],
+    "LinkOutputNumber": [2, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["Parts and blocks expanded cleanly", "Unresolved parts or block parameter errors"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 2,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Wire functional nets (S3) and execute check_c03 R1-R8 gate (S4)",
+    "LinkInputType": ["track", "convergence_or"],
+    "LinkInputNumber": [1, 9],
+    "LinkOutputNumber": [3, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["check_c03 R1-R8 pass with 0 blocking", "BOM conflict, pin polarity error or missing mandated passive"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 3,
+    "ModuleRef": "A2",
+    "StepType": "normal",
+    "StepAction": "Mint cryptographic C03 receipt and lock schematic (S5_C03_LOCKED)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [2],
+    "LinkOutputNumber": [4],
+    "LinkOutputType": "track",
+    "Condition": ["Receipt signed"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 4,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Import C02 board outline (P0), place core topology (P1), and snap/align passives (P2)",
+    "LinkInputType": ["track", "convergence_or"],
+    "LinkInputNumber": [3, 9],
+    "LinkOutputNumber": [5, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["Topology and passives tidied", "Courtyard overlap or keepout violation"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 5,
+    "ModuleRef": "A3",
+    "StepType": "normal",
+    "StepAction": "Execute placement_preflight and c04_placement_geometry_gate (P3)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [4],
+    "LinkOutputNumber": [6, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["Preflight passed with density/clearance green", "Preflight failure: utilization > 1.0 or clearance breach"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 6,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Execute routing (P4), pour copper planes, and run silk_tidy to clear pad overlaps (P5)",
+    "LinkInputType": ["track", "convergence_or"],
+    "LinkInputNumber": [5, 9],
+    "LinkOutputNumber": [7, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["Routing 100% complete and planes poured", "Unrouted nets or micro-stubs detected"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 7,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Execute layout_drc_gate and emit visual DRC crops for visual verification (P6)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [6],
+    "LinkOutputNumber": [8, 9],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["DRC 0 violations and visual closure verified", "DRC violation detected (visual crops generated)"],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 8,
+    "ModuleRef": "A4",
+    "StepType": "normal",
+    "StepAction": "Release fabrication package: Gerbers, drill manifests, and IPC-D-356 (P7_FAB_RELEASED)",
+    "LinkInputType": ["track"],
+    "LinkInputNumber": [7],
+    "LinkOutputNumber": [],
+    "LinkOutputType": "track",
+    "Condition": [],
+    "SubGrafcet": []
+  },
+  {
+    "StepNumber": 9,
+    "ModuleRef": "A5",
+    "StepType": "normal",
+    "StepAction": "Audit blocker, attach visual crop or rule error, and dispatch repair to owning micro-step",
+    "LinkInputType": ["convergence_or", "convergence_or", "convergence_or", "convergence_or", "convergence_or", "convergence_or"],
+    "LinkInputNumber": [1, 2, 4, 5, 6, 7],
+    "LinkOutputNumber": [1, 2, 4, 6],
+    "LinkOutputType": "divergence_or",
+    "Condition": ["Part/block repaired", "Schematic wiring fixed", "Placement adjusted", "Routing/planes cleaned"],
+    "SubGrafcet": []
+  }
+]

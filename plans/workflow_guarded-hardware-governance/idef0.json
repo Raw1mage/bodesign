@@ -1,0 +1,64 @@
+{
+  "diagram_title": "Governed hardware design workflow under IDEF0 A2A institutional regime (C03-C04)",
+  "node_reference": "A0",
+  "activities": [
+    {
+      "id": "A1",
+      "title": "Capture Requirements & Expand Verified Circuit Blocks (C03-in: S0-S2)",
+      "description": "Systems Architect and EE Designer elicit PRD constraints, resolve parts against Component KB, and expand verified circuit blocks carrying mandatory passives and layout topology rules.",
+      "decomposition": null
+    },
+    {
+      "id": "A2",
+      "title": "Wire Nets & Enforce Deterministic Electrical Reconciliation (C03-gating: S3-S5)",
+      "description": "EE Designer wires functional pins; Verification Adversary executes check_c03 (R1-R8) with zero-silent-fallback and mints the cryptographic S5 C03 Lock Receipt.",
+      "decomposition": null
+    },
+    {
+      "id": "A3",
+      "title": "Engineer Physical Placement, Grid-Snap & Decoupling Topology (C04-place: P0-P3)",
+      "description": "Layout Specialist places footprints honoring C02 outline and keepouts; executes grid_snap and distribute_passives; Verification Adversary audits placement_preflight gate.",
+      "decomposition": null
+    },
+    {
+      "id": "A4",
+      "title": "Route, Tidy Silkscreen, Visual DRC Audit & Fab Release (C04-closeout: P4-P7)",
+      "description": "Layout Specialist routes nets and pours planes; silk_tidy clears pad overlaps; Verification Adversary audits layout_drc_gate with visual DRC crops; Release Engineer signs off fab package.",
+      "decomposition": null
+    },
+    {
+      "id": "A5",
+      "title": "Adjudicate Exceptions & Route Directed Repairs (Blocker Hub)",
+      "description": "Orchestrator logs typed blocker records (BLK-nnn.json), enforces the no-bypass rule, and routes directed repairs back to the owning A2A activity.",
+      "decomposition": null
+    }
+  ],
+  "arrows": [
+    { "id": "AR1", "source": "EXTERNAL", "target": "A1:input", "type": "input", "label": "PRD brief & interface specs" },
+    { "id": "AR2", "source": "EXTERNAL", "target": "A1:control", "type": "control", "label": "Component KB & circuit block schemas" },
+    { "id": "AR3", "source": "EXTERNAL", "target": "A1:mechanism", "type": "mechanism", "label": "Systems Architect & EE Designer" },
+    { "id": "AR4", "source": "A1:output", "target": "A2:input", "type": "input", "label": "expanded circuit blocks & component instances" },
+    { "id": "AR5", "source": "A1:output", "target": "A2:control", "type": "control", "label": "pin allocations & mandated passive constraints" },
+    { "id": "AR6", "source": "EXTERNAL", "target": "A2:control", "type": "control", "label": "check_c03 rules (R1-R8) & zero-silent-fallback policy" },
+    { "id": "AR7", "source": "EXTERNAL", "target": "A2:mechanism", "type": "mechanism", "label": "EE Designer & Verification Adversary" },
+    { "id": "AR8", "source": "A2:output", "target": "A3:input", "type": "input", "label": "verified netlist & footprints" },
+    { "id": "AR9", "source": "A2:output", "target": "A3:control", "type": "control", "label": "signed S5 C03 lock receipt (immutable connectivity SSOT)" },
+    { "id": "AR10", "source": "EXTERNAL", "target": "A3:control", "type": "control", "label": "C02 mechanical outline, keepouts & topology rules" },
+    { "id": "AR11", "source": "EXTERNAL", "target": "A3:mechanism", "type": "mechanism", "label": "Layout Specialist & Verification Adversary" },
+    { "id": "AR12", "source": "A3:output", "target": "A4:input", "type": "input", "label": "preflight-cleared placed board" },
+    { "id": "AR13", "source": "A3:output", "target": "A4:control", "type": "control", "label": "signed P3 preflight receipt & placement geometry bounds" },
+    { "id": "AR14", "source": "EXTERNAL", "target": "A4:control", "type": "control", "label": "DRC clearance rules, silk clearance & fab release policy" },
+    { "id": "AR15", "source": "EXTERNAL", "target": "A4:mechanism", "type": "mechanism", "label": "Layout Specialist, Verification Adversary & Release Engineer" },
+    { "id": "AR16", "source": "A4:output", "target": "EXTERNAL", "type": "output", "label": "DRC-clean manufacturing package (Gerbers, Drill, IPC-D-356)" },
+    { "id": "AR17", "source": "A1:output", "target": "A5:input", "type": "input", "label": "blocker: part unresolved or block invalid" },
+    { "id": "AR18", "source": "A2:output", "target": "A5:input", "type": "input", "label": "blocker: check_c03 violation" },
+    { "id": "AR19", "source": "A3:output", "target": "A5:input", "type": "input", "label": "blocker: placement preflight failure" },
+    { "id": "AR20", "source": "A4:output", "target": "A5:input", "type": "input", "label": "blocker: DRC violation with visual crop" },
+    { "id": "AR21", "source": "EXTERNAL", "target": "A5:control", "type": "control", "label": "A2A governance constitution & recovery policy" },
+    { "id": "AR22", "source": "EXTERNAL", "target": "A5:mechanism", "type": "mechanism", "label": "Orchestrator Duty Officer" },
+    { "id": "AR23", "source": "A5:output", "target": "A1:input", "type": "input", "label": "directed repair: requirements / parts" },
+    { "id": "AR24", "source": "A5:output", "target": "A2:input", "type": "input", "label": "directed repair: schematic wiring" },
+    { "id": "AR25", "source": "A5:output", "target": "A3:input", "type": "input", "label": "directed repair: placement topology" },
+    { "id": "AR26", "source": "A5:output", "target": "A4:input", "type": "input", "label": "directed repair: routing / silk clearance" }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "plans/workflow_guarded-hardware-governance/data-schema.json",
+  "title": "Governed Hardware Design Workflow Schemas under IDEF0 A2A Institutional Regime",
+  "type": "object",
+  "definitions": {
+    "micro_state": {
+      "type": "string",
+      "enum": [
+        "S0_SPEC_FROZEN",
+        "S1_PARTS_RESOLVED",
+        "S2_BLOCKS_EXPANDED",
+        "S3_NETS_WIRED",
+        "S4_CHECK_C03_VERIFIED",
+        "S5_C03_LOCKED",
+        "P0_BOARD_BOUNDED",
+        "P1_TOPOLOGY_PLACED",
+        "P2_PERIPHERAL_TIDIED",
+        "P3_PREFLIGHT_PASSED",
+        "P4_ROUTED",
+        "P5_PLANES_AND_TIDY",
+        "P6_DRC_AND_VISUAL_CLOSED",
+        "P7_FAB_RELEASED"
+      ]
+    },
+    "state_receipt": {
+      "type": "object",
+      "required": ["token", "state", "timestamp", "sha256_digest", "mechanical_axes_only", "not_checked", "gate_verdicts"],
+      "properties": {
+        "token": { "type": "string" },
+        "state": { "$ref": "#/definitions/micro_state" },
+        "timestamp": { "type": "string" },
+        "sha256_digest": { "type": "string" },
+        "mechanical_axes_only": { "type": "boolean", "const": true },
+        "not_checked": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "gate_verdicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["gate_name", "passed", "blocking_count"],
+            "properties": {
+              "gate_name": { "type": "string" },
+              "passed": { "type": "boolean" },
+              "blocking_count": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "blocker_record": {
+      "type": "object",
+      "required": ["blocker_id", "source_step", "owning_activity", "error_code", "evidence", "resume_condition"],
+      "properties": {
+        "blocker_id": { "type": "string", "pattern": "^BLK-[0-9]{3,}$" },
+        "source_step": { "type": "integer" },
+        "owning_activity": { "type": "string", "enum": ["A1", "A2", "A3", "A4", "A5"] },
+        "error_code": { "type": "string" },
+        "evidence": { "type": "object" },
+        "resume_condition": { "type": "string" }
+      }
+    },
+    "circuit_block_definition": {
+      "type": "object",
+      "required": ["block_id", "name", "category", "ports", "components"],
+      "properties": {
+        "block_id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["power", "interface", "protection", "clock", "mcu_subsystem"] },
+        "ports": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["ref_prefix", "value", "footprint"],
+            "properties": {
+              "ref_prefix": { "type": "string" },
+              "value": { "type": "string" },
+              "footprint": { "type": "string" },
+              "mandatory": { "type": "boolean" }
+            }
+          }
+        },
+        "layout_constraints": {
+          "type": "object",
+          "properties": {
+            "max_trace_length_mm": { "type": "number" },
+            "max_distance_to_pin_mm": { "type": "number" }
+          }
+        }
+      }
+    },
+    "layout_tidy_request": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": { "type": "string", "enum": ["grid_snap", "distribute_passives", "silk_tidy"] },
+        "grid_step_mm": { "type": "number", "default": 0.1 },
+        "component_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "visual_drc_crop": {
+      "type": "object",
+      "required": ["violation_id", "rule_type", "coordinate", "crop_file"],
+      "properties": {
+        "violation_id": { "type": "string" },
+        "rule_type": { "type": "string" },
+        "coordinate": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "crop_file": { "type": "string" }
+      }
+    }
+  }
+}

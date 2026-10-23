@@ -1,0 +1,69 @@
+<svg width="1768.3" height="635.8" viewBox="-230.2 -165.8 1768.3 635.8" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="black" /></marker>
+<marker id="call_arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 M 0 2 L 6 5 L 0 8" fill="none" stroke="black" stroke-width="1" /></marker>
+</defs>
+<rect x="-230.2" y="-165.8" width="1768.3" height="635.8" fill="white" />
+<rect x="130.0" y="120.0" width="232.0" height="100.0" stroke="black" fill="white" stroke-width="1.5" data-id="A1" />
+<text x="246.0" y="140.7" text-anchor="middle" font-size="9" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >A1</text>
+<text x="246.0" y="163.6" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >CAPTURE REQUIREMENTS &amp;</text>
+<text x="246.0" y="182.3" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >EXPAND VERIFIED CIRCUIT</text>
+<text x="246.0" y="201.1" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A1" >BLOCKS (C03-IN: S0-S2)</text>
+<rect x="566.0" y="120.0" width="232.0" height="100.0" stroke="black" fill="white" stroke-width="1.5" data-id="A2" />
+<text x="682.0" y="140.7" text-anchor="middle" font-size="9" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >A2</text>
+<text x="682.0" y="163.6" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >WIRE NETS &amp; ENFORCE DETERMINISTIC</text>
+<text x="682.0" y="182.3" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >ELECTRICAL RECONCILIATION</text>
+<text x="682.0" y="201.1" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A2" >(C03-GATING: S3-S5)</text>
+<rect x="946.0" y="120.0" width="232.0" height="100.0" stroke="black" fill="white" stroke-width="1.5" data-id="A3" />
+<text x="1062.0" y="140.7" text-anchor="middle" font-size="9" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >A3</text>
+<text x="1062.0" y="163.6" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >ENGINEER PHYSICAL PLACEMENT,</text>
+<text x="1062.0" y="182.3" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >GRID-SNAP &amp; DECOUPLING</text>
+<text x="1062.0" y="201.1" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A3" >TOPOLOGY (C04-PLACE: P0-P3)</text>
+<rect x="130.0" y="320.0" width="232.0" height="100.0" stroke="black" fill="white" stroke-width="1.5" data-id="A4" />
+<text x="246.0" y="340.7" text-anchor="middle" font-size="9" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >A4</text>
+<text x="246.0" y="363.6" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >ROUTE, TIDY SILKSCREEN,</text>
+<text x="246.0" y="382.3" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >VISUAL DRC AUDIT &amp; FAB</text>
+<text x="246.0" y="401.1" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A4" >RELEASE (C04-CLOSEOUT: P4-P7)</text>
+<rect x="566.0" y="320.0" width="232.0" height="100.0" stroke="black" fill="white" stroke-width="1.5" data-id="A5" />
+<text x="682.0" y="348.2" text-anchor="middle" font-size="9" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >A5</text>
+<text x="682.0" y="371.1" text-anchor="middle" font-size="11" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >ADJUDICATE EXCEPTIONS &amp; ROUTE</text>
+<text x="682.0" y="391.7" text-anchor="middle" font-size="11" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A5" >DIRECTED REPAIRS (BLOCKER HUB)</text>
+<rect x="40.0" y="44.2" width="1228.0" height="415.8" stroke="black" fill="none" stroke-width="2" />
+<rect x="306.0" y="-155.8" width="696.0" height="110.0" stroke="black" fill="white" stroke-width="1.5" data-id="A0" />
+<text x="654.0" y="-112.8" text-anchor="middle" font-size="10" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >A0</text>
+<text x="654.0" y="-88.5" text-anchor="middle" font-size="12" font-weight="bold" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-id="A0" >GOVERNED HARDWARE DESIGN WORKFLOW UNDER IDEF0 A2A INSTITUTIONAL REGIME (C03-C04)</text>
+<line x1="306.0" y1="-155.8" x2="40.0" y2="44.2" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="1002.0" y1="-155.8" x2="1268.0" y2="44.2" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="306.0" y1="-45.8" x2="40.0" y2="460.0" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<line x1="1002.0" y1="-45.8" x2="1268.0" y2="460.0" stroke="red" stroke-dasharray="5,5" stroke-width="1.0" opacity="0.6" />
+<path d="M 362.0 170.0 L 566.0 170.0" stroke="black" stroke-width="1.2" data-arrow-id="AR4" data-waypoints="362.0,170.0 566.0,170.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 798.0 170.0 L 946.0 170.0" stroke="black" stroke-width="1.2" data-arrow-id="AR8" data-waypoints="798.0,170.0 946.0,170.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1178.0 170.0 L 1208.0 170.0 Q 1218.0 170.0 1218.0 180.0 L 1218.0 260.0 Q 1218.0 270.0 1208.0 270.0 L 100.0 270.0 Q 90.0 270.0 90.0 280.0 L 90.0 360.0 Q 90.0 370.0 100.0 370.0 L 130.0 370.0" stroke="black" stroke-width="1.2" data-arrow-id="AR12" data-waypoints="1178.0,170.0 1218.0,170.0 1218.0,270.0 90.0,270.0 90.0,370.0 130.0,370.0" marker-end="url(#arrow)" fill="none" />
+<path d="M -10.0 170.0 L 130.0 170.0" stroke="black" stroke-width="1.2" data-arrow-id="AR1" data-waypoints="-10.0,170.0 130.0,170.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 246.0 84.2 L 246.0 120.0" stroke="black" stroke-width="1.2" data-arrow-id="AR2" data-waypoints="246.0,84.2 246.0,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 246.0 255.8 L 246.0 220.0" stroke="black" stroke-width="1.2" data-arrow-id="AR3" data-waypoints="246.0,255.8 246.0,220.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 682.0 255.8 L 682.0 220.0" stroke="black" stroke-width="1.2" data-arrow-id="AR7" data-waypoints="682.0,255.8 682.0,220.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1062.0 255.8 L 1062.0 220.0" stroke="black" stroke-width="1.2" data-arrow-id="AR11" data-waypoints="1062.0,255.8 1062.0,220.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 720.7 84.2 L 720.7 120.0" stroke="black" stroke-width="1.2" data-arrow-id="_merged_A2_control" data-waypoints="720.7,84.2 720.7,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 1100.7 84.2 L 1100.7 120.0" stroke="black" stroke-width="1.2" data-arrow-id="_merged_A3_control" data-waypoints="1100.7,84.2 1100.7,120.0" marker-end="url(#arrow)" fill="none" />
+<path d="M 284.7 284.2 L 284.7 320.0" stroke="black" stroke-width="1.2" data-arrow-id="_merged_A4_control" data-waypoints="284.7,284.2 284.7,320.0" marker-end="url(#arrow)" fill="none" />
+<text x="246.0" y="78.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR2">Component KB &amp; circuit block schemas</text>
+<text x="240.0" y="236.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR3">Systems Architect</text>
+<text x="252.0" y="236.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR3">&amp; EE Designer</text>
+<text x="676.0" y="236.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR7">EE Designer &amp;</text>
+<text x="688.0" y="236.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR7">Verification Adversary</text>
+<text x="1056.0" y="236.0" font-size="13" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">Layout Specialist &amp;</text>
+<text x="1068.0" y="236.0" font-size="13" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR11">Verification Adversary</text>
+<text x="714.7" y="114.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR5">pin allocations &amp; mandated passive constraints</text>
+<text x="726.7" y="114.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR5">check_c03 rules (R1-R8) &amp; zero-silent-fallback policy</text>
+<text x="1100.7" y="78.2" font-size="14" text-anchor="middle" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR9">signed S5 C03 lock receipt (immutable connectivity SSOT)、C02 mechanical outline, keepouts &amp; topology rules</text>
+<text x="278.7" y="314.0" font-size="14" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR13">signed P3 preflight receipt &amp; placement geometry bounds</text>
+<text x="290.7" y="314.0" font-size="14" text-anchor="start" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR13">DRC clearance rules, silk clearance &amp; fab release policy</text>
+<text x="464.0" y="165.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR4">expanded circuit blocks</text>
+<text x="464.0" y="182.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR4">&amp; component instances</text>
+<text x="872.0" y="165.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR8">verified netlist</text>
+<text x="872.0" y="182.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR8">&amp; footprints</text>
+<text x="682.0" y="288.0" font-size="14" font-weight="bold" fill="black" text-anchor="middle" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR12" >preflight-cleared placed board</text>
+<text x="-14.0" y="161.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">PRD brief &amp;</text>
+<text x="-14.0" y="187.0" font-size="20" text-anchor="end" font-weight="bold" fill="black" font-family="'Times New Roman', 'BiauKai', 'DFKai-SB', '標楷體', 'KaiTi', serif" data-arrow-id="AR1">interface specs</text>
+</svg>

@@ -1,0 +1,234 @@
+{
+  "version": "1.0.0",
+  "definition": "Execution bindings for governed hardware design workflow under IDEF0 A2A institutional regime (C03-C04)",
+  "bindings": [
+    {
+      "grafcet_step": 0,
+      "idef0_activity": "A1",
+      "task_class": "interaction",
+      "objective": "Receive PRD requirements and freeze S0_SPEC_FROZEN state",
+      "role": "systems-architect",
+      "session_binding": {
+        "title": "Systems Architect：Requirements & S0 Freeze",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-discipline", "bodesign-kb"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "hardware PRD interface constraints"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_kb_query"],
+      "validate": [
+        "schema"
+      ],
+      "human_gates": []
+    },
+    {
+      "grafcet_step": 1,
+      "idef0_activity": "A1",
+      "task_class": "synthesis",
+      "objective": "Resolve component part numbers and expand verified circuit blocks into design netlist",
+      "role": "ee-designer",
+      "session_binding": {
+        "title": "EE Designer：Parts & Circuit Blocks Expansion",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-ee", "bodesign-kb"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "verified circuit blocks library"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_apply_circuit_block"],
+      "validate": [
+        "schema",
+        "tool-verdict"
+      ],
+      "human_gates": []
+    },
+    {
+      "grafcet_step": 2,
+      "idef0_activity": "A2",
+      "task_class": "validation",
+      "objective": "Wire functional nets and execute deterministic check_c03 R1-R8 validation",
+      "role": "verification-adversary",
+      "session_binding": {
+        "title": "Verification Adversary：C03 Gate Validation",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-tools"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "check_c03 rules R1-R8"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_check_c03"],
+      "validate": [
+        "tool-verdict"
+      ],
+      "human_gates": []
+    },
+    {
+      "grafcet_step": 3,
+      "idef0_activity": "A2",
+      "task_class": "validation",
+      "objective": "Mint cryptographic state receipt locking S5_C03_LOCKED schematic assets",
+      "role": "systems-architect",
+      "session_binding": {
+        "title": "Systems Architect：C03 Receipt Signing & Lock",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-discipline"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "state receipt signing protocol"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_kb_query"],
+      "validate": [
+        "tool-verdict"
+      ],
+      "human_gates": [],
+      "stop_conditions": [{ "type": "RECEIPT_MINT_FAILED" }]
+    },
+    {
+      "grafcet_step": 4,
+      "idef0_activity": "A3",
+      "task_class": "synthesis",
+      "objective": "Place core component topology, snap passives to grid, and align arrays",
+      "role": "layout-specialist",
+      "session_binding": {
+        "title": "Layout Specialist：Placement & Geometric Tidy",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-tools"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "decoupling capacitor placement rules"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_layout_tidy"],
+      "validate": [
+        "tool-verdict"
+      ],
+      "human_gates": []
+    },
+    {
+      "grafcet_step": 5,
+      "idef0_activity": "A3",
+      "task_class": "validation",
+      "objective": "Execute placement_preflight and c04_placement_geometry_gate",
+      "role": "verification-adversary",
+      "session_binding": {
+        "title": "Verification Adversary：Placement Preflight Gate",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-tools"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "placement preflight gate"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_placement_preflight", "bodesign_c04_placement_geometry_gate"],
+      "validate": [
+        "tool-verdict"
+      ],
+      "human_gates": []
+    },
+    {
+      "grafcet_step": 6,
+      "idef0_activity": "A4",
+      "task_class": "synthesis",
+      "objective": "Route board traces, pour copper planes, and execute silk_tidy to clear pad overlaps",
+      "role": "layout-specialist",
+      "session_binding": {
+        "title": "Layout Specialist：Routing & Plane Pour",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-tools"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "routing and plane pour guidelines"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_autoroute", "bodesign_pour_planes", "bodesign_layout_tidy"],
+      "validate": [
+        "tool-verdict"
+      ],
+      "human_gates": []
+    },
+    {
+      "grafcet_step": 7,
+      "idef0_activity": "A4",
+      "task_class": "validation",
+      "objective": "Run layout_drc_gate and emit visual DRC crops for visual verification closure",
+      "role": "verification-adversary",
+      "session_binding": {
+        "title": "Verification Adversary：Layout DRC & Visual Crops",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-tools"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "layout DRC gate and visual crop"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_layout_drc_gate"],
+      "validate": [
+        "tool-verdict",
+        "human-approval"
+      ],
+      "human_gates": ["fab_release"]
+    },
+    {
+      "grafcet_step": 9,
+      "idef0_activity": "A5",
+      "task_class": "validation",
+      "objective": "Adjudicate blocker events, attach diagnostic visual crops, and route repair back to owning step",
+      "role": "systems-architect",
+      "session_binding": {
+        "title": "Systems Architect：Blocker Adjudication Hub",
+        "reuse": "reuse-first"
+      },
+      "activate": {
+        "skills": ["bodesign-discipline"],
+        "ragbase": [
+          {
+            "scope": "domain",
+            "query": "blocker routing and exception handling"
+          }
+        ]
+      },
+      "capabilities": ["bodesign_kb_query"],
+      "validate": [
+        "tool-verdict"
+      ],
+      "human_gates": []
+    }
+  ]
+}
