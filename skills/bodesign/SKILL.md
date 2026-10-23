@@ -30,6 +30,7 @@ Load supporting skills for quality gates and tool execution.
 - Reference-derived design contracts and SSOT traceability: load `bodesign-kb`.
 - Command-line runner syntax, landing verbs, and tool error codes: load `bodesign-tools`.
 - Architecture and diagram emitter references: read `references/concept-diagrams.md`.
+- Landing vs compute plane routing and the stage → verb table: read `references/landing-verbs.md`.
 
 ## 3. Operating Invariant
 

@@ -448,15 +448,15 @@ VERBS = {
                           "(untraceable=憑空發明); every SSOT-required ref must appear "
                           "(unfulfilled=漏做). Either non-empty → blocking. Deterministic, no LLM."),
     # A2A hardware governance (plans/workflow_guarded-hardware-governance)
-    "c03_substate_advance": (_WC, "c03_substate_advance", ("current_state", "target_state", "agent_id"),
+    "c03_substate_advance": (_WC, "SubstateMachine", ("current_state", "target_state", "agent_id"),
                              "A2A C03 EE substate transition (S0-S5) with role verification, unmeasured axis disclosure, and receipt minting."),
-    "c04_substate_advance": (_WC, "c04_substate_advance", ("current_state", "target_state", "agent_id"),
+    "c04_substate_advance": (_WC, "SubstateMachine", ("current_state", "target_state", "agent_id"),
                              "A2A C04 Layout substate transition (P0-P7) with strict role gating, DRC evidence validation, and receipt minting."),
-    "circuit_block_apply": (_WC, "apply_circuit_block_verb", ("block_name",),
+    "circuit_block_apply": (_WC, "apply_circuit_block", ("block_name",),
                             "Apply a verified standard circuit block (e.g. usb_c_sink, power_ldo_3v3, power_dcdc_buck, esd_protection_array) with instance-scoped nets."),
-    "layout_tidy": (_WC, "layout_tidy_verb", ("board_path",),
+    "layout_tidy": (_WC, "tidy_kicad_pcb", ("board_path",),
                     "Execute deterministic layout tidy pipeline (grid snapping, passive distribution, silkscreen overlap clearance) on .kicad_pcb."),
-    "blocker_record": (_WC, "blocker_record_verb", ("folder", "substate", "reason"),
+    "blocker_record": (_WC, "BlockerHub", ("folder", "substate", "reason"),
                        "Log a structured A2A hardware blocker (BLK-nnn.json) with targeted repair routing and retry tracking."),
 }
 

@@ -607,7 +607,7 @@ Under the IDEF0 A2A multi-agent hardware regime (`plans/workflow_guarded-hardwar
 - **`S5_C03_LOCKED`**: Netlist frozen (`C03_Netlist_Freeze.json`) and handed off to C04. Owned by `release-engineer`. Downstream C04 layout execution is blocked unless S5 receipt is minted.
 
 ### 2. State Receipts & Unmeasured Axis Disclosure
-Every substate advance mintage produces a cryptographic token and explicitly discloses what was **not** measured:
+Advance with `gate.py c03_substate_advance --repo <abs> --json '{"current_state":"S3_NETS_WIRED","target_state":"S4_CHECK_C03_VERIFIED","role":"verification-adversary"}'`. Every substate advance mintage produces a cryptographic token and explicitly discloses what was **not** measured:
 - Mandatory unmeasured axes: `functional_circuit_simulation`, `high_speed_si_pi_simulation`, `thermal_fem_analysis`, `rf_tuning_and_emc`, `human_visual_inspection`.
 - Receipt tokens are stored in the orchestration spine and prevent backward or skipped transitions.
 

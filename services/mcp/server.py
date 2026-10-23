@@ -1742,6 +1742,9 @@ LANDED_VERBS = frozenset({
     # Pure functions
     "plan_design_intent", "evidence_manifest", "pin_allocation", "reference_crosscheck",
     "impedance_solve",
+    # A2A hardware governance (plans/workflow_guarded-hardware-governance)
+    "c03_substate_advance", "c04_substate_advance", "circuit_block_apply", "layout_tidy",
+    "blocker_record",
 })
 
 

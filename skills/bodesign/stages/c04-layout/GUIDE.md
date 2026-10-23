@@ -383,6 +383,8 @@ Under the IDEF0 A2A multi-agent hardware regime (`plans/workflow_guarded-hardwar
 - **`P6_DRC_AND_VISUAL_CLOSED`**: DRC verification passed. Generates localized visual DRC crops for multimodal confirmation. **Zero Self-Approval applies**: owned strictly by `verification-adversary`.
 - **`P7_FAB_RELEASED`**: Final fabrication release. Owned by `release-engineer`. Invariant (天條 3): Requires explicit user approval (`human_approved=true`), else advance is blocked.
 
+Advance with `gate.py c04_substate_advance --repo <abs> --json '{"current_state":"P2_PERIPHERAL_TIDIED","target_state":"P3_PREFLIGHT_PASSED","role":"verification-adversary","gate_verdicts":[{"gate_name":"placement_preflight","passed":true}]}'`. P7 additionally requires `"human_approved": true`.
+
 ### 2. Visual DRC Cropping Pipeline
 When `bodesign_layout_drc_gate` detects violations, pass `visual_crops_dir`:
 - Parses 2D coordinate centers from KiCad DRC JSON reports.
