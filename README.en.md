@@ -9,9 +9,10 @@ schematic → layout → fab — and produces a manufacturer-ready document pack
 rather than asserting it.
 
 It is **host-agnostic and independently operable**: any MCP-capable client (IDE, agent, or
-your own HTTP caller) drives it over a Unix socket — no host shell required. To expose it
-remotely, put a gateway in front of that socket to supply authentication; the container does
-**not** publish a TCP port to the host (BR_20260730d).
+your own HTTP caller) drives it over MCP Streamable HTTP — no host shell required. Production
+runs on DockerLab CT105 (`http://192.168.100.141:8177/mcp/`, behind an nginx ingress that
+returns 403 for `POST /invoke`); the container's internal TCP port is never published directly
+(BR_20260730d).
 
 ## What it does
 
@@ -74,14 +75,17 @@ python services/mcp/server.py --transport http --uds .run/bodesign.sock --port 8
 
 ## Connect (MCP)
 
-MCP **Streamable HTTP**, served over UDS:
+MCP **Streamable HTTP**:
 
-- Local: `unix:///…/.run/bodesign.sock:/mcp/`
-- External: put a gateway in front of the socket. The container does **not**
-  publish a TCP port to the host (BR_20260730d: publishing it exposed an
-  unauthenticated `POST /invoke` on every interface).
+- **Production (DockerLab CT105, default)**: `http://192.168.100.141:8177/mcp/` — LAN only;
+  the nginx ingress blocks `POST /invoke` (403) and opens only `/healthz`, `/mcp`, `/files`.
+  Manifest and release SOP: [`deploy/dockerlab/`](deploy/dockerlab/README.md).
+- **Local dev**: `BODESIGN_DEV=1 ./mcpctl.sh start`, then UDS
+  `unix:///…/.run/bodesign.sock:/mcp/`. Run one or the other, never both.
+- The container's internal TCP `:8077` is never published directly (BR_20260730d: publishing
+  it exposed an unauthenticated `POST /invoke` on every interface); exposure goes through an ingress.
 
-See [`mcp.json`](mcp.json) for the registration manifest. Open `/` over the socket
+See [`mcp.json`](mcp.json) for the registration manifest. Open `/` on the service
 for the live, self-documenting guide — install, the file model, the circuit-design workflow,
 and the full tool-call schemas at `/tools` and `/tools/{name}`.
 

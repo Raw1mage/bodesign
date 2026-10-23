@@ -8,8 +8,9 @@ _語言：**繁體中文** · [English](./README.en.md)_
 而非「宣稱」可靠度。
 
 它**與宿主無關、可獨立對外營運**：任何支援 MCP 的客戶端（IDE、agent，或你自己的 HTTP 呼叫端）
-都能透過 Unix socket 驅動它，**不需要任何宿主外殼**。對外開放時請在 socket 前面擺一個 gateway 提供
-認證——容器本身**不對 host publish** TCP port（BR_20260730d）。
+都能透過 MCP Streamable HTTP 驅動它，**不需要任何宿主外殼**。正式服務部署在 DockerLab CT105
+（`http://192.168.100.141:8177/mcp/`，經 nginx ingress，`POST /invoke` 一律 403）；容器內部的
+TCP port 從不直接對外 publish（BR_20260730d）。
 
 ## 它做什麼
 
@@ -110,13 +111,17 @@ python services/mcp/server.py --transport http --uds .run/bodesign.sock --port 8
 
 ## 連線（MCP）
 
-MCP **Streamable HTTP**，經 UDS 提供：
+MCP **Streamable HTTP**：
 
-- 本機：`unix:///…/.run/bodesign.sock:/mcp/`
-- 對外：在 socket 前面擺一個 gateway。容器**不對 host publish** TCP port
-  （BR_20260730d：publish 會把未認證的 `POST /invoke` 暴露在所有介面上）。
+- **正式（DockerLab CT105，預設）**：`http://192.168.100.141:8177/mcp/`——僅限 LAN，nginx ingress
+  封鎖 `POST /invoke`（403），只開放 `/healthz`、`/mcp`、`/files`。部署清單與發布 SOP 見
+  [`deploy/dockerlab/`](deploy/dockerlab/README.md)。
+- **本機開發**：`BODESIGN_DEV=1 ./mcpctl.sh start` 後經 UDS `unix:///…/.run/bodesign.sock:/mcp/`。
+  兩者擇一，不要同時跑。
+- 容器內部 TCP `:8077` 從不直接 publish（BR_20260730d：publish 會把未認證的 `POST /invoke`
+  暴露在所有介面上），對外一律經 ingress。
 
-註冊資訊見 [`mcp.json`](mcp.json)。經 socket 開啟 `/` 即是即時的自我說明指南——
+註冊資訊見 [`mcp.json`](mcp.json)。開啟服務的 `/` 即是即時的自我說明指南——
 安裝、檔案模型、電路設計工作流，以及 `/tools`、`/tools/{name}` 的完整 tool-call schema。
 
 ## 檔案模型（兩平面，0.2.0）

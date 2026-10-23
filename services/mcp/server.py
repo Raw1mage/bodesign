@@ -2047,6 +2047,13 @@ _RENDER_EMIT_ASSET_KEYS = {
 }
 
 
+def _group_route(group: str) -> str:
+    """'local' | 'forward' | 'unavailable' -- same decision _route_tool makes."""
+    if _serves_locally(group):
+        return "local"
+    return "forward" if _worker_url_for_group(group) else "unavailable"
+
+
 def _endpoint(url: str, transport: str, *, host_executable: bool) -> dict:
     """One capability-summary endpoint row. host_executable=False marks a
     container/service endpoint that MUST NOT be presented as host-runnable
@@ -2097,10 +2104,13 @@ def _build_capabilities() -> dict:
         },
         "companion_skill": COMPANION_SKILL,
         "conditional_tool_families": [
-            {"group": "me", "available": bool(os.environ.get("BODESIGN_ME_WORKER_URL")),
-             "tools": sorted(_ME_GROUP_TOOLS)},
-            {"group": "ee", "available": bool(os.environ.get("BODESIGN_EE_WORKER_URL")),
-             "tools": sorted(_EE_GROUP_TOOLS)},
+            # available = this process serves the group itself (monolith / that
+            # worker) OR forwards it to a configured worker URL. A monolith with no
+            # worker URL serves every group in-process, so it is available.
+            {"group": "me", "available": _serves_locally("me") or bool(_worker_url_for_group("me")),
+             "route": _group_route("me"), "tools": sorted(_ME_GROUP_TOOLS)},
+            {"group": "ee", "available": _serves_locally("ee") or bool(_worker_url_for_group("ee")),
+             "route": _group_route("ee"), "tools": sorted(_EE_GROUP_TOOLS)},
         ],
     }
 

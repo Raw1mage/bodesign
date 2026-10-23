@@ -4,7 +4,7 @@
   "description": "AI PCB design copilot — ingest a KiCad/EDA project folder, plan requirements, source reference evidence, generate KiCad symbols/schematics, lay out + export fab files, and track readiness, validated against KiCad and a known-good reference (control group). Runs as a Docker container; MCP Streamable HTTP over a Unix socket with a token file API.",
   "version": "0.3.0",
   "transport": "streamable-http",
-  "url": "unix:///home/pkcs12/projects/bodesign/.run/bodesign.sock:/mcp/",
+  "url": "http://192.168.100.141:8177/mcp/",
   "auth": {
     "type": "none"
   },

@@ -126,12 +126,15 @@ source); `mcp.json.skillPaths`, `GET /skills` and `bodesign_init` all name it.
   FIRST for any multi-step hardware job — it is where the C00–C07 SOPs and the
   honesty contract live. This is advisory, not a gate: a bare MCP client with no
   skill mechanism is still correct to drive the tools using this doctrine alone.
-- **Transport is MCP Streamable HTTP over a Unix domain socket** (local
-  `.run/bodesign.sock`). The process also binds TCP `:8077` inside the container,
-  but that port is **NOT published to the host** (BR_20260730d): reach the service
-  over the UDS, which is what `mcp.json`'s `url` declares. External HTTP, if ever
-  wanted, belongs behind a gateway in front of the socket -- a published port put
-  an unauthenticated `POST /invoke` on every interface.
+- **Transport is MCP Streamable HTTP; `mcp.json`'s `url` is the endpoint to use.**
+  Production runs on DockerLab CT105 behind an nginx ingress:
+  `http://192.168.100.141:8177/mcp/` (LAN only; `POST /invoke` returns 403). Local
+  dev mode (`BODESIGN_DEV=1 ./mcpctl.sh start`) serves the same protocol over the
+  UDS `.run/bodesign.sock`; run only one of the two. The process binds TCP `:8077`
+  inside the container, and that port is **never published directly**
+  (BR_20260730d) -- any HTTP exposure goes through an ingress that blocks
+  `/invoke`. `capabilities.transport.service_endpoints[]` lists the container-side
+  socket, which is not a host path.
   The container runs in Docker and only sees `.run` / sessions /
   vault — a host path OUTSIDE those mounts is invisible, and readiness tools report
   `root_visible:false` for it. Never read a `readiness_pct: 0` as "deliverables
@@ -147,10 +150,15 @@ source); `mcp.json.skillPaths`, `GET /skills` and `bodesign_init` all name it.
     `bodesign_cache_provision` or `rclone mount` yourself.
   - **vault** = cross-project component knowledge (server SQLite); `vault_*` tools
     only.
-- **Runtime is managed ONLY via `./mcpctl.sh`** (docker-compose; per-user project).
-  A new tool / prompt / instruction takes effect after a container restart
-  (`BODESIGN_DEV=1 ./mcpctl.sh restart` in dev; `rebuild` only when dependencies
-  change). Never hand-roll `docker run` / `docker cp`.
+- **Runtime management depends on the deployment.** DockerLab: a code change goes
+  live only after the release SOP (tests -> image pushed to
+  `registore.thesmart.cc/bodesign:<tag>` -> CT105 `docker compose up -d` -> remote
+  smoke; manifest in `deploy/dockerlab/`). Local dev: `./mcpctl.sh` only
+  (`BODESIGN_DEV=1 ./mcpctl.sh restart`; `rebuild` only when dependencies change).
+  Never hand-roll `docker run` / `docker cp`.
+- **`conditional_tool_families[].available` / `route`** says whether the ee / me
+  tools run here: `local` (monolith or that worker), `forward` (configured worker
+  URL) or `unavailable`. Check it before calling a heavy tool.
 
 ## 4. Cache & file transfer (the single most-reflexed-wrong area)
 
